@@ -135,3 +135,12 @@ source-map-resources/
 # yarn.lock
 # pnpm-lock.yaml
 # bun.lockb
+
+# Private planning and internal documentation
+IMPLEMENTATION_STATUS.md
+MILESTONE_2_PLAN.md
+SETUP.md
+UI_IMPROVEMENTS.md
+phase-1-technical-plan.md
+phase-2-technical-plan.md
+top-level-plan.md
