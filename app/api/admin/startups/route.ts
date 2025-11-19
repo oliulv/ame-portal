@@ -5,6 +5,60 @@ import { requireAdmin } from '@/lib/auth'
 import { generateStartupSlug } from '@/lib/slugify'
 
 /**
+ * GET /api/admin/startups
+ * Fetch all startups, optionally filtered by cohort_id
+ */
+export async function GET(request: Request) {
+  try {
+    // 1. Authenticate and authorize
+    await requireAdmin()
+
+    // 2. Get query parameters
+    const { searchParams } = new URL(request.url)
+    const cohortId = searchParams.get('cohort_id')
+
+    // 3. Fetch startups from database
+    const supabase = await createClient()
+    let query = supabase
+      .from('startups')
+      .select('*')
+      .order('name', { ascending: true })
+
+    // Filter by cohort if provided
+    if (cohortId) {
+      query = query.eq('cohort_id', cohortId)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('Database error fetching startups:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch startups' },
+        { status: 500 }
+      )
+    }
+
+    // 4. Return startups data
+    return NextResponse.json(data || [])
+  } catch (error) {
+    console.error('Error in GET /api/admin/startups:', error)
+
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
  * POST /api/admin/startups
  * Create a new startup with related records and auto-assign goals
  */

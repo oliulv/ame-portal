@@ -18,6 +18,7 @@ export interface User {
 export interface Cohort {
   id: string
   name: string
+  slug: string
   year_start: number
   year_end: number
   label: string
@@ -30,6 +31,7 @@ export interface Startup {
   id: string
   cohort_id: string
   name: string
+  slug?: string
   logo_url?: string
   stage?: string
   sector?: string

@@ -63,3 +63,15 @@ export function generateStartupSlug(name: string, existingSlugs: string[] = []):
   const baseSlug = slugify(name)
   return generateUniqueSlug(baseSlug, existingSlugs)
 }
+
+/**
+ * Generate a slug from a cohort label and ensure uniqueness
+ * This is a helper that combines slugify and uniqueness check
+ * @param label - The cohort label (e.g., "Cohort 12")
+ * @param existingSlugs - Array of existing slugs in the database
+ * @returns A unique, URL-friendly slug
+ */
+export function generateCohortSlug(label: string, existingSlugs: string[] = []): string {
+  const baseSlug = slugify(label)
+  return generateUniqueSlug(baseSlug, existingSlugs)
+}

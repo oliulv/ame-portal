@@ -11,7 +11,7 @@ export default async function AdminLayout({
 
   const navItems = [
     { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
-    { title: 'Cohorts', href: '/admin/cohorts', icon: 'Users' },
+    { title: 'Startups', href: '/admin/startups', icon: 'Building2' },
     { title: 'Goal Templates', href: '/admin/goals', icon: 'Target' },
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },
     { title: 'Leaderboard', href: '/admin/leaderboard', icon: 'Trophy' },
@@ -28,7 +28,7 @@ export default async function AdminLayout({
       {/* Main content */}
       <div className="flex flex-1 flex-col lg:ml-64">
         {/* Top bar */}
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-white px-6 lg:px-6">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-white px-6">
           <h2 className="ml-12 text-lg font-semibold lg:ml-0">Admin Portal</h2>
           <UserButton />
         </header>

@@ -48,7 +48,7 @@ export default async function CohortsPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Years</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -73,9 +73,9 @@ export default async function CohortsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/admin/cohorts/${cohort.id}`}>
+                    <Link href={`/admin/cohorts/${cohort.slug}/edit`}>
                       <Button variant="ghost" size="sm">
-                        View
+                        Edit
                         <ExternalLink className="ml-2 h-3 w-3" />
                       </Button>
                     </Link>

@@ -24,13 +24,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 interface CohortEditPageProps {
   params: Promise<{
-    id: string
+    slug: string
   }>
 }
 
 export default function CohortEditPage({ params }: CohortEditPageProps) {
   const router = useRouter()
-  const [cohortId, setCohortId] = useState<string | null>(null)
+  const [cohortSlug, setCohortSlug] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,10 +50,10 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
   useEffect(() => {
     async function loadCohort() {
       const resolvedParams = await params
-      setCohortId(resolvedParams.id)
+      setCohortSlug(resolvedParams.slug)
 
       try {
-        const response = await fetch(`/api/admin/cohorts/${resolvedParams.id}`)
+        const response = await fetch(`/api/admin/cohorts/${resolvedParams.slug}`)
         if (!response.ok) {
           throw new Error('Failed to load cohort')
         }
@@ -77,13 +77,13 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
   }, [params, form])
 
   async function onSubmit(data: CohortFormData) {
-    if (!cohortId) return
+    if (!cohortSlug) return
 
     setIsSubmitting(true)
     setError(null)
 
     try {
-      const response = await fetch(`/api/admin/cohorts/${cohortId}`, {
+      const response = await fetch(`/api/admin/cohorts/${cohortSlug}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -96,8 +96,10 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
         throw new Error(errorData.error || 'Failed to update cohort')
       }
 
-      // Success! Redirect to cohort detail page
-      router.push(`/admin/cohorts/${cohortId}`)
+      const updatedCohort = await response.json()
+      
+      // Success! Redirect to startups page (which shows cohort info)
+      router.push('/admin/startups')
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -128,10 +130,10 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
   return (
     <div className="container max-w-2xl py-8">
       <div className="mb-6">
-        <Link href={`/admin/cohorts/${cohortId}`}>
+        <Link href="/admin/startups">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Cohort
+            Back to Startups
           </Button>
         </Link>
       </div>
@@ -258,7 +260,7 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
                 >
                   {isSubmitting ? 'Saving...' : 'Save Changes'}
                 </Button>
-                <Link href={`/admin/cohorts/${cohortId}`}>
+                <Link href="/admin/startups">
                   <Button type="button" variant="outline">
                     Cancel
                   </Button>

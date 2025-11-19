@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { cohortSchema } from '@/lib/schemas'
 import { requireAdmin } from '@/lib/auth'
+import { generateCohortSlug } from '@/lib/slugify'
 
 /**
  * GET /api/admin/cohorts
@@ -16,7 +17,7 @@ export async function GET() {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('cohorts')
-      .select('id, label, name, year_start, year_end, is_active')
+      .select('id, slug, label, name, year_start, year_end, is_active')
       .order('year_start', { ascending: false })
 
     if (error) {
@@ -59,13 +60,22 @@ export async function POST(request: Request) {
     const body = await request.json()
     const validatedData = cohortSchema.parse(body)
 
-    // 3. Create cohort in database
+    // 3. Generate unique slug for the cohort
     const supabase = await createClient()
+    const { data: existingCohorts } = await supabase
+      .from('cohorts')
+      .select('slug')
+
+    const existingSlugs = existingCohorts?.map((c) => c.slug) || []
+    const slug = generateCohortSlug(validatedData.label, existingSlugs)
+
+    // 4. Create cohort in database
     const { data, error } = await supabase
       .from('cohorts')
       .insert({
         name: validatedData.name,
         label: validatedData.label,
+        slug,
         year_start: validatedData.year_start,
         year_end: validatedData.year_end,
         is_active: validatedData.is_active,
