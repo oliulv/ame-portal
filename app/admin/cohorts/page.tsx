@@ -1,4 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -13,13 +15,36 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Plus, Users, ExternalLink } from 'lucide-react'
+import { queryKeys } from '@/lib/queryKeys'
+import { cohortsApi } from '@/lib/api/cohorts'
+import { Skeleton } from '@/components/ui/skeleton'
 
-export default async function CohortsPage() {
-  const supabase = await createClient()
-  const { data: cohorts } = await supabase
-    .from('cohorts')
-    .select('*')
-    .order('year_start', { ascending: false })
+export default function CohortsPage() {
+  const { data: cohorts, isLoading } = useQuery({
+    queryKey: queryKeys.cohorts.lists(),
+    queryFn: () => cohortsApi.getAll(),
+  })
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-9 w-48 mb-2" />
+            <Skeleton className="h-5 w-64" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <Card>
+          <div className="p-6 space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -103,4 +128,3 @@ export default async function CohortsPage() {
     </div>
   )
 }
-

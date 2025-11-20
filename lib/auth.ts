@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 export type UserRole = 'admin' | 'founder'
@@ -41,14 +42,31 @@ export async function getCurrentUser(): Promise<AppUser | null> {
  * Ensure the current user has a specific role
  */
 export async function requireRole(requiredRole: UserRole): Promise<AppUser> {
-  const user = await getCurrentUser()
+  const { userId: clerkUserId } = await auth()
   
-  if (!user) {
-    throw new Error('Unauthorized: Not authenticated')
+  // If not authenticated with Clerk, redirect to login
+  if (!clerkUserId) {
+    redirect('/login')
   }
 
+  const user = await getCurrentUser()
+  
+  // If user doesn't exist in Supabase, redirect to login
+  // This can happen if webhook didn't fire or failed
+  if (!user) {
+    redirect('/login')
+  }
+
+  // If user doesn't have the required role, redirect to appropriate page
   if (user.role !== requiredRole) {
-    throw new Error(`Unauthorized: Requires ${requiredRole} role`)
+    // Redirect to their role's dashboard or login
+    if (user.role === 'admin') {
+      redirect('/admin')
+    } else if (user.role === 'founder') {
+      redirect('/founder/dashboard')
+    } else {
+      redirect('/login')
+    }
   }
 
   return user

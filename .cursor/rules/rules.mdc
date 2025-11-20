@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+
+# Cohort Context Rule
+The application uses a cohort-based context system where admins select a cohort from the sidebar, and this selection acts as a sitewide filter/context for all admin operations. When an admin switches cohorts, it should feel like switching to a completely different profile/workspace.

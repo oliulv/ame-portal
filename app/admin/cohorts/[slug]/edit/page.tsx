@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -21,6 +22,9 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAppMutation } from '@/lib/hooks/useAppMutation'
+import { cohortsApi } from '@/lib/api/cohorts'
+import { queryKeys } from '@/lib/queryKeys'
 
 interface CohortEditPageProps {
   params: Promise<{
@@ -31,9 +35,6 @@ interface CohortEditPageProps {
 export default function CohortEditPage({ params }: CohortEditPageProps) {
   const router = useRouter()
   const [cohortSlug, setCohortSlug] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const form = useForm<CohortFormData>({
     resolver: zodResolver(cohortSchema),
@@ -46,69 +47,56 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
     },
   })
 
-  // Unwrap params and fetch cohort data
+  // Unwrap params
   useEffect(() => {
-    async function loadCohort() {
+    async function loadParams() {
       const resolvedParams = await params
       setCohortSlug(resolvedParams.slug)
-
-      try {
-        const response = await fetch(`/api/admin/cohorts/${resolvedParams.slug}`)
-        if (!response.ok) {
-          throw new Error('Failed to load cohort')
-        }
-
-        const cohort = await response.json()
-        form.reset({
-          name: cohort.name,
-          label: cohort.label,
-          year_start: cohort.year_start,
-          year_end: cohort.year_end,
-          is_active: cohort.is_active,
-        })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load cohort')
-      } finally {
-        setIsLoading(false)
-      }
     }
+    loadParams()
+  }, [params])
 
-    loadCohort()
-  }, [params, form])
+  // Fetch cohort data using TanStack Query
+  const { data: cohort, isLoading, error: queryError } = useQuery({
+    queryKey: queryKeys.cohorts.detail(cohortSlug || ''),
+    queryFn: () => cohortsApi.getBySlug(cohortSlug!),
+    enabled: !!cohortSlug,
+  })
+
+  // Reset form when cohort data loads
+  useEffect(() => {
+    if (cohort) {
+      form.reset({
+        name: cohort.name,
+        label: cohort.label,
+        year_start: cohort.year_start,
+        year_end: cohort.year_end,
+        is_active: cohort.is_active,
+      })
+    }
+  }, [cohort, form])
+
+  const updateCohort = useAppMutation({
+    mutationFn: (data: CohortFormData) => {
+      if (!cohortSlug) throw new Error('Cohort slug is required')
+      return cohortsApi.update(cohortSlug, data)
+    },
+    invalidateQueries: [
+      queryKeys.cohorts.lists(),
+      queryKeys.cohorts.detail(cohortSlug || ''),
+    ],
+    successMessage: 'Cohort updated successfully',
+    onSuccess: () => {
+      router.push('/admin/startups')
+    },
+  })
 
   async function onSubmit(data: CohortFormData) {
     if (!cohortSlug) return
-
-    setIsSubmitting(true)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/admin/cohorts/${cohortSlug}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to update cohort')
-      }
-
-      const updatedCohort = await response.json()
-      
-      // Success! Redirect to startups page (which shows cohort info)
-      router.push('/admin/startups')
-      router.refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setIsSubmitting(false)
-    }
+    updateCohort.mutate(data)
   }
 
-  if (isLoading) {
+  if (isLoading || !cohortSlug) {
     return (
       <div className="container max-w-2xl py-8">
         <Skeleton className="mb-6 h-10 w-32" />
@@ -146,9 +134,9 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {error && (
+          {(queryError || updateCohort.isError) && (
             <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
+              {queryError?.message || updateCohort.error?.message || 'An error occurred'}
             </div>
           )}
 
@@ -256,9 +244,9 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
               <div className="flex gap-4">
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={updateCohort.isPending}
                 >
-                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                  {updateCohort.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
                 <Link href="/admin/startups">
                   <Button type="button" variant="outline">

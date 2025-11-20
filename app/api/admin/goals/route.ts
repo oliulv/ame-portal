@@ -45,8 +45,23 @@ export async function GET(request: Request) {
       )
     }
 
-    // 4. Return goal templates data
-    return NextResponse.json(data || [])
+    // 4. Deduplicate "Join AccelerateMe" goals - keep only the first one per cohort
+    // This prevents duplicate entries from appearing in the UI
+    const seenAccelerateMe = new Map<string, string>() // cohort_id -> goal_id
+    const deduplicated = (data || []).filter((goal) => {
+      const isAccelerateMe = goal.title === 'Join AccelerateMe' || 
+                             goal.title?.toLowerCase().includes('join accelerateme')
+      if (isAccelerateMe && goal.cohort_id) {
+        if (seenAccelerateMe.has(goal.cohort_id)) {
+          return false // Skip duplicate
+        }
+        seenAccelerateMe.set(goal.cohort_id, goal.id)
+      }
+      return true
+    })
+
+    // 5. Return deduplicated goal templates data
+    return NextResponse.json(deduplicated)
   } catch (error) {
     console.error('Error in GET /api/admin/goals:', error)
 

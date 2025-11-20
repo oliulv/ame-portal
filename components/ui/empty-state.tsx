@@ -7,6 +7,7 @@ interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string
   description?: string
   action?: React.ReactNode
+  noCard?: boolean
 }
 
 export function EmptyState({
@@ -15,16 +16,11 @@ export function EmptyState({
   description,
   action,
   className,
+  noCard = false,
   ...props
 }: EmptyStateProps) {
-  return (
-    <Card
-      className={cn(
-        "flex flex-col items-center justify-center p-12 text-center",
-        className
-      )}
-      {...props}
-    >
+  const content = (
+    <>
       {icon && (
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
           {icon}
@@ -37,6 +33,32 @@ export function EmptyState({
         </p>
       )}
       {action && <div>{action}</div>}
+    </>
+  )
+
+  if (noCard) {
+    return (
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center p-12 text-center",
+          className
+        )}
+        {...props}
+      >
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <Card
+      className={cn(
+        "flex flex-col items-center justify-center p-12 text-center",
+        className
+      )}
+      {...props}
+    >
+      {content}
     </Card>
   )
 }

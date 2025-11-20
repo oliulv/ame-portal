@@ -28,7 +28,12 @@ import { goalTemplateSchema, type GoalTemplateFormData } from '@/lib/schemas'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAppMutation } from '@/lib/hooks/useAppMutation'
+import { useSelectedCohort } from '@/lib/hooks/useSelectedCohort'
+import { goalsApi } from '@/lib/api/goals'
+import { queryKeys } from '@/lib/queryKeys'
 
 const GOAL_CATEGORIES = [
   { value: 'launch', label: 'Launch' },
@@ -47,15 +52,12 @@ interface GoalEditPageProps {
 export default function GoalEditPage({ params }: GoalEditPageProps) {
   const router = useRouter()
   const [goalId, setGoalId] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [cohorts, setCohorts] = useState<Array<{ id: string; label: string }>>([])
+  const { cohortId, cohort, cohortSlug } = useSelectedCohort()
 
   const form = useForm<GoalTemplateFormData>({
     resolver: zodResolver(goalTemplateSchema),
     defaultValues: {
-      cohort_id: '',
+      cohort_id: cohortId || '',
       title: '',
       description: '',
       category: 'launch',
@@ -67,79 +69,72 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
     },
   })
 
-  // Fetch goal template data and cohorts
+  // Unwrap params
   useEffect(() => {
-    async function loadData() {
+    async function loadParams() {
       const resolvedParams = await params
       setGoalId(resolvedParams.id)
-
-      try {
-        // Fetch cohorts for dropdown
-        const cohortsResponse = await fetch('/api/admin/cohorts')
-        if (cohortsResponse.ok) {
-          const cohortsData = await cohortsResponse.json()
-          setCohorts(cohortsData)
-        }
-
-        // Fetch goal template
-        const goalResponse = await fetch(`/api/admin/goals/${resolvedParams.id}`)
-        if (!goalResponse.ok) {
-          throw new Error('Failed to load goal template')
-        }
-
-        const goal = await goalResponse.json()
-        form.reset({
-          cohort_id: goal.cohort_id,
-          title: goal.title,
-          description: goal.description,
-          category: goal.category,
-          default_target_value: goal.default_target_value,
-          default_deadline: goal.default_deadline,
-          default_weight: goal.default_weight,
-          default_funding_amount: goal.default_funding_amount,
-          is_active: goal.is_active,
-        })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load goal template')
-      } finally {
-        setIsLoading(false)
-      }
     }
+    loadParams()
+  }, [params])
 
-    loadData()
-  }, [params, form])
+  // Fetch goal template data
+  const { data: goal, isLoading, error: queryError } = useQuery({
+    queryKey: queryKeys.goals.detail(goalId || ''),
+    queryFn: () => goalsApi.getById(goalId!),
+    enabled: !!goalId,
+  })
+
+  // Reset form when goal data loads
+  // Note: We keep the goal's original cohort_id, but display the current selected cohort
+  useEffect(() => {
+    if (goal) {
+      const category = (goal.category && ['launch', 'revenue', 'users', 'product', 'fundraising'].includes(goal.category))
+        ? goal.category as 'launch' | 'revenue' | 'users' | 'product' | 'fundraising'
+        : 'launch'
+      
+      form.reset({
+        cohort_id: goal.cohort_id, // Keep original cohort_id from the goal
+        title: goal.title,
+        description: goal.description || '',
+        category,
+        default_target_value: goal.default_target_value,
+        default_deadline: goal.default_deadline,
+        default_weight: goal.default_weight,
+        default_funding_amount: goal.default_funding_amount,
+        is_active: goal.is_active,
+      })
+    }
+  }, [goal, form])
+
+  // Update cohort_id when cohort changes (but only if form hasn't been populated with goal data yet)
+  useEffect(() => {
+    if (cohortId && goal && !goal.cohort_id) {
+      form.setValue('cohort_id', cohortId)
+    }
+  }, [cohortId, goal, form])
+
+  const updateGoal = useAppMutation({
+    mutationFn: (data: GoalTemplateFormData) => {
+      if (!goalId) throw new Error('Goal ID is required')
+      return goalsApi.update(goalId, data)
+    },
+    invalidateQueries: [
+      queryKeys.goals.list('admin'),
+      queryKeys.goals.detail(goalId || ''),
+    ],
+    successMessage: 'Goal template updated successfully',
+    onSuccess: () => {
+      router.push('/admin/goals')
+    },
+  })
 
   async function onSubmit(data: GoalTemplateFormData) {
     if (!goalId) return
-
-    setIsSubmitting(true)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/admin/goals/${goalId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to update goal template')
-      }
-
-      // Success! Redirect to goals list
-      router.push('/admin/goals')
-      router.refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setIsSubmitting(false)
-    }
+    updateGoal.mutate(data)
   }
 
-  if (isLoading) {
+  if (isLoading || !goalId) {
     return (
       <div className="container max-w-2xl py-8">
         <Skeleton className="mb-6 h-10 w-32" />
@@ -161,7 +156,7 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
   return (
     <div className="container max-w-2xl py-8">
       <div className="mb-6">
-        <Link href="/admin/goals">
+        <Link href={cohortSlug ? `/admin/${cohortSlug}/goals` : '/admin/goals'}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Goal Templates
@@ -177,44 +172,25 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {error && (
+          {(queryError || updateGoal.isError) && (
             <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
+              {queryError?.message || updateGoal.error?.message || 'An error occurred'}
             </div>
           )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="cohort_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cohort</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a cohort" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {cohorts.map((cohort) => (
-                          <SelectItem key={cohort.id} value={cohort.id}>
-                            {cohort.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      This goal template will apply to new startups in this cohort
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {goal && (
+                <div className="rounded-lg border p-4 bg-muted/50">
+                  <p className="text-sm font-medium">Cohort</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {goal.cohorts?.label || 'Unknown Cohort'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    This goal template belongs to the cohort shown above. The cohort cannot be changed after creation.
+                  </p>
+                </div>
+              )}
 
               <FormField
                 control={form.control}
@@ -403,11 +379,11 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
               <div className="flex gap-4">
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={updateGoal.isPending}
                 >
-                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                  {updateGoal.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
-                <Link href="/admin/goals">
+                <Link href={cohortSlug ? `/admin/${cohortSlug}/goals` : '/admin/goals'}>
                   <Button type="button" variant="outline">
                     Cancel
                   </Button>

@@ -91,7 +91,26 @@ export async function POST(request: Request) {
       )
     }
 
-    // 4. Return success response
+    // 5. Create default "Join AccelerateMe" goal template for this cohort
+    if (data) {
+      const { error: goalError } = await supabase
+        .from('goal_templates')
+        .insert({
+          cohort_id: data.id,
+          title: 'Join AccelerateMe',
+          description: 'Welcome to the program! Your journey starts here.',
+          category: 'launch',
+          is_active: true,
+          display_order: 0, // Always first
+        })
+
+      if (goalError) {
+        console.error('Error creating default AccelerateMe goal:', goalError)
+        // Non-critical, continue and return the cohort
+      }
+    }
+
+    // 6. Return success response
     return NextResponse.json(data, { status: 201 })
   } catch (error) {
     console.error('Error in POST /api/admin/cohorts:', error)

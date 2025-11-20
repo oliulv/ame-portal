@@ -1,71 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Check, Clock, MinusCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StartupGoal } from '@/lib/types'
-
-const INITIAL_GOAL: StartupGoal = {
-  id: 'goal-join-accelerateme',
-  startup_id: 'system',
-  title: 'Join AccelerateMe',
-  status: 'completed',
-  progress_value: 1,
-  target_value: 1,
-  weight: 0,
-  manually_overridden: false,
-  created_at: new Date(0).toISOString(), // ensuring it's always first
-  updated_at: new Date(0).toISOString(),
-  description: 'Welcome to the program! Your journey starts here.'
-}
+import { queryKeys } from '@/lib/queryKeys'
+import { goalsApi } from '@/lib/api/goals'
 
 export default function FounderGoalsPage() {
-  const [goals, setGoals] = useState<StartupGoal[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchGoals = async () => {
-    try {
-      const response = await fetch('/api/founder/goals')
-      if (!response.ok) {
-        throw new Error('Failed to fetch goals')
-      }
-      const data = await response.json()
-      setGoals([INITIAL_GOAL, ...data])
-      setError(null)
-    } catch (err) {
-      console.error('Error fetching goals:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load goals')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    // Initial fetch
-    fetchGoals()
-
-    // Refresh when page becomes visible (user switches back to tab)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchGoals()
-      }
-    }
-
-    // Refresh periodically (every 30 seconds)
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchGoals()
-      }
-    }, 30000)
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      clearInterval(interval)
-    }
-  }, [])
+  const { data: goals = [], isLoading, error } = useQuery({
+    queryKey: queryKeys.goals.list('founder'),
+    queryFn: () => goalsApi.getFounderGoals(),
+    staleTime: 1000 * 60, // 1 minute - goals can change, but realtime handles most updates
+    refetchInterval: 1000 * 60 * 2, // Refetch every 2 minutes as fallback
+    refetchOnWindowFocus: true,
+  })
 
   if (isLoading) {
     return (
@@ -83,7 +32,7 @@ export default function FounderGoalsPage() {
       <div className="max-w-3xl">
         <h1 className="text-2xl font-bold mb-8">Goals Checklist</h1>
         <div className="bg-white p-6 rounded-lg shadow text-center">
-          <p className="text-red-500">Error: {error}</p>
+          <p className="text-red-500">Error: {error instanceof Error ? error.message : 'Failed to load goals'}</p>
         </div>
       </div>
     )
@@ -164,7 +113,7 @@ export default function FounderGoalsPage() {
                       {goal.status === 'completed' ? (
                         <span className={cn(
                           "h-12 w-12 rounded-full flex items-center justify-center ring-8 ring-white z-10",
-                          goal.id === INITIAL_GOAL.id ? "bg-indigo-600" : "bg-green-500"
+                          goal.id === 'goal-join-accelerateme' ? "bg-indigo-600" : "bg-green-500"
                         )}>
                           <Check className="h-6 w-6 text-white" aria-hidden="true" />
                         </span>

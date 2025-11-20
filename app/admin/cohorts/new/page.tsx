@@ -19,12 +19,12 @@ import { Switch } from '@/components/ui/switch'
 import { cohortSchema, type CohortFormData } from '@/lib/schemas'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useAppMutation } from '@/lib/hooks/useAppMutation'
+import { cohortsApi } from '@/lib/api/cohorts'
+import { queryKeys } from '@/lib/queryKeys'
 
 export default function NewCohortPage() {
   const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const form = useForm<CohortFormData>({
     resolver: zodResolver(cohortSchema),
@@ -37,32 +37,17 @@ export default function NewCohortPage() {
     },
   })
 
-  async function onSubmit(data: CohortFormData) {
-    setIsSubmitting(true)
-    setError(null)
-
-    try {
-      const response = await fetch('/api/admin/cohorts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to create cohort')
-      }
-
-      // Success! Redirect to cohorts list
+  const createCohort = useAppMutation({
+    mutationFn: (data: CohortFormData) => cohortsApi.create(data),
+    invalidateQueries: [queryKeys.cohorts.lists()],
+    successMessage: 'Cohort created successfully',
+    onSuccess: () => {
       router.push('/admin/cohorts')
-      router.refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setIsSubmitting(false)
-    }
+    },
+  })
+
+  async function onSubmit(data: CohortFormData) {
+    createCohort.mutate(data)
   }
 
   return (
@@ -84,9 +69,9 @@ export default function NewCohortPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {error && (
+          {createCohort.isError && (
             <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
+              {createCohort.error?.message || 'An error occurred'}
             </div>
           )}
 
@@ -194,9 +179,9 @@ export default function NewCohortPage() {
               <div className="flex gap-4">
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={createCohort.isPending}
                 >
-                  {isSubmitting ? 'Creating...' : 'Create Cohort'}
+                  {createCohort.isPending ? 'Creating...' : 'Create Cohort'}
                 </Button>
                 <Link href="/admin/cohorts">
                   <Button type="button" variant="outline">

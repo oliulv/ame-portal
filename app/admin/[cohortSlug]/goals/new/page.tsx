@@ -72,7 +72,12 @@ export default function NewGoalTemplatePage() {
     invalidateQueries: [queryKeys.goals.list('admin')],
     successMessage: 'Goal template created successfully',
     onSuccess: () => {
-      router.push('/admin/goals')
+      // Navigate back to the cohort-specific goals page
+      if (cohortSlug) {
+        router.push(`/admin/${cohortSlug}/goals`)
+      } else {
+        router.push('/admin/goals')
+      }
     },
   })
 
@@ -345,3 +350,4 @@ export default function NewGoalTemplatePage() {
     </div>
   )
 }
+
