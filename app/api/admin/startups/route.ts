@@ -132,12 +132,14 @@ export async function POST(request: Request) {
       // Non-critical, log but continue
     }
 
-    // 7. Fetch active goal templates for this cohort
+    // 7. Fetch active goal templates for this cohort, ordered by display_order
     const { data: goalTemplates, error: templatesError } = await supabase
       .from('goal_templates')
       .select('*')
       .eq('cohort_id', validatedData.cohort_id)
       .eq('is_active', true)
+      .order('display_order', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: false })
 
     if (templatesError) {
       console.error('Error fetching goal templates:', templatesError)

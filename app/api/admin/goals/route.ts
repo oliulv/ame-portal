@@ -27,6 +27,7 @@ export async function GET(request: Request) {
           label
         )
       `)
+      .order('display_order', { ascending: true, nullsFirst: true })
       .order('created_at', { ascending: false })
 
     // Filter by cohort if provided
@@ -78,6 +79,20 @@ export async function POST(request: Request) {
 
     // 3. Create goal template in database
     const supabase = await createClient()
+    
+    // Get the max display_order for this cohort to set the new goal's order
+    const { data: maxOrderData } = await supabase
+      .from('goal_templates')
+      .select('display_order')
+      .eq('cohort_id', validatedData.cohort_id)
+      .order('display_order', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    
+    const nextDisplayOrder = maxOrderData?.display_order 
+      ? maxOrderData.display_order + 1 
+      : 1
+    
     const { data, error } = await supabase
       .from('goal_templates')
       .insert({
@@ -90,6 +105,7 @@ export async function POST(request: Request) {
         default_weight: validatedData.default_weight,
         default_funding_amount: validatedData.default_funding_amount,
         is_active: validatedData.is_active,
+        display_order: nextDisplayOrder,
       })
       .select()
       .single()
