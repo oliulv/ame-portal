@@ -42,7 +42,7 @@ function generateInvitationEmailHTML(params: {
 
           <p>Hi ${founderName},</p>
 
-          <p>You've been invited to join <strong>${startupName}</strong> on the AccelerateMe platform. This platform helps you track your startup's progress, manage goals, and streamline funding processes.</p>
+          <p>You've been invited to join <strong>${startupName}</strong> on the AccelerateMe platform.</p>
 
           <p>Click the button below to accept your invitation and complete your profile:</p>
 
@@ -86,7 +86,9 @@ export async function sendInvitationEmail({
   inviteToken,
   expirationDays = 14,
 }: InvitationEmailParams) {
-  const inviteUrl = `${APP_URL}/invite/${inviteToken}`
+  // URL encode the token to ensure it's properly handled in email clients
+  // Next.js will automatically decode it when reading the route parameter
+  const inviteUrl = `${APP_URL}/invite/${encodeURIComponent(inviteToken)}`
 
   // Check if API key is properly configured
   if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_dummy_key_for_build') {

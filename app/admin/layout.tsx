@@ -1,5 +1,4 @@
 import { requireAdmin } from '@/lib/auth'
-import { UserButton } from '@clerk/nextjs'
 import { Sidebar } from '@/components/sidebar'
 
 export default async function AdminLayout({
@@ -23,6 +22,7 @@ export default async function AdminLayout({
         title="AccelerateMe"
         subtitle="Admin Portal"
         navItems={navItems}
+        showCohortSelector={true}
       />
 
       {/* Main content */}
@@ -30,7 +30,6 @@ export default async function AdminLayout({
         {/* Top bar */}
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-white px-6">
           <h2 className="ml-12 text-lg font-semibold lg:ml-0">Admin Portal</h2>
-          <UserButton />
         </header>
 
         {/* Page content */}

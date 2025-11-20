@@ -154,9 +154,11 @@ export async function POST(request: Request) {
         category: template.category,
         target_value: template.default_target_value,
         deadline: template.default_deadline,
-        weight: template.default_weight,
+        weight: template.default_weight || 1,
         funding_amount: template.default_funding_amount,
-        status: 'pending' as const,
+        status: 'not_started' as const,
+        progress_value: 0,
+        manually_overridden: false,
       }))
 
       const { error: goalsError } = await supabase

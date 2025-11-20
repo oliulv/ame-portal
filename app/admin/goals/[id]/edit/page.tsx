@@ -285,7 +285,7 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                   name="default_target_value"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Target Value (Optional)</FormLabel>
+                      <FormLabel>Target (Number, Optional)</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -298,6 +298,9 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                           }}
                         />
                       </FormControl>
+                      <FormDescription>
+                        Enter the numeric target for this goal (e.g., 100 for £100 revenue, 50 for 50 users). Units come from the goal title/description.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -308,7 +311,7 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                   name="default_weight"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Weight (Optional)</FormLabel>
+                      <FormLabel>Priority (1-10, Optional)</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -323,6 +326,9 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                           }}
                         />
                       </FormControl>
+                      <FormDescription>
+                        Importance from 1–10 (1–3 = low, 4–7 = medium, 8–10 = high). Higher priority goals can count more in scoring later.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -352,7 +358,7 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                 name="default_funding_amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Funding Amount (Optional)</FormLabel>
+                      <FormLabel>Funding Unlocked on Completion (Optional)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -366,7 +372,7 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                       />
                     </FormControl>
                     <FormDescription>
-                      Funding unlock amount in GBP
+                      Amount in GBP that this goal contributes when marked as completed.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

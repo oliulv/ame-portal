@@ -67,7 +67,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
     total: goals?.length || 0,
     completed: goals?.filter(g => g.status === 'completed').length || 0,
     inProgress: goals?.filter(g => g.status === 'in_progress').length || 0,
-    pending: goals?.filter(g => g.status === 'pending').length || 0,
+    notStarted: goals?.filter(g => g.status === 'not_started').length || 0,
   }
 
   return (
@@ -216,30 +216,34 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invitations.map((invitation) => (
-                  <TableRow key={invitation.id}>
-                    <TableCell className="font-medium">{invitation.full_name}</TableCell>
-                    <TableCell>{invitation.personal_email}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          invitation.status === 'accepted'
-                            ? 'success'
-                            : invitation.status === 'sent'
-                            ? 'info'
-                            : invitation.status === 'failed'
-                            ? 'destructive'
-                            : 'secondary'
-                        }
-                      >
-                        {invitation.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(invitation.created_at).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {invitations.map((invitation) => {
+                  const isAccepted = !!invitation.accepted_at
+                  const isExpired = !isAccepted && new Date(invitation.expires_at) < new Date()
+                  const status = isAccepted ? 'accepted' : isExpired ? 'expired' : 'pending'
+                  
+                  return (
+                    <TableRow key={invitation.id}>
+                      <TableCell className="font-medium">{invitation.full_name}</TableCell>
+                      <TableCell>{invitation.email}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            status === 'accepted'
+                              ? 'success'
+                              : status === 'expired'
+                              ? 'destructive'
+                              : 'info'
+                          }
+                        >
+                          {status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(invitation.created_at).toLocaleDateString()}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           ) : (

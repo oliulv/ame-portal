@@ -39,8 +39,8 @@ interface InviteFounderPageProps {
 interface Invitation {
   id: string
   full_name: string
-  personal_email: string
-  status: string
+  email: string
+  accepted_at: string | null
   created_at: string
   expires_at: string
 }
@@ -66,6 +66,19 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
     },
   })
 
+  // Function to fetch invitations
+  const fetchInvitations = async (startupId: string) => {
+    try {
+      const response = await fetch(`/api/admin/invitations?startup_id=${startupId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setInvitations(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch invitations:', err)
+    }
+  }
+
   // Load startup and invitations
   useEffect(() => {
     async function loadData() {
@@ -80,11 +93,10 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
           setStartupId(startup.id)
           setStartupName(startup.name)
           form.setValue('startup_id', startup.id)
+          
+          // Fetch invitations for this startup
+          await fetchInvitations(startup.id)
         }
-
-        // Note: We'd need a separate endpoint to fetch invitations by startup_id
-        // For now, we'll set empty array
-        setInvitations([])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
@@ -93,7 +105,8 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
     }
 
     loadData()
-  }, [params, form])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params])
 
   async function onSubmit(data: InvitationFormData) {
     setIsSubmitting(true)
@@ -115,6 +128,11 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
       }
 
       setSuccessMessage(`Invitation sent successfully to ${data.personal_email}`)
+
+      // Refresh invitations list
+      if (startupId) {
+        await fetchInvitations(startupId)
+      }
 
       // Reset form
       form.reset({
@@ -145,6 +163,11 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
       }
 
       setSuccessMessage('Invitation resent successfully')
+      
+      // Refresh invitations list
+      if (startupId) {
+        await fetchInvitations(startupId)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resend invitation')
     } finally {
@@ -279,32 +302,27 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
                 </TableHeader>
                 <TableBody>
                   {invitations.map((invitation) => {
-                    const isExpired = new Date(invitation.expires_at) < new Date()
-                    const canResend = invitation.status !== 'accepted'
+                    const isAccepted = !!invitation.accepted_at
+                    const isExpired = !isAccepted && new Date(invitation.expires_at) < new Date()
+                    const status = isAccepted ? 'accepted' : isExpired ? 'expired' : 'pending'
+                    const canResend = !isAccepted
 
                     return (
                       <TableRow key={invitation.id}>
                         <TableCell className="font-medium">{invitation.full_name}</TableCell>
-                        <TableCell>{invitation.personal_email}</TableCell>
+                        <TableCell>{invitation.email}</TableCell>
                         <TableCell>
                           <Badge
                             variant={
-                              invitation.status === 'accepted'
+                              status === 'accepted'
                                 ? 'success'
-                                : invitation.status === 'sent'
-                                ? 'info'
-                                : invitation.status === 'failed'
+                                : status === 'expired'
                                 ? 'destructive'
-                                : 'secondary'
+                                : 'info'
                             }
                           >
-                            {invitation.status}
+                            {status}
                           </Badge>
-                          {isExpired && invitation.status !== 'accepted' && (
-                            <Badge variant="destructive" className="ml-2">
-                              Expired
-                            </Badge>
-                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(invitation.created_at).toLocaleDateString()}

@@ -20,8 +20,14 @@ export async function GET(request: Request) {
     const supabase = await createClient()
     let query = supabase
       .from('goal_templates')
-      .select('*')
-      .order('category', { ascending: true })
+      .select(`
+        *,
+        cohorts (
+          id,
+          label
+        )
+      `)
+      .order('created_at', { ascending: false })
 
     // Filter by cohort if provided
     if (cohortId) {
@@ -96,7 +102,65 @@ export async function POST(request: Request) {
       )
     }
 
-    // 4. Return success response
+    // 4. If template is active, assign it to existing startups in this cohort
+    if (validatedData.is_active && data) {
+      // Fetch all startups in this cohort
+      const { data: startups, error: startupsError } = await supabase
+        .from('startups')
+        .select('id')
+        .eq('cohort_id', validatedData.cohort_id)
+
+      if (startupsError) {
+        console.error('Error fetching startups for goal assignment:', startupsError)
+        // Non-critical, continue and return the template
+      } else if (startups && startups.length > 0) {
+        // For each startup, check if they already have this goal template assigned
+        // and create startup_goals if not
+        const goalsToCreate = []
+        
+        for (const startup of startups) {
+          // Check if this startup already has a goal from this template
+          const { data: existingGoal } = await supabase
+            .from('startup_goals')
+            .select('id')
+            .eq('startup_id', startup.id)
+            .eq('goal_template_id', data.id)
+            .maybeSingle()
+
+          // Only create if it doesn't exist
+          if (!existingGoal) {
+            goalsToCreate.push({
+              startup_id: startup.id,
+              goal_template_id: data.id,
+              title: validatedData.title,
+              description: validatedData.description,
+              category: validatedData.category,
+              target_value: validatedData.default_target_value,
+              deadline: validatedData.default_deadline,
+              weight: validatedData.default_weight || 1,
+              funding_amount: validatedData.default_funding_amount,
+              status: 'not_started' as const,
+              progress_value: 0,
+              manually_overridden: false,
+            })
+          }
+        }
+
+        // Bulk insert all new goals
+        if (goalsToCreate.length > 0) {
+          const { error: goalsError } = await supabase
+            .from('startup_goals')
+            .insert(goalsToCreate)
+
+          if (goalsError) {
+            console.error('Error assigning goal template to existing startups:', goalsError)
+            // Non-critical, log but continue
+          }
+        }
+      }
+    }
+
+    // 5. Return success response
     return NextResponse.json(data, { status: 201 })
   } catch (error) {
     console.error('Error in POST /api/admin/goals:', error)

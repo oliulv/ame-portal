@@ -6,13 +6,68 @@ import { generateInvitationToken, getInvitationExpiration } from '@/lib/tokens'
 import { sendInvitationEmail } from '@/lib/email'
 
 /**
+ * GET /api/admin/invitations?startup_id=xxx
+ * Fetch invitations for a specific startup
+ */
+export async function GET(request: Request) {
+  try {
+    // 1. Authenticate and authorize
+    await requireAdmin()
+
+    // 2. Get query parameters
+    const { searchParams } = new URL(request.url)
+    const startupId = searchParams.get('startup_id')
+
+    if (!startupId) {
+      return NextResponse.json(
+        { error: 'startup_id query parameter is required' },
+        { status: 400 }
+      )
+    }
+
+    // 3. Fetch invitations from database
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('invitations')
+      .select('id, full_name, email, accepted_at, created_at, expires_at')
+      .eq('startup_id', startupId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Database error fetching invitations:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch invitations' },
+        { status: 500 }
+      )
+    }
+
+    // 4. Return invitations data
+    return NextResponse.json(data || [])
+  } catch (error) {
+    console.error('Error in GET /api/admin/invitations:', error)
+
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
  * POST /api/admin/invitations
  * Create a new invitation and send email
  */
 export async function POST(request: Request) {
   try {
     // 1. Authenticate and authorize
-    await requireAdmin()
+    const admin = await requireAdmin()
 
     // 2. Parse and validate request body
     const body = await request.json()
@@ -23,12 +78,12 @@ export async function POST(request: Request) {
     // 3. Check if email already has an invitation for this startup
     const { data: existingInvitation } = await supabase
       .from('invitations')
-      .select('id, status')
+      .select('id, accepted_at')
       .eq('startup_id', validatedData.startup_id)
-      .eq('personal_email', validatedData.personal_email)
+      .eq('email', validatedData.personal_email)
       .single()
 
-    if (existingInvitation && existingInvitation.status === 'accepted') {
+    if (existingInvitation && existingInvitation.accepted_at) {
       return NextResponse.json(
         { error: 'This email has already accepted an invitation for this startup' },
         { status: 400 }
@@ -59,10 +114,10 @@ export async function POST(request: Request) {
       .insert({
         startup_id: validatedData.startup_id,
         full_name: validatedData.full_name,
-        personal_email: validatedData.personal_email,
+        email: validatedData.personal_email,
         token,
         expires_at: expiresAt,
-        status: 'sent',
+        created_by_admin_id: admin.id,
       })
       .select()
       .single()
@@ -86,11 +141,8 @@ export async function POST(request: Request) {
       })
     } catch (emailError) {
       console.error('Failed to send invitation email:', emailError)
-      // Update invitation status to indicate email failure
-      await supabase
-        .from('invitations')
-        .update({ status: 'failed' })
-        .eq('id', invitation.id)
+      // Note: We can't track email failure status in the database
+      // The invitation is created but email failed - admin can resend if needed
 
       return NextResponse.json(
         { error: 'Invitation created but email failed to send. Please try resending.' },

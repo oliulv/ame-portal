@@ -60,3 +60,53 @@ body {
   color: hsl(var(--foreground));
   font-feature-settings: "rlig" 1, "calt" 1;
 }
+
+/* Clerk SignUp component customization to match app design system */
+.cl-rootBox {
+  width: 100%;
+}
+
+.cl-card {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: calc(var(--radius) * 1px) !important;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important;
+}
+
+.cl-formButtonPrimary {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-radius: calc(var(--radius) * 0.5px) !important;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important;
+}
+
+.cl-formButtonPrimary:hover {
+  background-color: hsl(var(--primary) / 0.9) !important;
+}
+
+.cl-formFieldInput {
+  background-color: transparent !important;
+  border: 1px solid hsl(var(--input)) !important;
+  border-radius: calc(var(--radius) * 0.5px) !important;
+  height: 2.25rem !important;
+  padding: 0.25rem 0.75rem !important;
+  font-size: 0.875rem !important;
+}
+
+.cl-formFieldInput:focus {
+  outline: none !important;
+  ring: 1px solid hsl(var(--ring)) !important;
+}
+
+.cl-socialButtonsBlockButton {
+  background-color: hsl(var(--secondary)) !important;
+  color: hsl(var(--secondary-foreground)) !important;
+  border: 1px solid hsl(var(--input)) !important;
+  border-radius: calc(var(--radius) * 0.5px) !important;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important;
+}
+
+.cl-socialButtonsBlockButton:hover {
+  background-color: hsl(var(--secondary) / 0.8) !important;
+}

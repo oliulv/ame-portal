@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Cohort } from '@/lib/types'
+import { UserButton } from '@clerk/nextjs'
 
 interface NavItem {
   title: string
@@ -42,6 +43,7 @@ interface SidebarProps {
   title: string
   subtitle: string
   navItems: NavItem[]
+  showCohortSelector?: boolean
 }
 
 const iconMap: Record<string, LucideIcon> = {
@@ -53,15 +55,20 @@ const iconMap: Record<string, LucideIcon> = {
   'Building2': Building2,
 }
 
-function SidebarContent({ title, subtitle, navItems, onLinkClick }: SidebarProps & { onLinkClick?: () => void }) {
+function SidebarContent({ title, subtitle, navItems, showCohortSelector = false, onLinkClick }: SidebarProps & { onLinkClick?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const [cohorts, setCohorts] = useState<Cohort[]>([])
   const [selectedCohortSlug, setSelectedCohortSlug] = useState<string>('')
   const [isLoadingCohorts, setIsLoadingCohorts] = useState(true)
 
-  // Load cohorts and selected cohort from localStorage
+  // Load cohorts and selected cohort from localStorage (only if showCohortSelector is true)
   useEffect(() => {
+    if (!showCohortSelector) {
+      setIsLoadingCohorts(false)
+      return
+    }
+
     const loadCohorts = async () => {
       try {
         const response = await fetch('/api/admin/cohorts')
@@ -107,7 +114,7 @@ function SidebarContent({ title, subtitle, navItems, onLinkClick }: SidebarProps
     }
 
     loadCohorts()
-  }, [])
+  }, [showCohortSelector])
 
   const handleCohortChange = (cohortSlug: string) => {
     setSelectedCohortSlug(cohortSlug)
@@ -125,7 +132,7 @@ function SidebarContent({ title, subtitle, navItems, onLinkClick }: SidebarProps
   return (
     <div className="flex h-full flex-col">
       {/* Logo/Brand */}
-      <div className="flex h-16 flex-col justify-center border-b px-6">
+      <div className="flex h-16 flex-col justify-center border-b bg-card px-6">
         <h1 className="text-xl font-bold tracking-tight">{title}</h1>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
@@ -159,50 +166,57 @@ function SidebarContent({ title, subtitle, navItems, onLinkClick }: SidebarProps
         })}
       </nav>
 
-      {/* Cohort Selector */}
-      <div className="border-t p-4 space-y-2">
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">
-            Cohort
-          </label>
-          {isLoadingCohorts ? (
-            <div className="h-9 rounded-md border bg-muted animate-pulse" />
-          ) : (
-            <Select value={selectedCohortSlug} onValueChange={handleCohortChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select cohort">
-                  {selectedCohort ? selectedCohort.label : 'Select cohort'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {cohorts.map((cohort) => (
-                  <SelectItem key={cohort.id} value={cohort.slug}>
-                    {cohort.label} ({cohort.year_start} - {cohort.year_end})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+      {/* Cohort Selector - Only for admins */}
+      {showCohortSelector && (
+        <div className="border-t p-4 space-y-2">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              Cohort
+            </label>
+            {isLoadingCohorts ? (
+              <div className="h-9 rounded-md border bg-muted animate-pulse" />
+            ) : (
+              <Select value={selectedCohortSlug} onValueChange={handleCohortChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select cohort">
+                    {selectedCohort ? selectedCohort.label : 'Select cohort'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {cohorts.map((cohort) => (
+                    <SelectItem key={cohort.id} value={cohort.slug}>
+                      {cohort.label} ({cohort.year_start} - {cohort.year_end})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <Link href="/admin/cohorts/new" onClick={onLinkClick}>
+            <Button variant="outline" size="sm" className="w-full">
+              <Plus className="mr-2 h-3 w-3" />
+              Create New Cohort
+            </Button>
+          </Link>
         </div>
-        <Link href="/admin/cohorts/new" onClick={onLinkClick}>
-          <Button variant="outline" size="sm" className="w-full">
-            <Plus className="mr-2 h-3 w-3" />
-            Create New Cohort
-          </Button>
-        </Link>
-      </div>
+      )}
 
-      {/* Footer */}
-      <div className="border-t px-4 py-2">
-        <p className="text-xs text-muted-foreground">
-          AccelerateMe Internal Tool
-        </p>
+      {/* Footer with UserButton */}
+      <div className="border-t px-4 py-3">
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            AccelerateMe Internal Tool
+          </p>
+          <div className="flex items-center justify-start">
+            <UserButton />
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-export function Sidebar({ title, subtitle, navItems }: SidebarProps) {
+export function Sidebar({ title, subtitle, navItems, showCohortSelector = false }: SidebarProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -225,6 +239,7 @@ export function Sidebar({ title, subtitle, navItems }: SidebarProps) {
               title={title}
               subtitle={subtitle}
               navItems={navItems}
+              showCohortSelector={showCohortSelector}
               onLinkClick={() => setOpen(false)}
             />
           </SheetContent>
@@ -233,7 +248,7 @@ export function Sidebar({ title, subtitle, navItems }: SidebarProps) {
 
       {/* Desktop Sidebar */}
       <aside className="hidden fixed left-0 top-0 z-30 h-screen w-64 flex-col border-r bg-card lg:flex">
-        <SidebarContent title={title} subtitle={subtitle} navItems={navItems} />
+        <SidebarContent title={title} subtitle={subtitle} navItems={navItems} showCohortSelector={showCohortSelector} />
       </aside>
     </>
   )

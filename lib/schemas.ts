@@ -68,3 +68,59 @@ export const invitationSchema = z.object({
 })
 
 export type InvitationFormData = z.infer<typeof invitationSchema>
+
+/**
+ * Validation schema for founder onboarding - Personal Info
+ */
+export const founderPersonalInfoSchema = z.object({
+  address_line1: z.string().min(1, 'Address line 1 is required'),
+  address_line2: z.string().optional(),
+  city: z.string().min(1, 'City is required'),
+  postcode: z.string().min(1, 'Postcode is required'),
+  country: z.string().min(1, 'Country is required'),
+  phone: z.string().min(1, 'Phone number is required'),
+  bio: z.string().optional(),
+  linkedin_url: z.string().url('Invalid URL').optional().or(z.literal('')),
+  x_url: z.string().url('Invalid URL').optional().or(z.literal('')),
+})
+
+export type FounderPersonalInfoFormData = z.infer<typeof founderPersonalInfoSchema>
+
+/**
+ * Validation schema for startup profile
+ */
+export const startupProfileSchema = z.object({
+  one_liner: z.string().min(1, 'One-liner is required').max(100, 'Maximum 100 characters'),
+  description: z.string().min(1, 'Description is required'),
+  company_url: z.string().url('Invalid URL').optional().or(z.literal('')),
+  product_url: z.string().url('Invalid URL').optional().or(z.literal('')),
+  industry: z.string().min(1, 'Industry is required'),
+  location: z.string().min(1, 'Location is required'),
+  initial_customers: z.number().int().min(0, 'Must be 0 or greater').optional(),
+  initial_revenue: z.number().min(0, 'Must be 0 or greater').optional(),
+})
+
+export type StartupProfileFormData = z.infer<typeof startupProfileSchema>
+
+/**
+ * Validation schema for bank details
+ */
+export const bankDetailsSchema = z.object({
+  account_holder_name: z.string().min(1, 'Account holder name is required'),
+  sort_code: z.string().regex(/^\d{2}-\d{2}-\d{2}$/, 'Sort code must be in format XX-XX-XX'),
+  account_number: z.string().regex(/^\d{8}$/, 'Account number must be 8 digits'),
+  bank_name: z.string().optional(),
+})
+
+export type BankDetailsFormData = z.infer<typeof bankDetailsSchema>
+
+/**
+ * Complete onboarding schema (all steps combined)
+ */
+export const completeOnboardingSchema = z.object({
+  founderInfo: founderPersonalInfoSchema,
+  startupProfile: startupProfileSchema,
+  bankDetails: bankDetailsSchema,
+})
+
+export type CompleteOnboardingFormData = z.infer<typeof completeOnboardingSchema>

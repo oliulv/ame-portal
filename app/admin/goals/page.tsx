@@ -1,4 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,28 +15,92 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Target, Edit } from 'lucide-react'
+import { Plus, Target, Edit, Trash2 } from 'lucide-react'
 
-export default async function GoalTemplatesPage() {
-  const supabase = await createClient()
+interface GoalTemplate {
+  id: string
+  title: string
+  description: string
+  category: string
+  default_target_value?: number
+  default_funding_amount?: number
+  is_active: boolean
+  cohorts?: {
+    id: string
+    label: string
+  }
+}
 
-  // Fetch all goal templates with cohort info
-  const { data: goalTemplates } = await supabase
-    .from('goal_templates')
-    .select(`
-      id,
-      title,
-      description,
-      category,
-      default_target_value,
-      default_funding_amount,
-      is_active,
-      cohorts (
-        id,
-        label
-      )
-    `)
-    .order('created_at', { ascending: false })
+export default function GoalTemplatesPage() {
+  const router = useRouter()
+  const [goalTemplates, setGoalTemplates] = useState<GoalTemplate[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchGoalTemplates() {
+      try {
+        const response = await fetch('/api/admin/goals')
+        if (response.ok) {
+          const data = await response.json()
+          setGoalTemplates(data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch goal templates:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchGoalTemplates()
+  }, [])
+
+  async function handleDelete(id: string) {
+    if (!confirm('Are you sure you want to delete this goal template?')) {
+      return
+    }
+
+    setDeletingId(id)
+    try {
+      const response = await fetch(`/api/admin/goals/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to delete goal template')
+      }
+
+      // Remove from state
+      setGoalTemplates(goalTemplates.filter((template) => template.id !== id))
+      router.refresh()
+    } catch (error) {
+      console.error('Error deleting goal template:', error)
+      alert(error instanceof Error ? error.message : 'Failed to delete goal template')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Goal Templates</h1>
+            <p className="text-muted-foreground">
+              Manage default goals that are automatically assigned to new startups
+            </p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="py-8">
+            <p className="text-center text-muted-foreground">Loading...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -62,14 +129,14 @@ export default async function GoalTemplatesPage() {
                 <TableHead>Title</TableHead>
                 <TableHead>Cohort</TableHead>
                 <TableHead>Category</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Funding</TableHead>
+                <TableHead>Target (Number)</TableHead>
+                <TableHead>Funding (GBP)</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {goalTemplates.map((template: any) => (
+              {goalTemplates.map((template) => (
                 <TableRow key={template.id}>
                   <TableCell>
                     <div className="flex flex-col">
@@ -107,12 +174,21 @@ export default async function GoalTemplatesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/admin/goals/${template.id}/edit`}>
-                      <Button variant="ghost" size="sm">
-                        <Edit className="mr-2 h-3 w-3" />
-                        Edit
+                    <div className="flex items-center justify-end gap-2">
+                      <Link href={`/admin/goals/${template.id}/edit`}>
+                        <Button variant="ghost" size="sm">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(template.id)}
+                        disabled={deletingId === template.id}
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
-                    </Link>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

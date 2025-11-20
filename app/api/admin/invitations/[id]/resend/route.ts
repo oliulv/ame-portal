@@ -29,9 +29,9 @@ export async function POST(request: Request, context: RouteContext) {
       .select(`
         id,
         full_name,
-        personal_email,
+        email,
         token,
-        status,
+        accepted_at,
         startups (
           name
         )
@@ -47,7 +47,7 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     // 3. Check if invitation is already accepted
-    if (invitation.status === 'accepted') {
+    if (invitation.accepted_at) {
       return NextResponse.json(
         { error: 'This invitation has already been accepted' },
         { status: 400 }
@@ -57,18 +57,17 @@ export async function POST(request: Request, context: RouteContext) {
     // 4. Send invitation email
     try {
       await sendInvitationEmail({
-        to: invitation.personal_email,
+        to: invitation.email,
         founderName: invitation.full_name,
         startupName: (invitation.startups as any).name,
         inviteToken: invitation.token,
         expirationDays: 14,
       })
 
-      // 5. Update invitation status to 'sent'
+      // 5. Update invitation timestamp
       await supabase
         .from('invitations')
         .update({
-          status: 'sent',
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
@@ -76,12 +75,6 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ message: 'Invitation resent successfully' })
     } catch (emailError) {
       console.error('Failed to resend invitation email:', emailError)
-
-      // Update invitation status to 'failed'
-      await supabase
-        .from('invitations')
-        .update({ status: 'failed' })
-        .eq('id', id)
 
       return NextResponse.json(
         { error: 'Failed to send invitation email' },

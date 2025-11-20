@@ -77,7 +77,7 @@ export default async function FounderDashboard() {
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Onboarding</span>
-                    <Badge variant={startup.onboarding_status === 'complete' ? 'success' : 'warning'}>
+                    <Badge variant={startup.onboarding_status === 'completed' ? 'success' : 'warning'}>
                       {startup.onboarding_status}
                     </Badge>
                   </div>
