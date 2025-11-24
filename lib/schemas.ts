@@ -150,3 +150,52 @@ export const completeOnboardingSchema = z.object({
 })
 
 export type CompleteOnboardingFormData = z.infer<typeof completeOnboardingSchema>
+
+/**
+ * Validation schema for updating founder personal info
+ * Required fields must be provided, optional fields can be empty strings
+ */
+export const founderPersonalInfoUpdateSchema = z.object({
+  full_name: z.string().min(1, 'Full name is required'),
+  personal_email: z.string().email('Invalid email address'),
+  address_line1: z.string().optional(),
+  address_line2: z.string().optional(),
+  city: z.string().optional(),
+  postcode: z.string().optional(),
+  country: z.string().optional(),
+  phone: z.string().optional(),
+  bio: z.string().optional(),
+  linkedin_url: z.string().url('Invalid URL').optional().or(z.literal('')),
+  x_url: z.string().url('Invalid URL').optional().or(z.literal('')),
+})
+
+export type FounderPersonalInfoUpdateFormData = z.infer<typeof founderPersonalInfoUpdateSchema>
+
+/**
+ * Validation schema for updating startup details
+ * Required fields must be provided, optional fields can be empty strings
+ */
+export const startupUpdateSchema = z.object({
+  name: z.string().min(1, 'Startup name is required'),
+  website_url: z.string().url('Invalid URL').optional().or(z.literal('')),
+  one_liner: z.string().max(100, 'Maximum 100 characters').optional(),
+  description: z.string().optional(),
+  industry: z.string().optional(),
+  location: z.string().optional(),
+  initial_customers: z.number().int().min(0, 'Must be 0 or greater').optional(),
+  initial_revenue: z.number().min(0, 'Must be 0 or greater').optional(),
+})
+
+export type StartupUpdateFormData = z.infer<typeof startupUpdateSchema>
+
+/**
+ * Validation schema for founder invoice upload
+ */
+export const founderInvoiceUploadSchema = z.object({
+  vendor_name: z.string().min(1, 'Vendor name is required'),
+  invoice_date: z.string().min(1, 'Invoice date is required'),
+  amount_gbp: z.number().min(0.01, 'Amount must be greater than 0'),
+  description: z.string().optional(),
+})
+
+export type FounderInvoiceUploadFormData = z.infer<typeof founderInvoiceUploadSchema>

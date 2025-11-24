@@ -15,6 +15,7 @@ import {
   LucideIcon,
   Building2,
   Plus,
+  Settings,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -56,6 +57,7 @@ const iconMap: Record<string, LucideIcon> = {
   'FileText': FileText,
   'Trophy': Trophy,
   'Building2': Building2,
+  'Settings': Settings,
 }
 
 /**
