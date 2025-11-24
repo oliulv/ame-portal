@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
 
 // Public routes that don't require authentication
 const isPublicRoute = createRouteMatcher([
@@ -11,7 +12,16 @@ const isPublicRoute = createRouteMatcher([
 
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
-    await auth.protect()
+    const { userId } = await auth()
+    
+    if (!userId) {
+      // Redirect to custom login page instead of Clerk's default.
+      // We intentionally do NOT pass redirect_url here so that post-login
+      // always goes through our own routing (/ → /admin or /founder/...),
+      // which then shows the cohort selection screen for admins.
+      const loginUrl = new URL('/login', req.url)
+      return NextResponse.redirect(loginUrl)
+    }
   }
 })
 
