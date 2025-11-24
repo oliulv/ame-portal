@@ -146,7 +146,7 @@ export type BankDetailsFormData = z.infer<typeof bankDetailsSchema>
 export const completeOnboardingSchema = z.object({
   founderInfo: founderPersonalInfoSchema,
   startupProfile: startupProfileSchema,
-  bankDetails: bankDetailsSchema,
+  bankDetails: bankDetailsSchema.optional(),
 })
 
 export type CompleteOnboardingFormData = z.infer<typeof completeOnboardingSchema>

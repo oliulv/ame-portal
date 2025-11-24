@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -25,7 +25,7 @@ import {
   type StartupProfileFormData,
   type BankDetailsFormData,
 } from '@/lib/schemas'
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, AlertCircle } from 'lucide-react'
 
 type OnboardingStep = 'personal' | 'startup' | 'bank'
 
@@ -34,10 +34,30 @@ export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('personal')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hasBankDetails, setHasBankDetails] = useState<boolean | null>(null)
+  const [isCheckingBankStatus, setIsCheckingBankStatus] = useState(true)
 
   // Store completed step data
   const [personalData, setPersonalData] = useState<FounderPersonalInfoFormData | null>(null)
   const [startupData, setStartupData] = useState<StartupProfileFormData | null>(null)
+
+  // Check if bank details already exist for this startup
+  useEffect(() => {
+    async function checkBankStatus() {
+      try {
+        const response = await fetch('/api/founder/onboarding/bank-status')
+        if (response.ok) {
+          const data = await response.json()
+          setHasBankDetails(data.hasBankDetails)
+        }
+      } catch (err) {
+        console.error('Failed to check bank status:', err)
+      } finally {
+        setIsCheckingBankStatus(false)
+      }
+    }
+    checkBankStatus()
+  }, [])
 
   // Forms for each step
   const personalForm = useForm<FounderPersonalInfoFormData>({
@@ -101,7 +121,51 @@ export default function OnboardingPage() {
 
   async function handleStartupNext(data: StartupProfileFormData) {
     setStartupData(data)
-    setCurrentStep('bank')
+    // Skip bank step if bank details already exist
+    if (hasBankDetails === true) {
+      // Bank details already exist, skip to completion
+      await handleSubmitWithoutBank(data)
+    } else {
+      // Show bank step (with option to skip)
+      setCurrentStep('bank')
+    }
+  }
+
+  async function handleSubmitWithoutBank(startupData: StartupProfileFormData) {
+    if (!personalData) {
+      setError('Please complete all previous steps')
+      return
+    }
+
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/founder/onboarding', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          founderInfo: personalData,
+          startupProfile: startupData,
+          // bankDetails omitted
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to complete onboarding')
+      }
+
+      // Success! Redirect to founder dashboard
+      router.push('/founder/dashboard')
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   async function handleBankSubmit(data: BankDetailsFormData) {
@@ -139,6 +203,15 @@ export default function OnboardingPage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  async function handleSkipBank() {
+    if (!personalData || !startupData) {
+      setError('Please complete all previous steps')
+      return
+    }
+
+    await handleSubmitWithoutBank(startupData)
   }
 
   function handleBack() {
@@ -569,7 +642,7 @@ export default function OnboardingPage() {
         )}
 
         {/* Step 3: Bank Details */}
-        {currentStep === 'bank' && (
+        {currentStep === 'bank' && !isCheckingBankStatus && (
           <Card>
             <CardHeader>
               <CardTitle>Bank Details</CardTitle>
@@ -578,6 +651,19 @@ export default function OnboardingPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {hasBankDetails === false && (
+                <div className="mb-6 rounded-md bg-amber-50 border border-amber-200 p-4">
+                  <div className="flex items-start">
+                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
+                    <div className="text-sm text-amber-900">
+                      <p className="font-medium mb-1">Bank details not set up yet</p>
+                      <p className="text-amber-800">
+                        You haven't set up bank details for your startup. Only one founder needs to complete this step - once one founder adds the bank details, other founders won't need to.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               <Form {...bankForm}>
                 <form onSubmit={bankForm.handleSubmit(handleBankSubmit)} className="space-y-6">
                   <FormField
@@ -672,6 +758,14 @@ export default function OnboardingPage() {
                     <Button type="button" variant="outline" onClick={handleBack}>
                       <ChevronLeft className="mr-2 h-4 w-4" />
                       Back
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handleSkipBank}
+                      disabled={isSubmitting}
+                    >
+                      Skip for Now
                     </Button>
                     <Button type="submit" disabled={isSubmitting}>
                       {isSubmitting ? 'Completing...' : 'Complete Onboarding'}

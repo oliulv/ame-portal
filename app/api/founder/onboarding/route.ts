@@ -115,52 +115,54 @@ export async function POST(request: Request) {
       }
     }
 
-    // 6. Create or update bank details
-    const { data: existingBankDetails } = await supabase
-      .from('bank_details')
-      .select('id')
-      .eq('startup_id', founderProfile.startup_id)
-      .single()
-
-    if (existingBankDetails) {
-      // Update existing bank details
-      const { error: bankUpdateError } = await supabase
+    // 6. Create or update bank details (only if provided)
+    if (validatedData.bankDetails) {
+      const { data: existingBankDetails } = await supabase
         .from('bank_details')
-        .update({
-          account_holder_name: validatedData.bankDetails.account_holder_name,
-          sort_code: validatedData.bankDetails.sort_code,
-          account_number: validatedData.bankDetails.account_number,
-          bank_name: validatedData.bankDetails.bank_name,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingBankDetails.id)
+        .select('id')
+        .eq('startup_id', founderProfile.startup_id)
+        .single()
 
-      if (bankUpdateError) {
-        console.error('Error updating bank details:', bankUpdateError)
-        return NextResponse.json(
-          { error: 'Failed to update bank details' },
-          { status: 500 }
-        )
-      }
-    } else {
-      // Create new bank details
-      const { error: bankInsertError } = await supabase
-        .from('bank_details')
-        .insert({
-          startup_id: founderProfile.startup_id,
-          account_holder_name: validatedData.bankDetails.account_holder_name,
-          sort_code: validatedData.bankDetails.sort_code,
-          account_number: validatedData.bankDetails.account_number,
-          bank_name: validatedData.bankDetails.bank_name,
-          verified: false,
-        })
+      if (existingBankDetails) {
+        // Update existing bank details
+        const { error: bankUpdateError } = await supabase
+          .from('bank_details')
+          .update({
+            account_holder_name: validatedData.bankDetails.account_holder_name,
+            sort_code: validatedData.bankDetails.sort_code,
+            account_number: validatedData.bankDetails.account_number,
+            bank_name: validatedData.bankDetails.bank_name,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingBankDetails.id)
 
-      if (bankInsertError) {
-        console.error('Error creating bank details:', bankInsertError)
-        return NextResponse.json(
-          { error: 'Failed to create bank details' },
-          { status: 500 }
-        )
+        if (bankUpdateError) {
+          console.error('Error updating bank details:', bankUpdateError)
+          return NextResponse.json(
+            { error: 'Failed to update bank details' },
+            { status: 500 }
+          )
+        }
+      } else {
+        // Create new bank details
+        const { error: bankInsertError } = await supabase
+          .from('bank_details')
+          .insert({
+            startup_id: founderProfile.startup_id,
+            account_holder_name: validatedData.bankDetails.account_holder_name,
+            sort_code: validatedData.bankDetails.sort_code,
+            account_number: validatedData.bankDetails.account_number,
+            bank_name: validatedData.bankDetails.bank_name,
+            verified: false,
+          })
+
+        if (bankInsertError) {
+          console.error('Error creating bank details:', bankInsertError)
+          return NextResponse.json(
+            { error: 'Failed to create bank details' },
+            { status: 500 }
+          )
+        }
       }
     }
 
