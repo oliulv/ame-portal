@@ -51,6 +51,7 @@ import { useAppMutation } from '@/lib/hooks/useAppMutation'
 import { useSelectedCohort } from '@/lib/hooks/useSelectedCohort'
 import { useQueryClient } from '@tanstack/react-query'
 import { type GoalTemplateFormData } from '@/lib/schemas'
+import { extractConditionsFromDescription } from '@/lib/goalUtils'
 
 // Special row for "Join AccelerateMe" goal (non-draggable, always first)
 function AccelerateMeRow({
@@ -149,7 +150,7 @@ function SortableRow({
         <div className="flex flex-col">
           <span className="font-medium">{template.title}</span>
           <span className="text-sm text-muted-foreground line-clamp-1">
-            {template.description}
+            {extractConditionsFromDescription(template.description).cleanDescription || '-'}
           </span>
         </div>
       </TableCell>

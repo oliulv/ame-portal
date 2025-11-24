@@ -26,21 +26,47 @@ export const cohortSchema = z.object({
 export type CohortFormData = z.infer<typeof cohortSchema>
 
 /**
- * Validation schema for goal templates
+ * Validation schema for goal template success conditions
+ */
+const conditionSchema = z
+  .object({
+    dataSource: z.enum(['stripe', 'ga4', 'other']),
+    metric: z.string().min(1, 'Metric is required'),
+    operator: z.enum(['>=', '>', '=', '<=', '<', 'increased_by', 'decreased_by']),
+    targetValue: z.number({ message: 'Target value is required' }),
+    unit: z.string().min(1, 'Unit is required'),
+  })
+  .refine(
+    (data) => {
+      // For 'other' data source, allow any metric/unit
+      if (data.dataSource === 'other') {
+        return true
+      }
+      // For stripe/ga4, metric should be a valid identifier (alphanumeric with underscores)
+      return /^[a-z0-9_]+$/.test(data.metric)
+    },
+    {
+      message: 'Metric must be a valid identifier (lowercase letters, numbers, underscores)',
+      path: ['metric'],
+    }
+  )
+
+/**
+ * Validation schema for goal templates with condition-based success criteria
  */
 export const goalTemplateSchema = z.object({
-  cohort_id: z.string().uuid('Invalid cohort ID'),
+  cohortId: z.string().uuid('Invalid cohort ID'),
   title: z.string().min(1, 'Title is required'),
-  description: z.string().min(1, 'Description is required'),
-  category: z.enum(['launch', 'revenue', 'users', 'product', 'fundraising']),
-  default_target_value: z.number().optional(),
-  default_deadline: z.string().optional(), // ISO date string
-  default_weight: z.number().int().min(1).max(10).optional(),
-  default_funding_amount: z.number().min(0).optional(),
-  is_active: z.boolean(),
+  description: z.string().optional(),
+  category: z.enum(['launch', 'revenue', 'users', 'product', 'fundraising', 'growth', 'hiring']),
+  deadline: z.string().optional(), // ISO date string
+  isActive: z.boolean(),
+  conditions: z.array(conditionSchema).min(1, 'At least one success condition is required'),
+  fundingUnlocked: z.number().min(0).optional(),
 })
 
 export type GoalTemplateFormData = z.infer<typeof goalTemplateSchema>
+export type GoalTemplateCondition = z.infer<typeof conditionSchema>
 
 /**
  * Validation schema for startups
