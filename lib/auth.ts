@@ -15,7 +15,7 @@ export interface AppUser {
  */
 export async function getCurrentUser(): Promise<AppUser | null> {
   const { userId: clerkUserId } = await auth()
-  
+
   if (!clerkUserId) {
     return null
   }
@@ -43,14 +43,14 @@ export async function getCurrentUser(): Promise<AppUser | null> {
  */
 export async function requireRole(requiredRole: UserRole): Promise<AppUser> {
   const { userId: clerkUserId } = await auth()
-  
+
   // If not authenticated with Clerk, redirect to login
   if (!clerkUserId) {
     redirect('/login')
   }
 
   const user = await getCurrentUser()
-  
+
   // If user doesn't exist in Supabase, redirect to login
   // This can happen if webhook didn't fire or failed
   if (!user) {
@@ -91,7 +91,7 @@ export async function requireFounder(): Promise<AppUser> {
  */
 export async function getFounderStartupIds(): Promise<string[]> {
   const user = await getCurrentUser()
-  
+
   if (!user || user.role !== 'founder') {
     return []
   }
@@ -102,6 +102,5 @@ export async function getFounderStartupIds(): Promise<string[]> {
     .select('startup_id')
     .eq('user_id', user.id)
 
-  return profiles?.map(p => p.startup_id).filter(Boolean) as string[] || []
+  return (profiles?.map((p) => p.startup_id).filter(Boolean) as string[]) || []
 }
-

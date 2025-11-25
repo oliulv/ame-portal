@@ -52,9 +52,7 @@ export default function CohortsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Cohorts</h1>
-          <p className="text-muted-foreground">
-            Manage your accelerator cohorts and programs
-          </p>
+          <p className="text-muted-foreground">Manage your accelerator cohorts and programs</p>
         </div>
         <Link href="/admin/cohorts/new">
           <Button>
@@ -82,9 +80,7 @@ export default function CohortsPage() {
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">{cohort.label}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {cohort.name}
-                      </span>
+                      <span className="text-sm text-muted-foreground">{cohort.name}</span>
                     </div>
                   </TableCell>
                   <TableCell>

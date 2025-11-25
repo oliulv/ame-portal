@@ -47,20 +47,19 @@ export async function GET() {
     // 5. Fetch goals from database, joined with goal_templates to get display_order
     const { data, error } = await supabase
       .from('startup_goals')
-      .select(`
+      .select(
+        `
         *,
         goal_templates (
           display_order
         )
-      `)
+      `
+      )
       .in('startup_id', startupIds)
 
     if (error) {
       console.error('Database error fetching founder goals:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch goals' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch goals' }, { status: 500 })
     }
 
     // 6. Always create AccelerateMe goal (use template if available, otherwise use defaults)
@@ -69,7 +68,8 @@ export async function GET() {
       startup_id: startupIds[0],
       goal_template_id: accelerateMeTemplate?.id || null,
       title: accelerateMeTemplate?.title || 'Join AccelerateMe',
-      description: accelerateMeTemplate?.description || 'Welcome to the program! Your journey starts here.',
+      description:
+        accelerateMeTemplate?.description || 'Welcome to the program! Your journey starts here.',
       category: accelerateMeTemplate?.category || 'launch',
       status: 'completed' as const,
       progress_value: 1,
@@ -87,9 +87,11 @@ export async function GET() {
 
     // 7. Sort by display_order from goal_templates, then by created_at
     const sortedData = (data || []).sort((a, b) => {
-      const aOrder = (a.goal_templates as any)?.display_order ?? null
-      const bOrder = (b.goal_templates as any)?.display_order ?? null
-      
+      const aOrder =
+        (a.goal_templates as { display_order: number | null } | null)?.display_order ?? null
+      const bOrder =
+        (b.goal_templates as { display_order: number | null } | null)?.display_order ?? null
+
       // If both have display_order, sort by that
       if (aOrder !== null && bOrder !== null) {
         return aOrder - bOrder
@@ -114,16 +116,9 @@ export async function GET() {
     console.error('Error in GET /api/founder/goals:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

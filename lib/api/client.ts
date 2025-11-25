@@ -1,6 +1,6 @@
 /**
  * Centralized API client for making requests to our API routes
- * 
+ *
  * Provides typed wrappers around fetch with consistent error handling
  */
 
@@ -112,4 +112,3 @@ export const apiClient = {
     return handleResponse<T>(response)
   },
 }
-

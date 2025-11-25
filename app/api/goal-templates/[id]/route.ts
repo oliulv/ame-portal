@@ -28,17 +28,17 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     // 3. Update goal template in database
     const supabase = await createClient()
-    
+
     // Extract target value from first condition for backward compatibility
     const firstCondition = validatedData.conditions[0]
     const targetValue = firstCondition?.targetValue || null
-    
+
     // Store conditions as JSON string in description (temporary until migration)
     const descriptionWithConditions = formatDescriptionWithConditions(
       validatedData.description,
       validatedData.conditions
     )
-    
+
     const { data, error } = await supabase
       .from('goal_templates')
       .update({
@@ -57,10 +57,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (error) {
       console.error('Database error updating goal template:', error)
-      return NextResponse.json(
-        { error: 'Failed to update goal template' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to update goal template' }, { status: 500 })
     }
 
     // 4. Return success response
@@ -70,24 +67,14 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     // Handle validation errors
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Validation failed', details: error }, { status: 400 })
     }
 
     // Handle authentication errors
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

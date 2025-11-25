@@ -54,7 +54,7 @@ export function InvitationsTable({ invitations }: InvitationsTableProps) {
 
   async function handleResend(invitationId: string) {
     setResendingId(invitationId)
-    
+
     try {
       const response = await fetch(`/api/admin/invitations/${invitationId}/resend`, {
         method: 'POST',
@@ -66,7 +66,7 @@ export function InvitationsTable({ invitations }: InvitationsTableProps) {
       }
 
       toast.success('Invitation resent successfully')
-      
+
       // Refresh the page to update the invitations list
       router.refresh()
     } catch (err) {
@@ -77,11 +77,7 @@ export function InvitationsTable({ invitations }: InvitationsTableProps) {
   }
 
   if (invitations.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        No founders invited yet
-      </p>
-    )
+    return <p className="py-8 text-center text-sm text-muted-foreground">No founders invited yet</p>
   }
 
   return (
@@ -102,7 +98,7 @@ export function InvitationsTable({ invitations }: InvitationsTableProps) {
             const isExpired = !isAccepted && new Date(invitation.expires_at) < new Date()
             const status = isAccepted ? 'accepted' : isExpired ? 'expired' : 'pending'
             const canResend = !isAccepted
-            
+
             return (
               <TableRow key={invitation.id}>
                 <TableCell className="font-medium">{invitation.full_name}</TableCell>
@@ -113,8 +109,8 @@ export function InvitationsTable({ invitations }: InvitationsTableProps) {
                       status === 'accepted'
                         ? 'success'
                         : status === 'expired'
-                        ? 'destructive'
-                        : 'info'
+                          ? 'destructive'
+                          : 'info'
                     }
                   >
                     {status}
@@ -169,4 +165,3 @@ export function InvitationsTable({ invitations }: InvitationsTableProps) {
     </>
   )
 }
-

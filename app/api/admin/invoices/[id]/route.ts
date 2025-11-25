@@ -41,33 +41,34 @@ export async function PATCH(request: Request, context: RouteContext) {
       .single()
 
     if (fetchError || !currentInvoice) {
-      return NextResponse.json(
-        { error: 'Invoice not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
     }
 
     // 5. Validate status transitions
     const currentStatus = currentInvoice.status
     const validTransitions: Record<string, string[]> = {
-      'submitted': ['approved', 'rejected', 'under_review'],
-      'under_review': ['approved', 'rejected'],
-      'approved': ['paid'],
-      'rejected': [], // Cannot transition from rejected
-      'paid': [], // Cannot transition from paid
+      submitted: ['approved', 'rejected', 'under_review'],
+      under_review: ['approved', 'rejected'],
+      approved: ['paid'],
+      rejected: [], // Cannot transition from rejected
+      paid: [], // Cannot transition from paid
     }
 
     if (!validTransitions[currentStatus]?.includes(status)) {
       return NextResponse.json(
-        { 
-          error: `Cannot change status from "${currentStatus}" to "${status}". Valid transitions: ${validTransitions[currentStatus]?.join(', ') || 'none'}` 
+        {
+          error: `Cannot change status from "${currentStatus}" to "${status}". Valid transitions: ${validTransitions[currentStatus]?.join(', ') || 'none'}`,
         },
         { status: 400 }
       )
     }
 
     // 6. Prepare update data
-    const updateData: any = {
+    const updateData: {
+      status: string
+      updated_at: string
+      admin_comment?: string
+    } = {
       status,
       updated_at: new Date().toISOString(),
     }
@@ -97,10 +98,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (updateError) {
       console.error('Database error updating invoice:', updateError)
-      return NextResponse.json(
-        { error: 'Failed to update invoice' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to update invoice' }, { status: 500 })
     }
 
     return NextResponse.json({
@@ -111,16 +109,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     console.error('Error in PATCH /api/admin/invoices/[id]:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

@@ -45,9 +45,7 @@ export function FounderDetailsDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Founder Details</DialogTitle>
-          <DialogDescription>
-            Complete information for {invitationName}
-          </DialogDescription>
+          <DialogDescription>Complete information for {invitationName}</DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">
           {/* Basic Information */}
@@ -103,9 +101,7 @@ export function FounderDetailsDialog({
                         <span className="text-sm">{founderProfile.postcode}</span>
                       )}
                     </div>
-                    {founderProfile.country && (
-                      <p className="text-sm">{founderProfile.country}</p>
-                    )}
+                    {founderProfile.country && <p className="text-sm">{founderProfile.country}</p>}
                   </div>
                 </div>
               )}
@@ -164,4 +160,3 @@ export function FounderDetailsDialog({
     </Dialog>
   )
 }
-

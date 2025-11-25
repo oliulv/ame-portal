@@ -21,10 +21,7 @@ export async function GET() {
       .single()
 
     if (profileError || !founderProfile) {
-      return NextResponse.json(
-        { error: 'Founder profile not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Founder profile not found' }, { status: 404 })
     }
 
     // 3. Check if bank details exist for this startup
@@ -38,10 +35,7 @@ export async function GET() {
     if (bankError && bankError.code !== 'PGRST116') {
       // PGRST116 is "not found" error, which is expected
       console.error('Error checking bank details:', bankError)
-      return NextResponse.json(
-        { error: 'Failed to check bank details' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to check bank details' }, { status: 500 })
     }
 
     return NextResponse.json({
@@ -51,16 +45,9 @@ export async function GET() {
     console.error('Error in GET /api/founder/onboarding/bank-status:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

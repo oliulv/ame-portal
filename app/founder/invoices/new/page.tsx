@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -17,11 +16,8 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  founderInvoiceUploadSchema,
-  type FounderInvoiceUploadFormData,
-} from '@/lib/schemas'
-import { Upload, ArrowLeft, AlertCircle } from 'lucide-react'
+import { founderInvoiceUploadSchema, type FounderInvoiceUploadFormData } from '@/lib/schemas'
+import { Upload, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -89,9 +85,7 @@ export default function NewInvoicePage() {
         </Link>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Upload Invoice</h1>
-          <p className="text-muted-foreground">
-            Submit a new invoice for review and reimbursement
-          </p>
+          <p className="text-muted-foreground">Submit a new invoice for review and reimbursement</p>
         </div>
       </div>
 
@@ -223,4 +217,3 @@ export default function NewInvoicePage() {
     </div>
   )
 }
-

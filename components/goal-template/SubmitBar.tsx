@@ -16,10 +16,7 @@ export function SubmitBar({ form, isLoading, cohortSlug }: SubmitBarProps) {
 
   return (
     <div className="flex gap-4">
-      <Button
-        type="submit"
-        disabled={isLoading || !isFormValid}
-      >
+      <Button type="submit" disabled={isLoading || !isFormValid}>
         {isLoading ? 'Creating...' : 'Create Goal Template'}
       </Button>
       <Link href={cohortSlug ? `/admin/${cohortSlug}/goals` : '/admin/goals'}>
@@ -30,4 +27,3 @@ export function SubmitBar({ form, isLoading, cohortSlug }: SubmitBarProps) {
     </div>
   )
 }
-

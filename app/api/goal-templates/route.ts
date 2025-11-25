@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
     // 3. Create goal template in database
     const supabase = await createClient()
-    
+
     // Get the max display_order for this cohort to set the new goal's order
     const { data: maxOrderData } = await supabase
       .from('goal_templates')
@@ -28,23 +28,21 @@ export async function POST(request: Request) {
       .order('display_order', { ascending: false })
       .limit(1)
       .maybeSingle()
-    
-    const nextDisplayOrder = maxOrderData?.display_order 
-      ? maxOrderData.display_order + 1 
-      : 1
-    
+
+    const nextDisplayOrder = maxOrderData?.display_order ? maxOrderData.display_order + 1 : 1
+
     // Insert the new goal template
     // Note: Until database migration adds 'conditions' (JSONB) column,
     // we store conditions as JSON in description and extract target value for backward compatibility
     const firstCondition = validatedData.conditions[0]
     const targetValue = firstCondition?.targetValue || null
-    
+
     // Store conditions as JSON string in description (temporary until migration)
     const descriptionWithConditions = formatDescriptionWithConditions(
       validatedData.description,
       validatedData.conditions
     )
-    
+
     const { data, error } = await supabase
       .from('goal_templates')
       .insert({
@@ -64,10 +62,7 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('Database error creating goal template:', error)
-      return NextResponse.json(
-        { error: 'Failed to create goal template' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to create goal template' }, { status: 500 })
     }
 
     // 4. If template is active, assign it to existing startups in this cohort
@@ -85,7 +80,7 @@ export async function POST(request: Request) {
         // For each startup, check if they already have this goal template assigned
         // and create startup_goals if not
         const goalsToCreate = []
-        
+
         for (const startup of startups) {
           // Check if this startup already has a goal from this template
           const { data: existingGoal } = await supabase
@@ -99,7 +94,7 @@ export async function POST(request: Request) {
           if (!existingGoal) {
             // Use the original description (without conditions JSON comment)
             const cleanDescription = validatedData.description || null
-            
+
             goalsToCreate.push({
               startup_id: startup.id,
               goal_template_id: data.id,
@@ -119,9 +114,7 @@ export async function POST(request: Request) {
 
         // Bulk insert all new goals
         if (goalsToCreate.length > 0) {
-          const { error: goalsError } = await supabase
-            .from('startup_goals')
-            .insert(goalsToCreate)
+          const { error: goalsError } = await supabase.from('startup_goals').insert(goalsToCreate)
 
           if (goalsError) {
             console.error('Error assigning goal template to existing startups:', goalsError)
@@ -138,24 +131,14 @@ export async function POST(request: Request) {
 
     // Handle validation errors
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Validation failed', details: error }, { status: 400 })
     }
 
     // Handle authentication errors
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

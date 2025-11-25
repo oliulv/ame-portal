@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import { GoalTemplate, StartupGoal } from '@/lib/types'
-import { goalTemplateSchema, type GoalTemplateFormData } from '@/lib/schemas'
+import { type GoalTemplateFormData } from '@/lib/schemas'
 
 export interface GoalTemplateWithCohort extends GoalTemplate {
   cohorts?: {
@@ -14,9 +14,7 @@ export const goalsApi = {
    * Fetch all goal templates (admin)
    */
   getAll: async (cohortId?: string): Promise<GoalTemplateWithCohort[]> => {
-    const url = cohortId 
-      ? `/api/admin/goals?cohort_id=${cohortId}`
-      : '/api/admin/goals'
+    const url = cohortId ? `/api/admin/goals?cohort_id=${cohortId}` : '/api/admin/goals'
     return apiClient.get<GoalTemplateWithCohort[]>(url)
   },
 
@@ -76,4 +74,3 @@ export const goalsApi = {
     return apiClient.get<StartupGoal[]>('/api/founder/goals')
   },
 }
-

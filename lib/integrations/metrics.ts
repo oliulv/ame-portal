@@ -20,12 +20,10 @@ export async function storeMetrics(snapshots: MetricSnapshot[]): Promise<void> {
   // Upsert metrics (update if exists for same startup/provider/metric_key/timestamp/window)
   // Note: This assumes a unique constraint on (startup_id, provider, metric_key, timestamp, window)
   // If not, we'll insert and handle duplicates gracefully
-  const { error } = await supabase
-    .from('metrics_data')
-    .upsert(metricsToInsert, {
-      onConflict: 'startup_id,provider,metric_key,timestamp,window',
-      ignoreDuplicates: false,
-    })
+  const { error } = await supabase.from('metrics_data').upsert(metricsToInsert, {
+    onConflict: 'startup_id,provider,metric_key,timestamp,window',
+    ignoreDuplicates: false,
+  })
 
   if (error) {
     console.error('Error storing metrics:', error)
@@ -103,4 +101,3 @@ export async function getMetricTimeSeries(
     value: row.value,
   }))
 }
-

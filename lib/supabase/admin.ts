@@ -19,4 +19,3 @@ export function createAdminClient() {
 
   return createClient(supabaseUrl, supabaseSecret)
 }
-

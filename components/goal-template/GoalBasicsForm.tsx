@@ -106,11 +106,7 @@ export function GoalBasicsForm({ form }: GoalBasicsFormProps) {
           <FormItem>
             <FormLabel>Default Deadline (Optional)</FormLabel>
             <FormControl>
-              <Input
-                type="date"
-                {...field}
-                value={field.value || ''}
-              />
+              <Input type="date" {...field} value={field.value || ''} />
             </FormControl>
             <FormDescription>Target completion date</FormDescription>
             <FormMessage />
@@ -136,4 +132,3 @@ export function GoalBasicsForm({ form }: GoalBasicsFormProps) {
     </div>
   )
 }
-

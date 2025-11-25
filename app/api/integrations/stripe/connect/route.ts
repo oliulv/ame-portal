@@ -13,16 +13,15 @@ const connectStripeSchema = z.object({
  * GET /api/integrations/stripe/connect
  * Redirects to API key entry page
  */
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   try {
     await requireFounder()
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?tab=stripe`)
+    return NextResponse.redirect(
+      `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?tab=stripe`
+    )
   } catch (error) {
     console.error('Error redirecting to Stripe connect:', error)
-    return NextResponse.json(
-      { error: 'Failed to redirect' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to redirect' }, { status: 500 })
   }
 }
 
@@ -37,12 +36,9 @@ export async function POST(request: Request) {
 
     // Get founder's startup IDs
     const startupIds = await getFounderStartupIds()
-    
+
     if (startupIds.length === 0) {
-      return NextResponse.json(
-        { error: 'No startup found for this founder' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'No startup found for this founder' }, { status: 404 })
     }
 
     // Use the first startup
@@ -64,12 +60,7 @@ export async function POST(request: Request) {
       const accountName = account.business_profile?.name || account.email || 'Stripe Account'
 
       // Store connection
-      await storeStripeConnection(
-        startupId,
-        validatedData.api_key,
-        accountId,
-        accountName
-      )
+      await storeStripeConnection(startupId, validatedData.api_key, accountId, accountName)
 
       return NextResponse.json({ success: true })
     } catch (stripeError) {
@@ -87,10 +78,6 @@ export async function POST(request: Request) {
       )
     }
     console.error('Error connecting Stripe:', error)
-    return NextResponse.json(
-      { error: 'Failed to connect Stripe' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to connect Stripe' }, { status: 500 })
   }
 }
-

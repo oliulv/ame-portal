@@ -23,17 +23,10 @@ export async function GET(request: Request, context: RouteContext) {
 
     // 2. Fetch goal template from database
     const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('goal_templates')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const { data, error } = await supabase.from('goal_templates').select('*').eq('id', id).single()
 
     if (error || !data) {
-      return NextResponse.json(
-        { error: 'Goal template not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Goal template not found' }, { status: 404 })
     }
 
     // 3. Return goal template data
@@ -42,16 +35,10 @@ export async function GET(request: Request, context: RouteContext) {
     console.error('Error in GET /api/admin/goals/[id]:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -99,16 +86,13 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (error) {
       console.error('Database error updating goal template:', error)
-      return NextResponse.json(
-        { error: 'Failed to update goal template' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to update goal template' }, { status: 500 })
     }
 
     // 5. If template was just activated (changed from inactive to active), assign to existing startups
     const wasInactive = currentTemplate && !currentTemplate.is_active
     const isNowActive = validatedData.is_active
-    
+
     if (wasInactive && isNowActive && data) {
       // Fetch all startups in this cohort
       const { data: startups, error: startupsError } = await supabase
@@ -121,7 +105,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         // Non-critical, continue
       } else if (startups && startups.length > 0) {
         const goalsToCreate = []
-        
+
         for (const startup of startups) {
           // Check if this startup already has a goal from this template
           const { data: existingGoal } = await supabase
@@ -152,9 +136,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
         // Bulk insert all new goals
         if (goalsToCreate.length > 0) {
-          const { error: goalsError } = await supabase
-            .from('startup_goals')
-            .insert(goalsToCreate)
+          const { error: goalsError } = await supabase.from('startup_goals').insert(goalsToCreate)
 
           if (goalsError) {
             console.error('Error assigning goal template to existing startups:', goalsError)
@@ -171,24 +153,15 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     // Handle validation errors
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Validation failed', details: error }, { status: 400 })
     }
 
     // Handle authentication errors
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -206,17 +179,11 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     // 2. Delete goal template
     const supabase = await createClient()
-    const { error } = await supabase
-      .from('goal_templates')
-      .delete()
-      .eq('id', id)
+    const { error } = await supabase.from('goal_templates').delete().eq('id', id)
 
     if (error) {
       console.error('Database error deleting goal template:', error)
-      return NextResponse.json(
-        { error: 'Failed to delete goal template' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to delete goal template' }, { status: 500 })
     }
 
     // 3. Return success response
@@ -225,15 +192,9 @@ export async function DELETE(request: Request, context: RouteContext) {
     console.error('Error in DELETE /api/admin/goals/[id]:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

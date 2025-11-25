@@ -27,7 +27,17 @@ import {
   type BankDetailsFormData,
 } from '@/lib/schemas'
 import { useAppMutation } from '@/lib/hooks/useAppMutation'
-import { User, Building2, CreditCard, Save, AlertCircle, Plug, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import {
+  User,
+  Building2,
+  CreditCard,
+  Save,
+  AlertCircle,
+  Plug,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+} from 'lucide-react'
 
 type SettingsTab = 'personal' | 'startup' | 'bank' | 'integrations'
 
@@ -76,10 +86,18 @@ export default function SettingsPage() {
   const [data, setData] = useState<FounderProfileData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [integrationStatus, setIntegrationStatus] = useState<{
-    stripe: { id: string; status: string; account_name?: string; connected_at?: string; last_synced_at?: string } | null
+    stripe: {
+      id: string
+      status: string
+      account_name?: string
+      connected_at?: string
+      last_synced_at?: string
+    } | null
   } | null>(null)
   const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true)
-  const [trackerWebsites, setTrackerWebsites] = useState<Array<{ id: string; name: string; domain?: string }>>([])
+  const [trackerWebsites, setTrackerWebsites] = useState<
+    Array<{ id: string; name: string; domain?: string }>
+  >([])
 
   // Fetch data on mount
   useEffect(() => {
@@ -121,13 +139,13 @@ export default function SettingsPage() {
   // Fetch tracker websites
   useEffect(() => {
     fetch('/api/founder/tracker-websites')
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data.websites) {
           setTrackerWebsites(data.websites)
         }
       })
-      .catch(err => console.error('Failed to fetch tracker websites:', err))
+      .catch((err) => console.error('Failed to fetch tracker websites:', err))
   }, [])
 
   // Personal info form
@@ -231,8 +249,8 @@ export default function SettingsPage() {
       router.refresh()
       // Refetch data
       fetch('/api/founder/profile')
-        .then(res => res.json())
-        .then(newData => setData(newData))
+        .then((res) => res.json())
+        .then((newData) => setData(newData))
     },
   })
 
@@ -253,8 +271,8 @@ export default function SettingsPage() {
       router.refresh()
       // Refetch data
       fetch('/api/founder/profile')
-        .then(res => res.json())
-        .then(newData => setData(newData))
+        .then((res) => res.json())
+        .then((newData) => setData(newData))
     },
   })
 
@@ -275,8 +293,8 @@ export default function SettingsPage() {
       router.refresh()
       // Refetch data
       fetch('/api/founder/profile')
-        .then(res => res.json())
-        .then(newData => setData(newData))
+        .then((res) => res.json())
+        .then((newData) => setData(newData))
     },
   })
 
@@ -308,7 +326,6 @@ export default function SettingsPage() {
       console.error('Failed to disconnect Stripe:', err)
     }
   }
-
 
   if (isLoading) {
     return (
@@ -556,10 +573,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button
-                    type="submit"
-                    disabled={updatePersonalMutation.isPending}
-                  >
+                  <Button type="submit" disabled={updatePersonalMutation.isPending}>
                     <Save className="mr-2 h-4 w-4" />
                     {updatePersonalMutation.isPending ? 'Saving...' : 'Save Changes'}
                   </Button>
@@ -592,9 +606,7 @@ export default function SettingsPage() {
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
-                      <FormDescription>
-                        The name of your startup or business
-                      </FormDescription>
+                      <FormDescription>The name of your startup or business</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -687,7 +699,9 @@ export default function SettingsPage() {
                             type="number"
                             min="0"
                             {...field}
-                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                            onChange={(e) =>
+                              field.onChange(e.target.value ? parseInt(e.target.value) : undefined)
+                            }
                           />
                         </FormControl>
                         <FormMessage />
@@ -707,7 +721,11 @@ export default function SettingsPage() {
                             min="0"
                             step="0.01"
                             {...field}
-                            onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value ? parseFloat(e.target.value) : undefined
+                              )
+                            }
                           />
                         </FormControl>
                         <FormMessage />
@@ -717,10 +735,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button
-                    type="submit"
-                    disabled={updateStartupMutation.isPending}
-                  >
+                  <Button type="submit" disabled={updateStartupMutation.isPending}>
                     <Save className="mr-2 h-4 w-4" />
                     {updateStartupMutation.isPending ? 'Saving...' : 'Save Changes'}
                   </Button>
@@ -823,10 +838,7 @@ export default function SettingsPage() {
                 />
 
                 <div className="flex justify-end">
-                  <Button
-                    type="submit"
-                    disabled={updateBankMutation.isPending}
-                  >
+                  <Button type="submit" disabled={updateBankMutation.isPending}>
                     <Save className="mr-2 h-4 w-4" />
                     {updateBankMutation.isPending ? 'Saving...' : 'Save Changes'}
                   </Button>
@@ -874,7 +886,8 @@ export default function SettingsPage() {
                         )}
                         {integrationStatus.stripe.connected_at && (
                           <p>
-                            Connected: {new Date(integrationStatus.stripe.connected_at).toLocaleDateString()}
+                            Connected:{' '}
+                            {new Date(integrationStatus.stripe.connected_at).toLocaleDateString()}
                           </p>
                         )}
                       </div>
@@ -886,9 +899,7 @@ export default function SettingsPage() {
                         Disconnect
                       </Button>
                     ) : (
-                      <Button onClick={handleConnectStripe}>
-                        Connect Stripe
-                      </Button>
+                      <Button onClick={handleConnectStripe}>Connect Stripe</Button>
                     )}
                   </div>
                 </div>
@@ -905,11 +916,15 @@ export default function SettingsPage() {
                       ) : null}
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">
-                      Add a lightweight tracking script to your website to track pageviews, sessions, and user activity
+                      Add a lightweight tracking script to your website to track pageviews,
+                      sessions, and user activity
                     </p>
                     {trackerWebsites.length > 0 && (
                       <div className="text-sm text-muted-foreground">
-                        <p>{trackerWebsites.length} tracker website{trackerWebsites.length !== 1 ? 's' : ''} configured</p>
+                        <p>
+                          {trackerWebsites.length} tracker website
+                          {trackerWebsites.length !== 1 ? 's' : ''} configured
+                        </p>
                       </div>
                     )}
                   </div>
@@ -920,7 +935,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
-
             </CardContent>
           </Card>
         </div>
@@ -928,4 +942,3 @@ export default function SettingsPage() {
     </div>
   )
 }
-

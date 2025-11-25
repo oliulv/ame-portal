@@ -28,7 +28,7 @@ function extractCohortSlugFromPath(pathname: string): string | null {
 /**
  * Hook to get the currently selected cohort from URL (primary) or localStorage (fallback)
  * Returns the cohort slug, id, and full cohort object
- * 
+ *
  * This hook ensures that the cohort context is maintained sitewide
  * and automatically updates when the cohort selection changes.
  * URL is the primary source of truth, localStorage is used as fallback for legacy routes.
@@ -48,7 +48,7 @@ export function useSelectedCohort() {
   useEffect(() => {
     // Primary: Try to get cohort slug from URL
     const urlCohortSlug = extractCohortSlugFromPath(pathname)
-    
+
     if (urlCohortSlug) {
       // URL has cohort slug - use it and sync to localStorage
       setSelectedCohortSlug(urlCohortSlug)
@@ -57,7 +57,7 @@ export function useSelectedCohort() {
       // Fallback: Get cohort from localStorage (for legacy routes during transition)
       const storedCohortSlug = localStorage.getItem('selectedCohortSlug')
       const storedCohortId = localStorage.getItem('selectedCohortId')
-      
+
       if (storedCohortSlug && cohorts.find((c: Cohort) => c.slug === storedCohortSlug)) {
         setSelectedCohortSlug(storedCohortSlug)
       } else if (storedCohortId) {
@@ -96,7 +96,7 @@ export function useSelectedCohort() {
 
     // Listen for custom event from sidebar
     window.addEventListener('cohortChanged', handleCohortChange)
-    
+
     // Also listen for storage changes (cross-tab updates)
     window.addEventListener('storage', handleCohortChange)
 
@@ -116,4 +116,3 @@ export function useSelectedCohort() {
     isLoading: isLoadingCohorts,
   }
 }
-

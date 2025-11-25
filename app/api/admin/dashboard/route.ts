@@ -33,7 +33,7 @@ export async function GET(request: Request) {
       if (cohort) {
         // Filter startups by cohort
         startupsQuery = startupsQuery.eq('cohort_id', cohort.id)
-        
+
         // Filter invoices by startups in this cohort
         const { data: cohortStartups } = await supabase
           .from('startups')
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
           .eq('cohort_id', cohort.id)
 
         if (cohortStartups && cohortStartups.length > 0) {
-          const startupIds = cohortStartups.map(s => s.id)
+          const startupIds = cohortStartups.map((s) => s.id)
           invoicesQuery = invoicesQuery.in('startup_id', startupIds)
         } else {
           // No startups in cohort, so no invoices - use a query that returns 0
@@ -72,16 +72,9 @@ export async function GET(request: Request) {
     console.error('Error in GET /api/admin/dashboard:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

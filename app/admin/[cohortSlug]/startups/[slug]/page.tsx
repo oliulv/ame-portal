@@ -4,7 +4,18 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Edit, UserPlus, Target, Users, Mail, ExternalLink, Plug, CheckCircle2, XCircle } from 'lucide-react'
+import {
+  ArrowLeft,
+  Edit,
+  UserPlus,
+  Target,
+  Users,
+  Mail,
+  ExternalLink,
+  Plug,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react'
 import { GoalsSection } from './GoalsSection'
 import { InvitationsTable } from './InvitationsTable'
 
@@ -22,14 +33,16 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
   // Fetch startup details with cohort info by slug
   const { data: startup, error } = await supabase
     .from('startups')
-    .select(`
+    .select(
+      `
       *,
       cohorts (
         id,
         slug,
         label
       )
-    `)
+    `
+    )
     .eq('slug', slug)
     .single()
 
@@ -38,7 +51,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
   }
 
   // Verify the startup belongs to the cohort in the URL
-  const cohort = startup.cohorts as any
+  const cohort = startup.cohorts as { id: string; slug: string; label: string } | null
   if (cohort?.slug !== cohortSlug) {
     notFound()
   }
@@ -58,30 +71,30 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
     .order('created_at', { ascending: false })
 
   // Fetch founder profiles for accepted invitations
-  const acceptedEmails = invitations?.filter(i => i.accepted_at).map(i => i.email) || []
-  const { data: founderProfiles } = acceptedEmails.length > 0
-    ? await supabase
-        .from('founder_profiles')
-        .select('*')
-        .eq('startup_id', startup.id)
-        .in('personal_email', acceptedEmails)
-    : { data: null }
+  const acceptedEmails = invitations?.filter((i) => i.accepted_at).map((i) => i.email) || []
+  const { data: founderProfiles } =
+    acceptedEmails.length > 0
+      ? await supabase
+          .from('founder_profiles')
+          .select('*')
+          .eq('startup_id', startup.id)
+          .in('personal_email', acceptedEmails)
+      : { data: null }
 
   // Create a map of email -> founder profile for easy lookup
-  const founderProfileMap = new Map(
-    founderProfiles?.map(fp => [fp.personal_email, fp]) || []
-  )
+  const founderProfileMap = new Map(founderProfiles?.map((fp) => [fp.personal_email, fp]) || [])
 
   // Format dates on the server to avoid hydration mismatches
-  const formattedInvitations = invitations?.map((invitation) => ({
-    ...invitation,
-    created_at_formatted: new Date(invitation.created_at).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    }),
-    founderProfile: founderProfileMap.get(invitation.email) || null,
-  })) || []
+  const formattedInvitations =
+    invitations?.map((invitation) => ({
+      ...invitation,
+      created_at_formatted: new Date(invitation.created_at).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+      founderProfile: founderProfileMap.get(invitation.email) || null,
+    })) || []
 
   // Fetch bank details for this startup
   const { data: bankDetails } = await supabase
@@ -91,7 +104,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
     .single()
 
   // Fetch invoices for this startup
-  const { data: invoices } = await supabase
+  const { data: _invoices } = await supabase
     .from('invoices')
     .select('id, status, amount, created_at')
     .eq('startup_id', startup.id)
@@ -107,9 +120,9 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
 
   const goalStats = {
     total: goals?.length || 0,
-    completed: goals?.filter(g => g.status === 'completed').length || 0,
-    inProgress: goals?.filter(g => g.status === 'in_progress').length || 0,
-    notStarted: goals?.filter(g => g.status === 'not_started').length || 0,
+    completed: goals?.filter((g) => g.status === 'completed').length || 0,
+    inProgress: goals?.filter((g) => g.status === 'in_progress').length || 0,
+    notStarted: goals?.filter((g) => g.status === 'not_started').length || 0,
   }
 
   return (
@@ -125,9 +138,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           </Link>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{startup.name}</h1>
-            <p className="text-muted-foreground">
-              {cohort?.label || 'No cohort'}
-            </p>
+            <p className="text-muted-foreground">{cohort?.label || 'No cohort'}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -167,10 +178,16 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <Target className={`h-4 w-4 ${goalStats.completed > 0 ? 'text-green-600' : 'text-muted-foreground'}`} />
+            <Target
+              className={`h-4 w-4 ${goalStats.completed > 0 ? 'text-green-600' : 'text-muted-foreground'}`}
+            />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${goalStats.completed > 0 ? 'text-green-600' : ''}`}>{goalStats.completed}</div>
+            <div
+              className={`text-2xl font-bold ${goalStats.completed > 0 ? 'text-green-600' : ''}`}
+            >
+              {goalStats.completed}
+            </div>
           </CardContent>
         </Card>
 
@@ -181,7 +198,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {invitations?.filter(i => i.accepted_at).length || 0}
+              {invitations?.filter((i) => i.accepted_at).length || 0}
             </div>
           </CardContent>
         </Card>
@@ -272,7 +289,9 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
               <Plug className="h-5 w-5" />
               Integrations
             </CardTitle>
-            <CardDescription>Connected external services for automated metric tracking</CardDescription>
+            <CardDescription>
+              Connected external services for automated metric tracking
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2">
@@ -315,9 +334,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Founders & Invitations</CardTitle>
-              <CardDescription>
-                Team members and pending invitations
-              </CardDescription>
+              <CardDescription>Team members and pending invitations</CardDescription>
             </div>
             <Link href={`/admin/startups/${slug}/invite`}>
               <Button size="sm">
@@ -337,4 +354,3 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
     </div>
   )
 }
-

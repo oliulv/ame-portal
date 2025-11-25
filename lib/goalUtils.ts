@@ -13,7 +13,7 @@ export function extractConditionsFromDescription(description: string | null | un
   }
 
   const conditionsMatch = description.match(/<!-- CONDITIONS_JSON:(.+?) -->/)
-  
+
   if (!conditionsMatch) {
     return { cleanDescription: description, conditions: null }
   }
@@ -21,10 +21,10 @@ export function extractConditionsFromDescription(description: string | null | un
   try {
     const conditionsJson = conditionsMatch[1]
     const conditions = JSON.parse(conditionsJson) as GoalTemplateCondition[]
-    
+
     // Remove the conditions JSON comment from description
     const cleanDescription = description.replace(/<!-- CONDITIONS_JSON:.+? -->/g, '').trim()
-    
+
     return { cleanDescription, conditions }
   } catch (error) {
     console.error('Failed to parse conditions JSON:', error)
@@ -43,19 +43,20 @@ export function formatDescriptionWithConditions(
 ): string {
   const conditionsJson = JSON.stringify(conditions)
   const conditionsComment = `<!-- CONDITIONS_JSON:${conditionsJson} -->`
-  
+
   if (!description) {
     return conditionsComment
   }
-  
+
   return `${description}\n\n${conditionsComment}`
 }
 
 /**
  * Parse conditions from description (alias for extractConditionsFromDescription)
  */
-export function parseConditionsFromDescription(description: string | null | undefined): GoalTemplateCondition[] {
+export function parseConditionsFromDescription(
+  description: string | null | undefined
+): GoalTemplateCondition[] {
   const { conditions } = extractConditionsFromDescription(description)
   return conditions || []
 }
-

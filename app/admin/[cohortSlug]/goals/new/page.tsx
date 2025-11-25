@@ -88,7 +88,8 @@ export default function NewGoalTemplatePage() {
         <CardHeader>
           <CardTitle>Create New Goal Template</CardTitle>
           <CardDescription>
-            Create a goal template with data-bound success conditions that will be assigned to new startups in the selected cohort
+            Create a goal template with data-bound success conditions that will be assigned to new
+            startups in the selected cohort
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -141,7 +142,11 @@ export default function NewGoalTemplatePage() {
 
               {/* Section D: Submit Controls */}
               <div className="border-t pt-6">
-                <SubmitBar form={form} isLoading={createGoal.isPending} cohortSlug={cohortSlug ?? undefined} />
+                <SubmitBar
+                  form={form}
+                  isLoading={createGoal.isPending}
+                  cohortSlug={cohortSlug ?? undefined}
+                />
               </div>
             </form>
           </Form>
@@ -150,4 +155,3 @@ export default function NewGoalTemplatePage() {
     </div>
   )
 }
-

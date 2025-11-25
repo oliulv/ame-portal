@@ -43,13 +43,13 @@ export function InvoiceActions({ invoiceId, currentStatus }: InvoiceActionsProps
       }
 
       toast.success(
-        action === 'approve' 
+        action === 'approve'
           ? 'Invoice approved successfully'
           : action === 'reject'
-          ? 'Invoice rejected'
-          : 'Invoice marked as paid'
+            ? 'Invoice rejected'
+            : 'Invoice marked as paid'
       )
-      
+
       router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update invoice')
@@ -130,4 +130,3 @@ export function InvoiceActions({ invoiceId, currentStatus }: InvoiceActionsProps
     </Card>
   )
 }
-

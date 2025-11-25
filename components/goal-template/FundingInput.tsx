@@ -43,7 +43,8 @@ export function FundingInput({ form }: FundingInputProps) {
             </div>
           </FormControl>
           <FormDescription>
-            Amount in GBP that triggers internal accelerator funding logic when this goal is completed
+            Amount in GBP that triggers internal accelerator funding logic when this goal is
+            completed
           </FormDescription>
           <FormMessage />
         </FormItem>
@@ -51,4 +52,3 @@ export function FundingInput({ form }: FundingInputProps) {
     />
   )
 }
-

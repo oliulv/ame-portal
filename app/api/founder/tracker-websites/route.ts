@@ -10,7 +10,7 @@ export async function GET() {
   try {
     await requireFounder()
     const startupIds = await getFounderStartupIds()
-    
+
     if (startupIds.length === 0) {
       return NextResponse.json({ websites: [] })
     }
@@ -26,19 +26,13 @@ export async function GET() {
 
     if (error) {
       console.error('Error fetching tracker websites:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch tracker websites' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch tracker websites' }, { status: 500 })
     }
 
     return NextResponse.json({ websites: websites || [] })
   } catch (error) {
     console.error('Error in GET tracker-websites:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -50,12 +44,9 @@ export async function POST(request: Request) {
   try {
     await requireFounder()
     const startupIds = await getFounderStartupIds()
-    
+
     if (startupIds.length === 0) {
-      return NextResponse.json(
-        { error: 'No startup found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'No startup found' }, { status: 404 })
     }
 
     const startupId = startupIds[0]
@@ -63,10 +54,7 @@ export async function POST(request: Request) {
     const { name, domain } = body
 
     if (!name) {
-      return NextResponse.json(
-        { error: 'Name is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
 
     const supabase = createAdminClient()
@@ -100,19 +88,12 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('Error creating tracker website:', error)
-      return NextResponse.json(
-        { error: 'Failed to create tracker website' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to create tracker website' }, { status: 500 })
     }
 
     return NextResponse.json({ website })
   } catch (error) {
     console.error('Error in POST tracker-websites:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

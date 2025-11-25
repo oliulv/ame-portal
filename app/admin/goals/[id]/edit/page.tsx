@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { goalTemplateSchema, type GoalTemplateFormData } from '@/lib/schemas'
+import { extractConditionsFromDescription } from '@/lib/goalUtils'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -52,20 +53,27 @@ interface GoalEditPageProps {
 export default function GoalEditPage({ params }: GoalEditPageProps) {
   const router = useRouter()
   const [goalId, setGoalId] = useState<string | null>(null)
-  const { cohortId, cohort, cohortSlug } = useSelectedCohort()
+  const { cohortId, cohort: _cohort, cohortSlug } = useSelectedCohort()
 
   const form = useForm<GoalTemplateFormData>({
     resolver: zodResolver(goalTemplateSchema),
     defaultValues: {
-      cohort_id: cohortId || '',
+      cohortId: cohortId || '',
       title: '',
       description: '',
       category: 'launch',
-      default_target_value: undefined,
-      default_deadline: undefined,
-      default_weight: undefined,
-      default_funding_amount: undefined,
-      is_active: true,
+      deadline: undefined,
+      isActive: true,
+      conditions: [
+        {
+          dataSource: 'stripe',
+          metric: '',
+          operator: '>=',
+          targetValue: undefined,
+          unit: '',
+        },
+      ],
+      fundingUnlocked: undefined,
     },
   })
 
@@ -79,50 +87,70 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
   }, [params])
 
   // Fetch goal template data
-  const { data: goal, isLoading, error: queryError } = useQuery({
+  const {
+    data: goal,
+    isLoading,
+    error: queryError,
+  } = useQuery({
     queryKey: queryKeys.goals.detail(goalId || ''),
     queryFn: () => goalsApi.getById(goalId!),
     enabled: !!goalId,
   })
 
   // Reset form when goal data loads
-  // Note: We keep the goal's original cohort_id, but display the current selected cohort
   useEffect(() => {
     if (goal) {
-      const category = (goal.category && ['launch', 'revenue', 'users', 'product', 'fundraising'].includes(goal.category))
-        ? goal.category as 'launch' | 'revenue' | 'users' | 'product' | 'fundraising'
-        : 'launch'
-      
+      const { cleanDescription, conditions } = extractConditionsFromDescription(goal.description)
+
+      // Parse category - handle both old and new categories
+      const validCategories = [
+        'launch',
+        'revenue',
+        'users',
+        'product',
+        'fundraising',
+        'growth',
+        'hiring',
+      ] as const
+      const category =
+        goal.category && validCategories.includes(goal.category as (typeof validCategories)[number])
+          ? (goal.category as (typeof validCategories)[number])
+          : 'launch'
+
       form.reset({
-        cohort_id: goal.cohort_id, // Keep original cohort_id from the goal
+        cohortId: goal.cohort_id,
         title: goal.title,
-        description: goal.description || '',
+        description: cleanDescription,
         category,
-        default_target_value: goal.default_target_value,
-        default_deadline: goal.default_deadline,
-        default_weight: goal.default_weight,
-        default_funding_amount: goal.default_funding_amount,
-        is_active: goal.is_active,
+        deadline: goal.default_deadline || undefined,
+        isActive: goal.is_active,
+        conditions: conditions || [
+          {
+            dataSource: 'stripe' as const,
+            metric: '',
+            operator: '>=' as const,
+            targetValue: goal.default_target_value || undefined,
+            unit: '',
+          },
+        ],
+        fundingUnlocked: goal.default_funding_amount || undefined,
       })
     }
   }, [goal, form])
 
-  // Update cohort_id when cohort changes (but only if form hasn't been populated with goal data yet)
+  // Update cohortId when cohort changes
   useEffect(() => {
-    if (cohortId && goal && !goal.cohort_id) {
-      form.setValue('cohort_id', cohortId)
+    if (cohortId) {
+      form.setValue('cohortId', cohortId)
     }
-  }, [cohortId, goal, form])
+  }, [cohortId, form])
 
   const updateGoal = useAppMutation({
     mutationFn: (data: GoalTemplateFormData) => {
       if (!goalId) throw new Error('Goal ID is required')
-      return goalsApi.update(goalId, data)
+      return goalsApi.updateTemplate(goalId, data)
     },
-    invalidateQueries: [
-      queryKeys.goals.list('admin'),
-      queryKeys.goals.detail(goalId || ''),
-    ],
+    invalidateQueries: [queryKeys.goals.list('admin'), queryKeys.goals.detail(goalId || '')],
     successMessage: 'Goal template updated successfully',
     onSuccess: () => {
       router.push('/admin/goals')
@@ -167,9 +195,7 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
       <Card>
         <CardHeader>
           <CardTitle>Edit Goal Template</CardTitle>
-          <CardDescription>
-            Update goal template information
-          </CardDescription>
+          <CardDescription>Update goal template information</CardDescription>
         </CardHeader>
         <CardContent>
           {(queryError || updateGoal.isError) && (
@@ -187,7 +213,8 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                     {goal.cohorts?.label || 'Unknown Cohort'}
                   </p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    This goal template belongs to the cohort shown above. The cohort cannot be changed after creation.
+                    This goal template belongs to the cohort shown above. The cohort cannot be
+                    changed after creation.
                   </p>
                 </div>
               )}
@@ -199,10 +226,7 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                   <FormItem>
                     <FormLabel>Goal Title</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., Launch MVP"
-                        {...field}
-                      />
+                      <Input placeholder="e.g., Launch MVP" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -233,10 +257,7 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Category</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a category" />
@@ -255,73 +276,22 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="default_target_value"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Target (Number, Optional)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="e.g., 100"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            field.onChange(value === '' ? undefined : parseFloat(value))
-                          }}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Enter the numeric target for this goal (e.g., 100 for £100 revenue, 50 for 50 users). Units come from the goal title/description.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="default_weight"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Priority (1-10, Optional)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="1"
-                          max="10"
-                          placeholder="1-10"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            field.onChange(value === '' ? undefined : parseInt(value))
-                          }}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Importance from 1–10 (1–3 = low, 4–7 = medium, 8–10 = high). Higher priority goals can count more in scoring later.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
               <FormField
                 control={form.control}
-                name="default_deadline"
+                name="deadline"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Default Deadline (Optional)</FormLabel>
+                    <FormLabel>Deadline (Optional)</FormLabel>
                     <FormControl>
                       <Input
                         type="date"
                         {...field}
-                        value={field.value ?? ''}
+                        value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''}
+                        onChange={(e) => {
+                          field.onChange(
+                            e.target.value ? new Date(e.target.value).toISOString() : undefined
+                          )
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
@@ -331,10 +301,10 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
 
               <FormField
                 control={form.control}
-                name="default_funding_amount"
+                name="fundingUnlocked"
                 render={({ field }) => (
                   <FormItem>
-                      <FormLabel>Funding Unlocked on Completion (Optional)</FormLabel>
+                    <FormLabel>Funding Unlocked on Completion (Optional)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -357,7 +327,7 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
 
               <FormField
                 control={form.control}
-                name="is_active"
+                name="isActive"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
@@ -367,20 +337,14 @@ export default function GoalEditPage({ params }: GoalEditPageProps) {
                       </FormDescription>
                     </div>
                     <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
                   </FormItem>
                 )}
               />
 
               <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  disabled={updateGoal.isPending}
-                >
+                <Button type="submit" disabled={updateGoal.isPending}>
                   {updateGoal.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
                 <Link href={cohortSlug ? `/admin/${cohortSlug}/goals` : '/admin/goals'}>

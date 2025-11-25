@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { Users, Plus } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface PageProps {
   params: Promise<{
@@ -13,9 +14,9 @@ interface PageProps {
 
 export default async function LeaderboardPage({ params }: PageProps) {
   const { cohortSlug } = await params
-  
+
   const supabase = await createClient()
-  
+
   // Verify cohort exists - use Supabase directly for server-side calls
   const { data: cohort, error: cohortError } = await supabase
     .from('cohorts')
@@ -27,7 +28,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
     // Cohort doesn't exist, redirect to cohorts page
     redirect('/admin/cohorts')
   }
-  
+
   // Get startups in this cohort with their goals and metrics
   const { data: startups } = await supabase
     .from('startups')
@@ -67,56 +68,59 @@ export default async function LeaderboardPage({ params }: PageProps) {
   // Calculate scores for each startup
   const startupScores = await Promise.all(
     startups.map(async (startup) => {
-      const [goalsResult, manualMetricsResult, stripeMetricsResult, gaMetricsResult] = await Promise.all([
-        supabase
-          .from('startup_goals')
-          .select('status, completion_source, data_source')
-          .eq('startup_id', startup.id),
-        supabase
-          .from('startup_metrics_manual')
-          .select('metric_name, metric_value')
-          .eq('startup_id', startup.id),
-        supabase
-          .from('metrics_data')
-          .select('metric_key, value')
-          .eq('startup_id', startup.id)
-          .eq('provider', 'stripe')
-          .order('timestamp', { ascending: false })
-          .limit(10),
-        supabase
-          .from('metrics_data')
-          .select('metric_key, value')
-          .eq('startup_id', startup.id)
-          .eq('provider', 'tracker')
-          .order('timestamp', { ascending: false })
-          .limit(10),
-      ])
+      const [goalsResult, manualMetricsResult, stripeMetricsResult, gaMetricsResult] =
+        await Promise.all([
+          supabase
+            .from('startup_goals')
+            .select('status, completion_source, data_source')
+            .eq('startup_id', startup.id),
+          supabase
+            .from('startup_metrics_manual')
+            .select('metric_name, metric_value')
+            .eq('startup_id', startup.id),
+          supabase
+            .from('metrics_data')
+            .select('metric_key, value')
+            .eq('startup_id', startup.id)
+            .eq('provider', 'stripe')
+            .order('timestamp', { ascending: false })
+            .limit(10),
+          supabase
+            .from('metrics_data')
+            .select('metric_key, value')
+            .eq('startup_id', startup.id)
+            .eq('provider', 'tracker')
+            .order('timestamp', { ascending: false })
+            .limit(10),
+        ])
 
       const goals = goalsResult.data || []
       const manualMetrics = manualMetricsResult.data || []
       const stripeMetrics = stripeMetricsResult.data || []
       const gaMetrics = gaMetricsResult.data || []
 
-      const completedGoals = goals.filter(g => g.status === 'completed').length
-      const autoCompletedGoals = goals.filter(g => g.status === 'completed' && g.completion_source === 'auto').length
+      const completedGoals = goals.filter((g) => g.status === 'completed').length
+      const autoCompletedGoals = goals.filter(
+        (g) => g.status === 'completed' && g.completion_source === 'auto'
+      ).length
       const totalGoals = goals.length
       const completionPercentage = totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0
 
       // Get revenue from manual metrics or Stripe metrics
       let revenue = 0
-      const manualRevenueMetric = manualMetrics.find(m => m.metric_name === 'manual_revenue')
+      const manualRevenueMetric = manualMetrics.find((m) => m.metric_name === 'manual_revenue')
       if (manualRevenueMetric) {
         revenue = Number(manualRevenueMetric.metric_value)
       } else {
         // Try to get from Stripe metrics
-        const stripeRevenue = stripeMetrics.find(m => m.metric_key === 'total_revenue')
+        const stripeRevenue = stripeMetrics.find((m) => m.metric_key === 'total_revenue')
         if (stripeRevenue) {
           revenue = Number(stripeRevenue.value)
         }
       }
 
       // Get traffic metrics from tracker
-      const sessionsMetric = gaMetrics.find(m => m.metric_key === 'sessions')
+      const sessionsMetric = gaMetrics.find((m) => m.metric_key === 'sessions')
       const sessions = sessionsMetric ? Number(sessionsMetric.value) : 0
 
       // Enhanced scoring formula:
@@ -189,9 +193,11 @@ export default async function LeaderboardPage({ params }: PageProps) {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     {startup.logo_url && (
-                      <img
+                      <Image
                         src={startup.logo_url}
                         alt={startup.name}
+                        width={40}
+                        height={40}
                         className="h-10 w-10 rounded-full mr-3"
                       />
                     )}
@@ -224,7 +230,11 @@ export default async function LeaderboardPage({ params }: PageProps) {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  £{startup.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  £
+                  {startup.revenue.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {startup.sessions > 0 ? startup.sessions.toLocaleString() : '-'}
@@ -243,16 +253,27 @@ export default async function LeaderboardPage({ params }: PageProps) {
           <strong>Scoring Formula:</strong> Leaderboard score combines multiple factors:
         </p>
         <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
-          <li><strong>Goal Completion (40%):</strong> Percentage of completed goals</li>
-          <li><strong>Revenue (30%):</strong> From Stripe integration or manual entry (£1000 = 30 points, capped)</li>
-          <li><strong>Traffic (20%):</strong> Sessions from AccelerateMe Tracker (1000 sessions = 20 points, capped)</li>
-          <li><strong>Automation Bonus (10%):</strong> Bonus for goals auto-completed via metric tracking</li>
+          <li>
+            <strong>Goal Completion (40%):</strong> Percentage of completed goals
+          </li>
+          <li>
+            <strong>Revenue (30%):</strong> From Stripe integration or manual entry (£1000 = 30
+            points, capped)
+          </li>
+          <li>
+            <strong>Traffic (20%):</strong> Sessions from AccelerateMe Tracker (1000 sessions = 20
+            points, capped)
+          </li>
+          <li>
+            <strong>Automation Bonus (10%):</strong> Bonus for goals auto-completed via metric
+            tracking
+          </li>
         </ul>
         <p className="text-sm text-gray-600 mt-2">
-          Goals marked with "auto" badges are automatically completed when metric thresholds are met.
+          Goals marked with "auto" badges are automatically completed when metric thresholds are
+          met.
         </p>
       </div>
     </div>
   )
 }
-

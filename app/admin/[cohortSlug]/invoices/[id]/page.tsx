@@ -4,10 +4,21 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, CheckCircle2, XCircle, DollarSign, FileText, ExternalLink, Calendar, Building2, User } from 'lucide-react'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  DollarSign,
+  FileText,
+  ExternalLink,
+  Calendar,
+  Building2,
+  User,
+} from 'lucide-react'
 import { InvoiceActions } from './InvoiceActions'
 
-function getInvoiceStatusVariant(status: string): "success" | "warning" | "destructive" | "info" | "secondary" {
+function getInvoiceStatusVariant(
+  status: string
+): 'success' | 'warning' | 'destructive' | 'info' | 'secondary' {
   switch (status) {
     case 'approved':
       return 'success'
@@ -45,14 +56,16 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   // Fetch invoice with related data
   const { data: invoice, error: invoiceError } = await supabase
     .from('invoices')
-    .select(`
+    .select(
+      `
       *,
       startups (
         id,
         name,
         slug
       )
-    `)
+    `
+    )
     .eq('id', id)
     .single()
 
@@ -61,7 +74,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   }
 
   // Verify invoice belongs to a startup in this cohort
-  const startup = invoice.startups as any
+  const startup = invoice.startups as { id: string; name: string; slug: string | null } | null
   if (!startup) {
     notFound()
   }
@@ -131,7 +144,9 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Amount</label>
-                  <p className="text-lg font-medium font-mono">£{Number(invoice.amount_gbp).toFixed(2)}</p>
+                  <p className="text-lg font-medium font-mono">
+                    £{Number(invoice.amount_gbp).toFixed(2)}
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Invoice Date</label>
@@ -139,7 +154,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                     {new Date(invoice.invoice_date).toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'long',
-                      year: 'numeric'
+                      year: 'numeric',
                     })}
                   </p>
                 </div>
@@ -150,7 +165,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       {new Date(invoice.due_date).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'long',
-                        year: 'numeric'
+                        year: 'numeric',
                       })}
                     </p>
                   </div>
@@ -172,7 +187,9 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
 
               {/* Invoice File */}
               <div>
-                <label className="text-sm font-medium text-muted-foreground mb-2 block">Invoice File</label>
+                <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                  Invoice File
+                </label>
                 <a
                   href={invoice.file_path}
                   target="_blank"
@@ -241,7 +258,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                     month: 'short',
                     year: 'numeric',
                     hour: '2-digit',
-                    minute: '2-digit'
+                    minute: '2-digit',
                   })}
                 </div>
               </CardContent>
@@ -258,13 +275,17 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 {invoice.approved_at && (
                   <div className="flex items-center gap-2 text-green-600">
                     <CheckCircle2 className="h-4 w-4" />
-                    <span>Approved on {new Date(invoice.approved_at).toLocaleDateString('en-GB')}</span>
+                    <span>
+                      Approved on {new Date(invoice.approved_at).toLocaleDateString('en-GB')}
+                    </span>
                   </div>
                 )}
                 {invoice.paid_at && (
                   <div className="flex items-center gap-2 text-blue-600">
                     <DollarSign className="h-4 w-4" />
-                    <span>Marked as paid on {new Date(invoice.paid_at).toLocaleDateString('en-GB')}</span>
+                    <span>
+                      Marked as paid on {new Date(invoice.paid_at).toLocaleDateString('en-GB')}
+                    </span>
                   </div>
                 )}
               </CardContent>
@@ -280,4 +301,3 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
     </div>
   )
 }
-

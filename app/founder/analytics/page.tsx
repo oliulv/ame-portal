@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MetricChart } from '@/components/analytics/metric-chart'
@@ -27,7 +27,7 @@ export default function FounderAnalyticsPage() {
   const [range, setRange] = useState('30')
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     try {
       const response = await fetch(`/api/founder/analytics?range=${range}`)
       if (response.ok) {
@@ -40,12 +40,12 @@ export default function FounderAnalyticsPage() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }
+  }, [range])
 
   useEffect(() => {
     setIsLoading(true)
     fetchAnalytics()
-  }, [range])
+  }, [fetchAnalytics])
 
   const handleRefresh = () => {
     setIsRefreshing(true)
@@ -107,7 +107,8 @@ export default function FounderAnalyticsPage() {
               <Plug className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Integrations Connected</h3>
               <p className="text-muted-foreground mb-4">
-                Connect Stripe or add the AccelerateMe Tracker to start tracking metrics automatically
+                Connect Stripe or add the AccelerateMe Tracker to start tracking metrics
+                automatically
               </p>
               <Link href="/founder/settings?tab=integrations">
                 <Button>Go to Settings</Button>
@@ -132,7 +133,9 @@ export default function FounderAnalyticsPage() {
               title="Total Revenue"
               description="Cumulative revenue over time"
               data={data.stripe.revenue}
-              formatValue={(v) => `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              formatValue={(v) =>
+                `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              }
             />
           )}
 
@@ -141,7 +144,9 @@ export default function FounderAnalyticsPage() {
               title="Monthly Recurring Revenue (MRR)"
               description="Recurring revenue from subscriptions"
               data={data.stripe.mrr}
-              formatValue={(v) => `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              formatValue={(v) =>
+                `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              }
             />
           )}
 
@@ -197,4 +202,3 @@ export default function FounderAnalyticsPage() {
     </div>
   )
 }
-

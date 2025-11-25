@@ -2,14 +2,7 @@
 
 import { UseFormReturn, useWatch } from 'react-hook-form'
 import { GoalTemplateFormData } from '@/lib/schemas'
-import {
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -168,11 +161,7 @@ export function ConditionRow({ form, index, canRemove, onRemove }: ConditionRowP
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Metric</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  disabled={!dataSource}
-                >
+                <Select onValueChange={field.onChange} value={field.value} disabled={!dataSource}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select metric" />
@@ -262,4 +251,3 @@ export function ConditionRow({ form, index, canRemove, onRemove }: ConditionRowP
     </div>
   )
 }
-

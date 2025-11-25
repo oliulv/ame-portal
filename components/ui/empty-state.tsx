@@ -1,6 +1,6 @@
-import * as React from "react"
-import { cn } from "@/lib/utils"
-import { Card } from "./card"
+import * as React from 'react'
+import { cn } from '@/lib/utils'
+import { Card } from './card'
 
 interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
   icon?: React.ReactNode
@@ -27,11 +27,7 @@ export function EmptyState({
         </div>
       )}
       <h3 className="mb-2 text-lg font-semibold">{title}</h3>
-      {description && (
-        <p className="mb-6 max-w-sm text-sm text-muted-foreground">
-          {description}
-        </p>
-      )}
+      {description && <p className="mb-6 max-w-sm text-sm text-muted-foreground">{description}</p>}
       {action && <div>{action}</div>}
     </>
   )
@@ -39,10 +35,7 @@ export function EmptyState({
   if (noCard) {
     return (
       <div
-        className={cn(
-          "flex flex-col items-center justify-center p-12 text-center",
-          className
-        )}
+        className={cn('flex flex-col items-center justify-center p-12 text-center', className)}
         {...props}
       >
         {content}
@@ -52,10 +45,7 @@ export function EmptyState({
 
   return (
     <Card
-      className={cn(
-        "flex flex-col items-center justify-center p-12 text-center",
-        className
-      )}
+      className={cn('flex flex-col items-center justify-center p-12 text-center', className)}
       {...props}
     >
       {content}

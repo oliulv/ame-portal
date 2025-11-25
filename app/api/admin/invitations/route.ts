@@ -19,10 +19,7 @@ export async function GET(request: Request) {
     const startupId = searchParams.get('startup_id')
 
     if (!startupId) {
-      return NextResponse.json(
-        { error: 'startup_id query parameter is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'startup_id query parameter is required' }, { status: 400 })
     }
 
     // 3. Fetch invitations from database
@@ -35,10 +32,7 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error('Database error fetching invitations:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch invitations' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch invitations' }, { status: 500 })
     }
 
     // 4. Return invitations data
@@ -47,16 +41,10 @@ export async function GET(request: Request) {
     console.error('Error in GET /api/admin/invitations:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -98,10 +86,7 @@ export async function POST(request: Request) {
       .single()
 
     if (!startup) {
-      return NextResponse.json(
-        { error: 'Startup not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Startup not found' }, { status: 404 })
     }
 
     // 5. Generate secure token and expiration
@@ -124,10 +109,7 @@ export async function POST(request: Request) {
 
     if (invitationError || !invitation) {
       console.error('Database error creating invitation:', invitationError)
-      return NextResponse.json(
-        { error: 'Failed to create invitation' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to create invitation' }, { status: 500 })
     }
 
     // 7. Send invitation email
@@ -157,23 +139,14 @@ export async function POST(request: Request) {
 
     // Handle validation errors
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Validation failed', details: error }, { status: 400 })
     }
 
     // Handle authentication errors
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

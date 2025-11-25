@@ -9,16 +9,13 @@ import { NextResponse } from 'next/server'
 export async function POST() {
   try {
     const { userId } = await auth()
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
     const supabase = createAdminClient()
-    
+
     // Test database connection first
     const { error: testError, data: testData } = await supabase.from('users').select('id').limit(1)
     if (testError) {
@@ -31,21 +28,23 @@ export async function POST() {
         hasSecret: !!process.env.SUPABASE_SECRET,
         secretPrefix: process.env.SUPABASE_SECRET?.substring(0, 10),
       })
-      
+
       // Check if it's an authentication error
       if (testError.message === 'Internal server error.' && !testError.code) {
         return NextResponse.json(
-          { 
+          {
             error: 'Database authentication failed',
-            details: 'The SUPABASE_SECRET key may not have service_role permissions. Please verify you are using the service_role key from Supabase Dashboard → Settings → API → service_role (secret key). It should be a JWT token starting with "eyJ".',
-            troubleshooting: 'If you see a key starting with "sb_secret_", that is not the service_role key. You need the actual service_role JWT token.',
+            details:
+              'The SUPABASE_SECRET key may not have service_role permissions. Please verify you are using the service_role key from Supabase Dashboard → Settings → API → service_role (secret key). It should be a JWT token starting with "eyJ".',
+            troubleshooting:
+              'If you see a key starting with "sb_secret_", that is not the service_role key. You need the actual service_role JWT token.',
           },
           { status: 500 }
         )
       }
-      
+
       return NextResponse.json(
-        { 
+        {
           error: 'Database connection failed',
           details: testError.message,
           code: testError.code,
@@ -53,9 +52,9 @@ export async function POST() {
         { status: 500 }
       )
     }
-    
-    console.log('Database connection test successful, can read', testData?.length || 0, 'users')
-    
+
+    console.warn('Database connection test successful, can read', testData?.length || 0, 'users')
+
     // Check if user already exists
     const { data: existingUser, error: queryError } = await supabase
       .from('users')
@@ -113,7 +112,7 @@ export async function POST() {
       }
 
       return NextResponse.json(
-        { 
+        {
           error: 'Failed to create user',
           details: error.message,
           code: error.code,
@@ -129,9 +128,11 @@ export async function POST() {
   } catch (err) {
     console.error('Unexpected error in user setup:', err)
     return NextResponse.json(
-      { error: 'Internal server error', details: err instanceof Error ? err.message : 'Unknown error' },
+      {
+        error: 'Internal server error',
+        details: err instanceof Error ? err.message : 'Unknown error',
+      },
       { status: 500 }
     )
   }
 }
-

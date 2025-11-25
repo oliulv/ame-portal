@@ -106,7 +106,7 @@ export default function OnboardingPage() {
   ]
 
   const currentStepIndex = steps.findIndex((s) => s.key === currentStep)
-  
+
   // Determine step states
   const getStepState = (index: number) => {
     if (index < currentStepIndex) return 'completed'
@@ -237,7 +237,7 @@ export default function OnboardingPage() {
           <div className="relative flex items-start justify-between">
             {/* Connecting Lines Background */}
             <div className="absolute top-5 left-0 right-0 h-0.5 bg-muted-foreground/20" />
-            
+
             {/* Completed Progress Line */}
             {currentStepIndex > 0 && (
               <div
@@ -247,14 +247,14 @@ export default function OnboardingPage() {
                 }}
               />
             )}
-            
+
             {/* Steps */}
             {steps.map((step, index) => {
               const state = getStepState(index)
               const isCompleted = state === 'completed'
               const isCurrent = state === 'current'
-              const isUpcoming = state === 'upcoming'
-              
+              const _isUpcoming = state === 'upcoming'
+
               return (
                 <div key={step.key} className="relative z-10 flex flex-col items-center flex-1">
                   {/* Step Circle */}
@@ -263,26 +263,26 @@ export default function OnboardingPage() {
                       isCompleted
                         ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                         : isCurrent
-                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                        : 'border-muted-foreground/30 bg-muted/30 text-muted-foreground/50'
+                          ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                          : 'border-muted-foreground/30 bg-muted/30 text-muted-foreground/50'
                     }`}
                   >
                     {isCompleted ? (
                       <Check className="h-5 w-5" />
                     ) : (
-                      <span className={`text-sm font-semibold ${isCurrent ? 'text-primary' : 'text-muted-foreground/50'}`}>
+                      <span
+                        className={`text-sm font-semibold ${isCurrent ? 'text-primary' : 'text-muted-foreground/50'}`}
+                      >
                         {index + 1}
                       </span>
                     )}
                   </div>
-                  
+
                   {/* Step Label */}
                   <div className="mt-3 text-center max-w-[140px]">
                     <div
                       className={`text-sm font-medium ${
-                        isCompleted || isCurrent
-                          ? 'text-primary'
-                          : 'text-muted-foreground/50'
+                        isCompleted || isCurrent ? 'text-primary' : 'text-muted-foreground/50'
                       }`}
                     >
                       {step.title}
@@ -318,7 +318,10 @@ export default function OnboardingPage() {
             </CardHeader>
             <CardContent>
               <Form {...personalForm}>
-                <form onSubmit={personalForm.handleSubmit(handlePersonalNext)} className="space-y-6">
+                <form
+                  onSubmit={personalForm.handleSubmit(handlePersonalNext)}
+                  className="space-y-6"
+                >
                   <FormField
                     control={personalForm.control}
                     name="address_line1"
@@ -483,11 +486,7 @@ export default function OnboardingPage() {
                       <FormItem>
                         <FormLabel>One-Liner</FormLabel>
                         <FormControl>
-                          <Input
-                            placeholder="We help X do Y by Z"
-                            maxLength={100}
-                            {...field}
-                          />
+                          <Input placeholder="We help X do Y by Z" maxLength={100} {...field} />
                         </FormControl>
                         <FormDescription>
                           A short, punchy description of what your startup does (max 100 characters)
@@ -658,7 +657,9 @@ export default function OnboardingPage() {
                     <div className="text-sm text-amber-900">
                       <p className="font-medium mb-1">Bank details not set up yet</p>
                       <p className="text-amber-800">
-                        You haven't set up bank details for your startup. Only one founder needs to complete this step - once one founder adds the bank details, other founders won't need to.
+                        You haven't set up bank details for your startup. Only one founder needs to
+                        complete this step - once one founder adds the bank details, other founders
+                        won't need to.
                       </p>
                     </div>
                   </div>
@@ -675,9 +676,7 @@ export default function OnboardingPage() {
                         <FormControl>
                           <Input placeholder="John Doe" {...field} />
                         </FormControl>
-                        <FormDescription>
-                          Name as it appears on the bank account
-                        </FormDescription>
+                        <FormDescription>Name as it appears on the bank account</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -697,8 +696,10 @@ export default function OnboardingPage() {
                               onChange={(e) => {
                                 // Auto-format sort code
                                 let value = e.target.value.replace(/\D/g, '')
-                                if (value.length > 2) value = value.slice(0, 2) + '-' + value.slice(2)
-                                if (value.length > 5) value = value.slice(0, 5) + '-' + value.slice(5, 7)
+                                if (value.length > 2)
+                                  value = value.slice(0, 2) + '-' + value.slice(2)
+                                if (value.length > 5)
+                                  value = value.slice(0, 5) + '-' + value.slice(5, 7)
                                 field.onChange(value)
                               }}
                             />
@@ -749,8 +750,8 @@ export default function OnboardingPage() {
                   <div className="rounded-md bg-blue-50 p-4 text-sm text-blue-900">
                     <p className="font-medium mb-1">🔒 Your data is secure</p>
                     <p className="text-blue-800">
-                      Your bank details are encrypted and stored securely. They will only be used for
-                      legitimate funding disbursements.
+                      Your bank details are encrypted and stored securely. They will only be used
+                      for legitimate funding disbursements.
                     </p>
                   </div>
 
@@ -759,9 +760,9 @@ export default function OnboardingPage() {
                       <ChevronLeft className="mr-2 h-4 w-4" />
                       Back
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={handleSkipBank}
                       disabled={isSubmitting}
                     >

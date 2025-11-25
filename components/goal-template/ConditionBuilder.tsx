@@ -30,9 +30,7 @@ export function ConditionBuilder({ form }: ConditionBuilderProps) {
     <div className="space-y-4">
       <div>
         <h3 className="text-base font-semibold">Success Condition</h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          This goal is complete when:
-        </p>
+        <p className="text-sm text-muted-foreground mt-1">This goal is complete when:</p>
       </div>
 
       <div className="space-y-4">
@@ -47,12 +45,7 @@ export function ConditionBuilder({ form }: ConditionBuilderProps) {
         ))}
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        onClick={addCondition}
-        className="w-full"
-      >
+      <Button type="button" variant="outline" onClick={addCondition} className="w-full">
         <Plus className="mr-2 h-4 w-4" />
         Add another condition
       </Button>
@@ -65,4 +58,3 @@ export function ConditionBuilder({ form }: ConditionBuilderProps) {
     </div>
   )
 }
-

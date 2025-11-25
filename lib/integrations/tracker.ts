@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MetricSnapshot } from '@/lib/types'
-import { subDays, subWeeks, subMonths, startOfDay, endOfDay } from 'date-fns'
+import { subDays } from 'date-fns'
 
 /**
  * Fetch tracker metrics for a startup
@@ -37,7 +37,7 @@ export async function fetchTrackerMetrics(
     return []
   }
 
-  const websiteIds = websites.map(w => w.id)
+  const websiteIds = websites.map((w) => w.id)
 
   // Aggregate events by time period
   const snapshots: MetricSnapshot[] = []
@@ -59,17 +59,20 @@ export async function fetchTrackerMetrics(
       .gte('created_at', startDate.toISOString())
 
     // Get unique users (unique session_ids, could be improved with visitor ID)
-    const uniqueSessions = new Set(sessionEvents?.map(e => e.session_id).filter(Boolean) || [])
+    const _uniqueSessions = new Set(sessionEvents?.map((e) => e.session_id).filter(Boolean) || [])
 
     // Aggregate by time window
-    const timeBuckets = new Map<string, {
-      pageviews: number
-      sessions: number
-      users: number
-    }>()
+    const timeBuckets = new Map<
+      string,
+      {
+        pageviews: number
+        sessions: number
+        users: number
+      }
+    >()
 
     // Process pageviews
-    pageviewEvents?.forEach(event => {
+    pageviewEvents?.forEach((event) => {
       const bucket = getTimeBucket(new Date(event.created_at), window)
       const current = timeBuckets.get(bucket) || { pageviews: 0, sessions: 0, users: 0 }
       current.pageviews++
@@ -77,7 +80,7 @@ export async function fetchTrackerMetrics(
     })
 
     // Process sessions
-    sessionEvents?.forEach(event => {
+    sessionEvents?.forEach((event) => {
       if (event.session_id) {
         const bucket = getTimeBucket(new Date(event.created_at), window)
         const current = timeBuckets.get(bucket) || { pageviews: 0, sessions: 0, users: 0 }
@@ -88,7 +91,7 @@ export async function fetchTrackerMetrics(
 
     // For users, we'll use unique sessions per bucket
     const sessionBuckets = new Map<string, Set<string>>()
-    sessionEvents?.forEach(event => {
+    sessionEvents?.forEach((event) => {
       if (event.session_id) {
         const bucket = getTimeBucket(new Date(event.created_at), window)
         if (!sessionBuckets.has(bucket)) {
@@ -176,4 +179,3 @@ function parseTimeBucket(bucket: string, window: 'daily' | 'weekly' | 'monthly')
       return new Date(bucket + '-01T00:00:00Z')
   }
 }
-

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,17 @@ import {
 import { Input } from '@/components/ui/input'
 import { useAppMutation } from '@/lib/hooks/useAppMutation'
 import { z } from 'zod'
-import { ArrowLeft, CreditCard, Code, Copy, Check, Trash2, Plus, BookOpen, ChevronRight } from 'lucide-react'
+import {
+  ArrowLeft,
+  CreditCard,
+  Code,
+  Copy,
+  Check,
+  Trash2,
+  Plus,
+  BookOpen,
+  ChevronRight,
+} from 'lucide-react'
 import Link from 'next/link'
 import { TrackerWebsite } from '@/lib/types'
 
@@ -60,13 +70,13 @@ export default function IntegrationsPage() {
   // Fetch tracker websites
   useEffect(() => {
     fetch('/api/founder/tracker-websites')
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data.websites) {
           setTrackerWebsites(data.websites)
         }
       })
-      .catch(err => console.error('Failed to fetch tracker websites:', err))
+      .catch((err) => console.error('Failed to fetch tracker websites:', err))
   }, [])
 
   const createTrackerWebsiteMutation = useAppMutation({
@@ -103,8 +113,8 @@ export default function IntegrationsPage() {
       router.refresh()
       // Refetch websites
       fetch('/api/founder/tracker-websites')
-        .then(res => res.json())
-        .then(data => {
+        .then((res) => res.json())
+        .then((data) => {
           if (data.websites) {
             setTrackerWebsites(data.websites)
           }
@@ -115,10 +125,12 @@ export default function IntegrationsPage() {
   const getTrackerSnippet = (websiteId: string) => {
     // Use environment variable for production URL, fallback to window.location.origin for development
     // Set NEXT_PUBLIC_TRACKER_BASE_URL to your production URL (e.g., https://app.accelerateme.com)
-    const baseUrl = 
-      (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_TRACKER_BASE_URL) 
+    const baseUrl =
+      typeof window !== 'undefined' && process.env.NEXT_PUBLIC_TRACKER_BASE_URL
         ? process.env.NEXT_PUBLIC_TRACKER_BASE_URL
-        : (typeof window !== 'undefined' ? window.location.origin : '')
+        : typeof window !== 'undefined'
+          ? window.location.origin
+          : ''
     return `<script defer src="${baseUrl}/tracker.js" data-website-id="${websiteId}"></script>`
   }
 
@@ -147,7 +159,6 @@ export default function IntegrationsPage() {
     },
   })
 
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -160,7 +171,9 @@ export default function IntegrationsPage() {
         </Link>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Connect Integration</h1>
-          <p className="text-muted-foreground">Connect your external services to track metrics automatically</p>
+          <p className="text-muted-foreground">
+            Connect your external services to track metrics automatically
+          </p>
         </div>
       </div>
 
@@ -215,7 +228,12 @@ export default function IntegrationsPage() {
                     <FormItem>
                       <FormLabel>Stripe Secret Key</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="sk_live_..." autoComplete="new-password" {...field} />
+                        <Input
+                          type="password"
+                          placeholder="sk_live_..."
+                          autoComplete="new-password"
+                          {...field}
+                        />
                       </FormControl>
                       <FormDescription>
                         Your Stripe secret key (starts with sk_live_ or sk_test_)
@@ -243,10 +261,7 @@ export default function IntegrationsPage() {
                 />
 
                 <div className="flex justify-end">
-                  <Button
-                    type="submit"
-                    disabled={connectStripeMutation.isPending}
-                  >
+                  <Button type="submit" disabled={connectStripeMutation.isPending}>
                     {connectStripeMutation.isPending ? 'Connecting...' : 'Connect Stripe'}
                   </Button>
                 </div>
@@ -279,11 +294,12 @@ export default function IntegrationsPage() {
                   <div className="flex-1 pt-0.5">
                     <p className="font-medium">Create a Tracker Website</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Fill out the form below to create a new tracker website. Give it a name and optionally specify the domain.
+                      Fill out the form below to create a new tracker website. Give it a name and
+                      optionally specify the domain.
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start gap-3">
                   <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
                     2
@@ -291,11 +307,12 @@ export default function IntegrationsPage() {
                   <div className="flex-1 pt-0.5">
                     <p className="font-medium">Copy Your Tracking Script</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      After creating a tracker website, you'll see a tracking script. Click the copy button to copy it to your clipboard.
+                      After creating a tracker website, you'll see a tracking script. Click the copy
+                      button to copy it to your clipboard.
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start gap-3">
                   <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
                     3
@@ -303,11 +320,19 @@ export default function IntegrationsPage() {
                   <div className="flex-1 pt-0.5">
                     <p className="font-medium">Paste Into Your Website</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Paste the script into the <code className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">&lt;head&gt;</code> section of your HTML, or before the closing <code className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">&lt;/body&gt;</code> tag.
+                      Paste the script into the{' '}
+                      <code className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">
+                        &lt;head&gt;
+                      </code>{' '}
+                      section of your HTML, or before the closing{' '}
+                      <code className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">
+                        &lt;/body&gt;
+                      </code>{' '}
+                      tag.
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start gap-3">
                   <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
                     4
@@ -315,12 +340,19 @@ export default function IntegrationsPage() {
                   <div className="flex-1 pt-0.5">
                     <p className="font-medium">View Your Analytics</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Once installed, visit your <Link href="/founder/analytics" className="underline font-medium text-primary hover:text-primary/80">Analytics page</Link> to see pageviews, sessions, and user metrics appear within a few minutes.
+                      Once installed, visit your{' '}
+                      <Link
+                        href="/founder/analytics"
+                        className="underline font-medium text-primary hover:text-primary/80"
+                      >
+                        Analytics page
+                      </Link>{' '}
+                      to see pageviews, sessions, and user metrics appear within a few minutes.
                     </p>
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-4 pt-4 border-t">
                 <details className="group">
                   <summary className="cursor-pointer text-sm font-medium flex items-center gap-2 hover:text-foreground">
@@ -356,7 +388,9 @@ export default function IntegrationsPage() {
             <CardContent>
               <Form {...trackerForm}>
                 <form
-                  onSubmit={trackerForm.handleSubmit((data) => createTrackerWebsiteMutation.mutate(data))}
+                  onSubmit={trackerForm.handleSubmit((data) =>
+                    createTrackerWebsiteMutation.mutate(data)
+                  )}
                   className="space-y-6"
                 >
                   <FormField
@@ -368,9 +402,7 @@ export default function IntegrationsPage() {
                         <FormControl>
                           <Input placeholder="My Marketing Site" {...field} />
                         </FormControl>
-                        <FormDescription>
-                          A friendly name to identify this website
-                        </FormDescription>
+                        <FormDescription>A friendly name to identify this website</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -394,12 +426,11 @@ export default function IntegrationsPage() {
                   />
 
                   <div className="flex justify-end">
-                    <Button
-                      type="submit"
-                      disabled={createTrackerWebsiteMutation.isPending}
-                    >
+                    <Button type="submit" disabled={createTrackerWebsiteMutation.isPending}>
                       <Plus className="h-4 w-4 mr-2" />
-                      {createTrackerWebsiteMutation.isPending ? 'Creating...' : 'Create Tracker Website'}
+                      {createTrackerWebsiteMutation.isPending
+                        ? 'Creating...'
+                        : 'Create Tracker Website'}
                     </Button>
                   </div>
                 </form>
@@ -419,9 +450,7 @@ export default function IntegrationsPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <CardTitle>{website.name}</CardTitle>
-                          {website.domain && (
-                            <CardDescription>{website.domain}</CardDescription>
-                          )}
+                          {website.domain && <CardDescription>{website.domain}</CardDescription>}
                         </div>
                         <Button
                           variant="ghost"
@@ -435,9 +464,7 @@ export default function IntegrationsPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
-                        <label className="text-sm font-medium mb-2 block">
-                          Tracking Script
-                        </label>
+                        <label className="text-sm font-medium mb-2 block">Tracking Script</label>
                         <div className="flex items-center gap-2">
                           <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm break-all">
                             {snippet}
@@ -459,9 +486,25 @@ export default function IntegrationsPage() {
                           <ol className="text-sm text-muted-foreground space-y-1 ml-4 list-decimal">
                             <li>Copy the script above</li>
                             <li>Open your website's HTML file or content management system</li>
-                            <li>Paste the script in the <code className="px-1 py-0.5 bg-muted rounded text-xs">&lt;head&gt;</code> section, or before the closing <code className="px-1 py-0.5 bg-muted rounded text-xs">&lt;/body&gt;</code> tag</li>
+                            <li>
+                              Paste the script in the{' '}
+                              <code className="px-1 py-0.5 bg-muted rounded text-xs">
+                                &lt;head&gt;
+                              </code>{' '}
+                              section, or before the closing{' '}
+                              <code className="px-1 py-0.5 bg-muted rounded text-xs">
+                                &lt;/body&gt;
+                              </code>{' '}
+                              tag
+                            </li>
                             <li>Save and publish your website</li>
-                            <li>Visit your <Link href="/founder/analytics" className="underline">Analytics page</Link> to see metrics appear</li>
+                            <li>
+                              Visit your{' '}
+                              <Link href="/founder/analytics" className="underline">
+                                Analytics page
+                              </Link>{' '}
+                              to see metrics appear
+                            </li>
                           </ol>
                         </div>
                       </div>
@@ -476,4 +519,3 @@ export default function IntegrationsPage() {
     </div>
   )
 }
-

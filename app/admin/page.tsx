@@ -57,9 +57,7 @@ export default async function AdminDashboardEntry() {
             ))}
           </div>
           <div className="mt-6 flex justify-between text-xs text-muted-foreground">
-            <span>
-              You can switch cohorts at any time from the sidebar cohort selector.
-            </span>
+            <span>You can switch cohorts at any time from the sidebar cohort selector.</span>
             <Link href="/admin/cohorts">
               <Button variant="ghost" size="sm" className="px-0 text-xs">
                 Manage cohorts

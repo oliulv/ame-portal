@@ -53,12 +53,7 @@ export async function GET(request: Request) {
     const accountName = response.stripe_publishable_key ? 'Connected Account' : undefined
 
     // Store connection in database
-    await storeStripeConnection(
-      startupId,
-      response.access_token,
-      accountId,
-      accountName
-    )
+    await storeStripeConnection(startupId, response.access_token, accountId, accountName)
 
     // Redirect back to settings page with success message
     return NextResponse.redirect(
@@ -71,4 +66,3 @@ export async function GET(request: Request) {
     )
   }
 }
-

@@ -37,10 +37,7 @@ export async function GET(request: Request, context: RouteContext) {
       .single()
 
     if (startupError || !startup) {
-      return NextResponse.json(
-        { error: 'Startup not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Startup not found' }, { status: 404 })
     }
 
     // Check which integrations are connected
@@ -58,7 +55,7 @@ export async function GET(request: Request, context: RouteContext) {
       .eq('startup_id', startup.id)
       .limit(1)
 
-    const stripeConnected = connections?.some(c => c.provider === 'stripe')
+    const stripeConnected = connections?.some((c) => c.provider === 'stripe')
     const trackerConnected = trackerWebsites && trackerWebsites.length > 0
 
     const result: {
@@ -79,9 +76,30 @@ export async function GET(request: Request, context: RouteContext) {
 
     // Fetch Stripe metrics if connected
     if (stripeConnected) {
-      const revenue = await getMetricTimeSeries(startup.id, 'stripe', 'total_revenue', 'daily', startDate, endDate)
-      const customers = await getMetricTimeSeries(startup.id, 'stripe', 'active_customers', 'daily', startDate, endDate)
-      const mrr = await getMetricTimeSeries(startup.id, 'stripe', 'mrr', 'daily', startDate, endDate)
+      const revenue = await getMetricTimeSeries(
+        startup.id,
+        'stripe',
+        'total_revenue',
+        'daily',
+        startDate,
+        endDate
+      )
+      const customers = await getMetricTimeSeries(
+        startup.id,
+        'stripe',
+        'active_customers',
+        'daily',
+        startDate,
+        endDate
+      )
+      const mrr = await getMetricTimeSeries(
+        startup.id,
+        'stripe',
+        'mrr',
+        'daily',
+        startDate,
+        endDate
+      )
 
       result.stripe = {
         revenue: revenue.length > 0 ? revenue : undefined,
@@ -92,9 +110,30 @@ export async function GET(request: Request, context: RouteContext) {
 
     // Fetch Tracker metrics if connected
     if (trackerConnected) {
-      const sessions = await getMetricTimeSeries(startup.id, 'tracker', 'sessions', 'daily', startDate, endDate)
-      const users = await getMetricTimeSeries(startup.id, 'tracker', 'weekly_active_users', 'daily', startDate, endDate)
-      const pageviews = await getMetricTimeSeries(startup.id, 'tracker', 'pageviews', 'daily', startDate, endDate)
+      const sessions = await getMetricTimeSeries(
+        startup.id,
+        'tracker',
+        'sessions',
+        'daily',
+        startDate,
+        endDate
+      )
+      const users = await getMetricTimeSeries(
+        startup.id,
+        'tracker',
+        'weekly_active_users',
+        'daily',
+        startDate,
+        endDate
+      )
+      const pageviews = await getMetricTimeSeries(
+        startup.id,
+        'tracker',
+        'pageviews',
+        'daily',
+        startDate,
+        endDate
+      )
 
       result.tracker = {
         sessions: sessions.length > 0 ? sessions : undefined,
@@ -103,14 +142,9 @@ export async function GET(request: Request, context: RouteContext) {
       }
     }
 
-
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching admin analytics:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch analytics' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 })
   }
 }
-

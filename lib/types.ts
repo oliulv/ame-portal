@@ -267,4 +267,3 @@ export interface TrackerEvent {
   data?: Record<string, unknown>
   created_at: string
 }
-

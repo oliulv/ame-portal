@@ -64,9 +64,7 @@ export default function NewCohortPage() {
       <Card>
         <CardHeader>
           <CardTitle>Create New Cohort</CardTitle>
-          <CardDescription>
-            Add a new cohort to organize startups by program year
-          </CardDescription>
+          <CardDescription>Add a new cohort to organize startups by program year</CardDescription>
         </CardHeader>
         <CardContent>
           {createCohort.isError && (
@@ -84,10 +82,7 @@ export default function NewCohortPage() {
                   <FormItem>
                     <FormLabel>Internal Name</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="accelerateme-2025"
-                        {...field}
-                      />
+                      <Input placeholder="accelerateme-2025" {...field} />
                     </FormControl>
                     <FormDescription>
                       Lowercase alphanumeric with hyphens (e.g., accelerateme-2025)
@@ -104,14 +99,9 @@ export default function NewCohortPage() {
                   <FormItem>
                     <FormLabel>Display Name</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="Cohort 12"
-                        {...field}
-                      />
+                      <Input placeholder="Cohort 12" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      User-friendly name shown in the interface
-                    </FormDescription>
+                    <FormDescription>User-friendly name shown in the interface</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -162,25 +152,17 @@ export default function NewCohortPage() {
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Active Status</FormLabel>
-                      <FormDescription>
-                        Active cohorts are displayed in the system
-                      </FormDescription>
+                      <FormDescription>Active cohorts are displayed in the system</FormDescription>
                     </div>
                     <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
                   </FormItem>
                 )}
               />
 
               <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  disabled={createCohort.isPending}
-                >
+                <Button type="submit" disabled={createCohort.isPending}>
                   {createCohort.isPending ? 'Creating...' : 'Create Cohort'}
                 </Button>
                 <Link href="/admin/cohorts">

@@ -16,17 +16,11 @@ export async function POST(request: Request) {
 
     if (!cronSecret) {
       console.error('CRON_SECRET not configured')
-      return NextResponse.json(
-        { error: 'Cron secret not configured' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Cron secret not configured' }, { status: 500 })
     }
 
     if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const supabase = createAdminClient()
@@ -40,10 +34,7 @@ export async function POST(request: Request) {
 
     if (connectionsError) {
       console.error('Error fetching integration connections:', connectionsError)
-      return NextResponse.json(
-        { error: 'Failed to fetch connections' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch connections' }, { status: 500 })
     }
 
     // Fetch all startups with tracker websites
@@ -56,7 +47,7 @@ export async function POST(request: Request) {
       console.error('Error fetching tracker websites:', trackerError)
     }
 
-    const startupsWithTrackers = new Set(trackerWebsites?.map(tw => tw.startup_id) || [])
+    const startupsWithTrackers = new Set(trackerWebsites?.map((tw) => tw.startup_id) || [])
 
     if ((!connections || connections.length === 0) && startupsWithTrackers.size === 0) {
       return NextResponse.json({
@@ -92,7 +83,10 @@ export async function POST(request: Request) {
             .eq('id', connection.id)
         }
       } catch (error) {
-        console.error(`Error syncing ${connection.provider} for startup ${connection.startup_id}:`, error)
+        console.error(
+          `Error syncing ${connection.provider} for startup ${connection.startup_id}:`,
+          error
+        )
         errors.push({
           startupId: connection.startup_id,
           provider: connection.provider,
@@ -138,10 +132,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Error in sync-metrics cron:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -152,4 +143,3 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   return POST(request)
 }
-

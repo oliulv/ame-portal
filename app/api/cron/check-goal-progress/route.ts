@@ -15,17 +15,11 @@ export async function POST(request: Request) {
 
     if (!cronSecret) {
       console.error('CRON_SECRET not configured')
-      return NextResponse.json(
-        { error: 'Cron secret not configured' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Cron secret not configured' }, { status: 500 })
     }
 
     if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const supabase = createAdminClient()
@@ -41,10 +35,7 @@ export async function POST(request: Request) {
 
     if (goalsError) {
       console.error('Error fetching goals:', goalsError)
-      return NextResponse.json(
-        { error: 'Failed to fetch goals' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch goals' }, { status: 500 })
     }
 
     if (!goals || goals.length === 0) {
@@ -150,10 +141,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Error in check-goal-progress cron:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -164,4 +152,3 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   return POST(request)
 }
-

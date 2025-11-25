@@ -13,12 +13,9 @@ export async function POST() {
 
     // Get founder's startup IDs
     const startupIds = await getFounderStartupIds()
-    
+
     if (startupIds.length === 0) {
-      return NextResponse.json(
-        { error: 'No startup found for this founder' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'No startup found for this founder' }, { status: 404 })
     }
 
     // Use the first startup
@@ -30,10 +27,6 @@ export async function POST() {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error disconnecting Stripe:', error)
-    return NextResponse.json(
-      { error: 'Failed to disconnect Stripe' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to disconnect Stripe' }, { status: 500 })
   }
 }
-

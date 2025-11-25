@@ -31,10 +31,7 @@ export async function POST(request: Request) {
     const { type, payload } = body
 
     if (!type || !payload || !payload.website) {
-      return NextResponse.json(
-        { error: 'Invalid request' },
-        { status: 400, headers: corsHeaders }
-      )
+      return NextResponse.json({ error: 'Invalid request' }, { status: 400, headers: corsHeaders })
     }
 
     const supabase = createAdminClient()
@@ -56,10 +53,9 @@ export async function POST(request: Request) {
     // Get request headers for additional data
     const headersList = await headers()
     const userAgent = headersList.get('user-agent') || ''
-    const referer = headersList.get('referer') || payload.referrer || ''
-    const ip = headersList.get('x-forwarded-for')?.split(',')[0] || 
-               headersList.get('x-real-ip') || 
-               'unknown'
+    const _referer = headersList.get('referer') || payload.referrer || ''
+    const _ip =
+      headersList.get('x-forwarded-for')?.split(',')[0] || headersList.get('x-real-ip') || 'unknown'
 
     // Parse user agent (basic parsing - could use a library like ua-parser-js)
     const device = parseDevice(userAgent)
@@ -117,9 +113,7 @@ export async function POST(request: Request) {
     }
 
     // Insert event
-    const { error: insertError } = await supabase
-      .from('tracker_events')
-      .insert(eventData)
+    const { error: insertError } = await supabase.from('tracker_events').insert(eventData)
 
     if (insertError) {
       console.error('Error inserting tracker event:', insertError)
@@ -188,7 +182,11 @@ function generateSessionId(): string {
  */
 function parseDevice(userAgent: string): string | null {
   const ua = userAgent.toLowerCase()
-  if (/mobile|android|iphone|ipod|blackberry|opera mini|opera mobi|skyfire|maemo|windows phone|palm|iemobile|symbian|symbianos|fennec/i.test(ua)) {
+  if (
+    /mobile|android|iphone|ipod|blackberry|opera mini|opera mobi|skyfire|maemo|windows phone|palm|iemobile|symbian|symbianos|fennec/i.test(
+      ua
+    )
+  ) {
     if (/tablet|ipad|playbook|silk/i.test(ua)) {
       return 'tablet'
     }
@@ -225,4 +223,3 @@ function parseOS(userAgent: string): string | null {
   if (ua.includes('ios') || ua.includes('iphone') || ua.includes('ipad')) return 'iOS'
   return null
 }
-

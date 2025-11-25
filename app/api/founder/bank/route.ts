@@ -15,43 +15,32 @@ export async function PATCH(request: Request) {
     const body = await request.json()
 
     // Validate required fields
-    if (!body.account_holder_name || typeof body.account_holder_name !== 'string' || body.account_holder_name.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'Account holder name is required' },
-        { status: 400 }
-      )
+    if (
+      !body.account_holder_name ||
+      typeof body.account_holder_name !== 'string' ||
+      body.account_holder_name.trim().length === 0
+    ) {
+      return NextResponse.json({ error: 'Account holder name is required' }, { status: 400 })
     }
 
     if (!body.sort_code || typeof body.sort_code !== 'string') {
-      return NextResponse.json(
-        { error: 'Sort code is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Sort code is required' }, { status: 400 })
     }
 
     // Validate sort code format (XX-XX-XX)
     const sortCodeRegex = /^\d{2}-\d{2}-\d{2}$/
     if (!sortCodeRegex.test(body.sort_code)) {
-      return NextResponse.json(
-        { error: 'Sort code must be in format XX-XX-XX' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Sort code must be in format XX-XX-XX' }, { status: 400 })
     }
 
     if (!body.account_number || typeof body.account_number !== 'string') {
-      return NextResponse.json(
-        { error: 'Account number is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Account number is required' }, { status: 400 })
     }
 
     // Validate account number format (8 digits)
     const accountNumberRegex = /^\d{8}$/
     if (!accountNumberRegex.test(body.account_number)) {
-      return NextResponse.json(
-        { error: 'Account number must be 8 digits' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Account number must be 8 digits' }, { status: 400 })
     }
 
     const supabase = await createClient()
@@ -64,10 +53,7 @@ export async function PATCH(request: Request) {
       .single()
 
     if (profileError || !founderProfile) {
-      return NextResponse.json(
-        { error: 'Founder profile not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Founder profile not found' }, { status: 404 })
     }
 
     // 4. Prepare update data
@@ -98,10 +84,7 @@ export async function PATCH(request: Request) {
 
       if (error) {
         console.error('Database error updating bank details:', error)
-        return NextResponse.json(
-          { error: 'Failed to update bank details' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Failed to update bank details' }, { status: 500 })
       }
 
       return NextResponse.json({
@@ -121,10 +104,7 @@ export async function PATCH(request: Request) {
 
       if (error) {
         console.error('Database error creating bank details:', error)
-        return NextResponse.json(
-          { error: 'Failed to create bank details' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Failed to create bank details' }, { status: 500 })
       }
 
       return NextResponse.json({
@@ -136,16 +116,9 @@ export async function PATCH(request: Request) {
     console.error('Error in PATCH /api/founder/bank:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

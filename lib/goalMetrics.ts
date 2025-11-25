@@ -287,14 +287,15 @@ export function evaluateConditions(
 
   // All conditions must be met
   const completed = breakdown.every((b) => b.met)
-  
+
   // Average progress across all conditions
-  const avgProgress = breakdown.reduce((sum, b) => {
-    const currentValue = b.currentValue ?? 0
-    const targetValue = b.condition.targetValue
-    const evaluation = evaluateCondition(b.condition, currentValue)
-    return sum + evaluation.progress
-  }, 0) / breakdown.length
+  const avgProgress =
+    breakdown.reduce((sum, b) => {
+      const currentValue = b.currentValue ?? 0
+      const _targetValue = b.condition.targetValue
+      const evaluation = evaluateCondition(b.condition, currentValue)
+      return sum + evaluation.progress
+    }, 0) / breakdown.length
 
   // Use the first condition's target value as the primary target
   const targetValue = conditions[0].targetValue
@@ -306,4 +307,3 @@ export function evaluateConditions(
     breakdown,
   }
 }
-

@@ -14,7 +14,7 @@ export async function GET() {
 
     // Get founder's startup IDs
     const startupIds = await getFounderStartupIds()
-    
+
     if (startupIds.length === 0) {
       return NextResponse.json({
         stripe: null,
@@ -25,7 +25,7 @@ export async function GET() {
     const startupId = startupIds[0]
 
     const supabase = await createClient()
-    
+
     const { data: connections, error } = await supabase
       .from('integration_connections')
       .select('*')
@@ -34,29 +34,26 @@ export async function GET() {
 
     if (error) {
       console.error('Error fetching integration connections:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch integration status' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch integration status' }, { status: 500 })
     }
 
-    const stripe = connections?.find(c => c.provider === 'stripe') as IntegrationConnection | undefined
+    const stripe = connections?.find((c) => c.provider === 'stripe') as
+      | IntegrationConnection
+      | undefined
 
     return NextResponse.json({
-      stripe: stripe ? {
-        id: stripe.id,
-        status: stripe.status,
-        account_name: stripe.account_name,
-        connected_at: stripe.connected_at,
-        last_synced_at: stripe.last_synced_at,
-      } : null,
+      stripe: stripe
+        ? {
+            id: stripe.id,
+            status: stripe.status,
+            account_name: stripe.account_name,
+            connected_at: stripe.connected_at,
+            last_synced_at: stripe.last_synced_at,
+          }
+        : null,
     })
   } catch (error) {
     console.error('Error fetching integration status:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch integration status' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch integration status' }, { status: 500 })
   }
 }
-

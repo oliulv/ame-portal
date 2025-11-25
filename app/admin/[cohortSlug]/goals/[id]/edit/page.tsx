@@ -3,7 +3,7 @@
 import { useRouter, useParams } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -51,7 +51,11 @@ export default function GoalEditPage() {
   })
 
   // Fetch goal template data
-  const { data: goal, isLoading, error: queryError } = useQuery({
+  const {
+    data: goal,
+    isLoading,
+    error: queryError,
+  } = useQuery({
     queryKey: queryKeys.goals.detail(goalId),
     queryFn: () => goalsApi.getById(goalId),
     enabled: !!goalId,
@@ -61,13 +65,22 @@ export default function GoalEditPage() {
   useEffect(() => {
     if (goal) {
       const { cleanDescription, conditions } = extractConditionsFromDescription(goal.description)
-      
+
       // Parse category - handle both old and new categories
-      const validCategories = ['launch', 'revenue', 'users', 'product', 'fundraising', 'growth', 'hiring'] as const
-      const category = (goal.category && validCategories.includes(goal.category as any))
-        ? goal.category as typeof validCategories[number]
-        : 'launch'
-      
+      const validCategories = [
+        'launch',
+        'revenue',
+        'users',
+        'product',
+        'fundraising',
+        'growth',
+        'hiring',
+      ] as const
+      const category =
+        goal.category && validCategories.includes(goal.category as (typeof validCategories)[number])
+          ? (goal.category as (typeof validCategories)[number])
+          : 'launch'
+
       form.reset({
         cohortId: goal.cohort_id,
         title: goal.title,
@@ -157,9 +170,7 @@ export default function GoalEditPage() {
         <Card>
           <CardContent className="py-8">
             <div className="text-center">
-              <p className="text-destructive">
-                {queryError?.message || 'Goal template not found'}
-              </p>
+              <p className="text-destructive">{queryError?.message || 'Goal template not found'}</p>
             </div>
           </CardContent>
         </Card>
@@ -222,10 +233,10 @@ export default function GoalEditPage() {
 
               {/* Section D: Submit Controls */}
               <div className="border-t pt-6">
-                <SubmitBar 
-                  form={form} 
-                  isLoading={updateGoal.isPending} 
-                  cohortSlug={cohortSlug ?? undefined} 
+                <SubmitBar
+                  form={form}
+                  isLoading={updateGoal.isPending}
+                  cohortSlug={cohortSlug ?? undefined}
                 />
               </div>
             </form>
@@ -235,4 +246,3 @@ export default function GoalEditPage() {
     </div>
   )
 }
-

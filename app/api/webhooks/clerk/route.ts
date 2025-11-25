@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   const supabase = createAdminClient()
 
   if (eventType === 'user.created') {
-    const { id, email_addresses } = evt.data
+    const { id, email_addresses: _email_addresses } = evt.data
 
     // Create user record in Supabase
     // Default to 'founder' role - admins can be manually updated
@@ -80,4 +80,3 @@ export async function POST(req: Request) {
 
   return new Response('', { status: 200 })
 }
-

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
     // 2. Get founder's startup ID
     const startupIds = await getFounderStartupIds()
-    
+
     if (startupIds.length === 0) {
       return NextResponse.json(
         { error: 'No startup associated with your account' },
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
     // 3. Parse form data
     const formData = await request.formData()
-    
+
     const vendorName = formData.get('vendor_name') as string
     const invoiceDate = formData.get('invoice_date') as string
     const amountGbp = formData.get('amount_gbp') as string
@@ -42,52 +42,41 @@ export async function POST(request: Request) {
 
     // 4. Validate required fields
     if (!vendorName || typeof vendorName !== 'string' || vendorName.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'Vendor name is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Vendor name is required' }, { status: 400 })
     }
 
     if (!invoiceDate || typeof invoiceDate !== 'string') {
-      return NextResponse.json(
-        { error: 'Invoice date is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invoice date is required' }, { status: 400 })
     }
 
     // Validate date format
     const dateObj = new Date(invoiceDate)
     if (isNaN(dateObj.getTime())) {
-      return NextResponse.json(
-        { error: 'Invalid invoice date format' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid invoice date format' }, { status: 400 })
     }
 
     if (!amountGbp || typeof amountGbp !== 'string') {
-      return NextResponse.json(
-        { error: 'Amount is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Amount is required' }, { status: 400 })
     }
 
     const amount = parseFloat(amountGbp)
     if (isNaN(amount) || amount <= 0) {
-      return NextResponse.json(
-        { error: 'Amount must be a positive number' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Amount must be a positive number' }, { status: 400 })
     }
 
     if (!file || !(file instanceof File)) {
-      return NextResponse.json(
-        { error: 'Invoice file is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invoice file is required' }, { status: 400 })
     }
 
     // Validate file type
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+    ]
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
         { error: 'File must be a PDF or image (JPEG, PNG, GIF, WebP)' },
@@ -98,10 +87,7 @@ export async function POST(request: Request) {
     // Validate file size (max 10MB)
     const maxSize = 10 * 1024 * 1024 // 10MB
     if (file.size > maxSize) {
-      return NextResponse.json(
-        { error: 'File size must be less than 10MB' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'File size must be less than 10MB' }, { status: 400 })
     }
 
     const supabase = await createClient()
@@ -113,7 +99,7 @@ export async function POST(request: Request) {
 
     // Convert File to ArrayBuffer for Supabase Storage
     const fileBuffer = await file.arrayBuffer()
-    
+
     const { error: uploadError } = await supabase.storage
       .from('invoice_files')
       .upload(filePath, fileBuffer, {
@@ -123,40 +109,56 @@ export async function POST(request: Request) {
 
     if (uploadError) {
       console.error('Supabase Storage upload error:', uploadError)
-      
+
       // Check if bucket doesn't exist (404 or specific error)
       // StorageError has status property, not statusCode
-      const errorStatus = (uploadError as any).status || (uploadError as any).statusCode
-      const isBucketNotFound = errorStatus === 404 || 
-                               errorStatus === '404' ||
-                               uploadError.message?.includes('Bucket not found') ||
-                               uploadError.message?.includes('not found')
-      
+      const errorStatus =
+        (uploadError as { status?: number | string; statusCode?: number | string }).status ||
+        (uploadError as { statusCode?: number | string }).statusCode
+      const isBucketNotFound =
+        errorStatus === 404 ||
+        errorStatus === '404' ||
+        uploadError.message?.includes('Bucket not found') ||
+        uploadError.message?.includes('not found')
+
       // Check if RLS policy violation (403)
-      const isRLSViolation = errorStatus === 403 ||
-                            errorStatus === '403' ||
-                            uploadError.message?.includes('row-level security') ||
-                            uploadError.message?.includes('violates row-level security policy')
-      
+      const isRLSViolation =
+        errorStatus === 403 ||
+        errorStatus === '403' ||
+        uploadError.message?.includes('row-level security') ||
+        uploadError.message?.includes('violates row-level security policy')
+
       if (isBucketNotFound || isRLSViolation) {
         // Use admin client to bypass RLS or create bucket if needed
         try {
           const adminClient = createAdminClient()
-          
+
           // Only create bucket if it doesn't exist
           if (isBucketNotFound) {
-            const { error: createBucketError } = await adminClient.storage.createBucket('invoice_files', {
-              public: true,
-              allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
-              fileSizeLimit: 10485760, // 10MB
-            })
+            const { error: createBucketError } = await adminClient.storage.createBucket(
+              'invoice_files',
+              {
+                public: true,
+                allowedMimeTypes: [
+                  'application/pdf',
+                  'image/jpeg',
+                  'image/jpg',
+                  'image/png',
+                  'image/gif',
+                  'image/webp',
+                ],
+                fileSizeLimit: 10485760, // 10MB
+              }
+            )
 
             if (createBucketError) {
               console.error('Failed to create bucket:', createBucketError)
               return NextResponse.json(
-                { 
-                  error: 'Storage bucket not configured. Please create the "invoice_files" bucket in Supabase Storage with public access enabled.',
-                  details: 'Bucket creation failed. Please contact an administrator to set up the invoice_files storage bucket.'
+                {
+                  error:
+                    'Storage bucket not configured. Please create the "invoice_files" bucket in Supabase Storage with public access enabled.',
+                  details:
+                    'Bucket creation failed. Please contact an administrator to set up the invoice_files storage bucket.',
                 },
                 { status: 500 }
               )
@@ -174,23 +176,21 @@ export async function POST(request: Request) {
           if (retryUploadError) {
             console.error('Retry upload error with admin client:', retryUploadError)
             return NextResponse.json(
-              { 
+              {
                 error: 'Failed to upload invoice file',
-                details: isRLSViolation 
+                details: isRLSViolation
                   ? 'RLS policy issue detected. Using admin client as fallback but upload still failed. Please check your Supabase Storage policies.'
-                  : 'Upload failed even with admin client. Please check your Supabase configuration.'
+                  : 'Upload failed even with admin client. Please check your Supabase configuration.',
               },
               { status: 500 }
             )
           }
-          
+
           // Use admin client for getting URL too since we used it for upload
-          const { data: urlData } = adminClient.storage
-            .from('invoice_files')
-            .getPublicUrl(filePath)
-          
+          const { data: urlData } = adminClient.storage.from('invoice_files').getPublicUrl(filePath)
+
           const fileUrl = urlData.publicUrl
-          
+
           // Skip to database insert since we already have the URL
           const { data: invoice, error: dbError } = await supabase
             .from('invoices')
@@ -209,10 +209,7 @@ export async function POST(request: Request) {
 
           if (dbError) {
             console.error('Database error creating invoice:', dbError)
-            return NextResponse.json(
-              { error: 'Failed to create invoice record' },
-              { status: 500 }
-            )
+            return NextResponse.json({ error: 'Failed to create invoice record' }, { status: 500 })
           }
 
           return NextResponse.json({
@@ -228,9 +225,11 @@ export async function POST(request: Request) {
         } catch (adminError) {
           console.error('Admin client error:', adminError)
           return NextResponse.json(
-            { 
-              error: 'Storage bucket not configured. Please create the "invoice_files" bucket in Supabase Storage.',
-              details: 'Go to Supabase Dashboard > Storage > Create Bucket > Name: "invoice_files" > Public: Enabled'
+            {
+              error:
+                'Storage bucket not configured. Please create the "invoice_files" bucket in Supabase Storage.',
+              details:
+                'Go to Supabase Dashboard > Storage > Create Bucket > Name: "invoice_files" > Public: Enabled',
             },
             { status: 500 }
           )
@@ -244,9 +243,7 @@ export async function POST(request: Request) {
     }
 
     // 6. Get public URL for the uploaded file
-    const { data: urlData } = supabase.storage
-      .from('invoice_files')
-      .getPublicUrl(filePath)
+    const { data: urlData } = supabase.storage.from('invoice_files').getPublicUrl(filePath)
 
     const fileUrl = urlData.publicUrl
 
@@ -268,7 +265,7 @@ export async function POST(request: Request) {
 
     if (dbError) {
       console.error('Database error creating invoice:', dbError)
-      
+
       // If database insert fails, try to clean up the uploaded file
       await supabase.storage
         .from('invoice_files')
@@ -277,10 +274,7 @@ export async function POST(request: Request) {
           console.error('Failed to cleanup uploaded file:', cleanupError)
         })
 
-      return NextResponse.json(
-        { error: 'Failed to create invoice record' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to create invoice record' }, { status: 500 })
     }
 
     return NextResponse.json({
@@ -297,16 +291,9 @@ export async function POST(request: Request) {
     console.error('Error in POST /api/founder/invoices:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

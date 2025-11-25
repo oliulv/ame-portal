@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireFounder, getFounderStartupIds } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getMetricTimeSeries } from '@/lib/integrations/metrics'
-import { subDays, subWeeks, subMonths } from 'date-fns'
+import { subDays } from 'date-fns'
 
 /**
  * GET /api/founder/analytics
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
     // Get founder's startup IDs
     const startupIds = await getFounderStartupIds()
-    
+
     if (startupIds.length === 0) {
       return NextResponse.json({
         stripe: null,
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
       .eq('startup_id', startupId)
       .limit(1)
 
-    const stripeConnected = connections?.some(c => c.provider === 'stripe')
+    const stripeConnected = connections?.some((c) => c.provider === 'stripe')
     const trackerConnected = trackerWebsites && trackerWebsites.length > 0
 
     const result: {
@@ -70,8 +70,22 @@ export async function GET(request: Request) {
 
     // Fetch Stripe metrics if connected
     if (stripeConnected) {
-      const revenue = await getMetricTimeSeries(startupId, 'stripe', 'total_revenue', 'daily', startDate, endDate)
-      const customers = await getMetricTimeSeries(startupId, 'stripe', 'active_customers', 'daily', startDate, endDate)
+      const revenue = await getMetricTimeSeries(
+        startupId,
+        'stripe',
+        'total_revenue',
+        'daily',
+        startDate,
+        endDate
+      )
+      const customers = await getMetricTimeSeries(
+        startupId,
+        'stripe',
+        'active_customers',
+        'daily',
+        startDate,
+        endDate
+      )
       const mrr = await getMetricTimeSeries(startupId, 'stripe', 'mrr', 'daily', startDate, endDate)
 
       result.stripe = {
@@ -83,9 +97,30 @@ export async function GET(request: Request) {
 
     // Fetch Tracker metrics if connected
     if (trackerConnected) {
-      const sessions = await getMetricTimeSeries(startupId, 'tracker', 'sessions', 'daily', startDate, endDate)
-      const users = await getMetricTimeSeries(startupId, 'tracker', 'weekly_active_users', 'daily', startDate, endDate)
-      const pageviews = await getMetricTimeSeries(startupId, 'tracker', 'pageviews', 'daily', startDate, endDate)
+      const sessions = await getMetricTimeSeries(
+        startupId,
+        'tracker',
+        'sessions',
+        'daily',
+        startDate,
+        endDate
+      )
+      const users = await getMetricTimeSeries(
+        startupId,
+        'tracker',
+        'weekly_active_users',
+        'daily',
+        startDate,
+        endDate
+      )
+      const pageviews = await getMetricTimeSeries(
+        startupId,
+        'tracker',
+        'pageviews',
+        'daily',
+        startDate,
+        endDate
+      )
 
       result.tracker = {
         sessions: sessions.length > 0 ? sessions : undefined,
@@ -94,14 +129,9 @@ export async function GET(request: Request) {
       }
     }
 
-
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching founder analytics:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch analytics' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 })
   }
 }
-

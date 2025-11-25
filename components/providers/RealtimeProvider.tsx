@@ -6,7 +6,7 @@ import { setupRealtime, cleanupRealtime, type RealtimeSubscriptions } from '@/li
 
 /**
  * Provider component that sets up Supabase Realtime subscriptions
- * 
+ *
  * This should be mounted in the app layout to enable realtime updates
  * across all pages.
  */
@@ -29,4 +29,3 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>
 }
-

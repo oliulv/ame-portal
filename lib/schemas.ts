@@ -3,25 +3,21 @@ import { z } from 'zod'
 /**
  * Validation schema for cohorts
  */
-export const cohortSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Name is required')
-    .regex(/^[a-z0-9-]+$/, 'Name must be lowercase alphanumeric with hyphens only'),
-  label: z.string().min(1, 'Label is required'),
-  year_start: z
-    .number()
-    .int()
-    .min(2020, 'Start year must be 2020 or later'),
-  year_end: z
-    .number()
-    .int()
-    .min(2020, 'End year must be 2020 or later'),
-  is_active: z.boolean(),
-}).refine(data => data.year_start <= data.year_end, {
-  message: 'Start year must be before or equal to end year',
-  path: ['year_end'],
-})
+export const cohortSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, 'Name is required')
+      .regex(/^[a-z0-9-]+$/, 'Name must be lowercase alphanumeric with hyphens only'),
+    label: z.string().min(1, 'Label is required'),
+    year_start: z.number().int().min(2020, 'Start year must be 2020 or later'),
+    year_end: z.number().int().min(2020, 'End year must be 2020 or later'),
+    is_active: z.boolean(),
+  })
+  .refine((data) => data.year_start <= data.year_end, {
+    message: 'Start year must be before or equal to end year',
+    path: ['year_end'],
+  })
 
 export type CohortFormData = z.infer<typeof cohortSchema>
 
@@ -74,7 +70,11 @@ export type GoalTemplateCondition = z.infer<typeof conditionSchema>
 export const startupSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   cohort_id: z.string().uuid('Invalid cohort ID'),
-  slug: z.string().min(1, 'Slug is required').regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens only').optional(),
+  slug: z
+    .string()
+    .min(1, 'Slug is required')
+    .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens only')
+    .optional(),
   logo_url: z.string().url().optional().or(z.literal('')),
   sector: z.string().optional(),
   stage: z.string().optional(),
@@ -238,7 +238,9 @@ export const metricGoalUpdateSchema = z.object({
   metric_key: z.string().optional(),
   aggregation_window: z.enum(['daily', 'weekly', 'monthly']).optional(),
   target_value_metric: z.number().optional(),
-  comparison_operator: z.enum(['>=', '>', '=', '<=', '<', 'increased_by', 'decreased_by']).optional(),
+  comparison_operator: z
+    .enum(['>=', '>', '=', '<=', '<', 'increased_by', 'decreased_by'])
+    .optional(),
   direction: z.enum(['up', 'down']).optional(),
 })
 

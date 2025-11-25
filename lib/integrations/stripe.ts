@@ -1,13 +1,13 @@
 import Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { IntegrationConnection, MetricSnapshot, IntegrationProvider } from '@/lib/types'
+import { MetricSnapshot } from '@/lib/types'
 
 /**
  * Initialize Stripe client with access token from integration connection
  */
 export async function getStripeClient(startupId: string): Promise<Stripe | null> {
   const supabase = createAdminClient()
-  
+
   const { data: connection, error } = await supabase
     .from('integration_connections')
     .select('*')
@@ -41,14 +41,14 @@ export async function fetchStripeMetrics(
   window: 'daily' | 'weekly' | 'monthly' = 'daily'
 ): Promise<MetricSnapshot[]> {
   const stripe = await getStripeClient(startupId)
-  
+
   if (!stripe) {
     throw new Error('Stripe connection not found or inactive')
   }
 
   const snapshots: MetricSnapshot[] = []
   const now = new Date()
-  
+
   // Calculate time range based on window
   let startDate: Date
   switch (window) {
@@ -73,14 +73,15 @@ export async function fetchStripeMetrics(
     })
 
     // Calculate total revenue (sum of successful charges)
-    const totalRevenue = charges.data
-      .filter(c => c.status === 'succeeded')
-      .reduce((sum, c) => sum + (c.amount || 0), 0) / 100 // Convert cents to currency units
+    const totalRevenue =
+      charges.data
+        .filter((c) => c.status === 'succeeded')
+        .reduce((sum, c) => sum + (c.amount || 0), 0) / 100 // Convert cents to currency units
 
     // Count unique customers
     const uniqueCustomers = new Set(
       charges.data
-        .map(c => c.customer)
+        .map((c) => c.customer)
         .filter((customer): customer is string => Boolean(customer))
     ).size
 
@@ -154,9 +155,8 @@ export async function storeStripeConnection(
   const supabase = createAdminClient()
 
   // Upsert connection
-  const { error } = await supabase
-    .from('integration_connections')
-    .upsert({
+  const { error } = await supabase.from('integration_connections').upsert(
+    {
       startup_id: startupId,
       provider: 'stripe',
       account_id: accountId,
@@ -167,9 +167,11 @@ export async function storeStripeConnection(
       connected_by_user_id: connectedByUserId,
       connected_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    }, {
+    },
+    {
       onConflict: 'startup_id,provider',
-    })
+    }
+  )
 
   if (error) {
     console.error('Error storing Stripe connection:', error)
@@ -198,4 +200,3 @@ export async function disconnectStripe(startupId: string): Promise<void> {
     throw new Error('Failed to disconnect Stripe')
   }
 }
-

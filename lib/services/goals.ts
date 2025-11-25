@@ -1,6 +1,4 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { StartupGoal, GoalTemplate } from '@/lib/types'
-import { GoalTemplateCondition, GoalTemplateFormData } from '@/lib/schemas'
 import {
   MetricCondition,
   GoalEvaluationResult,
@@ -15,7 +13,9 @@ import { parseConditionsFromDescription } from '@/lib/goalUtils'
  */
 export async function evaluateGoalForStartup(
   startupGoalId: string
-): Promise<GoalEvaluationResult & { shouldUpdate: boolean; newStatus?: 'completed' | 'in_progress' }> {
+): Promise<
+  GoalEvaluationResult & { shouldUpdate: boolean; newStatus?: 'completed' | 'in_progress' }
+> {
   const supabase = createAdminClient()
 
   // Fetch the goal
@@ -95,7 +95,11 @@ export async function evaluateGoalForStartup(
       continue // Skip manual metrics
     }
 
-    const requirement = conditionToRequirement(condition, goal.startup_id, goal.aggregation_window || 'daily')
+    const requirement = conditionToRequirement(
+      condition,
+      goal.startup_id,
+      goal.aggregation_window || 'daily'
+    )
     if (!requirement) {
       continue
     }
@@ -139,4 +143,3 @@ export async function evaluateGoalForStartup(
     newStatus,
   }
 }
-

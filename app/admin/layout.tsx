@@ -1,11 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { Sidebar } from '@/components/sidebar'
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin()
 
   const navItems = [
@@ -38,4 +34,3 @@ export default async function AdminLayout({
     </div>
   )
 }
-

@@ -95,7 +95,8 @@ export default function NewGoalTemplatePage() {
         <CardHeader>
           <CardTitle>Create New Goal Template</CardTitle>
           <CardDescription>
-            Create a default goal template that will be assigned to new startups in the selected cohort
+            Create a default goal template that will be assigned to new startups in the selected
+            cohort
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -136,14 +137,9 @@ export default function NewGoalTemplatePage() {
                   <FormItem>
                     <FormLabel>Goal Title</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., Launch MVP"
-                        {...field}
-                      />
+                      <Input placeholder="e.g., Launch MVP" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Short, descriptive title for the goal
-                    </FormDescription>
+                    <FormDescription>Short, descriptive title for the goal</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -176,10 +172,7 @@ export default function NewGoalTemplatePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Category</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a category" />
@@ -193,9 +186,7 @@ export default function NewGoalTemplatePage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormDescription>
-                      Type of goal to help with organization
-                    </FormDescription>
+                    <FormDescription>Type of goal to help with organization</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -221,7 +212,8 @@ export default function NewGoalTemplatePage() {
                         />
                       </FormControl>
                       <FormDescription>
-                        Enter the numeric target for this goal (e.g., 100 for £100 revenue, 50 for 50 users). Units come from the goal title/description.
+                        Enter the numeric target for this goal (e.g., 100 for £100 revenue, 50 for
+                        50 users). Units come from the goal title/description.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -249,7 +241,8 @@ export default function NewGoalTemplatePage() {
                         />
                       </FormControl>
                       <FormDescription>
-                        Importance from 1–10 (1–3 = low, 4–7 = medium, 8–10 = high). Higher priority goals can count more in scoring later.
+                        Importance from 1–10 (1–3 = low, 4–7 = medium, 8–10 = high). Higher priority
+                        goals can count more in scoring later.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -264,15 +257,9 @@ export default function NewGoalTemplatePage() {
                   <FormItem>
                     <FormLabel>Default Deadline (Optional)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="date"
-                        {...field}
-                        value={field.value ?? ''}
-                      />
+                      <Input type="date" {...field} value={field.value ?? ''} />
                     </FormControl>
-                    <FormDescription>
-                      Target completion date
-                    </FormDescription>
+                    <FormDescription>Target completion date</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -316,20 +303,14 @@ export default function NewGoalTemplatePage() {
                       </FormDescription>
                     </div>
                     <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
                   </FormItem>
                 )}
               />
 
               <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  disabled={createGoal.isPending || !cohortId}
-                >
+                <Button type="submit" disabled={createGoal.isPending || !cohortId}>
                   {createGoal.isPending ? 'Creating...' : 'Create Goal Template'}
                 </Button>
                 <Link href={cohortSlug ? `/admin/${cohortSlug}/goals` : '/admin/goals'}>

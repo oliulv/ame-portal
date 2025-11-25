@@ -21,10 +21,7 @@ export async function GET() {
       .single()
 
     if (profileError || !founderProfile) {
-      return NextResponse.json(
-        { error: 'Founder profile not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Founder profile not found' }, { status: 404 })
     }
 
     // 3. Get startup details
@@ -35,10 +32,7 @@ export async function GET() {
       .single()
 
     if (startupError || !startup) {
-      return NextResponse.json(
-        { error: 'Startup not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Startup not found' }, { status: 404 })
     }
 
     // 4. Get startup profile
@@ -65,16 +59,10 @@ export async function GET() {
     console.error('Error in GET /api/founder/profile:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -91,14 +79,23 @@ export async function PATCH(request: Request) {
     const body = await request.json()
 
     // Validate the fields we allow updating
-    const updateData: any = {}
-    
+    const updateData: Partial<{
+      full_name: string
+      personal_email: string
+      address_line1: string | null
+      address_line2: string | null
+      city: string | null
+      postcode: string | null
+      country: string | null
+      phone: string | null
+      bio: string | null
+      linkedin_url: string | null
+      x_url: string | null
+    }> = {}
+
     if (body.full_name !== undefined) {
       if (typeof body.full_name !== 'string' || body.full_name.trim().length === 0) {
-        return NextResponse.json(
-          { error: 'Full name must be a non-empty string' },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: 'Full name must be a non-empty string' }, { status: 400 })
       }
       updateData.full_name = body.full_name.trim()
     }
@@ -106,10 +103,7 @@ export async function PATCH(request: Request) {
     if (body.personal_email !== undefined) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(body.personal_email)) {
-        return NextResponse.json(
-          { error: 'Invalid email address' },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
       }
       updateData.personal_email = body.personal_email.trim()
     }
@@ -145,10 +139,7 @@ export async function PATCH(request: Request) {
     if (body.linkedin_url !== undefined) {
       const url = body.linkedin_url?.trim() || ''
       if (url && !url.match(/^https?:\/\/.+/)) {
-        return NextResponse.json(
-          { error: 'LinkedIn URL must be a valid URL' },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: 'LinkedIn URL must be a valid URL' }, { status: 400 })
       }
       updateData.linkedin_url = url || null
     }
@@ -156,19 +147,13 @@ export async function PATCH(request: Request) {
     if (body.x_url !== undefined) {
       const url = body.x_url?.trim() || ''
       if (url && !url.match(/^https?:\/\/.+/)) {
-        return NextResponse.json(
-          { error: 'X URL must be a valid URL' },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: 'X URL must be a valid URL' }, { status: 400 })
       }
       updateData.x_url = url || null
     }
 
     if (Object.keys(updateData).length === 0) {
-      return NextResponse.json(
-        { error: 'No valid fields to update' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
     updateData.updated_at = new Date().toISOString()
@@ -185,10 +170,7 @@ export async function PATCH(request: Request) {
 
     if (error) {
       console.error('Database error updating founder profile:', error)
-      return NextResponse.json(
-        { error: 'Failed to update founder profile' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to update founder profile' }, { status: 500 })
     }
 
     return NextResponse.json({
@@ -199,16 +181,9 @@ export async function PATCH(request: Request) {
     console.error('Error in PATCH /api/founder/profile:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

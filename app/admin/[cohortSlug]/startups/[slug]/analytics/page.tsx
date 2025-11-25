@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MetricChart } from '@/components/analytics/metric-chart'
@@ -32,7 +32,7 @@ export default function AdminStartupAnalyticsPage() {
   const [range, setRange] = useState('30')
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     try {
       const response = await fetch(`/api/admin/startups/${slug}/analytics?range=${range}`)
       if (response.ok) {
@@ -45,12 +45,12 @@ export default function AdminStartupAnalyticsPage() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }
+  }, [range, slug])
 
   useEffect(() => {
     setIsLoading(true)
     fetchAnalytics()
-  }, [range, slug])
+  }, [fetchAnalytics])
 
   const handleRefresh = () => {
     setIsRefreshing(true)
@@ -118,7 +118,8 @@ export default function AdminStartupAnalyticsPage() {
           <CardContent className="pt-6">
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-muted-foreground">
-                No integrations connected. Metrics will appear here once the startup connects Stripe or adds the AccelerateMe Tracker.
+                No integrations connected. Metrics will appear here once the startup connects Stripe
+                or adds the AccelerateMe Tracker.
               </p>
             </div>
           </CardContent>
@@ -140,7 +141,9 @@ export default function AdminStartupAnalyticsPage() {
               title="Total Revenue"
               description="Cumulative revenue over time"
               data={data.stripe.revenue}
-              formatValue={(v) => `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              formatValue={(v) =>
+                `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              }
             />
           )}
 
@@ -149,7 +152,9 @@ export default function AdminStartupAnalyticsPage() {
               title="Monthly Recurring Revenue (MRR)"
               description="Recurring revenue from subscriptions"
               data={data.stripe.mrr}
-              formatValue={(v) => `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              formatValue={(v) =>
+                `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              }
             />
           )}
 
@@ -205,4 +210,3 @@ export default function AdminStartupAnalyticsPage() {
     </div>
   )
 }
-

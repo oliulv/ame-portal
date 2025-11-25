@@ -16,15 +16,12 @@ export async function PATCH(request: Request) {
     const { goalIds } = body
 
     if (!Array.isArray(goalIds) || goalIds.length === 0) {
-      return NextResponse.json(
-        { error: 'goalIds must be a non-empty array' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'goalIds must be a non-empty array' }, { status: 400 })
     }
 
     // 3. Update display_order for each goal template
     const supabase = await createClient()
-    
+
     // Use a transaction-like approach: update each goal with its new order
     const updates = goalIds.map((id: string, index: number) => ({
       id,
@@ -33,22 +30,16 @@ export async function PATCH(request: Request) {
 
     // Update all goals in parallel
     const updatePromises = updates.map(({ id, display_order }) =>
-      supabase
-        .from('goal_templates')
-        .update({ display_order })
-        .eq('id', id)
+      supabase.from('goal_templates').update({ display_order }).eq('id', id)
     )
 
     const results = await Promise.all(updatePromises)
-    
+
     // Check for errors
     const errors = results.filter((result) => result.error)
     if (errors.length > 0) {
       console.error('Database errors updating goal order:', errors)
-      return NextResponse.json(
-        { error: 'Failed to update goal order' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to update goal order' }, { status: 500 })
     }
 
     // 4. Return success response
@@ -57,16 +48,9 @@ export async function PATCH(request: Request) {
     console.error('Error in PATCH /api/admin/goals/reorder:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

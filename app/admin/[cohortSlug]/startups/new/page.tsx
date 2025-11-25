@@ -73,7 +73,7 @@ export default function NewStartupPage() {
         throw new Error(errorData.error || 'Failed to create startup')
       }
 
-      const startup = await response.json()
+      const _startup = await response.json()
 
       // Success! Redirect to cohort-specific startups page
       if (cohortSlug) {
@@ -104,7 +104,8 @@ export default function NewStartupPage() {
         <CardHeader>
           <CardTitle>Create New Startup</CardTitle>
           <CardDescription>
-            Add a new startup to the accelerator program. Goals will be automatically assigned from the cohort's templates.
+            Add a new startup to the accelerator program. Goals will be automatically assigned from
+            the cohort's templates.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -145,14 +146,9 @@ export default function NewStartupPage() {
                   <FormItem>
                     <FormLabel>Startup Name *</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., Acme Inc"
-                        {...field}
-                      />
+                      <Input placeholder="e.g., Acme Inc" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      The official name of the startup
-                    </FormDescription>
+                    <FormDescription>The official name of the startup</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -165,14 +161,9 @@ export default function NewStartupPage() {
                   <FormItem>
                     <FormLabel>Sector</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., FinTech, HealthTech, EdTech"
-                        {...field}
-                      />
+                      <Input placeholder="e.g., FinTech, HealthTech, EdTech" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Industry or sector (optional)
-                    </FormDescription>
+                    <FormDescription>Industry or sector (optional)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -185,15 +176,9 @@ export default function NewStartupPage() {
                   <FormItem>
                     <FormLabel>Website URL</FormLabel>
                     <FormControl>
-                      <Input
-                        type="url"
-                        placeholder="https://example.com"
-                        {...field}
-                      />
+                      <Input type="url" placeholder="https://example.com" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Company website (optional)
-                    </FormDescription>
+                    <FormDescription>Company website (optional)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -206,15 +191,9 @@ export default function NewStartupPage() {
                   <FormItem>
                     <FormLabel>Logo URL</FormLabel>
                     <FormControl>
-                      <Input
-                        type="url"
-                        placeholder="https://example.com/logo.png"
-                        {...field}
-                      />
+                      <Input type="url" placeholder="https://example.com/logo.png" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Direct URL to company logo (optional)
-                    </FormDescription>
+                    <FormDescription>Direct URL to company logo (optional)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -233,19 +212,14 @@ export default function NewStartupPage() {
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>
-                      Private notes (not visible to founders)
-                    </FormDescription>
+                    <FormDescription>Private notes (not visible to founders)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
               <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting || !cohortId}
-                >
+                <Button type="submit" disabled={isSubmitting || !cohortId}>
                   <Plus className="mr-2 h-4 w-4" />
                   {isSubmitting ? 'Creating Startup...' : 'Create Startup'}
                 </Button>
@@ -262,4 +236,3 @@ export default function NewStartupPage() {
     </div>
   )
 }
-

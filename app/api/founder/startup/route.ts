@@ -24,15 +24,16 @@ export async function PATCH(request: Request) {
       .single()
 
     if (profileError || !founderProfile) {
-      return NextResponse.json(
-        { error: 'Founder profile not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Founder profile not found' }, { status: 404 })
     }
 
     // 4. Update startup table fields (name, website_url)
-    const startupUpdateData: any = {}
-    
+    const startupUpdateData: Partial<{
+      name: string
+      website_url: string | null
+      updated_at: string
+    }> = {}
+
     if (body.name !== undefined) {
       if (typeof body.name !== 'string' || body.name.trim().length === 0) {
         return NextResponse.json(
@@ -46,17 +47,14 @@ export async function PATCH(request: Request) {
     if (body.website_url !== undefined) {
       const url = body.website_url?.trim() || ''
       if (url && !url.match(/^https?:\/\/.+/)) {
-        return NextResponse.json(
-          { error: 'Website URL must be a valid URL' },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: 'Website URL must be a valid URL' }, { status: 400 })
       }
       startupUpdateData.website_url = url || null
     }
 
     if (Object.keys(startupUpdateData).length > 0) {
       startupUpdateData.updated_at = new Date().toISOString()
-      
+
       const { error: startupError } = await supabase
         .from('startups')
         .update(startupUpdateData)
@@ -64,15 +62,19 @@ export async function PATCH(request: Request) {
 
       if (startupError) {
         console.error('Database error updating startup:', startupError)
-        return NextResponse.json(
-          { error: 'Failed to update startup' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Failed to update startup' }, { status: 500 })
       }
     }
 
     // 5. Update startup profile fields
-    const startupProfileUpdateData: any = {}
+    const startupProfileUpdateData: Partial<{
+      one_liner: string | null
+      description: string | null
+      industry: string | null
+      location: string | null
+      initial_customers: number | null
+      initial_revenue: number | null
+    }> = {}
 
     if (body.one_liner !== undefined) {
       startupProfileUpdateData.one_liner = body.one_liner?.trim() || null
@@ -131,26 +133,18 @@ export async function PATCH(request: Request) {
 
         if (profileUpdateError) {
           console.error('Database error updating startup profile:', profileUpdateError)
-          return NextResponse.json(
-            { error: 'Failed to update startup profile' },
-            { status: 500 }
-          )
+          return NextResponse.json({ error: 'Failed to update startup profile' }, { status: 500 })
         }
       } else {
         // Create new profile
-        const { error: profileInsertError } = await supabase
-          .from('startup_profiles')
-          .insert({
-            startup_id: founderProfile.startup_id,
-            ...startupProfileUpdateData,
-          })
+        const { error: profileInsertError } = await supabase.from('startup_profiles').insert({
+          startup_id: founderProfile.startup_id,
+          ...startupProfileUpdateData,
+        })
 
         if (profileInsertError) {
           console.error('Database error creating startup profile:', profileInsertError)
-          return NextResponse.json(
-            { error: 'Failed to create startup profile' },
-            { status: 500 }
-          )
+          return NextResponse.json({ error: 'Failed to create startup profile' }, { status: 500 })
         }
       }
     }
@@ -163,16 +157,9 @@ export async function PATCH(request: Request) {
     console.error('Error in PATCH /api/founder/startup:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

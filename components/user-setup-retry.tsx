@@ -51,7 +51,8 @@ export function UserSetupRetry({ isInternalServerError = false }: UserSetupRetry
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          This usually happens automatically. If you're seeing this message, the automatic setup may have failed.
+          This usually happens automatically. If you're seeing this message, the automatic setup may
+          have failed.
         </p>
         {isInternalServerError && (
           <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
@@ -59,7 +60,8 @@ export function UserSetupRetry({ isInternalServerError = false }: UserSetupRetry
               Stale Session Detected
             </p>
             <p className="text-xs text-yellow-600 dark:text-yellow-500">
-              This error often occurs due to stale authentication cookies. Try clearing your browser cookies and local storage, then sign in again.
+              This error often occurs due to stale authentication cookies. Try clearing your browser
+              cookies and local storage, then sign in again.
             </p>
           </div>
         )}
@@ -68,11 +70,7 @@ export function UserSetupRetry({ isInternalServerError = false }: UserSetupRetry
             <p className="text-sm text-destructive font-mono break-all">{error}</p>
           </div>
         )}
-        <Button 
-          onClick={handleRetry} 
-          disabled={isRetrying}
-          className="w-full"
-        >
+        <Button onClick={handleRetry} disabled={isRetrying} className="w-full">
           {isRetrying ? 'Setting up...' : 'Retry Account Setup'}
         </Button>
         <p className="text-xs text-muted-foreground text-center">
@@ -90,4 +88,3 @@ export function UserSetupRetry({ isInternalServerError = false }: UserSetupRetry
     </Card>
   )
 }
-

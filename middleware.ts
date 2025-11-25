@@ -15,7 +15,7 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
     const { userId } = await auth()
-    
+
     if (!userId) {
       // Redirect to custom login page instead of Clerk's default.
       // We intentionally do NOT pass redirect_url here so that post-login
@@ -35,4 +35,3 @@ export const config = {
     '/(api|trpc)(.*)',
   ],
 }
-

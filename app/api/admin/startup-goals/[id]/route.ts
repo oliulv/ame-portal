@@ -15,7 +15,9 @@ interface RouteContext {
 const updateStartupGoalSchema = z.object({
   title: z.string().min(1, 'Title is required').optional(),
   description: z.string().optional(),
-  category: z.enum(['launch', 'revenue', 'users', 'product', 'fundraising', 'growth', 'hiring']).optional(),
+  category: z
+    .enum(['launch', 'revenue', 'users', 'product', 'fundraising', 'growth', 'hiring'])
+    .optional(),
   target_value: z.number().optional(),
   deadline: z.string().optional(),
   weight: z.number().min(0).optional(),
@@ -55,10 +57,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (error) {
       console.error('Database error updating startup goal:', error)
-      return NextResponse.json(
-        { error: 'Failed to update startup goal' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to update startup goal' }, { status: 500 })
     }
 
     // 4. Return success response
@@ -76,16 +75,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     // Handle authentication errors
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -103,17 +96,11 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     // 2. Delete startup goal from database
     const supabase = await createClient()
-    const { error } = await supabase
-      .from('startup_goals')
-      .delete()
-      .eq('id', id)
+    const { error } = await supabase.from('startup_goals').delete().eq('id', id)
 
     if (error) {
       console.error('Database error deleting startup goal:', error)
-      return NextResponse.json(
-        { error: 'Failed to delete startup goal' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to delete startup goal' }, { status: 500 })
     }
 
     // 3. Return success response
@@ -123,16 +110,9 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     // Handle authentication errors
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

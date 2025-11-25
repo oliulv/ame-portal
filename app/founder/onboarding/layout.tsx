@@ -2,11 +2,7 @@ import { requireFounder } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
-export default async function OnboardingLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const user = await requireFounder()
   const supabase = await createClient()
 
@@ -29,4 +25,3 @@ export default async function OnboardingLayout({
     </div>
   )
 }
-

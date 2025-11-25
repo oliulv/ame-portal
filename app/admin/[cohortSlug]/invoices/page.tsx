@@ -15,7 +15,9 @@ import {
 } from '@/components/ui/table'
 import { FileText, AlertCircle, ExternalLink, Users, Plus } from 'lucide-react'
 
-function getInvoiceStatusVariant(status: string): "success" | "warning" | "destructive" | "info" | "secondary" {
+function getInvoiceStatusVariant(
+  status: string
+): 'success' | 'warning' | 'destructive' | 'info' | 'secondary' {
   switch (status) {
     case 'approved':
       return 'success'
@@ -36,9 +38,9 @@ interface PageProps {
 
 export default async function AdminInvoicesPage({ params }: PageProps) {
   const { cohortSlug } = await params
-  
+
   const supabase = await createClient()
-  
+
   // Verify cohort exists - use Supabase directly for server-side calls
   const { data: cohort, error: cohortError } = await supabase
     .from('cohorts')
@@ -50,12 +52,9 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
     // Cohort doesn't exist, redirect to cohorts page
     redirect('/admin/cohorts')
   }
-  
+
   // Fetch startups in this cohort
-  const { data: startups } = await supabase
-    .from('startups')
-    .select('id')
-    .eq('cohort_id', cohort.id)
+  const { data: startups } = await supabase.from('startups').select('id').eq('cohort_id', cohort.id)
 
   // If no startups, show empty state with call to action
   if (!startups || startups.length === 0) {
@@ -87,7 +86,7 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
     )
   }
 
-  const startupIds = startups.map(s => s.id)
+  const startupIds = startups.map((s) => s.id)
 
   const { data: invoices } = await supabase
     .from('invoices')
@@ -96,7 +95,8 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
     .order('created_at', { ascending: false })
     .limit(50)
 
-  const pendingCount = invoices?.filter(i => i.status === 'submitted' || i.status === 'under_review').length || 0
+  const pendingCount =
+    invoices?.filter((i) => i.status === 'submitted' || i.status === 'under_review').length || 0
 
   return (
     <div className="space-y-6">
@@ -117,9 +117,7 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
               <p className="font-medium text-amber-900">
                 {pendingCount} invoice{pendingCount !== 1 ? 's' : ''} pending review
               </p>
-              <p className="text-sm text-amber-700">
-                Review required to process reimbursements
-              </p>
+              <p className="text-sm text-amber-700">Review required to process reimbursements</p>
             </div>
           </div>
         </Card>
@@ -150,7 +148,7 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
                     {new Date(invoice.invoice_date).toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'short',
-                      year: 'numeric'
+                      year: 'numeric',
                     })}
                   </TableCell>
                   <TableCell className="font-mono text-sm">
@@ -184,4 +182,3 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
     </div>
   )
 }
-

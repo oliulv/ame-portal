@@ -56,7 +56,10 @@ interface GoalsSectionProps {
   startupSlug: string
 }
 
-export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionProps) {
+export function GoalsSection({
+  goals: initialGoals,
+  startupSlug: _startupSlug,
+}: GoalsSectionProps) {
   const router = useRouter()
   const [goals, setGoals] = useState<StartupGoal[]>(initialGoals)
   const [editingGoal, setEditingGoal] = useState<StartupGoal | null>(null)
@@ -81,15 +84,31 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
 
   const handleEditClick = (goal: StartupGoal) => {
     setEditingGoal(goal)
+    // Convert 'waived' status to 'not_started' since form doesn't support 'waived'
+    const formStatus = goal.status === 'waived' ? 'not_started' : goal.status
+    // Validate category against allowed values
+    const validCategories = [
+      'launch',
+      'revenue',
+      'users',
+      'product',
+      'fundraising',
+      'growth',
+      'hiring',
+    ] as const
+    const category =
+      goal.category && validCategories.includes(goal.category as (typeof validCategories)[number])
+        ? (goal.category as (typeof validCategories)[number])
+        : 'launch'
     form.reset({
       title: goal.title,
       description: goal.description || '',
-      category: (goal.category as any) || 'launch',
+      category,
       target_value: goal.target_value || undefined,
       deadline: goal.deadline || '',
       weight: goal.weight || 1,
       funding_amount: goal.funding_amount || undefined,
-      status: goal.status,
+      status: formStatus as 'not_started' | 'in_progress' | 'completed',
       progress_value: goal.progress_value || 0,
     })
     setError(null)
@@ -114,7 +133,7 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
       }
 
       // Remove goal from list
-      setGoals(goals.filter(g => g.id !== isDeleting))
+      setGoals(goals.filter((g) => g.id !== isDeleting))
       setIsDeleting(null)
       router.refresh()
     } catch (err) {
@@ -145,7 +164,7 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
       const updatedGoal = await response.json()
 
       // Update goal in list
-      setGoals(goals.map(g => g.id === editingGoal.id ? updatedGoal : g))
+      setGoals(goals.map((g) => (g.id === editingGoal.id ? updatedGoal : g)))
       setEditingGoal(null)
       form.reset()
       router.refresh()
@@ -156,27 +175,21 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
     }
   }
 
-  const goalStats = {
-    total: goals.length,
-    completed: goals.filter(g => g.status === 'completed').length,
-    inProgress: goals.filter(g => g.status === 'in_progress').length,
-    notStarted: goals.filter(g => g.status === 'not_started').length,
-  }
-
   return (
     <>
       <Card>
         <CardHeader>
           <CardTitle>Goals</CardTitle>
-          <CardDescription>
-            Assigned goals and progress
-          </CardDescription>
+          <CardDescription>Assigned goals and progress</CardDescription>
         </CardHeader>
         <CardContent>
           {goals.length > 0 ? (
             <div className="space-y-4">
               {goals.map((goal) => (
-                <div key={goal.id} className="flex items-start justify-between border-b pb-4 last:border-0 last:pb-0">
+                <div
+                  key={goal.id}
+                  className="flex items-start justify-between border-b pb-4 last:border-0 last:pb-0"
+                >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{goal.title}</span>
@@ -188,8 +201,8 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
                           goal.status === 'completed'
                             ? 'success'
                             : goal.status === 'in_progress'
-                            ? 'info'
-                            : 'secondary'
+                              ? 'info'
+                              : 'secondary'
                         }
                       >
                         {goal.status.replace('_', ' ')}
@@ -205,10 +218,11 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
                     )}
                     {goal.deadline && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        Deadline: {new Date(goal.deadline).toLocaleDateString('en-GB', { 
-                          year: 'numeric', 
-                          month: '2-digit', 
-                          day: '2-digit' 
+                        Deadline:{' '}
+                        {new Date(goal.deadline).toLocaleDateString('en-GB', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
                         })}
                       </p>
                     )}
@@ -216,22 +230,16 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
                   <div className="flex items-center gap-2 ml-4">
                     {goal.funding_amount && (
                       <div className="text-right mr-4">
-                        <div className="text-sm font-medium">£{goal.funding_amount.toLocaleString('en-GB')}</div>
+                        <div className="text-sm font-medium">
+                          £{goal.funding_amount.toLocaleString('en-GB')}
+                        </div>
                         <div className="text-xs text-muted-foreground">Funding</div>
                       </div>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditClick(goal)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handleEditClick(goal)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteClick(goal)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(goal)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
@@ -239,9 +247,7 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
               ))}
             </div>
           ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No goals assigned yet
-            </p>
+            <p className="py-8 text-center text-sm text-muted-foreground">No goals assigned yet</p>
           )}
         </CardContent>
       </Card>
@@ -251,15 +257,11 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Goal</DialogTitle>
-            <DialogDescription>
-              Update the goal details for this startup
-            </DialogDescription>
+            <DialogDescription>Update the goal details for this startup</DialogDescription>
           </DialogHeader>
 
           {error && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
           )}
 
           <Form {...form}>
@@ -360,7 +362,9 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
                           type="number"
                           placeholder="Target value"
                           {...field}
-                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                          onChange={(e) =>
+                            field.onChange(e.target.value ? Number(e.target.value) : undefined)
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -381,7 +385,9 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
                           max="100"
                           placeholder="0-100"
                           {...field}
-                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                          onChange={(e) =>
+                            field.onChange(e.target.value ? Number(e.target.value) : 0)
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -401,8 +407,14 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
                         <Input
                           type="date"
                           {...field}
-                          value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''}
-                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                          value={
+                            field.value ? new Date(field.value).toISOString().split('T')[0] : ''
+                          }
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.value ? new Date(e.target.value).toISOString() : ''
+                            )
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -422,7 +434,9 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
                           min="0"
                           placeholder="0"
                           {...field}
-                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                          onChange={(e) =>
+                            field.onChange(e.target.value ? Number(e.target.value) : undefined)
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -443,23 +457,19 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
                         min="0"
                         placeholder="1"
                         {...field}
-                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 1)}
+                        onChange={(e) =>
+                          field.onChange(e.target.value ? Number(e.target.value) : 1)
+                        }
                       />
                     </FormControl>
-                    <FormDescription>
-                      Relative importance of this goal
-                    </FormDescription>
+                    <FormDescription>Relative importance of this goal</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
               <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setEditingGoal(null)}
-                >
+                <Button type="button" variant="outline" onClick={() => setEditingGoal(null)}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
@@ -481,23 +491,13 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
             </DialogDescription>
           </DialogHeader>
           {error && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
           )}
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsDeleting(null)}
-            >
+            <Button type="button" variant="outline" onClick={() => setIsDeleting(null)}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDeleteConfirm}
-            >
+            <Button type="button" variant="destructive" onClick={handleDeleteConfirm}>
               Delete
             </Button>
           </DialogFooter>
@@ -506,4 +506,3 @@ export function GoalsSection({ goals: initialGoals, startupSlug }: GoalsSectionP
     </>
   )
 }
-

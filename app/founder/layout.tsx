@@ -1,11 +1,7 @@
 import { requireFounder } from '@/lib/auth'
 import { Sidebar } from '@/components/sidebar'
 
-export default async function FounderLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default async function FounderLayout({ children }: { children: React.ReactNode }) {
   await requireFounder()
 
   const navItems = [
@@ -38,4 +34,3 @@ export default async function FounderLayout({
     </div>
   )
 }
-

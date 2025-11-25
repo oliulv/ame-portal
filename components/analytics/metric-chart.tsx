@@ -75,10 +75,7 @@ export function MetricChart({
               textAnchor="end"
               height={80}
             />
-            <YAxis
-              tick={{ fontSize: 12 }}
-              tickFormatter={formatValue}
-            />
+            <YAxis tick={{ fontSize: 12 }} tickFormatter={formatValue} />
             <Tooltip
               formatter={(value: number) => formatValue(value)}
               labelFormatter={(label) => {
@@ -101,4 +98,3 @@ export function MetricChart({
     </Card>
   )
 }
-
