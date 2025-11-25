@@ -10,6 +10,14 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Table,
   TableBody,
   TableCell,
@@ -29,8 +37,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Users, Mail, UserPlus, RotateCw, X } from 'lucide-react'
+import { Users, Mail, UserPlus, RotateCw, X, Trash2 } from 'lucide-react'
 import { adminInvitationsApi } from '@/lib/api/admin-invitations'
+import { adminUsersApi } from '@/lib/api/admin-users'
 import { cohortsApi } from '@/lib/api/cohorts'
 import { queryKeys } from '@/lib/queryKeys'
 import { useAppMutation } from '@/lib/hooks/useAppMutation'
@@ -61,6 +70,7 @@ export default function AdminsPage() {
   const cohortSlug = params.cohortSlug as string
   const queryClient = useQueryClient()
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<AdminUserWithDetails | null>(null)
 
   // Fetch cohort details to get cohort_id
   const { data: cohort, isLoading: isLoadingCohort } = useQuery({
@@ -154,6 +164,34 @@ export default function AdminsPage() {
     },
   })
 
+  const removeAdminFromCohort = useAppMutation({
+    mutationFn: (userId: string) => {
+      if (!cohort?.id) {
+        throw new Error('Cohort not found')
+      }
+      return adminUsersApi.removeFromCohort(userId, cohort.id)
+    },
+    invalidateQueries: [],
+    successMessage: 'Admin removed from cohort successfully',
+    onSuccess: () => {
+      // Invalidate admin users query
+      if (cohort?.id) {
+        queryClient.invalidateQueries({ queryKey: ['admin-users', cohort.id] })
+      }
+      setUserToDelete(null)
+    },
+  })
+
+  function handleDeleteClick(user: AdminUserWithDetails) {
+    setUserToDelete(user)
+  }
+
+  function handleConfirmDelete() {
+    if (userToDelete) {
+      removeAdminFromCohort.mutate(userToDelete.id)
+    }
+  }
+
   function onSubmit(data: AdminInvitationFormData) {
     createInvitation.mutate(data)
   }
@@ -223,33 +261,56 @@ export default function AdminsPage() {
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {adminUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">
-                        {user.full_name || user.first_name || user.last_name || (
-                          <span className="text-muted-foreground italic">No name set</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {user.email || (
-                          <span className="text-muted-foreground italic">No email</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={user.role === 'super_admin' ? 'destructive' : 'default'}>
-                          {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {user.created_at
-                          ? new Date(user.created_at).toLocaleDateString()
-                          : 'Unknown'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {adminUsers.map((user) => {
+                    // Only show delete button for regular admins (not super admins)
+                    // and only if they're assigned to this cohort (not just appearing because they're super admin)
+                    const canDelete =
+                      user.role === 'admin' &&
+                      cohort?.id &&
+                      user.cohort_ids?.includes(cohort.id)
+
+                    return (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">
+                          {user.full_name || user.first_name || user.last_name || (
+                            <span className="text-muted-foreground italic">No name set</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {user.email || (
+                            <span className="text-muted-foreground italic">No email</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={user.role === 'super_admin' ? 'destructive' : 'default'}>
+                            {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {user.created_at
+                            ? new Date(user.created_at).toLocaleDateString()
+                            : 'Unknown'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {canDelete && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteClick(user)}
+                              disabled={removeAdminFromCohort.isPending}
+                            >
+                              <Trash2 className="mr-1 h-3 w-3" />
+                              Remove
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -472,6 +533,42 @@ export default function AdminsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Admin from Cohort</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove{' '}
+              <strong>
+                {userToDelete?.full_name ||
+                  userToDelete?.email ||
+                  userToDelete?.first_name ||
+                  'this admin'}
+              </strong>{' '}
+              from <strong>{cohort?.label}</strong>? They will lose access to this cohort but will
+              remain an admin user.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setUserToDelete(null)}
+              disabled={removeAdminFromCohort.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={removeAdminFromCohort.isPending}
+            >
+              {removeAdminFromCohort.isPending ? 'Removing...' : 'Remove Admin'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

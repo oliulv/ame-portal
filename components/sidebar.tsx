@@ -332,7 +332,7 @@ function SidebarContent({
         <div className="border-t p-4 space-y-2">
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">Cohort</label>
-            {isLoadingCohorts ? (
+            {!mounted || isLoadingCohorts ? (
               <div className="h-9 rounded-md border bg-muted animate-pulse" />
             ) : (
               <Select value={currentCohortSlug || ''} onValueChange={handleCohortChange}>

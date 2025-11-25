@@ -1,7 +1,10 @@
+'use client'
+
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ShieldX } from 'lucide-react'
+import { SignOutButton } from '@/components/sign-out-button'
 
 interface CohortAccessDeniedProps {
   cohortSlug: string
@@ -42,6 +45,7 @@ export function CohortAccessDenied({ cohortSlug, cohortName }: CohortAccessDenie
               <Button variant="outline" asChild className="w-full">
                 <Link href="/admin/cohorts">View Available Cohorts</Link>
               </Button>
+              <SignOutButton />
             </div>
           </CardContent>
         </Card>

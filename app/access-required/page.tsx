@@ -1,14 +1,40 @@
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useAuth } from '@clerk/nextjs'
+import { useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { SignOutButton } from '@/components/sign-out-button'
 
-export default async function AccessRequiredPage() {
-  const { userId } = await auth()
+export default function AccessRequiredPage() {
+  const { userId, isLoaded } = useAuth()
 
-  // If somehow hit this page without being authenticated, send to login
+  useEffect(() => {
+    if (!isLoaded) {
+      return
+    }
+
+    // If somehow hit this page without being authenticated, send to login
+    if (!userId) {
+      window.location.href = '/login'
+    }
+  }, [userId, isLoaded])
+
+  // Show loading state while checking auth
+  if (!isLoaded) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
+
+  // If not authenticated, the redirect will happen, but show nothing while redirecting
   if (!userId) {
-    redirect('/login')
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-sm text-muted-foreground">Redirecting...</div>
+      </div>
+    )
   }
 
   return (
@@ -34,9 +60,7 @@ export default async function AccessRequiredPage() {
             </ul>
 
             <div className="pt-2">
-              <Button variant="outline" asChild className="w-full">
-                <a href="/login">Sign out and switch account</a>
-              </Button>
+              <SignOutButton />
             </div>
           </CardContent>
         </Card>

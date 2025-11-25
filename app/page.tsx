@@ -1,29 +1,60 @@
-import { redirect } from 'next/navigation'
-import { auth } from '@clerk/nextjs/server'
-import { getCurrentUser } from '@/lib/auth'
+'use client'
 
-export default async function Home() {
-  const { userId } = await auth()
+import { useEffect } from 'react'
+import { useAuth } from '@clerk/nextjs'
 
-  // If not authenticated with Clerk, go to login
-  if (!userId) {
-    redirect('/login')
-  }
+export default function Home() {
+  const { userId, isLoaded } = useAuth()
 
-  // Try to load role from Supabase, but don't loop if it fails
-  const user = await getCurrentUser()
+  useEffect(() => {
+    if (!isLoaded) {
+      return
+    }
 
-  // If the account is authenticated with Clerk but has not been onboarded into
-  // our own database, send them to an access-required page instead of looping
-  // between / and /login or /admin.
-  if (!user) {
-    redirect('/access-required')
-  }
+    // If not authenticated with Clerk, go to login
+    if (!userId) {
+      window.location.href = '/login'
+      return
+    }
 
-  if (user.role === 'founder') {
-    redirect('/founder/dashboard')
-  }
+    // Fetch user data and redirect based on role
+    async function checkUserAndRedirect() {
+      try {
+        const response = await fetch('/api/user/current')
+        
+        if (!response.ok) {
+          // If user doesn't exist in Supabase, send them to access-required page
+          window.location.href = '/access-required'
+          return
+        }
 
-  // Default for any authenticated user with an app-level role
-  redirect('/admin')
+        const user = await response.json()
+
+        if (!user) {
+          window.location.href = '/access-required'
+          return
+        }
+
+        if (user.role === 'founder') {
+          window.location.href = '/founder/dashboard'
+          return
+        }
+
+        // Default for any authenticated user with an app-level role
+        window.location.href = '/admin'
+      } catch (error) {
+        // If there's a real error getting the user, send to access-required page
+        console.error('Error getting user in home page:', error)
+        window.location.href = '/access-required'
+      }
+    }
+
+    checkUserAndRedirect()
+  }, [userId, isLoaded])
+
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="text-sm text-muted-foreground">Redirecting...</div>
+    </div>
+  )
 }
