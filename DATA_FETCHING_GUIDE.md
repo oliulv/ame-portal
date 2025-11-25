@@ -139,6 +139,7 @@ Supabase Realtime is automatically set up via `RealtimeProvider` in the app layo
 ### Cache Invalidation
 
 Cache invalidation happens automatically:
+
 - After mutations via `invalidateQueries` in `useAppMutation`
 - Via Supabase Realtime subscriptions
 - On window focus (if data is stale)
@@ -214,4 +215,3 @@ export function CohortsPage() {
 - Reduce `staleTime` for frequently changing data
 - Use `refetchInterval` for polling fallback
 - Ensure Realtime subscriptions are active
-

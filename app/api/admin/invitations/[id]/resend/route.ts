@@ -26,7 +26,8 @@ export async function POST(request: Request, context: RouteContext) {
     // 2. Fetch invitation with startup details
     const { data: invitation, error: invitationError } = await supabase
       .from('invitations')
-      .select(`
+      .select(
+        `
         id,
         full_name,
         email,
@@ -35,15 +36,13 @@ export async function POST(request: Request, context: RouteContext) {
         startups (
           name
         )
-      `)
+      `
+      )
       .eq('id', id)
       .single()
 
     if (invitationError || !invitation) {
-      return NextResponse.json(
-        { error: 'Invitation not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Invitation not found' }, { status: 404 })
     }
 
     // 3. Check if invitation is already accepted
@@ -56,10 +55,17 @@ export async function POST(request: Request, context: RouteContext) {
 
     // 4. Send invitation email
     try {
+      // Handle startups relation - Supabase can return arrays for relations
+      const startup = Array.isArray(invitation.startups)
+        ? invitation.startups[0]
+        : invitation.startups
+      const startupName =
+        (startup as { name: string } | null | undefined)?.name || 'Unknown Startup'
+
       await sendInvitationEmail({
         to: invitation.email,
         founderName: invitation.full_name,
-        startupName: (invitation.startups as any).name,
+        startupName,
         inviteToken: invitation.token,
         expirationDays: 14,
       })
@@ -76,24 +82,15 @@ export async function POST(request: Request, context: RouteContext) {
     } catch (emailError) {
       console.error('Failed to resend invitation email:', emailError)
 
-      return NextResponse.json(
-        { error: 'Failed to send invitation email' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to send invitation email' }, { status: 500 })
     }
   } catch (error) {
     console.error('Error in POST /api/admin/invitations/[id]/resend:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

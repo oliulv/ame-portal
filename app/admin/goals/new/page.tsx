@@ -32,6 +32,8 @@ import { useAppMutation } from '@/lib/hooks/useAppMutation'
 import { useSelectedCohort } from '@/lib/hooks/useSelectedCohort'
 import { goalsApi } from '@/lib/api/goals'
 import { queryKeys } from '@/lib/queryKeys'
+import { ConditionBuilder } from '@/components/goal-template/ConditionBuilder'
+import { FundingInput } from '@/components/goal-template/FundingInput'
 
 const GOAL_CATEGORIES = [
   { value: 'launch', label: 'Launch' },
@@ -39,6 +41,8 @@ const GOAL_CATEGORIES = [
   { value: 'users', label: 'Users/Traffic' },
   { value: 'product', label: 'Product' },
   { value: 'fundraising', label: 'Fundraising' },
+  { value: 'growth', label: 'Growth' },
+  { value: 'hiring', label: 'Hiring' },
 ] as const
 
 export default function NewGoalTemplatePage() {
@@ -48,27 +52,34 @@ export default function NewGoalTemplatePage() {
   const form = useForm<GoalTemplateFormData>({
     resolver: zodResolver(goalTemplateSchema),
     defaultValues: {
-      cohort_id: cohortId || '',
+      cohortId: cohortId || '',
       title: '',
       description: '',
       category: 'launch',
-      default_target_value: undefined,
-      default_deadline: undefined,
-      default_weight: undefined,
-      default_funding_amount: undefined,
-      is_active: true,
+      deadline: undefined,
+      isActive: true,
+      conditions: [
+        {
+          dataSource: 'stripe',
+          metric: '',
+          operator: '>=',
+          targetValue: undefined,
+          unit: '',
+        },
+      ],
+      fundingUnlocked: undefined,
     },
   })
 
   // Update form when cohort is loaded
   useEffect(() => {
     if (cohortId) {
-      form.setValue('cohort_id', cohortId)
+      form.setValue('cohortId', cohortId)
     }
   }, [cohortId, form])
 
   const createGoal = useAppMutation({
-    mutationFn: (data: GoalTemplateFormData) => goalsApi.create(data),
+    mutationFn: (data: GoalTemplateFormData) => goalsApi.createTemplate(data),
     invalidateQueries: [queryKeys.goals.list('admin')],
     successMessage: 'Goal template created successfully',
     onSuccess: () => {
@@ -95,7 +106,8 @@ export default function NewGoalTemplatePage() {
         <CardHeader>
           <CardTitle>Create New Goal Template</CardTitle>
           <CardDescription>
-            Create a default goal template that will be assigned to new startups in the selected cohort
+            Create a default goal template that will be assigned to new startups in the selected
+            cohort
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -136,14 +148,9 @@ export default function NewGoalTemplatePage() {
                   <FormItem>
                     <FormLabel>Goal Title</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., Launch MVP"
-                        {...field}
-                      />
+                      <Input placeholder="e.g., Launch MVP" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Short, descriptive title for the goal
-                    </FormDescription>
+                    <FormDescription>Short, descriptive title for the goal</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -176,10 +183,7 @@ export default function NewGoalTemplatePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Category</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a category" />
@@ -193,120 +197,41 @@ export default function NewGoalTemplatePage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormDescription>
-                      Type of goal to help with organization
-                    </FormDescription>
+                    <FormDescription>Type of goal to help with organization</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="default_target_value"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Target (Number, Optional)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="e.g., 100"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            field.onChange(value === '' ? undefined : parseFloat(value))
-                          }}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Enter the numeric target for this goal (e.g., 100 for £100 revenue, 50 for 50 users). Units come from the goal title/description.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="default_weight"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Priority (1-10, Optional)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="1"
-                          max="10"
-                          placeholder="1-10"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            field.onChange(value === '' ? undefined : parseInt(value))
-                          }}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Importance from 1–10 (1–3 = low, 4–7 = medium, 8–10 = high). Higher priority goals can count more in scoring later.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
               <FormField
                 control={form.control}
-                name="default_deadline"
+                name="deadline"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Default Deadline (Optional)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="date"
-                        {...field}
-                        value={field.value ?? ''}
-                      />
+                      <Input type="date" {...field} value={field.value ?? ''} />
                     </FormControl>
-                    <FormDescription>
-                      Target completion date
-                    </FormDescription>
+                    <FormDescription>Target completion date</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="default_funding_amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Funding Unlocked on Completion (Optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        placeholder="e.g., 5000"
-                        {...field}
-                        value={field.value ?? ''}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          field.onChange(value === '' ? undefined : parseFloat(value))
-                        }}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Amount in GBP that this goal contributes when marked as completed.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Success Conditions Section */}
+              <div className="space-y-4 border-t pt-6">
+                <ConditionBuilder form={form} />
+              </div>
+
+              {/* Reward Section */}
+              <div className="space-y-4 border-t pt-6">
+                <h2 className="text-lg font-semibold">Reward</h2>
+                <FundingInput form={form} />
+              </div>
 
               <FormField
                 control={form.control}
-                name="is_active"
+                name="isActive"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
@@ -316,20 +241,14 @@ export default function NewGoalTemplatePage() {
                       </FormDescription>
                     </div>
                     <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
                   </FormItem>
                 )}
               />
 
               <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  disabled={createGoal.isPending || !cohortId}
-                >
+                <Button type="submit" disabled={createGoal.isPending || !cohortId}>
                   {createGoal.isPending ? 'Creating...' : 'Create Goal Template'}
                 </Button>
                 <Link href={cohortSlug ? `/admin/${cohortSlug}/goals` : '/admin/goals'}>

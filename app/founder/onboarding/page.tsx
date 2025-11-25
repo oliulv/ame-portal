@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -25,7 +25,7 @@ import {
   type StartupProfileFormData,
   type BankDetailsFormData,
 } from '@/lib/schemas'
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, AlertCircle } from 'lucide-react'
 
 type OnboardingStep = 'personal' | 'startup' | 'bank'
 
@@ -34,10 +34,30 @@ export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('personal')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hasBankDetails, setHasBankDetails] = useState<boolean | null>(null)
+  const [isCheckingBankStatus, setIsCheckingBankStatus] = useState(true)
 
   // Store completed step data
   const [personalData, setPersonalData] = useState<FounderPersonalInfoFormData | null>(null)
   const [startupData, setStartupData] = useState<StartupProfileFormData | null>(null)
+
+  // Check if bank details already exist for this startup
+  useEffect(() => {
+    async function checkBankStatus() {
+      try {
+        const response = await fetch('/api/founder/onboarding/bank-status')
+        if (response.ok) {
+          const data = await response.json()
+          setHasBankDetails(data.hasBankDetails)
+        }
+      } catch (err) {
+        console.error('Failed to check bank status:', err)
+      } finally {
+        setIsCheckingBankStatus(false)
+      }
+    }
+    checkBankStatus()
+  }, [])
 
   // Forms for each step
   const personalForm = useForm<FounderPersonalInfoFormData>({
@@ -86,7 +106,7 @@ export default function OnboardingPage() {
   ]
 
   const currentStepIndex = steps.findIndex((s) => s.key === currentStep)
-  
+
   // Determine step states
   const getStepState = (index: number) => {
     if (index < currentStepIndex) return 'completed'
@@ -101,7 +121,51 @@ export default function OnboardingPage() {
 
   async function handleStartupNext(data: StartupProfileFormData) {
     setStartupData(data)
-    setCurrentStep('bank')
+    // Skip bank step if bank details already exist
+    if (hasBankDetails === true) {
+      // Bank details already exist, skip to completion
+      await handleSubmitWithoutBank(data)
+    } else {
+      // Show bank step (with option to skip)
+      setCurrentStep('bank')
+    }
+  }
+
+  async function handleSubmitWithoutBank(startupData: StartupProfileFormData) {
+    if (!personalData) {
+      setError('Please complete all previous steps')
+      return
+    }
+
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/founder/onboarding', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          founderInfo: personalData,
+          startupProfile: startupData,
+          // bankDetails omitted
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to complete onboarding')
+      }
+
+      // Success! Redirect to founder dashboard
+      router.push('/founder/dashboard')
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   async function handleBankSubmit(data: BankDetailsFormData) {
@@ -141,6 +205,15 @@ export default function OnboardingPage() {
     }
   }
 
+  async function handleSkipBank() {
+    if (!personalData || !startupData) {
+      setError('Please complete all previous steps')
+      return
+    }
+
+    await handleSubmitWithoutBank(startupData)
+  }
+
   function handleBack() {
     if (currentStep === 'startup') {
       setCurrentStep('personal')
@@ -164,7 +237,7 @@ export default function OnboardingPage() {
           <div className="relative flex items-start justify-between">
             {/* Connecting Lines Background */}
             <div className="absolute top-5 left-0 right-0 h-0.5 bg-muted-foreground/20" />
-            
+
             {/* Completed Progress Line */}
             {currentStepIndex > 0 && (
               <div
@@ -174,14 +247,14 @@ export default function OnboardingPage() {
                 }}
               />
             )}
-            
+
             {/* Steps */}
             {steps.map((step, index) => {
               const state = getStepState(index)
               const isCompleted = state === 'completed'
               const isCurrent = state === 'current'
-              const isUpcoming = state === 'upcoming'
-              
+              const _isUpcoming = state === 'upcoming'
+
               return (
                 <div key={step.key} className="relative z-10 flex flex-col items-center flex-1">
                   {/* Step Circle */}
@@ -190,26 +263,26 @@ export default function OnboardingPage() {
                       isCompleted
                         ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                         : isCurrent
-                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                        : 'border-muted-foreground/30 bg-muted/30 text-muted-foreground/50'
+                          ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                          : 'border-muted-foreground/30 bg-muted/30 text-muted-foreground/50'
                     }`}
                   >
                     {isCompleted ? (
                       <Check className="h-5 w-5" />
                     ) : (
-                      <span className={`text-sm font-semibold ${isCurrent ? 'text-primary' : 'text-muted-foreground/50'}`}>
+                      <span
+                        className={`text-sm font-semibold ${isCurrent ? 'text-primary' : 'text-muted-foreground/50'}`}
+                      >
                         {index + 1}
                       </span>
                     )}
                   </div>
-                  
+
                   {/* Step Label */}
                   <div className="mt-3 text-center max-w-[140px]">
                     <div
                       className={`text-sm font-medium ${
-                        isCompleted || isCurrent
-                          ? 'text-primary'
-                          : 'text-muted-foreground/50'
+                        isCompleted || isCurrent ? 'text-primary' : 'text-muted-foreground/50'
                       }`}
                     >
                       {step.title}
@@ -245,7 +318,10 @@ export default function OnboardingPage() {
             </CardHeader>
             <CardContent>
               <Form {...personalForm}>
-                <form onSubmit={personalForm.handleSubmit(handlePersonalNext)} className="space-y-6">
+                <form
+                  onSubmit={personalForm.handleSubmit(handlePersonalNext)}
+                  className="space-y-6"
+                >
                   <FormField
                     control={personalForm.control}
                     name="address_line1"
@@ -410,11 +486,7 @@ export default function OnboardingPage() {
                       <FormItem>
                         <FormLabel>One-Liner</FormLabel>
                         <FormControl>
-                          <Input
-                            placeholder="We help X do Y by Z"
-                            maxLength={100}
-                            {...field}
-                          />
+                          <Input placeholder="We help X do Y by Z" maxLength={100} {...field} />
                         </FormControl>
                         <FormDescription>
                           A short, punchy description of what your startup does (max 100 characters)
@@ -569,7 +641,7 @@ export default function OnboardingPage() {
         )}
 
         {/* Step 3: Bank Details */}
-        {currentStep === 'bank' && (
+        {currentStep === 'bank' && !isCheckingBankStatus && (
           <Card>
             <CardHeader>
               <CardTitle>Bank Details</CardTitle>
@@ -578,6 +650,21 @@ export default function OnboardingPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {hasBankDetails === false && (
+                <div className="mb-6 rounded-md bg-amber-50 border border-amber-200 p-4">
+                  <div className="flex items-start">
+                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
+                    <div className="text-sm text-amber-900">
+                      <p className="font-medium mb-1">Bank details not set up yet</p>
+                      <p className="text-amber-800">
+                        You haven't set up bank details for your startup. Only one founder needs to
+                        complete this step - once one founder adds the bank details, other founders
+                        won't need to.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               <Form {...bankForm}>
                 <form onSubmit={bankForm.handleSubmit(handleBankSubmit)} className="space-y-6">
                   <FormField
@@ -589,9 +676,7 @@ export default function OnboardingPage() {
                         <FormControl>
                           <Input placeholder="John Doe" {...field} />
                         </FormControl>
-                        <FormDescription>
-                          Name as it appears on the bank account
-                        </FormDescription>
+                        <FormDescription>Name as it appears on the bank account</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -611,8 +696,10 @@ export default function OnboardingPage() {
                               onChange={(e) => {
                                 // Auto-format sort code
                                 let value = e.target.value.replace(/\D/g, '')
-                                if (value.length > 2) value = value.slice(0, 2) + '-' + value.slice(2)
-                                if (value.length > 5) value = value.slice(0, 5) + '-' + value.slice(5, 7)
+                                if (value.length > 2)
+                                  value = value.slice(0, 2) + '-' + value.slice(2)
+                                if (value.length > 5)
+                                  value = value.slice(0, 5) + '-' + value.slice(5, 7)
                                 field.onChange(value)
                               }}
                             />
@@ -663,8 +750,8 @@ export default function OnboardingPage() {
                   <div className="rounded-md bg-blue-50 p-4 text-sm text-blue-900">
                     <p className="font-medium mb-1">🔒 Your data is secure</p>
                     <p className="text-blue-800">
-                      Your bank details are encrypted and stored securely. They will only be used for
-                      legitimate funding disbursements.
+                      Your bank details are encrypted and stored securely. They will only be used
+                      for legitimate funding disbursements.
                     </p>
                   </div>
 
@@ -672,6 +759,14 @@ export default function OnboardingPage() {
                     <Button type="button" variant="outline" onClick={handleBack}>
                       <ChevronLeft className="mr-2 h-4 w-4" />
                       Back
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSkipBank}
+                      disabled={isSubmitting}
+                    >
+                      Skip for Now
                     </Button>
                     <Button type="submit" disabled={isSubmitting}>
                       {isSubmitting ? 'Completing...' : 'Complete Onboarding'}

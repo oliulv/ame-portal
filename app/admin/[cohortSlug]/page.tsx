@@ -8,7 +8,6 @@ import { Users, Building2, FileText, ArrowRight, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { dashboardApi } from '@/lib/api/dashboard'
-import { queryKeys } from '@/lib/queryKeys'
 import { useSelectedCohort } from '@/lib/hooks/useSelectedCohort'
 import { EmptyState } from '@/components/ui/empty-state'
 
@@ -74,9 +73,7 @@ export default function AdminDashboard() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
-          {cohort 
-            ? `Overview for ${cohort.label}`
-            : 'Overview of your accelerator program'}
+          {cohort ? `Overview for ${cohort.label}` : 'Overview of your accelerator program'}
         </p>
       </div>
 
@@ -89,9 +86,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{startupsCount}</div>
-            <p className="text-xs text-muted-foreground">
-              Startups in this cohort
-            </p>
+            <p className="text-xs text-muted-foreground">Startups in this cohort</p>
           </CardContent>
         </Card>
 
@@ -102,9 +97,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{invoicesCount}</div>
-            <p className="text-xs text-muted-foreground">
-              Invoices from this cohort
-            </p>
+            <p className="text-xs text-muted-foreground">Invoices from this cohort</p>
           </CardContent>
         </Card>
 
@@ -115,9 +108,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{cohortsCount}</div>
-            <p className="text-xs text-muted-foreground">
-              All cohorts in system
-            </p>
+            <p className="text-xs text-muted-foreground">All cohorts in system</p>
           </CardContent>
         </Card>
       </div>
@@ -143,9 +134,7 @@ export default function AdminDashboard() {
       <Card>
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>
-            Common tasks and workflows
-          </CardDescription>
+          <CardDescription>Common tasks and workflows</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <Link href={`/admin/${cohortSlug}/startups/new`}>
@@ -198,4 +187,3 @@ export default function AdminDashboard() {
     </div>
   )
 }
-

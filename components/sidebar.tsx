@@ -15,15 +15,11 @@ import {
   LucideIcon,
   Building2,
   Plus,
+  Settings,
+  TrendingUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import {
   Select,
   SelectContent,
@@ -50,12 +46,14 @@ interface SidebarProps {
 }
 
 const iconMap: Record<string, LucideIcon> = {
-  'LayoutDashboard': LayoutDashboard,
-  'Users': Users,
-  'Target': Target,
-  'FileText': FileText,
-  'Trophy': Trophy,
-  'Building2': Building2,
+  LayoutDashboard: LayoutDashboard,
+  Users: Users,
+  Target: Target,
+  FileText: FileText,
+  Trophy: Trophy,
+  Building2: Building2,
+  Settings: Settings,
+  TrendingUp: TrendingUp,
 }
 
 /**
@@ -78,7 +76,7 @@ function extractCohortSlugFromPath(pathname: string): string | null {
  */
 function buildNavHref(baseHref: string, cohortSlug: string | null): string {
   if (!cohortSlug) return baseHref
-  
+
   // Map old routes to new cohort-scoped routes
   const routeMap: Record<string, string> = {
     '/admin': `/admin/${cohortSlug}`,
@@ -87,11 +85,17 @@ function buildNavHref(baseHref: string, cohortSlug: string | null): string {
     '/admin/invoices': `/admin/${cohortSlug}/invoices`,
     '/admin/leaderboard': `/admin/${cohortSlug}/leaderboard`,
   }
-  
+
   return routeMap[baseHref] || baseHref
 }
 
-function SidebarContent({ title, subtitle, navItems, showCohortSelector = false, onLinkClick }: SidebarProps & { onLinkClick?: () => void }) {
+function SidebarContent({
+  title,
+  subtitle,
+  navItems,
+  showCohortSelector = false,
+  onLinkClick,
+}: SidebarProps & { onLinkClick?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   // Initialize to empty string to avoid hydration mismatch
@@ -119,7 +123,7 @@ function SidebarContent({ title, subtitle, navItems, showCohortSelector = false,
 
     // Primary: Try to get cohort slug from URL
     const urlCohortSlug = extractCohortSlugFromPath(pathname)
-    
+
     if (urlCohortSlug && cohorts.find((c: Cohort) => c.slug === urlCohortSlug)) {
       setSelectedCohortSlug(urlCohortSlug)
       if (mounted) {
@@ -142,7 +146,7 @@ function SidebarContent({ title, subtitle, navItems, showCohortSelector = false,
     // After mount, read from localStorage
     const storedCohortSlug = localStorage.getItem('selectedCohortSlug')
     const storedCohortId = localStorage.getItem('selectedCohortId')
-    
+
     if (storedCohortSlug && cohorts.find((c: Cohort) => c.slug === storedCohortSlug)) {
       setSelectedCohortSlug(storedCohortSlug)
     } else if (storedCohortId) {
@@ -174,11 +178,11 @@ function SidebarContent({ title, subtitle, navItems, showCohortSelector = false,
   const handleCohortChange = (newCohortSlug: string) => {
     setSelectedCohortSlug(newCohortSlug)
     localStorage.setItem('selectedCohortSlug', newCohortSlug)
-    
+
     // Update URL by replacing cohort slug in current path
     const urlCohortSlug = extractCohortSlugFromPath(pathname)
     let newPath = pathname
-    
+
     if (urlCohortSlug) {
       // Replace cohort slug in current path
       newPath = pathname.replace(`/admin/${urlCohortSlug}`, `/admin/${newCohortSlug}`)
@@ -186,14 +190,14 @@ function SidebarContent({ title, subtitle, navItems, showCohortSelector = false,
       // No cohort in URL, navigate to dashboard with new cohort
       newPath = `/admin/${newCohortSlug}`
     }
-    
+
     router.push(newPath)
-    
+
     // Trigger a custom event to notify other components (for legacy compatibility)
     window.dispatchEvent(new Event('cohortChanged'))
   }
 
-  const selectedCohort = cohorts.find(c => c.slug === selectedCohortSlug)
+  const selectedCohort = cohorts.find((c) => c.slug === selectedCohortSlug)
   const currentCohortSlug = extractCohortSlugFromPath(pathname) || selectedCohortSlug
 
   return (
@@ -221,20 +225,30 @@ function SidebarContent({ title, subtitle, navItems, showCohortSelector = false,
           } else if (cohorts.length > 0) {
             // Fallback to first available cohort (prevents redirect to /admin/cohorts)
             // This is safe because cohorts query result is the same on server and client
-            cohortSlugForHref = (cohorts.find((c: Cohort) => c.is_active) || cohorts[0])?.slug || null
+            cohortSlugForHref =
+              (cohorts.find((c: Cohort) => c.is_active) || cohorts[0])?.slug || null
           }
           const href = buildNavHref(item.href, cohortSlugForHref)
-          
+
           // For root paths like /admin, match if pathname matches the cohort-scoped version
           // For other paths, match if pathname starts with the href
-          const isActive = item.href === '/admin'
-            ? pathname === href || pathname.startsWith(`/admin/${currentCohortSlug}/`) && !pathname.match(/^\/admin\/[^/]+\/(goals|startups|invoices|leaderboard)/)
-            : pathname === href || pathname.startsWith(href + '/')
+          const isActive =
+            item.href === '/admin'
+              ? pathname === href ||
+                (pathname.startsWith(`/admin/${currentCohortSlug}/`) &&
+                  !pathname.match(/^\/admin\/[^/]+\/(goals|startups|invoices|leaderboard)/))
+              : pathname === href || pathname.startsWith(href + '/')
           const Icon = iconMap[item.icon] || LayoutDashboard
 
           // If we need a cohort slug but don't have one yet (and cohorts are loading), prevent navigation
           // This prevents clicking links that would redirect to /admin/cohorts
-          const needsCohortSlug = showCohortSelector && !cohortSlugForHref && (item.href === '/admin/invoices' || item.href === '/admin/leaderboard' || item.href === '/admin/goals' || item.href === '/admin/startups')
+          const needsCohortSlug =
+            showCohortSelector &&
+            !cohortSlugForHref &&
+            (item.href === '/admin/invoices' ||
+              item.href === '/admin/leaderboard' ||
+              item.href === '/admin/goals' ||
+              item.href === '/admin/startups')
           const isDisabled = needsCohortSlug && isLoadingCohorts
 
           return (
@@ -249,10 +263,10 @@ function SidebarContent({ title, subtitle, navItems, showCohortSelector = false,
                 onLinkClick?.()
               }}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 isActive
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
               <Icon className="h-4 w-4" />
@@ -266,9 +280,7 @@ function SidebarContent({ title, subtitle, navItems, showCohortSelector = false,
       {showCohortSelector && (
         <div className="border-t p-4 space-y-2">
           <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              Cohort
-            </label>
+            <label className="text-xs font-medium text-muted-foreground">Cohort</label>
             {isLoadingCohorts ? (
               <div className="h-9 rounded-md border bg-muted animate-pulse" />
             ) : (
@@ -300,9 +312,7 @@ function SidebarContent({ title, subtitle, navItems, showCohortSelector = false,
       {/* Footer with UserButton */}
       <div className="border-t px-4 py-3">
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">
-            AccelerateMe Internal Tool
-          </p>
+          <p className="text-xs text-muted-foreground">AccelerateMe Internal Tool</p>
           <div className="flex items-center justify-start">
             <UserButton />
           </div>
@@ -355,7 +365,12 @@ export function Sidebar({ title, subtitle, navItems, showCohortSelector = false 
 
       {/* Desktop Sidebar */}
       <aside className="hidden fixed left-0 top-0 z-30 h-screen w-64 flex-col border-r bg-white lg:flex">
-        <SidebarContent title={title} subtitle={subtitle} navItems={navItems} showCohortSelector={showCohortSelector} />
+        <SidebarContent
+          title={title}
+          subtitle={subtitle}
+          navItems={navItems}
+          showCohortSelector={showCohortSelector}
+        />
       </aside>
     </>
   )

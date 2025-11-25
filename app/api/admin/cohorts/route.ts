@@ -22,10 +22,7 @@ export async function GET() {
 
     if (error) {
       console.error('Database error fetching cohorts:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch cohorts' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch cohorts' }, { status: 500 })
     }
 
     // 3. Return cohorts data
@@ -34,16 +31,10 @@ export async function GET() {
     console.error('Error in GET /api/admin/cohorts:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -62,9 +53,7 @@ export async function POST(request: Request) {
 
     // 3. Generate unique slug for the cohort
     const supabase = await createClient()
-    const { data: existingCohorts } = await supabase
-      .from('cohorts')
-      .select('slug')
+    const { data: existingCohorts } = await supabase.from('cohorts').select('slug')
 
     const existingSlugs = existingCohorts?.map((c) => c.slug) || []
     const slug = generateCohortSlug(validatedData.label, existingSlugs)
@@ -85,24 +74,19 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('Database error creating cohort:', error)
-      return NextResponse.json(
-        { error: 'Failed to create cohort' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to create cohort' }, { status: 500 })
     }
 
     // 5. Create default "Join AccelerateMe" goal template for this cohort
     if (data) {
-      const { error: goalError } = await supabase
-        .from('goal_templates')
-        .insert({
-          cohort_id: data.id,
-          title: 'Join AccelerateMe',
-          description: 'Welcome to the program! Your journey starts here.',
-          category: 'launch',
-          is_active: true,
-          display_order: 0, // Always first
-        })
+      const { error: goalError } = await supabase.from('goal_templates').insert({
+        cohort_id: data.id,
+        title: 'Join AccelerateMe',
+        description: 'Welcome to the program! Your journey starts here.',
+        category: 'launch',
+        is_active: true,
+        display_order: 0, // Always first
+      })
 
       if (goalError) {
         console.error('Error creating default AccelerateMe goal:', goalError)
@@ -117,23 +101,14 @@ export async function POST(request: Request) {
 
     // Handle validation errors
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Validation failed', details: error }, { status: 400 })
     }
 
     // Handle authentication errors
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

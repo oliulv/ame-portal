@@ -46,7 +46,7 @@ interface Invitation {
 }
 
 export default function InviteFounderPage({ params }: InviteFounderPageProps) {
-  const router = useRouter()
+  const _router = useRouter()
   const [startupSlug, setStartupSlug] = useState<string | null>(null)
   const [startupId, setStartupId] = useState<string | null>(null)
   const [startupName, setStartupName] = useState<string>('')
@@ -93,7 +93,7 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
           setStartupId(startup.id)
           setStartupName(startup.name)
           form.setValue('startup_id', startup.id)
-          
+
           // Fetch invitations for this startup
           await fetchInvitations(startup.id)
         }
@@ -163,7 +163,7 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
       }
 
       setSuccessMessage('Invitation resent successfully')
-      
+
       // Refresh invitations list
       if (startupId) {
         await fetchInvitations(startupId)
@@ -226,14 +226,9 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
                     <FormItem>
                       <FormLabel>Full Name *</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="e.g., John Smith"
-                          {...field}
-                        />
+                        <Input placeholder="e.g., John Smith" {...field} />
                       </FormControl>
-                      <FormDescription>
-                        The founder's full name
-                      </FormDescription>
+                      <FormDescription>The founder's full name</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -246,11 +241,7 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
                     <FormItem>
                       <FormLabel>Email Address *</FormLabel>
                       <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="founder@example.com"
-                          {...field}
-                        />
+                        <Input type="email" placeholder="founder@example.com" {...field} />
                       </FormControl>
                       <FormDescription>
                         The email address where the invitation will be sent
@@ -261,10 +252,7 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
                 />
 
                 <div className="flex gap-4">
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting}
-                  >
+                  <Button type="submit" disabled={isSubmitting}>
                     <Mail className="mr-2 h-4 w-4" />
                     {isSubmitting ? 'Sending Invitation...' : 'Send Invitation'}
                   </Button>
@@ -283,9 +271,7 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
         <Card>
           <CardHeader>
             <CardTitle>Existing Invitations</CardTitle>
-            <CardDescription>
-              View and manage invitations for this startup
-            </CardDescription>
+            <CardDescription>View and manage invitations for this startup</CardDescription>
           </CardHeader>
           <CardContent>
             {invitations.length > 0 ? (
@@ -317,8 +303,8 @@ export default function InviteFounderPage({ params }: InviteFounderPageProps) {
                               status === 'accepted'
                                 ? 'success'
                                 : status === 'expired'
-                                ? 'destructive'
-                                : 'info'
+                                  ? 'destructive'
+                                  : 'info'
                             }
                           >
                             {status}

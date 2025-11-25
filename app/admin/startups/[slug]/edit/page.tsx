@@ -117,7 +117,7 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
       }
 
       const result = await response.json()
-      
+
       // Success! Redirect to startup detail page (using new slug if changed)
       const redirectSlug = result.new_slug || startupSlug
       router.push(`/admin/startups/${redirectSlug}`)
@@ -163,9 +163,7 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
       <Card>
         <CardHeader>
           <CardTitle>Edit Startup</CardTitle>
-          <CardDescription>
-            Update startup information
-          </CardDescription>
+          <CardDescription>Update startup information</CardDescription>
         </CardHeader>
         <CardContent>
           {error && (
@@ -183,14 +181,9 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
                   <FormItem>
                     <FormLabel>Startup Name *</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., Acme Inc"
-                        {...field}
-                      />
+                      <Input placeholder="e.g., Acme Inc" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      The official name of the startup
-                    </FormDescription>
+                    <FormDescription>The official name of the startup</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -203,10 +196,7 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
                   <FormItem>
                     <FormLabel>Slug</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., acme-inc"
-                        {...field}
-                      />
+                      <Input placeholder="e.g., acme-inc" {...field} />
                     </FormControl>
                     <FormDescription>
                       URL-friendly identifier (lowercase letters, numbers, and hyphens only)
@@ -222,10 +212,7 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Cohort *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a cohort" />
@@ -239,9 +226,7 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormDescription>
-                      Change the cohort for this startup
-                    </FormDescription>
+                    <FormDescription>Change the cohort for this startup</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -254,14 +239,9 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
                   <FormItem>
                     <FormLabel>Sector</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., FinTech, HealthTech, EdTech"
-                        {...field}
-                      />
+                      <Input placeholder="e.g., FinTech, HealthTech, EdTech" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Industry or sector (optional)
-                    </FormDescription>
+                    <FormDescription>Industry or sector (optional)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -274,15 +254,9 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
                   <FormItem>
                     <FormLabel>Website URL</FormLabel>
                     <FormControl>
-                      <Input
-                        type="url"
-                        placeholder="https://example.com"
-                        {...field}
-                      />
+                      <Input type="url" placeholder="https://example.com" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Company website (optional)
-                    </FormDescription>
+                    <FormDescription>Company website (optional)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -295,15 +269,9 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
                   <FormItem>
                     <FormLabel>Logo URL</FormLabel>
                     <FormControl>
-                      <Input
-                        type="url"
-                        placeholder="https://example.com/logo.png"
-                        {...field}
-                      />
+                      <Input type="url" placeholder="https://example.com/logo.png" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Direct URL to company logo (optional)
-                    </FormDescription>
+                    <FormDescription>Direct URL to company logo (optional)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -322,19 +290,14 @@ export default function StartupEditPage({ params }: StartupEditPageProps) {
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>
-                      Private notes (not visible to founders)
-                    </FormDescription>
+                    <FormDescription>Private notes (not visible to founders)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
               <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                >
+                <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting ? 'Saving...' : 'Save Changes'}
                 </Button>
                 <Link href={`/admin/startups/${startupSlug}`}>

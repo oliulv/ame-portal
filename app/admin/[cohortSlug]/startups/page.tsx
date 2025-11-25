@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Plus, Building2, ExternalLink, Users, Target, Edit } from 'lucide-react'
-import { Startup, Cohort, GoalTemplate } from '@/lib/types'
+import { Startup, GoalTemplate } from '@/lib/types'
 import { useSelectedCohort } from '@/lib/hooks/useSelectedCohort'
 
 export default function StartupsPage() {
@@ -33,7 +33,7 @@ export default function StartupsPage() {
 
       try {
         setIsLoading(true)
-        
+
         // Fetch startups and goal templates using the cohort id
         const [startupsResponse, goalsResponse] = await Promise.all([
           fetch(`/api/admin/startups?cohort_id=${cohort.id}`),
@@ -50,8 +50,9 @@ export default function StartupsPage() {
           // Filter out duplicate "Join AccelerateMe" goals - keep only the first one
           const seenAccelerateMe = new Set<string>()
           const filteredGoals = goalsData.filter((goal) => {
-            const isAccelerateMe = goal.title === 'Join AccelerateMe' || 
-                                   goal.title.toLowerCase().includes('join accelerateme')
+            const isAccelerateMe =
+              goal.title === 'Join AccelerateMe' ||
+              goal.title.toLowerCase().includes('join accelerateme')
             if (isAccelerateMe) {
               if (seenAccelerateMe.has(goal.cohort_id || '')) {
                 return false // Skip duplicate
@@ -111,9 +112,7 @@ export default function StartupsPage() {
               {cohort.is_active ? 'Active' : 'Inactive'}
             </Badge>
           </div>
-          <p className="text-muted-foreground">
-            {cohort.name}
-          </p>
+          <p className="text-muted-foreground">{cohort.name}</p>
         </div>
         <div className="flex gap-2">
           <Link href={`/admin/cohorts/${cohort.slug}/edit`}>
@@ -169,9 +168,7 @@ export default function StartupsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Startups in this Cohort</CardTitle>
-          <CardDescription>
-            All startups enrolled in {cohort.label}
-          </CardDescription>
+          <CardDescription>All startups enrolled in {cohort.label}</CardDescription>
         </CardHeader>
         <CardContent>
           {startups && startups.length > 0 ? (
@@ -190,14 +187,10 @@ export default function StartupsPage() {
                   <TableRow key={startup.id}>
                     <TableCell className="font-medium">{startup.name}</TableCell>
                     <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {startup.sector || '-'}
-                      </span>
+                      <span className="text-sm text-muted-foreground">{startup.sector || '-'}</span>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {startup.stage || '-'}
-                      </span>
+                      <span className="text-sm text-muted-foreground">{startup.stage || '-'}</span>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="capitalize">
@@ -211,7 +204,9 @@ export default function StartupsPage() {
                             <ExternalLink className="h-4 w-4" />
                           </Button>
                         </Link>
-                        <Link href={`/admin/${cohortSlug}/startups/${startup.slug || startup.id}/edit`}>
+                        <Link
+                          href={`/admin/${cohortSlug}/startups/${startup.slug || startup.id}/edit`}
+                        >
                           <Button variant="ghost" size="sm">
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -245,9 +240,7 @@ export default function StartupsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Goal Templates</CardTitle>
-          <CardDescription>
-            Default goals assigned to new startups in this cohort
-          </CardDescription>
+          <CardDescription>Default goals assigned to new startups in this cohort</CardDescription>
         </CardHeader>
         <CardContent>
           {goalTemplates && goalTemplates.length > 0 ? (
@@ -309,4 +302,3 @@ export default function StartupsPage() {
     </div>
   )
 }
-

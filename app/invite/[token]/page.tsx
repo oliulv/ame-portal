@@ -14,7 +14,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
   // Trim and normalize the token (Next.js should decode URL params automatically)
   const token = rawToken.trim()
-  
+
   // Try URL decoding in case email client encoded it (safe fallback)
   let decodedToken = token
   try {
@@ -39,7 +39,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
       .select('*, startups(id, name, cohort_id, cohorts(id, name))')
       .eq('token', decodedToken)
       .single()
-    
+
     invitation = retryResult.data
     error = retryResult.error
   }
@@ -51,7 +51,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
       .select('*, startups(id, name, cohort_id, cohorts(id, name))')
       .ilike('token', token)
       .single()
-    
+
     // Only use fallback if it found a result
     if (fallbackResult.data) {
       invitation = fallbackResult.data
@@ -76,7 +76,9 @@ export default async function InvitePage({ params }: InvitePageProps) {
         <div className="text-center">
           <div className="bg-card text-card-foreground p-8 rounded-lg shadow-md border border-border max-w-md mx-4">
             <h1 className="text-2xl font-bold mb-4 text-foreground">Invalid Invitation</h1>
-            <p className="text-muted-foreground mb-4">This invitation link is invalid or has expired.</p>
+            <p className="text-muted-foreground mb-4">
+              This invitation link is invalid or has expired.
+            </p>
             <Link href="/login" className="text-primary hover:text-primary/80 underline">
               Go to Login
             </Link>
@@ -177,7 +179,8 @@ export default async function InvitePage({ params }: InvitePageProps) {
         <div className="bg-card text-card-foreground p-8 rounded-lg shadow-md mb-4 border border-border">
           <h1 className="text-2xl font-bold mb-2">Welcome to AccelerateMe!</h1>
           <p className="text-muted-foreground mb-4">
-            You've been invited to join <strong className="text-foreground">{cohortName}</strong> as a founder of <strong className="text-foreground">{startupName}</strong>.
+            You've been invited to join <strong className="text-foreground">{cohortName}</strong> as
+            a founder of <strong className="text-foreground">{startupName}</strong>.
           </p>
           <p className="text-sm text-muted-foreground mb-6">
             Please create an account to accept your invitation.
@@ -190,59 +193,66 @@ export default async function InvitePage({ params }: InvitePageProps) {
             elements: {
               // Root container
               rootBox: 'mx-auto w-full',
-              
+
               // Main card container - match your Card component
               card: 'bg-card text-card-foreground rounded-lg border border-border shadow-sm p-0',
               cardBox: 'bg-card text-card-foreground rounded-lg border border-border shadow-sm',
-              
+
               // Header styling
               headerTitle: 'text-foreground font-semibold leading-none tracking-tight text-xl',
               headerSubtitle: 'text-muted-foreground text-sm',
               headerTitleContainer: 'mb-4',
-              
+
               // Form fields - match your Input component
-              formFieldInput: 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+              formFieldInput:
+                'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
               formFieldLabel: 'text-foreground text-sm font-medium leading-none',
               formFieldInputShowPasswordButton: 'text-muted-foreground hover:text-foreground',
               formFieldInputGroup: 'space-y-2',
-              
+
               // Buttons - match your Button component
-              formButtonPrimary: 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full',
-              formButtonReset: 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
-              
+              formButtonPrimary:
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full',
+              formButtonReset:
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+
               // Social buttons - match your secondary button style
-              socialButtonsBlockButton: 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full border border-input',
+              socialButtonsBlockButton:
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full border border-input',
               socialButtonsBlockButtonText: 'text-sm font-medium',
               socialButtonsBlockButtonArrow: 'hidden',
-              
+
               // Divider
               dividerLine: 'bg-border',
               dividerText: 'text-muted-foreground text-sm',
-              
+
               // Footer - hide sign-in link
               footerActionLink: 'hidden',
               footerAction: 'hidden',
               footer: 'hidden',
               footerPages: 'hidden',
-              
+
               // Identity preview
               identityPreviewText: 'text-foreground text-sm',
-              identityPreviewEditButton: 'text-primary hover:text-primary/80 text-sm underline-offset-4 hover:underline',
-              
+              identityPreviewEditButton:
+                'text-primary hover:text-primary/80 text-sm underline-offset-4 hover:underline',
+
               // OTP/Verification
-              otpCodeFieldInput: 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-              formResendCodeLink: 'text-primary hover:text-primary/80 text-sm underline-offset-4 hover:underline',
-              
+              otpCodeFieldInput:
+                'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+              formResendCodeLink:
+                'text-primary hover:text-primary/80 text-sm underline-offset-4 hover:underline',
+
               // Alerts and messages
               alertText: 'text-foreground text-sm',
               formFieldErrorText: 'text-destructive text-sm',
               formFieldSuccessText: 'text-muted-foreground text-sm',
               formFieldWarningText: 'text-muted-foreground text-sm',
-              
+
               // Form container spacing
               form: 'space-y-4',
               formField: 'space-y-2',
-              
+
               // Remove Clerk branding
               logoImage: 'hidden',
               logoBox: 'hidden',
@@ -266,4 +276,3 @@ export default async function InvitePage({ params }: InvitePageProps) {
     </div>
   )
 }
-

@@ -13,21 +13,23 @@
  * slugify("The Super Long Startup Name Company Limited Inc") // "the-super-long-startup-name-company-limited" (truncated)
  */
 export function slugify(text: string): string {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    // Remove accents/diacritics
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    // Replace spaces and special chars with hyphens
-    .replace(/[^a-z0-9]+/g, '-')
-    // Remove leading/trailing hyphens
-    .replace(/^-+|-+$/g, '')
-    // Truncate to 50 characters
-    .substring(0, 50)
-    // Remove trailing hyphen if truncation caused one
-    .replace(/-+$/, '')
+  return (
+    text
+      .toString()
+      .toLowerCase()
+      .trim()
+      // Remove accents/diacritics
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      // Replace spaces and special chars with hyphens
+      .replace(/[^a-z0-9]+/g, '-')
+      // Remove leading/trailing hyphens
+      .replace(/^-+|-+$/g, '')
+      // Truncate to 50 characters
+      .substring(0, 50)
+      // Remove trailing hyphen if truncation caused one
+      .replace(/-+$/, '')
+  )
 }
 
 /**

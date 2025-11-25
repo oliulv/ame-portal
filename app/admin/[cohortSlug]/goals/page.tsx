@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -51,6 +51,7 @@ import { useAppMutation } from '@/lib/hooks/useAppMutation'
 import { useSelectedCohort } from '@/lib/hooks/useSelectedCohort'
 import { useQueryClient } from '@tanstack/react-query'
 import { type GoalTemplateFormData } from '@/lib/schemas'
+import { extractConditionsFromDescription } from '@/lib/goalUtils'
 
 // Special row for "Join AccelerateMe" goal (non-draggable, always first)
 function AccelerateMeRow({
@@ -72,9 +73,7 @@ function AccelerateMeRow({
       <TableCell>
         <div className="flex flex-col">
           <span className="font-medium">{title}</span>
-          <span className="text-sm text-muted-foreground line-clamp-1">
-            {description}
-          </span>
+          <span className="text-sm text-muted-foreground line-clamp-1">{description}</span>
         </div>
       </TableCell>
       <TableCell>
@@ -112,16 +111,11 @@ function SortableRow({
   onDelete: (id: string) => void
   deletingId: string | null
   orderNumber: number
-  cohortSlug: string
+  cohortSlug: string | null
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: template.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: template.id,
+  })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -149,7 +143,7 @@ function SortableRow({
         <div className="flex flex-col">
           <span className="font-medium">{template.title}</span>
           <span className="text-sm text-muted-foreground line-clamp-1">
-            {template.description}
+            {extractConditionsFromDescription(template.description).cleanDescription || '-'}
           </span>
         </div>
       </TableCell>
@@ -159,9 +153,7 @@ function SortableRow({
         </Badge>
       </TableCell>
       <TableCell>
-        <span className="text-sm">
-          {template.default_target_value || '-'}
-        </span>
+        <span className="text-sm">{template.default_target_value || '-'}</span>
       </TableCell>
       <TableCell>
         <span className="text-sm">
@@ -177,7 +169,13 @@ function SortableRow({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-2">
-          <Link href={`/admin/${cohortSlug}/goals/${template.id}/edit`}>
+          <Link
+            href={
+              cohortSlug
+                ? `/admin/${cohortSlug}/goals/${template.id}/edit`
+                : `/admin/goals/${template.id}/edit`
+            }
+          >
             <Button variant="ghost" size="sm">
               <Edit className="h-4 w-4" />
             </Button>
@@ -211,9 +209,13 @@ export default function GoalTemplatesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isReordering, setIsReordering] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [editingAccelerateMeGoal, setEditingAccelerateMeGoal] = useState<AccelerateMeGoal | null>(null)
+  const [editingAccelerateMeGoal, setEditingAccelerateMeGoal] = useState<AccelerateMeGoal | null>(
+    null
+  )
   const [accelerateMeTitle, setAccelerateMeTitle] = useState('Join AccelerateMe')
-  const [accelerateMeDescription, setAccelerateMeDescription] = useState('Welcome to the program! Your journey starts here.')
+  const [accelerateMeDescription, setAccelerateMeDescription] = useState(
+    'Welcome to the program! Your journey starts here.'
+  )
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -232,21 +234,27 @@ export default function GoalTemplatesPage() {
   // Separate AccelerateMe goals from regular goals
   // Only keep the first "Join AccelerateMe" goal to avoid duplicates
   const goalTemplates: GoalTemplateWithCohort[] = []
-  const accelerateMeGoals = allGoals.filter((goal) => 
-    goal.title === 'Join AccelerateMe' || goal.title.toLowerCase().includes('join accelerateme')
+  const accelerateMeGoals = allGoals.filter(
+    (goal) =>
+      goal.title === 'Join AccelerateMe' || goal.title.toLowerCase().includes('join accelerateme')
   )
   const accelerateMeGoalFound = accelerateMeGoals[0]
   const hasDuplicateAccelerateMe = accelerateMeGoals.length > 1
-  
-  const accelerateMeGoal: AccelerateMeGoal | null = accelerateMeGoalFound ? {
-    id: accelerateMeGoalFound.id,
-    cohort_id: accelerateMeGoalFound.cohorts?.id || '',
-    title: accelerateMeGoalFound.title,
-    description: accelerateMeGoalFound.description || '',
-  } : null
-  
+
+  const accelerateMeGoal: AccelerateMeGoal | null = accelerateMeGoalFound
+    ? {
+        id: accelerateMeGoalFound.id,
+        cohort_id: accelerateMeGoalFound.cohorts?.id || '',
+        title: accelerateMeGoalFound.title,
+        description: accelerateMeGoalFound.description || '',
+      }
+    : null
+
   allGoals.forEach((goal) => {
-    if (goal.title !== 'Join AccelerateMe' && !goal.title.toLowerCase().includes('join accelerateme')) {
+    if (
+      goal.title !== 'Join AccelerateMe' &&
+      !goal.title.toLowerCase().includes('join accelerateme')
+    ) {
       goalTemplates.push(goal)
     }
     // Note: We're ignoring duplicate "Join AccelerateMe" goals
@@ -299,7 +307,7 @@ export default function GoalTemplatesPage() {
   })
 
   const updateAccelerateMeGoal = useAppMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<GoalTemplateFormData> }) => 
+    mutationFn: ({ id, data }: { id: string; data: Partial<GoalTemplateFormData> }) =>
       goalsApi.update(id, data),
     invalidateQueries: [queryKeys.goals.list('admin', { cohortId })],
     successMessage: 'Goal updated successfully',
@@ -328,36 +336,48 @@ export default function GoalTemplatesPage() {
 
     // Optimistically update the UI
     const newOrder = arrayMove(goalTemplates, oldIndex, newIndex)
-    
+
     // Optimistically update the query cache
-    queryClient.setQueryData(queryKeys.goals.list('admin', { cohortId }), (old: GoalTemplateWithCohort[] = []) => {
-      const accelerateMeGoal = old.find(g => 
-        g.title === 'Join AccelerateMe' || g.title.toLowerCase().includes('join accelerateme')
-      )
-      const regularGoals = old.filter(g => 
-        g.title !== 'Join AccelerateMe' && !g.title.toLowerCase().includes('join accelerateme')
-      )
-      const reorderedRegularGoals = arrayMove(
-        regularGoals,
-        regularGoals.findIndex(g => g.id === active.id),
-        regularGoals.findIndex(g => g.id === over.id)
-      )
-      return accelerateMeGoal ? [accelerateMeGoal, ...reorderedRegularGoals] : reorderedRegularGoals
-    })
+    queryClient.setQueryData(
+      queryKeys.goals.list('admin', { cohortId }),
+      (old: GoalTemplateWithCohort[] = []) => {
+        const accelerateMeGoal = old.find(
+          (g) =>
+            g.title === 'Join AccelerateMe' || g.title.toLowerCase().includes('join accelerateme')
+        )
+        const regularGoals = old.filter(
+          (g) =>
+            g.title !== 'Join AccelerateMe' && !g.title.toLowerCase().includes('join accelerateme')
+        )
+        const reorderedRegularGoals = arrayMove(
+          regularGoals,
+          regularGoals.findIndex((g) => g.id === active.id),
+          regularGoals.findIndex((g) => g.id === over.id)
+        )
+        return accelerateMeGoal
+          ? [accelerateMeGoal, ...reorderedRegularGoals]
+          : reorderedRegularGoals
+      }
+    )
 
     // Update the order in the database
     setIsReordering(true)
     const goalIds = newOrder.map((template) => template.id)
-    
+
     reorderGoals.mutate(goalIds, {
       onError: () => {
         // Revert on error
-        queryClient.setQueryData(queryKeys.goals.list('admin', { cohortId }), (old: GoalTemplateWithCohort[] = []) => {
-          const accelerateMeGoal = old.find(g => 
-            g.title === 'Join AccelerateMe' || g.title.toLowerCase().includes('join accelerateme')
-          )
-          return accelerateMeGoal ? [accelerateMeGoal, ...oldOrder] : oldOrder
-        })
+        queryClient.setQueryData(
+          queryKeys.goals.list('admin', { cohortId }),
+          (old: GoalTemplateWithCohort[] = []) => {
+            const accelerateMeGoal = old.find(
+              (g) =>
+                g.title === 'Join AccelerateMe' ||
+                g.title.toLowerCase().includes('join accelerateme')
+            )
+            return accelerateMeGoal ? [accelerateMeGoal, ...oldOrder] : oldOrder
+          }
+        )
       },
       onSettled: () => {
         setIsReordering(false)
@@ -416,7 +436,8 @@ export default function GoalTemplatesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Goal Templates</h1>
           <p className="text-muted-foreground">
-            Manage default goals for <span className="font-medium">{cohort.label}</span> that are automatically assigned to new startups
+            Manage default goals for <span className="font-medium">{cohort.label}</span> that are
+            automatically assigned to new startups
           </p>
         </div>
         <Link href={`/admin/${cohortSlug}/goals/new`}>
@@ -434,10 +455,11 @@ export default function GoalTemplatesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-orange-900">
-                  Duplicate "Join AccelerateMe" goals detected
+                  Duplicate &quot;Join AccelerateMe&quot; goals detected
                 </p>
                 <p className="text-xs text-orange-700 mt-1">
-                  Found {accelerateMeGoals.length} duplicate goal(s). Only one should exist per cohort.
+                  Found {accelerateMeGoals.length} duplicate goal(s). Only one should exist per
+                  cohort.
                 </p>
               </div>
               <Button
@@ -460,10 +482,11 @@ export default function GoalTemplatesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-amber-900">
-                  Default "Join AccelerateMe" goal is missing
+                  Default &quot;Join AccelerateMe&quot; goal is missing
                 </p>
                 <p className="text-xs text-amber-700 mt-1">
-                  This goal should exist for each cohort. It will be created automatically for new cohorts.
+                  This goal should exist for each cohort. It will be created automatically for new
+                  cohorts.
                 </p>
               </div>
               <Button
@@ -473,14 +496,25 @@ export default function GoalTemplatesPage() {
                   if (!cohortId) return
                   try {
                     await goalsApi.create({
-                      cohort_id: cohortId,
+                      cohortId: cohortId,
                       title: 'Join AccelerateMe',
                       description: 'Welcome to the program! Your journey starts here.',
                       category: 'launch',
-                      is_active: true,
+                      isActive: true,
+                      conditions: [
+                        {
+                          dataSource: 'stripe',
+                          metric: '',
+                          operator: '>=',
+                          targetValue: 0,
+                          unit: '',
+                        },
+                      ],
                     })
                     // Invalidate queries to refresh the list
-                    queryClient.invalidateQueries({ queryKey: queryKeys.goals.list('admin', { cohortId }) })
+                    queryClient.invalidateQueries({
+                      queryKey: queryKeys.goals.list('admin', { cohortId }),
+                    })
                   } catch (error) {
                     console.error('Failed to create default goal:', error)
                     alert('Failed to create default goal. Please try again.')
@@ -495,7 +529,7 @@ export default function GoalTemplatesPage() {
       )}
 
       {/* Table */}
-      {(goalTemplates.length > 0 || accelerateMeGoal) ? (
+      {goalTemplates.length > 0 || accelerateMeGoal ? (
         <Card>
           <DndContext
             sensors={sensors}
@@ -549,9 +583,7 @@ export default function GoalTemplatesPage() {
             </Table>
           </DndContext>
           {isReordering && (
-            <div className="p-4 text-center text-sm text-muted-foreground">
-              Updating order...
-            </div>
+            <div className="p-4 text-center text-sm text-muted-foreground">Updating order...</div>
           )}
         </Card>
       ) : (
@@ -576,7 +608,8 @@ export default function GoalTemplatesPage() {
           <DialogHeader>
             <DialogTitle>Edit Join AccelerateMe Goal</DialogTitle>
             <DialogDescription>
-              Edit the title and description for the "Join AccelerateMe" goal that appears first to founders in {cohort?.label || 'this cohort'}.
+              Edit the title and description for the &quot;Join AccelerateMe&quot; goal that appears
+              first to founders in {cohort?.label || 'this cohort'}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -613,15 +646,24 @@ export default function GoalTemplatesPage() {
             <Button
               onClick={() => {
                 if (!editingAccelerateMeGoal) return
-                
+
                 updateAccelerateMeGoal.mutate({
                   id: editingAccelerateMeGoal.id,
                   data: {
-                    cohort_id: editingAccelerateMeGoal.cohort_id,
+                    cohortId: editingAccelerateMeGoal.cohort_id,
                     title: accelerateMeTitle,
                     description: accelerateMeDescription,
                     category: 'launch',
-                    is_active: true,
+                    isActive: true,
+                    conditions: [
+                      {
+                        dataSource: 'stripe',
+                        metric: '',
+                        operator: '>=',
+                        targetValue: 0,
+                        unit: '',
+                      },
+                    ],
                   },
                 })
               }}
@@ -635,4 +677,3 @@ export default function GoalTemplatesPage() {
     </div>
   )
 }
-

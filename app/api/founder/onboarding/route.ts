@@ -27,10 +27,7 @@ export async function POST(request: Request) {
       .single()
 
     if (profileError || !founderProfile) {
-      return NextResponse.json(
-        { error: 'Founder profile not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Founder profile not found' }, { status: 404 })
     }
 
     // 4. Update founder profile with personal info
@@ -53,10 +50,7 @@ export async function POST(request: Request) {
 
     if (founderUpdateError) {
       console.error('Error updating founder profile:', founderUpdateError)
-      return NextResponse.json(
-        { error: 'Failed to update founder profile' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to update founder profile' }, { status: 500 })
     }
 
     // 5. Create or update startup profile
@@ -85,68 +79,56 @@ export async function POST(request: Request) {
 
       if (startupUpdateError) {
         console.error('Error updating startup profile:', startupUpdateError)
-        return NextResponse.json(
-          { error: 'Failed to update startup profile' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Failed to update startup profile' }, { status: 500 })
       }
     } else {
       // Create new profile
-      const { error: startupInsertError } = await supabase
-        .from('startup_profiles')
-        .insert({
-          startup_id: founderProfile.startup_id,
-          one_liner: validatedData.startupProfile.one_liner,
-          description: validatedData.startupProfile.description,
-          company_url: validatedData.startupProfile.company_url,
-          product_url: validatedData.startupProfile.product_url,
-          industry: validatedData.startupProfile.industry,
-          location: validatedData.startupProfile.location,
-          initial_customers: validatedData.startupProfile.initial_customers,
-          initial_revenue: validatedData.startupProfile.initial_revenue,
-        })
+      const { error: startupInsertError } = await supabase.from('startup_profiles').insert({
+        startup_id: founderProfile.startup_id,
+        one_liner: validatedData.startupProfile.one_liner,
+        description: validatedData.startupProfile.description,
+        company_url: validatedData.startupProfile.company_url,
+        product_url: validatedData.startupProfile.product_url,
+        industry: validatedData.startupProfile.industry,
+        location: validatedData.startupProfile.location,
+        initial_customers: validatedData.startupProfile.initial_customers,
+        initial_revenue: validatedData.startupProfile.initial_revenue,
+      })
 
       if (startupInsertError) {
         console.error('Error creating startup profile:', startupInsertError)
-        return NextResponse.json(
-          { error: 'Failed to create startup profile' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Failed to create startup profile' }, { status: 500 })
       }
     }
 
-    // 6. Create or update bank details
-    const { data: existingBankDetails } = await supabase
-      .from('bank_details')
-      .select('id')
-      .eq('startup_id', founderProfile.startup_id)
-      .single()
-
-    if (existingBankDetails) {
-      // Update existing bank details
-      const { error: bankUpdateError } = await supabase
+    // 6. Create or update bank details (only if provided)
+    if (validatedData.bankDetails) {
+      const { data: existingBankDetails } = await supabase
         .from('bank_details')
-        .update({
-          account_holder_name: validatedData.bankDetails.account_holder_name,
-          sort_code: validatedData.bankDetails.sort_code,
-          account_number: validatedData.bankDetails.account_number,
-          bank_name: validatedData.bankDetails.bank_name,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingBankDetails.id)
+        .select('id')
+        .eq('startup_id', founderProfile.startup_id)
+        .single()
 
-      if (bankUpdateError) {
-        console.error('Error updating bank details:', bankUpdateError)
-        return NextResponse.json(
-          { error: 'Failed to update bank details' },
-          { status: 500 }
-        )
-      }
-    } else {
-      // Create new bank details
-      const { error: bankInsertError } = await supabase
-        .from('bank_details')
-        .insert({
+      if (existingBankDetails) {
+        // Update existing bank details
+        const { error: bankUpdateError } = await supabase
+          .from('bank_details')
+          .update({
+            account_holder_name: validatedData.bankDetails.account_holder_name,
+            sort_code: validatedData.bankDetails.sort_code,
+            account_number: validatedData.bankDetails.account_number,
+            bank_name: validatedData.bankDetails.bank_name,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingBankDetails.id)
+
+        if (bankUpdateError) {
+          console.error('Error updating bank details:', bankUpdateError)
+          return NextResponse.json({ error: 'Failed to update bank details' }, { status: 500 })
+        }
+      } else {
+        // Create new bank details
+        const { error: bankInsertError } = await supabase.from('bank_details').insert({
           startup_id: founderProfile.startup_id,
           account_holder_name: validatedData.bankDetails.account_holder_name,
           sort_code: validatedData.bankDetails.sort_code,
@@ -155,12 +137,10 @@ export async function POST(request: Request) {
           verified: false,
         })
 
-      if (bankInsertError) {
-        console.error('Error creating bank details:', bankInsertError)
-        return NextResponse.json(
-          { error: 'Failed to create bank details' },
-          { status: 500 }
-        )
+        if (bankInsertError) {
+          console.error('Error creating bank details:', bankInsertError)
+          return NextResponse.json({ error: 'Failed to create bank details' }, { status: 500 })
+        }
       }
     }
 
@@ -182,7 +162,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: true,
-        message: 'Onboarding completed successfully'
+        message: 'Onboarding completed successfully',
       },
       { status: 200 }
     )
@@ -192,12 +172,12 @@ export async function POST(request: Request) {
     // Handle validation errors
     if (error instanceof ZodError) {
       return NextResponse.json(
-        { 
-          error: 'Validation failed', 
-          details: error.errors.map(e => ({
+        {
+          error: 'Validation failed',
+          details: error.issues.map((e) => ({
             path: e.path.join('.'),
-            message: e.message
-          }))
+            message: e.message,
+          })),
         },
         { status: 400 }
       )
@@ -205,15 +185,9 @@ export async function POST(request: Request) {
 
     // Handle authentication errors
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -36,10 +36,7 @@ export async function POST(request: Request) {
 
     if (fetchError) {
       console.error('Database error fetching duplicate goals:', fetchError)
-      return NextResponse.json(
-        { error: 'Failed to fetch goals' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to fetch goals' }, { status: 500 })
     }
 
     if (!accelerateMeGoals || accelerateMeGoals.length === 0) {
@@ -64,7 +61,7 @@ export async function POST(request: Request) {
     const goalsToDelete: string[] = []
     const keptGoals: Array<{ id: string; cohort_id: string | null }> = []
 
-    for (const [cohortId, goals] of goalsByCohort.entries()) {
+    for (const [_cohortId, goals] of goalsByCohort.entries()) {
       if (goals.length > 1) {
         // Sort by created_at to keep the oldest one
         const sorted = [...goals].sort((a, b) => {
@@ -126,16 +123,15 @@ export async function POST(request: Request) {
     console.error('Error in POST /api/admin/goals/cleanup-duplicates:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     )
   }
 }
-

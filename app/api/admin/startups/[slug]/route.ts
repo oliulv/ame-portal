@@ -23,17 +23,10 @@ export async function GET(request: Request, context: RouteContext) {
 
     // 2. Fetch startup from database by slug
     const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('startups')
-      .select('*')
-      .eq('slug', slug)
-      .single()
+    const { data, error } = await supabase.from('startups').select('*').eq('slug', slug).single()
 
     if (error || !data) {
-      return NextResponse.json(
-        { error: 'Startup not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Startup not found' }, { status: 404 })
     }
 
     // 3. Return startup data
@@ -42,16 +35,10 @@ export async function GET(request: Request, context: RouteContext) {
     console.error('Error in GET /api/admin/startups/[slug]:', error)
 
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -75,7 +62,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     // 3. Check if slug is being updated and validate uniqueness
     const supabase = await createClient()
     let newSlug = slug // Default to current slug
-    
+
     if (validatedData.slug && validatedData.slug !== slug) {
       // Check if new slug already exists
       const { data: existingStartup } = await supabase
@@ -83,7 +70,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         .select('id')
         .eq('slug', validatedData.slug)
         .single()
-      
+
       if (existingStartup) {
         return NextResponse.json(
           { error: 'A startup with this slug already exists' },
@@ -94,7 +81,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     // 4. Update startup in database
-    const updateData: any = {
+    const updateData: {
+      name: string
+      cohort_id: string
+      logo_url: string | null
+      sector?: string | null
+      stage?: string | null
+      website_url?: string | null
+      slug?: string
+      notes?: string | null
+    } = {
       name: validatedData.name,
       cohort_id: validatedData.cohort_id,
       logo_url: validatedData.logo_url || null,
@@ -102,8 +98,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       stage: validatedData.stage || null,
       website_url: validatedData.website_url || null,
       notes: validatedData.notes || null,
+      slug: newSlug,
     }
-    
+
     // Only update slug if it's provided and different
     if (validatedData.slug && validatedData.slug !== slug) {
       updateData.slug = validatedData.slug
@@ -118,10 +115,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (error) {
       console.error('Database error updating startup:', error)
-      return NextResponse.json(
-        { error: 'Failed to update startup' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to update startup' }, { status: 500 })
     }
 
     // 5. Return success response with new slug if changed
@@ -131,23 +125,14 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     // Handle validation errors
     if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Validation failed', details: error }, { status: 400 })
     }
 
     // Handle authentication errors
     if (error instanceof Error && error.message.includes('Unauthorized')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

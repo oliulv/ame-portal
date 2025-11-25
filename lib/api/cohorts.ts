@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import { Cohort } from '@/lib/types'
-import { cohortSchema, type CohortFormData } from '@/lib/schemas'
+import { type CohortFormData } from '@/lib/schemas'
 
 export const cohortsApi = {
   /**
@@ -31,4 +31,3 @@ export const cohortsApi = {
     return apiClient.patch<Cohort>(`/api/admin/cohorts/${slug}`, data)
   },
 }
-

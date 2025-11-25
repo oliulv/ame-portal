@@ -70,10 +70,10 @@ export default async function FounderInvoicesPage() {
                         invoice.status === 'approved'
                           ? 'bg-green-100 text-green-800'
                           : invoice.status === 'rejected'
-                          ? 'bg-red-100 text-red-800'
-                          : invoice.status === 'paid'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                            ? 'bg-red-100 text-red-800'
+                            : invoice.status === 'paid'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-yellow-100 text-yellow-800'
                       }`}
                     >
                       {invoice.status.replace('_', ' ')}
@@ -87,10 +87,7 @@ export default async function FounderInvoicesPage() {
       ) : (
         <div className="bg-white p-6 rounded-lg shadow text-center">
           <p className="text-gray-500 mb-4">No invoices yet.</p>
-          <Link
-            href="/founder/invoices/new"
-            className="text-blue-600 hover:underline"
-          >
+          <Link href="/founder/invoices/new" className="text-blue-600 hover:underline">
             Upload your first invoice
           </Link>
         </div>
@@ -98,4 +95,3 @@ export default async function FounderInvoicesPage() {
     </div>
   )
 }
-

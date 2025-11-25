@@ -12,10 +12,9 @@ export const dashboardApi = {
    * @param cohortSlug Optional cohort slug to filter stats by cohort
    */
   getStats: async (cohortSlug?: string): Promise<DashboardStats> => {
-    const url = cohortSlug 
+    const url = cohortSlug
       ? `/api/admin/dashboard?cohort_slug=${cohortSlug}`
       : '/api/admin/dashboard'
     return apiClient.get<DashboardStats>(url)
   },
 }
-

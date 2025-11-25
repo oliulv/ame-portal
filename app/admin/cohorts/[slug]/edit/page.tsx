@@ -57,7 +57,11 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
   }, [params])
 
   // Fetch cohort data using TanStack Query
-  const { data: cohort, isLoading, error: queryError } = useQuery({
+  const {
+    data: cohort,
+    isLoading,
+    error: queryError,
+  } = useQuery({
     queryKey: queryKeys.cohorts.detail(cohortSlug || ''),
     queryFn: () => cohortsApi.getBySlug(cohortSlug!),
     enabled: !!cohortSlug,
@@ -81,10 +85,7 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
       if (!cohortSlug) throw new Error('Cohort slug is required')
       return cohortsApi.update(cohortSlug, data)
     },
-    invalidateQueries: [
-      queryKeys.cohorts.lists(),
-      queryKeys.cohorts.detail(cohortSlug || ''),
-    ],
+    invalidateQueries: [queryKeys.cohorts.lists(), queryKeys.cohorts.detail(cohortSlug || '')],
     successMessage: 'Cohort updated successfully',
     onSuccess: () => {
       router.push('/admin/startups')
@@ -129,9 +130,7 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
       <Card>
         <CardHeader>
           <CardTitle>Edit Cohort</CardTitle>
-          <CardDescription>
-            Update cohort information
-          </CardDescription>
+          <CardDescription>Update cohort information</CardDescription>
         </CardHeader>
         <CardContent>
           {(queryError || updateCohort.isError) && (
@@ -149,10 +148,7 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
                   <FormItem>
                     <FormLabel>Internal Name</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="accelerateme-2025"
-                        {...field}
-                      />
+                      <Input placeholder="accelerateme-2025" {...field} />
                     </FormControl>
                     <FormDescription>
                       Lowercase alphanumeric with hyphens (e.g., accelerateme-2025)
@@ -169,14 +165,9 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
                   <FormItem>
                     <FormLabel>Display Name</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="Cohort 12"
-                        {...field}
-                      />
+                      <Input placeholder="Cohort 12" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      User-friendly name shown in the interface
-                    </FormDescription>
+                    <FormDescription>User-friendly name shown in the interface</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -227,25 +218,17 @@ export default function CohortEditPage({ params }: CohortEditPageProps) {
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Active Status</FormLabel>
-                      <FormDescription>
-                        Active cohorts are displayed in the system
-                      </FormDescription>
+                      <FormDescription>Active cohorts are displayed in the system</FormDescription>
                     </div>
                     <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
                   </FormItem>
                 )}
               />
 
               <div className="flex gap-4">
-                <Button
-                  type="submit"
-                  disabled={updateCohort.isPending}
-                >
+                <Button type="submit" disabled={updateCohort.isPending}>
                   {updateCohort.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
                 <Link href="/admin/startups">

@@ -18,18 +18,26 @@ See [SETUP.md](./SETUP.md) for detailed setup instructions.
 Quick start:
 
 1. Install dependencies:
+
    ```bash
-   npm install
+   bun install
    ```
 
-2. Set up environment variables (copy `.env.example` to `.env.local`)
+2. Start the development server:
 
-3. Run database migrations in Supabase
-
-4. Start the development server:
    ```bash
-   npm run dev
+   bun dev
    ```
+
+3. Visit http://localhost:3000
+
+## Development Commands
+
+- `bun dev` - Start development server
+- `bun run lint` - Run ESLint
+- `bun run lint:fix` - Auto-fix ESLint issues
+- `bun run format` - Format code with Prettier
+- `bun run format:check` - Check code formatting
 
 ## Phase 1 Features
 

@@ -27,13 +27,15 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
   // Fetch startup details with cohort info by slug
   const { data: startup, error } = await supabase
     .from('startups')
-    .select(`
+    .select(
+      `
       *,
       cohorts (
         id,
         label
       )
-    `)
+    `
+    )
     .eq('slug', slug)
     .single()
 
@@ -56,7 +58,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
     .order('created_at', { ascending: false })
 
   // Fetch invoices for this startup
-  const { data: invoices } = await supabase
+  const { data: _invoices } = await supabase
     .from('invoices')
     .select('id, status, amount, created_at')
     .eq('startup_id', startup.id)
@@ -65,9 +67,9 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
 
   const goalStats = {
     total: goals?.length || 0,
-    completed: goals?.filter(g => g.status === 'completed').length || 0,
-    inProgress: goals?.filter(g => g.status === 'in_progress').length || 0,
-    notStarted: goals?.filter(g => g.status === 'not_started').length || 0,
+    completed: goals?.filter((g) => g.status === 'completed').length || 0,
+    inProgress: goals?.filter((g) => g.status === 'in_progress').length || 0,
+    notStarted: goals?.filter((g) => g.status === 'not_started').length || 0,
   }
 
   return (
@@ -84,7 +86,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{startup.name}</h1>
             <p className="text-muted-foreground">
-              {(startup.cohorts as any)?.label || 'No cohort'}
+              {(startup.cohorts as { label: string } | null)?.label || 'No cohort'}
             </p>
           </div>
         </div>
@@ -119,10 +121,16 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <Target className={`h-4 w-4 ${goalStats.completed > 0 ? 'text-green-600' : 'text-muted-foreground'}`} />
+            <Target
+              className={`h-4 w-4 ${goalStats.completed > 0 ? 'text-green-600' : 'text-muted-foreground'}`}
+            />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${goalStats.completed > 0 ? 'text-green-600' : ''}`}>{goalStats.completed}</div>
+            <div
+              className={`text-2xl font-bold ${goalStats.completed > 0 ? 'text-green-600' : ''}`}
+            >
+              {goalStats.completed}
+            </div>
           </CardContent>
         </Card>
 
@@ -133,7 +141,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {invitations?.filter(i => i.status === 'accepted').length || 0}
+              {invitations?.filter((i) => i.status === 'accepted').length || 0}
             </div>
           </CardContent>
         </Card>
@@ -192,9 +200,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Founders & Invitations</CardTitle>
-              <CardDescription>
-                Team members and pending invitations
-              </CardDescription>
+              <CardDescription>Team members and pending invitations</CardDescription>
             </div>
             <Link href={`/admin/startups/${slug}/invite`}>
               <Button size="sm">
@@ -220,7 +226,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
                   const isAccepted = !!invitation.accepted_at
                   const isExpired = !isAccepted && new Date(invitation.expires_at) < new Date()
                   const status = isAccepted ? 'accepted' : isExpired ? 'expired' : 'pending'
-                  
+
                   return (
                     <TableRow key={invitation.id}>
                       <TableCell className="font-medium">{invitation.full_name}</TableCell>
@@ -231,8 +237,8 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
                             status === 'accepted'
                               ? 'success'
                               : status === 'expired'
-                              ? 'destructive'
-                              : 'info'
+                                ? 'destructive'
+                                : 'info'
                           }
                         >
                           {status}
@@ -258,15 +264,16 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
       <Card>
         <CardHeader>
           <CardTitle>Goals</CardTitle>
-          <CardDescription>
-            Assigned goals and progress
-          </CardDescription>
+          <CardDescription>Assigned goals and progress</CardDescription>
         </CardHeader>
         <CardContent>
           {goals && goals.length > 0 ? (
             <div className="space-y-4">
               {goals.map((goal) => (
-                <div key={goal.id} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
+                <div
+                  key={goal.id}
+                  className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
+                >
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{goal.title}</span>
@@ -278,8 +285,8 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
                           goal.status === 'completed'
                             ? 'success'
                             : goal.status === 'in_progress'
-                            ? 'info'
-                            : 'secondary'
+                              ? 'info'
+                              : 'secondary'
                         }
                       >
                         {goal.status.replace('_', ' ')}
@@ -289,7 +296,9 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
                   </div>
                   {goal.funding_amount && (
                     <div className="text-right ml-4">
-                      <div className="text-sm font-medium">£{goal.funding_amount.toLocaleString()}</div>
+                      <div className="text-sm font-medium">
+                        £{goal.funding_amount.toLocaleString()}
+                      </div>
                       <div className="text-xs text-muted-foreground">Funding</div>
                     </div>
                   )}
@@ -297,9 +306,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
               ))}
             </div>
           ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No goals assigned yet
-            </p>
+            <p className="py-8 text-center text-sm text-muted-foreground">No goals assigned yet</p>
           )}
         </CardContent>
       </Card>

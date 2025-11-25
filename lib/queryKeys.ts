@@ -1,6 +1,6 @@
 /**
  * Centralized query keys for TanStack Query
- * 
+ *
  * This ensures consistent key structure across the app and makes
  * cache invalidation predictable.
  */
@@ -19,7 +19,7 @@ export const queryKeys = {
   goals: {
     all: ['goals'] as const,
     lists: () => [...queryKeys.goals.all, 'list'] as const,
-    list: (scope: 'admin' | 'founder', filters?: Record<string, unknown>) => 
+    list: (scope: 'admin' | 'founder', filters?: Record<string, unknown>) =>
       [...queryKeys.goals.lists(), scope, filters] as const,
     details: () => [...queryKeys.goals.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.goals.details(), id] as const,
@@ -29,7 +29,7 @@ export const queryKeys = {
   startups: {
     all: ['startups'] as const,
     lists: () => [...queryKeys.startups.all, 'list'] as const,
-    list: (cohortSlug?: string, filters?: Record<string, unknown>) => 
+    list: (cohortSlug?: string, filters?: Record<string, unknown>) =>
       [...queryKeys.startups.lists(), cohortSlug, filters] as const,
     details: () => [...queryKeys.startups.all, 'detail'] as const,
     detail: (slugOrId: string) => [...queryKeys.startups.details(), slugOrId] as const,
@@ -39,7 +39,7 @@ export const queryKeys = {
   invoices: {
     all: ['invoices'] as const,
     lists: () => [...queryKeys.invoices.all, 'list'] as const,
-    list: (role: 'admin' | 'founder', filters?: Record<string, unknown>) => 
+    list: (role: 'admin' | 'founder', filters?: Record<string, unknown>) =>
       [...queryKeys.invoices.lists(), role, filters] as const,
     details: () => [...queryKeys.invoices.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.invoices.details(), id] as const,
@@ -60,4 +60,3 @@ export const queryKeys = {
     list: (cohortSlug?: string) => [...queryKeys.leaderboard.all, cohortSlug] as const,
   },
 } as const
-
