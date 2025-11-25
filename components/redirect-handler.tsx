@@ -16,10 +16,11 @@ export function RedirectHandler({ to, fallback }: RedirectHandlerProps) {
     router.replace(to)
   }, [router, to])
 
-  return fallback || (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-sm text-muted-foreground">Redirecting...</div>
-    </div>
+  return (
+    fallback || (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-sm text-muted-foreground">Redirecting...</div>
+      </div>
+    )
   )
 }
-

@@ -24,7 +24,7 @@ export default async function AdminDashboardEntry() {
         .from('cohorts')
         .select('id, name, slug, is_active, year_start, year_end')
         .order('year_start', { ascending: false })
-      
+
       if (error) {
         console.error('Error fetching cohorts:', error)
         redirect('/admin/cohorts')

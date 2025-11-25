@@ -21,7 +21,7 @@ export default function Home() {
     async function checkUserAndRedirect() {
       try {
         const response = await fetch('/api/user/current')
-        
+
         if (!response.ok) {
           // If user doesn't exist in Supabase, send them to access-required page
           window.location.href = '/access-required'

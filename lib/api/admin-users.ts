@@ -8,4 +8,3 @@ export const adminUsersApi = {
     return apiClient.delete(`/api/admin/users/${userId}/cohorts/${cohortId}`)
   },
 }
-

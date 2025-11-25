@@ -15,16 +15,10 @@ export function SignOutButton({
   children,
 }: SignOutButtonProps) {
   return (
-    <ClerkSignOutButton
-      signOutCallback={() => {
-        // Force a hard redirect after sign out
-        window.location.href = '/login'
-      }}
-    >
+    <ClerkSignOutButton redirectUrl="/login">
       <Button variant={variant} className={className}>
         {children || 'Sign Out and Switch Account'}
       </Button>
     </ClerkSignOutButton>
   )
 }
-

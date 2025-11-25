@@ -269,9 +269,7 @@ export default function AdminsPage() {
                     // Only show delete button for regular admins (not super admins)
                     // and only if they're assigned to this cohort (not just appearing because they're super admin)
                     const canDelete =
-                      user.role === 'admin' &&
-                      cohort?.id &&
-                      user.cohort_ids?.includes(cohort.id)
+                      user.role === 'admin' && cohort?.id && user.cohort_ids?.includes(cohort.id)
 
                     return (
                       <TableRow key={user.id}>
