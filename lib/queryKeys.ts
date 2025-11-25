@@ -59,4 +59,13 @@ export const queryKeys = {
     all: ['leaderboard'] as const,
     list: (cohortSlug?: string) => [...queryKeys.leaderboard.all, cohortSlug] as const,
   },
+
+  // Admin Invitations
+  adminInvitations: {
+    all: ['adminInvitations'] as const,
+    lists: () => [...queryKeys.adminInvitations.all, 'list'] as const,
+    list: (cohortId?: string) => [...queryKeys.adminInvitations.lists(), cohortId] as const,
+    details: () => [...queryKeys.adminInvitations.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.adminInvitations.details(), id] as const,
+  },
 } as const

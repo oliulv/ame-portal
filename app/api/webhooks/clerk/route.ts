@@ -7,7 +7,12 @@ export async function POST(req: Request) {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET
 
   if (!WEBHOOK_SECRET) {
-    throw new Error('Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local')
+    // If the webhook secret is not configured, safely no-op so local/dev
+    // environments don't crash when Clerk tries to call this endpoint.
+    console.warn(
+      'CLERK_WEBHOOK_SECRET is not set; skipping Clerk webhook handling. User records will only be created via invite/onboarding flows.'
+    )
+    return new Response('', { status: 200 })
   }
 
   // Get the headers
@@ -53,17 +58,11 @@ export async function POST(req: Request) {
   if (eventType === 'user.created') {
     const { id, email_addresses: _email_addresses } = evt.data
 
-    // Create user record in Supabase
-    // Default to 'founder' role - admins can be manually updated
-    const { error } = await supabase.from('users').insert({
-      id,
-      role: 'founder', // Default role, can be updated by admin
-    })
-
-    if (error) {
-      console.error('Error creating user:', error)
-      return new Response('Error creating user', { status: 500 })
-    }
+    // We no longer auto-provision app users here. User records are created
+    // explicitly when a founder accepts an invite or when an admin/super_admin
+    // onboards them. This prevents unauthorised signups from gaining founder
+    // access by default.
+    console.info('Clerk user.created webhook received for', id, '- no auto-provision performed.')
   }
 
   if (eventType === 'user.deleted') {

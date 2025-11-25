@@ -5,11 +5,50 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button'
 
 export default async function AdminDashboardEntry() {
+  const { getCurrentUser } = await import('@/lib/auth')
+  const user = await getCurrentUser()
+  
+  if (!user) {
+    redirect('/login')
+  }
+
   const supabase = await createClient()
-  const { data: cohorts } = await supabase
-    .from('cohorts')
-    .select('id, name, slug, is_active, year_start, year_end')
-    .order('year_start', { ascending: false })
+  
+  // Get cohorts the admin has access to
+  let cohorts
+  
+  if (user.role === 'super_admin') {
+    // Super admins can access all cohorts
+    const { data } = await supabase
+      .from('cohorts')
+      .select('id, name, slug, is_active, year_start, year_end')
+      .order('year_start', { ascending: false })
+    cohorts = data
+  } else {
+    // Regular admins can only access cohorts they're assigned to
+    const { data: adminCohorts } = await supabase
+      .from('admin_cohorts')
+      .select('cohort_id, cohorts(id, name, slug, is_active, year_start, year_end)')
+      .eq('user_id', user.id)
+    
+    cohorts = adminCohorts
+      ?.map((ac) => {
+        const cohort = ac.cohorts
+        if (cohort && typeof cohort === 'object' && !Array.isArray(cohort)) {
+          return cohort as {
+            id: string
+            name: string
+            slug: string
+            is_active: boolean
+            year_start: number
+            year_end: number
+          }
+        }
+        return null
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null)
+      .sort((a, b) => (b.year_start || 0) - (a.year_start || 0))
+  }
 
   // No cohorts configured yet – send to cohorts management
   if (!cohorts || cohorts.length === 0) {

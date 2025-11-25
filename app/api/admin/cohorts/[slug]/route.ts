@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { cohortSchema } from '@/lib/schemas'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, requireSuperAdmin } from '@/lib/auth'
 import { generateCohortSlug } from '@/lib/slugify'
 
 interface RouteContext {
@@ -49,8 +49,8 @@ export async function GET(request: Request, context: RouteContext) {
  */
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    // 1. Authenticate and authorize
-    await requireAdmin()
+    // 1. Authenticate and authorize - only super admins can edit cohorts
+    await requireSuperAdmin()
 
     // Get the cohort slug from params
     const { slug } = await context.params

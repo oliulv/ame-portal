@@ -13,10 +13,17 @@ export default async function Home() {
   // Try to load role from Supabase, but don't loop if it fails
   const user = await getCurrentUser()
 
-  if (user?.role === 'founder') {
+  // If the account is authenticated with Clerk but has not been onboarded into
+  // our own database, send them to an access-required page instead of looping
+  // between / and /login or /admin.
+  if (!user) {
+    redirect('/access-required')
+  }
+
+  if (user.role === 'founder') {
     redirect('/founder/dashboard')
   }
 
-  // Default for any authenticated user (including when Supabase lookup fails)
+  // Default for any authenticated user with an app-level role
   redirect('/admin')
 }

@@ -129,16 +129,33 @@ export default async function InvitePage({ params }: InvitePageProps) {
     // Check if user already exists
     const { data: existingUser } = await supabase
       .from('users')
-      .select('id')
+      .select('id, email, full_name')
       .eq('id', userId)
       .single()
 
-    // Create user record if doesn't exist
+    // Create user record if doesn't exist, or update with name/email from invitation
     if (!existingUser) {
       await supabase.from('users').insert({
         id: userId,
         role: 'founder',
+        email: invitation.email || null,
+        full_name: invitation.full_name || null,
       })
+    } else {
+      // Update user with invitation data if not already set
+      const updateData: { email?: string; full_name?: string; updated_at: string } = {
+        updated_at: new Date().toISOString(),
+      }
+      if (!existingUser.email && invitation.email) {
+        updateData.email = invitation.email
+      }
+      if (!existingUser.full_name && invitation.full_name) {
+        updateData.full_name = invitation.full_name
+      }
+      if (Object.keys(updateData).length > 1) {
+        // Only update if there's something to update (besides updated_at)
+        await supabase.from('users').update(updateData).eq('id', userId)
+      }
     }
 
     // Create founder profile
