@@ -5,7 +5,10 @@ import { cn } from '@/lib/utils'
 export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, ...props }, ref) => {
+  ({ className, value, ...props }, ref) => {
+    // Convert null to undefined to avoid React warning
+    const textareaValue = value === null ? undefined : value
+
     return (
       <textarea
         className={cn(
@@ -14,6 +17,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         )}
         ref={ref}
         {...props}
+        value={textareaValue}
       />
     )
   }

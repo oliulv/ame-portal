@@ -4,6 +4,51 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireFounder, getFounderStartupIds } from '@/lib/auth'
 
 /**
+ * GET /api/founder/invoices
+ * Get invoices for the founder's startup
+ */
+export async function GET() {
+  try {
+    // 1. Authenticate and authorize
+    await requireFounder()
+
+    // 2. Get founder's startup IDs
+    const startupIds = await getFounderStartupIds()
+
+    if (startupIds.length === 0) {
+      return NextResponse.json({ invoices: [], pendingCount: 0 })
+    }
+
+    const supabase = await createClient()
+
+    // 3. Fetch invoices
+    const { data: invoices, error } = await supabase
+      .from('invoices')
+      .select('*')
+      .in('startup_id', startupIds)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching invoices:', error)
+      return NextResponse.json({ error: 'Failed to fetch invoices' }, { status: 500 })
+    }
+
+    // 4. Count pending invoices (submitted or under_review)
+    const pendingCount =
+      invoices?.filter((invoice) => ['submitted', 'under_review'].includes(invoice.status))
+        .length || 0
+
+    return NextResponse.json({
+      invoices: invoices || [],
+      pendingCount,
+    })
+  } catch (error) {
+    console.error('Error in GET /api/founder/invoices:', error)
+    return NextResponse.json({ error: 'Failed to fetch invoices' }, { status: 500 })
+  }
+}
+
+/**
  * POST /api/founder/invoices
  * Upload a new invoice for the founder's startup
  */
@@ -108,8 +153,6 @@ export async function POST(request: Request) {
       })
 
     if (uploadError) {
-      console.error('Supabase Storage upload error:', uploadError)
-
       // Check if bucket doesn't exist (404 or specific error)
       // StorageError has status property, not statusCode
       const errorStatus =
@@ -129,6 +172,11 @@ export async function POST(request: Request) {
         uploadError.message?.includes('violates row-level security policy')
 
       if (isBucketNotFound || isRLSViolation) {
+        // Log as info since we're handling it gracefully with admin client fallback
+        console.warn(
+          `Storage ${isRLSViolation ? 'RLS' : 'bucket'} issue detected, using admin client fallback:`,
+          uploadError.message
+        )
         // Use admin client to bypass RLS or create bucket if needed
         try {
           const adminClient = createAdminClient()

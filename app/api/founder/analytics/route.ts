@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireFounder, getFounderStartupIds } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getMetricTimeSeries } from '@/lib/integrations/metrics'
 import { subDays } from 'date-fns'
 

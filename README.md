@@ -18,6 +18,7 @@ See [SETUP.md](./SETUP.md) for detailed setup instructions.
 Quick start:
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```

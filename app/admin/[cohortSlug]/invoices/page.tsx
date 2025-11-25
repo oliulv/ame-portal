@@ -41,10 +41,10 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
 
   const supabase = await createClient()
 
-  // Verify cohort exists - use Supabase directly for server-side calls
+  // Verify cohort exists - only fetch what we need
   const { data: cohort, error: cohortError } = await supabase
     .from('cohorts')
-    .select('*')
+    .select('id, label')
     .eq('slug', cohortSlug)
     .single()
 
@@ -53,7 +53,7 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
     redirect('/admin/cohorts')
   }
 
-  // Fetch startups in this cohort
+  // Fetch startups in this cohort - only need IDs
   const { data: startups } = await supabase.from('startups').select('id').eq('cohort_id', cohort.id)
 
   // If no startups, show empty state with call to action
@@ -88,9 +88,10 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
 
   const startupIds = startups.map((s) => s.id)
 
+  // Fetch invoices with only needed fields - optimized query
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('*, startups(id, name)')
+    .select('id, vendor_name, invoice_date, amount_gbp, status, created_at, startups(id, name)')
     .in('startup_id', startupIds)
     .order('created_at', { ascending: false })
     .limit(50)
@@ -141,7 +142,7 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
               {invoices.map((invoice) => (
                 <TableRow key={invoice.id}>
                   <TableCell className="font-medium">
-                    {invoice.startups?.name || 'Unknown'}
+                    {(invoice.startups as { id: string; name: string }[] | null)?.[0]?.name || 'Unknown'}
                   </TableCell>
                   <TableCell>{invoice.vendor_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">

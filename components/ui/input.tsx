@@ -5,7 +5,10 @@ import { cn } from '@/lib/utils'
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement>
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, value, ...props }, ref) => {
+    // Convert null to undefined to avoid React warning
+    const inputValue = value === null ? undefined : value
+
     return (
       <input
         type={type}
@@ -15,6 +18,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         )}
         ref={ref}
         {...props}
+        value={inputValue}
       />
     )
   }

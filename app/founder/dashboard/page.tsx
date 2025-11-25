@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { goalsApi } from '@/lib/api/goals'
+import { invoicesApi } from '@/lib/api/invoices'
 import { queryKeys } from '@/lib/queryKeys'
 
 export default function FounderDashboard() {
@@ -18,14 +19,22 @@ export default function FounderDashboard() {
     staleTime: 1000 * 60, // 1 minute - realtime handles most updates
   })
 
+  // Fetch invoices to get pending count
+  const { data: invoicesData, isLoading: isLoadingInvoices } = useQuery({
+    queryKey: queryKeys.invoices.list('founder'),
+    queryFn: () => invoicesApi.getFounderInvoices(),
+    staleTime: 1000 * 60, // 1 minute
+  })
+
   // Calculate stats from goals
   const completedGoals = goals.filter((g) => g.status === 'completed').length
   const totalGoals = goals.length
   const progressPercentage = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0
 
-  // For now, we'll use a simplified version since we don't have API endpoints for startups/invoices yet
-  // In a real implementation, you'd create API endpoints and use them here
-  const isLoading = isLoadingGoals
+  // Get pending invoice count
+  const pendingInvoices = invoicesData?.pendingCount ?? 0
+
+  const isLoading = isLoadingGoals || isLoadingInvoices
   const hasStartups = goals.length > 0 // If there are goals, there's at least one startup
 
   if (isLoading) {
@@ -119,8 +128,10 @@ export default function FounderDashboard() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground mt-2">All caught up!</p>
+            <div className="text-2xl font-bold">{pendingInvoices}</div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {pendingInvoices === 0 ? 'All caught up!' : `${pendingInvoices} awaiting review`}
+            </p>
             <Link href="/founder/invoices" className="mt-3 inline-block">
               <Button variant="link" size="sm" className="h-auto p-0">
                 View invoices →
