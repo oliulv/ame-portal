@@ -51,9 +51,13 @@ export function setupCohortsRealtime(queryClient: QueryClient): RealtimeChannel 
         // If it's an insert or update, invalidate the new detail cache
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           // INSERT events have 'record', UPDATE events have 'new_record'
-          const newRecord = (payload.eventType === 'INSERT' 
-            ? (payload as any).record 
-            : 'new_record' in payload ? payload.new_record : null) as Cohort | null
+          const newRecord = (
+            payload.eventType === 'INSERT'
+              ? (payload as any).record
+              : 'new_record' in payload
+                ? payload.new_record
+                : null
+          ) as Cohort | null
           if (newRecord?.slug) {
             queryClient.invalidateQueries({
               queryKey: queryKeys.cohorts.detail(newRecord.slug),
@@ -101,9 +105,13 @@ export function setupGoalsRealtime(queryClient: QueryClient): RealtimeChannel | 
         // If it's an insert or update, invalidate the new detail cache
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           // INSERT events have 'record', UPDATE events have 'new_record'
-          const newRecord = (payload.eventType === 'INSERT' 
-            ? (payload as any).record 
-            : 'new_record' in payload ? payload.new_record : null) as GoalTemplate | null
+          const newRecord = (
+            payload.eventType === 'INSERT'
+              ? (payload as any).record
+              : 'new_record' in payload
+                ? payload.new_record
+                : null
+          ) as GoalTemplate | null
           if (newRecord?.id) {
             queryClient.invalidateQueries({
               queryKey: queryKeys.goals.detail(newRecord.id),

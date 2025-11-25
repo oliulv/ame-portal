@@ -56,10 +56,11 @@ export async function POST(request: Request, context: RouteContext) {
     // 4. Send invitation email
     try {
       // Handle startups relation - Supabase can return arrays for relations
-      const startup = Array.isArray(invitation.startups) 
-        ? invitation.startups[0] 
+      const startup = Array.isArray(invitation.startups)
+        ? invitation.startups[0]
         : invitation.startups
-      const startupName = (startup as { name: string } | null | undefined)?.name || 'Unknown Startup'
+      const startupName =
+        (startup as { name: string } | null | undefined)?.name || 'Unknown Startup'
 
       await sendInvitationEmail({
         to: invitation.email,

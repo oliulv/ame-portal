@@ -142,7 +142,8 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
               {invoices.map((invoice) => (
                 <TableRow key={invoice.id}>
                   <TableCell className="font-medium">
-                    {(invoice.startups as { id: string; name: string }[] | null)?.[0]?.name || 'Unknown'}
+                    {(invoice.startups as { id: string; name: string }[] | null)?.[0]?.name ||
+                      'Unknown'}
                   </TableCell>
                   <TableCell>{invoice.vendor_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
