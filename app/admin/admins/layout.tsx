@@ -22,14 +22,13 @@ async function getDefaultCohortSlug(): Promise<string | null> {
 export default async function AdminsLayout({ children }: { children: React.ReactNode }) {
   // This ensures only super_admin can access this route
   await requireSuperAdmin()
-  
+
   // Redirect to cohort-scoped route
   const cohortSlug = await getDefaultCohortSlug()
   if (cohortSlug) {
     redirect(`/admin/${cohortSlug}/admins`)
   }
-  
+
   // If no cohorts exist, redirect to cohorts page
   redirect('/admin/cohorts')
 }
-

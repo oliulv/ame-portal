@@ -321,9 +321,7 @@ export default function AdminsPage() {
                         <FormControl>
                           <Input placeholder="John Doe" {...field} />
                         </FormControl>
-                        <FormDescription>
-                          Name to include in the invitation email.
-                        </FormDescription>
+                        <FormDescription>Name to include in the invitation email.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -477,4 +475,3 @@ export default function AdminsPage() {
     </div>
   )
 }
-

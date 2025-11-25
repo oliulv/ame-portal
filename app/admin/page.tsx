@@ -7,16 +7,16 @@ import { Button } from '@/components/ui/button'
 export default async function AdminDashboardEntry() {
   const { getCurrentUser } = await import('@/lib/auth')
   const user = await getCurrentUser()
-  
+
   if (!user) {
     redirect('/login')
   }
 
   const supabase = await createClient()
-  
+
   // Get cohorts the admin has access to
   let cohorts
-  
+
   if (user.role === 'super_admin') {
     // Super admins can access all cohorts
     const { data } = await supabase
@@ -30,7 +30,7 @@ export default async function AdminDashboardEntry() {
       .from('admin_cohorts')
       .select('cohort_id, cohorts(id, name, slug, is_active, year_start, year_end)')
       .eq('user_id', user.id)
-    
+
     cohorts = adminCohorts
       ?.map((ac) => {
         const cohort = ac.cohorts

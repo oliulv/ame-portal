@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -18,7 +17,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { User, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import { useAppMutation } from '@/lib/hooks/useAppMutation'
 
 const profileSchema = z.object({
@@ -156,4 +155,3 @@ export default function AdminSettingsPage() {
     </div>
   )
 }
-

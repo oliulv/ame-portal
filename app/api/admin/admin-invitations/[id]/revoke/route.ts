@@ -6,10 +6,7 @@ import { requireSuperAdmin } from '@/lib/auth'
  * POST /api/admin/admin-invitations/[id]/revoke
  * Revoke an admin invitation by setting expires_at to now (super admin only)
  */
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireSuperAdmin()
     const { id } = await params
@@ -52,4 +49,3 @@ export async function POST(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

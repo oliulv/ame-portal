@@ -44,7 +44,7 @@ export async function PATCH(request: Request) {
 
   if (!validation.success) {
     return NextResponse.json(
-      { error: 'Invalid input', details: validation.error.errors },
+      { error: 'Invalid input', details: validation.error.issues },
       { status: 400 }
     )
   }
@@ -60,7 +60,7 @@ export async function PATCH(request: Request) {
   }
 
   const supabase = await createClient()
-  const updateData: { email?: string; full_name?: string; updated_at: string } = {
+  const updateData: { email?: string | null; full_name?: string | null; updated_at: string } = {
     updated_at: new Date().toISOString(),
   }
 
@@ -85,4 +85,3 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json(data)
 }
-

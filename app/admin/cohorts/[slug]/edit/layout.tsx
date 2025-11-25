@@ -5,4 +5,3 @@ export default async function EditCohortLayout({ children }: { children: React.R
   await requireSuperAdmin()
   return <>{children}</>
 }
-

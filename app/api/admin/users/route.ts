@@ -18,7 +18,7 @@ export interface AdminUserWithDetails {
 /**
  * GET /api/admin/users
  * Returns admin users (super_admin and admin) with enriched Clerk data
- * 
+ *
  * Query parameters:
  * - cohort_id (optional): If provided, returns admins assigned to that cohort + all super_admins
  *                         If not provided, returns all admins (for super_admin global view)
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
   const supabase = await createClient()
 
-  let usersQuery = supabase
+  const usersQuery = supabase
     .from('users')
     .select('id, role, email, full_name, created_at, updated_at')
     .in('role', ['super_admin', 'admin'])
@@ -122,7 +122,7 @@ export async function GET(request: Request) {
             const clerkUser = await client.users.getUser(user.id)
             const primaryEmail =
               clerkUser?.emailAddresses?.find(
-                (e: { id: string }) => e.id === clerkUser.primaryEmailAddressId,
+                (e: { id: string }) => e.id === clerkUser.primaryEmailAddressId
               )?.emailAddress ?? clerkUser?.emailAddresses?.[0]?.emailAddress
 
             if (!email && primaryEmail) {
@@ -152,12 +152,14 @@ export async function GET(request: Request) {
           last_name,
           cohort_ids: cohortIdsMap.get(user.id) || [],
         }
-      }),
+      })
     )
 
-    return NextResponse.json(usersWithDetails.sort((a, b) => 
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    ))
+    return NextResponse.json(
+      usersWithDetails.sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+    )
   }
 
   // No cohort_id provided - return all admins (for super_admin global view)
@@ -203,7 +205,7 @@ export async function GET(request: Request) {
           const clerkUser = await client.users.getUser(user.id)
           const primaryEmail =
             clerkUser?.emailAddresses?.find(
-              (e: { id: string }) => e.id === clerkUser.primaryEmailAddressId,
+              (e: { id: string }) => e.id === clerkUser.primaryEmailAddressId
             )?.emailAddress ?? clerkUser?.emailAddresses?.[0]?.emailAddress
 
           // Only use Clerk data if database doesn't have it
@@ -235,9 +237,8 @@ export async function GET(request: Request) {
         last_name,
         cohort_ids: cohortIdsMap.get(user.id) || [],
       }
-    }),
+    })
   )
 
   return NextResponse.json(usersWithDetails)
 }
-

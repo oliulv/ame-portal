@@ -134,4 +134,3 @@ export function CohortsPageClient({ isSuperAdmin }: CohortsPageClientProps) {
     </div>
   )
 }
-

@@ -64,7 +64,15 @@ function extractCohortSlugFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/admin\/([^/]+)(?:\/|$)/)
   if (match && match[1]) {
     const slug = match[1]
-    const excludedRoutes = ['cohorts', 'startups', 'goals', 'invoices', 'leaderboard', 'new', 'settings']
+    const excludedRoutes = [
+      'cohorts',
+      'startups',
+      'goals',
+      'invoices',
+      'leaderboard',
+      'new',
+      'settings',
+    ]
     if (!excludedRoutes.includes(slug)) {
       return slug
     }
@@ -83,11 +91,18 @@ function buildNavHref(baseHref: string, cohortSlug: string | null): string {
   }
 
   // Routes that require a cohort slug
-  const cohortScopedRoutes = ['/admin', '/admin/goals', '/admin/startups', '/admin/invoices', '/admin/leaderboard', '/admin/admins']
-  
+  const cohortScopedRoutes = [
+    '/admin',
+    '/admin/goals',
+    '/admin/startups',
+    '/admin/invoices',
+    '/admin/leaderboard',
+    '/admin/admins',
+  ]
+
   // Normalize cohortSlug - treat empty string as null
   const validCohortSlug = cohortSlug && cohortSlug !== '' ? cohortSlug : null
-  
+
   // If this route needs a cohort slug but we don't have one, return '#' to prevent navigation
   // The disabled check in the component will handle preventing clicks
   if (cohortScopedRoutes.includes(baseHref) && !validCohortSlug) {
@@ -224,7 +239,8 @@ function SidebarContent({
   const selectedCohort = cohorts.find((c) => c.slug === selectedCohortSlug)
   // Get cohort slug from URL first, fallback to selectedCohortSlug only if it's not empty
   const urlCohortSlug = extractCohortSlugFromPath(pathname)
-  const currentCohortSlug = urlCohortSlug || (selectedCohortSlug && selectedCohortSlug !== '' ? selectedCohortSlug : null)
+  const currentCohortSlug =
+    urlCohortSlug || (selectedCohortSlug && selectedCohortSlug !== '' ? selectedCohortSlug : null)
 
   return (
     <div className="flex h-full flex-col">
@@ -242,7 +258,7 @@ function SidebarContent({
           // Use first available cohort even before mount if cohorts are loaded (from query cache)
           // This ensures we always have a cohort slug when cohorts exist, preventing redirects
           let cohortSlugForHref: string | null = null
-          
+
           // Determine which cohort slug to use for building hrefs
           if (currentCohortSlug && currentCohortSlug !== '') {
             // Always use URL-based cohort slug if available (consistent on server and client)
@@ -258,7 +274,7 @@ function SidebarContent({
             const defaultCohort = cohorts.find((c: Cohort) => c.is_active) || cohorts[0]
             cohortSlugForHref = defaultCohort?.slug || null
           }
-          
+
           const href = buildNavHref(item.href, cohortSlugForHref)
 
           // For root paths like /admin, match if pathname matches the cohort-scoped version
@@ -361,7 +377,13 @@ function SidebarContent({
   )
 }
 
-export function Sidebar({ title, subtitle, navItems, showCohortSelector = false, userRole }: SidebarProps) {
+export function Sidebar({
+  title,
+  subtitle,
+  navItems,
+  showCohortSelector = false,
+  userRole,
+}: SidebarProps) {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
 

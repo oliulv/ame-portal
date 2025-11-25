@@ -17,7 +17,9 @@ export const adminInvitationsApi = {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Failed to fetch admin invitations' }))
+      const error = await response
+        .json()
+        .catch(() => ({ error: 'Failed to fetch admin invitations' }))
       throw new Error(error.error || 'Failed to fetch admin invitations')
     }
 
@@ -42,7 +44,9 @@ export const adminInvitationsApi = {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Failed to create admin invitation' }))
+      const error = await response
+        .json()
+        .catch(() => ({ error: 'Failed to create admin invitation' }))
       throw new Error(error.error || 'Failed to create admin invitation')
     }
 
@@ -83,4 +87,3 @@ export const adminInvitationsApi = {
     }
   },
 }
-

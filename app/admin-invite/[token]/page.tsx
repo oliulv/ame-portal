@@ -174,7 +174,7 @@ export default async function AdminInvitePage({ params }: AdminInvitePageProps) 
         .select('slug')
         .eq('id', invitation.cohort_id)
         .single()
-      
+
       if (cohort?.slug) {
         redirect(`/admin/${cohort.slug}`)
       }
@@ -210,5 +210,3 @@ export default async function AdminInvitePage({ params }: AdminInvitePageProps) 
     </div>
   )
 }
-
-

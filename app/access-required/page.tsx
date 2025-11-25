@@ -17,14 +17,13 @@ export default async function AccessRequiredPage() {
         <Card>
           <CardHeader>
             <CardTitle>Access Required</CardTitle>
-            <CardDescription>
-              Hey there! You're probably not supposed to see this.
-            </CardDescription>
+            <CardDescription>Hey there! You're probably not supposed to see this.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Your account is authenticated, but you haven't been invited as a founder or granted admin access yet.
-              If you believe you should have access, please contact an administrator.
+              Your account is authenticated, but you haven't been invited as a founder or granted
+              admin access yet. If you believe you should have access, please contact an
+              administrator.
             </p>
             <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
               <li>You'll need to be invited before you can access the platform.</li>
@@ -45,5 +44,3 @@ export default async function AccessRequiredPage() {
     </div>
   )
 }
-
-

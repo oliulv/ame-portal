@@ -5,4 +5,3 @@ export default async function NewCohortLayout({ children }: { children: React.Re
   await requireSuperAdmin()
   return <>{children}</>
 }
-

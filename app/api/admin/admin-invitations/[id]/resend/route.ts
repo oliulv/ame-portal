@@ -7,10 +7,7 @@ import { sendAdminInvitationEmail } from '@/lib/email'
  * POST /api/admin/admin-invitations/[id]/resend
  * Resend an admin invitation email (super admin only)
  */
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireSuperAdmin()
     const { id } = await params
@@ -58,10 +55,7 @@ export async function POST(
       })
     } catch (emailError) {
       console.error('Failed to resend admin invitation email:', emailError)
-      return NextResponse.json(
-        { error: 'Failed to resend invitation email' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Failed to resend invitation email' }, { status: 500 })
     }
 
     return NextResponse.json({ message: 'Invitation email resent successfully' }, { status: 200 })
@@ -70,4 +64,3 @@ export async function POST(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

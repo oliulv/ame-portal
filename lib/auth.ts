@@ -167,8 +167,7 @@ async function maybeAutoProvisionDevUser(clerkUserId: string): Promise<AppUser |
     const clerkUser = await client.users.getUser(clerkUserId)
     const primaryEmail =
       clerkUser?.emailAddresses?.find((e) => e.id === clerkUser.primaryEmailAddressId)
-        ?.emailAddress ??
-      clerkUser?.emailAddresses?.[0]?.emailAddress
+        ?.emailAddress ?? clerkUser?.emailAddresses?.[0]?.emailAddress
 
     const normalizedEmail = primaryEmail?.toLowerCase()
     if (!normalizedEmail || !allowedEmails.includes(normalizedEmail)) {

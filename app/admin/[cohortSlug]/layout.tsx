@@ -3,7 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth'
 import { CohortAccessDenied } from '@/components/cohort-access-denied'
 
-const RESERVED_ROUTES = ['cohorts', 'startups', 'goals', 'invoices', 'leaderboard', 'new', 'settings']
+const RESERVED_ROUTES = [
+  'cohorts',
+  'startups',
+  'goals',
+  'invoices',
+  'leaderboard',
+  'new',
+  'settings',
+]
 
 interface CohortSlugLayoutProps {
   children: React.ReactNode
@@ -61,4 +69,3 @@ export default async function CohortSlugLayout({ children, params }: CohortSlugL
 
   return <>{children}</>
 }
-

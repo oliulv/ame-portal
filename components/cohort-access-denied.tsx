@@ -18,22 +18,21 @@ export function CohortAccessDenied({ cohortSlug, cohortName }: CohortAccessDenie
               <ShieldX className="h-6 w-6 text-destructive" />
               <div>
                 <CardTitle>Access Denied</CardTitle>
-                <CardDescription>
-                  You don't have permission to access this cohort
-                </CardDescription>
+                <CardDescription>You don't have permission to access this cohort</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              You don't have access to manage{' '}
-              <strong>{cohortName || cohortSlug}</strong>. Each admin is assigned to specific cohorts
-              they can manage.
+              You don't have access to manage <strong>{cohortName || cohortSlug}</strong>. Each
+              admin is assigned to specific cohorts they can manage.
             </p>
             <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
               <li>You can only access cohorts you've been assigned to</li>
               <li>Contact a super admin if you need access to this cohort</li>
-              <li>You can switch to a cohort you have access to using the sidebar cohort selector</li>
+              <li>
+                You can switch to a cohort you have access to using the sidebar cohort selector
+              </li>
             </ul>
 
             <div className="pt-2 space-y-2">
@@ -50,4 +49,3 @@ export function CohortAccessDenied({ cohortSlug, cohortName }: CohortAccessDenie
     </div>
   )
 }
-

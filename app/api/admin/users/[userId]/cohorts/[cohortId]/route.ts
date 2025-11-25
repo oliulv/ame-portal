@@ -47,4 +47,3 @@ export async function DELETE(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

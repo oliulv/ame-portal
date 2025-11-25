@@ -7,7 +7,7 @@ import { sendAdminInvitationEmail } from '@/lib/email'
 /**
  * GET /api/admin/admin-invitations
  * Fetch admin invitations (super admin only)
- * 
+ *
  * Query parameters:
  * - cohort_id (optional): If provided, returns invitations for that cohort
  */
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 /**
  * POST /api/admin/admin-invitations
  * Create a new admin invitation and send email
- * 
+ *
  * Request body:
  * - email: string (required)
  * - invited_name: string (optional)
@@ -150,5 +150,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-
-

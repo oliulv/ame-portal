@@ -56,7 +56,10 @@ export async function POST(request: Request, context: RouteContext) {
       .single()
 
     if (existing) {
-      return NextResponse.json({ error: 'Admin is already assigned to this cohort' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Admin is already assigned to this cohort' },
+        { status: 400 }
+      )
     }
 
     // Create assignment
@@ -80,4 +83,3 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-
