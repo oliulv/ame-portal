@@ -1,6 +1,6 @@
 // Database types (matching Supabase schema)
 
-export type UserRole = 'admin' | 'founder'
+export type UserRole = 'super_admin' | 'admin' | 'founder'
 
 export type OnboardingStatus = 'pending' | 'in_progress' | 'completed'
 
@@ -11,6 +11,8 @@ export type InvoiceStatus = 'submitted' | 'under_review' | 'approved' | 'rejecte
 export interface User {
   id: string
   role: UserRole
+  email?: string | null
+  full_name?: string | null
   created_at: string
   updated_at: string
 }
@@ -99,6 +101,28 @@ export interface Invitation {
   expires_at: string
   accepted_at?: string
   created_by_admin_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminInvitation {
+  id: string
+  email: string
+  token: string
+  role: 'admin'
+  invited_name?: string
+  expires_at: string
+  accepted_at?: string
+  created_by_user_id: string
+  cohort_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminCohort {
+  id: string
+  user_id: string
+  cohort_id: string
   created_at: string
   updated_at: string
 }

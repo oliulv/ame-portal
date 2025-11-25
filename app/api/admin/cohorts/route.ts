@@ -1,32 +1,69 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { cohortSchema } from '@/lib/schemas'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, requireSuperAdmin } from '@/lib/auth'
 import { generateCohortSlug } from '@/lib/slugify'
 
 /**
  * GET /api/admin/cohorts
- * Fetch all cohorts
+ * Fetch cohorts that the current admin has access to
+ * Super admins see all cohorts, regular admins only see cohorts they're assigned to
  */
 export async function GET() {
   try {
     // 1. Authenticate and authorize
-    await requireAdmin()
-
-    // 2. Fetch all cohorts from database
+    const user = await requireAdmin()
     const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('cohorts')
-      .select('id, slug, label, name, year_start, year_end, is_active')
-      .order('year_start', { ascending: false })
 
-    if (error) {
-      console.error('Database error fetching cohorts:', error)
-      return NextResponse.json({ error: 'Failed to fetch cohorts' }, { status: 500 })
+    let cohorts
+
+    if (user.role === 'super_admin') {
+      // Super admins can access all cohorts
+      const { data, error } = await supabase
+        .from('cohorts')
+        .select('id, slug, label, name, year_start, year_end, is_active')
+        .order('year_start', { ascending: false })
+
+      if (error) {
+        console.error('Database error fetching cohorts:', error)
+        return NextResponse.json({ error: 'Failed to fetch cohorts' }, { status: 500 })
+      }
+
+      cohorts = data
+    } else {
+      // Regular admins can only access cohorts they're assigned to
+      const { data: adminCohorts, error } = await supabase
+        .from('admin_cohorts')
+        .select('cohort_id, cohorts(id, slug, label, name, year_start, year_end, is_active)')
+        .eq('user_id', user.id)
+
+      if (error) {
+        console.error('Database error fetching admin cohorts:', error)
+        return NextResponse.json({ error: 'Failed to fetch cohorts' }, { status: 500 })
+      }
+
+      cohorts = adminCohorts
+        ?.map((ac) => {
+          const cohort = ac.cohorts
+          if (cohort && typeof cohort === 'object' && !Array.isArray(cohort)) {
+            return cohort as {
+              id: string
+              slug: string
+              label: string
+              name: string
+              year_start: number
+              year_end: number
+              is_active: boolean
+            }
+          }
+          return null
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null)
+        .sort((a, b) => (b.year_start || 0) - (a.year_start || 0))
     }
 
     // 3. Return cohorts data
-    return NextResponse.json(data)
+    return NextResponse.json(cohorts || [])
   } catch (error) {
     console.error('Error in GET /api/admin/cohorts:', error)
 
@@ -40,12 +77,12 @@ export async function GET() {
 
 /**
  * POST /api/admin/cohorts
- * Create a new cohort
+ * Create a new cohort (super admin only)
  */
 export async function POST(request: Request) {
   try {
-    // 1. Authenticate and authorize
-    await requireAdmin()
+    // 1. Authenticate and authorize - only super admins can create cohorts
+    await requireSuperAdmin()
 
     // 2. Parse and validate request body
     const body = await request.json()
