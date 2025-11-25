@@ -187,7 +187,7 @@ export interface StartupMetricManual {
   updated_at: string
 }
 
-export type IntegrationProvider = 'stripe'
+export type IntegrationProvider = 'stripe' | 'tracker'
 
 export type IntegrationStatus = 'active' | 'error' | 'disconnected'
 

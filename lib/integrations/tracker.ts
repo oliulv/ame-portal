@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MetricSnapshot } from '@/lib/types'
-import { subDays } from 'date-fns'
+import { subDays, subWeeks, subMonths } from 'date-fns'
 
 /**
  * Fetch tracker metrics for a startup

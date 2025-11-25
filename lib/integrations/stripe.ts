@@ -29,7 +29,7 @@ export async function getStripeClient(startupId: string): Promise<Stripe | null>
   }
 
   return new Stripe(connection.access_token, {
-    apiVersion: '2024-11-20.acacia',
+    apiVersion: '2025-11-17.clover',
   })
 }
 

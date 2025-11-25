@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       )
     }
 
-    const startupId = state
+    const startupId = state as string // Type assertion: we've already checked state is not null above
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY
 
     if (!stripeSecretKey) {
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 
     // Exchange authorization code for access token
     const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2024-11-20.acacia',
+      apiVersion: '2025-11-17.clover',
     })
 
     const response = await stripe.oauth.token({
@@ -51,9 +51,16 @@ export async function GET(request: Request) {
     // Get account information
     const accountId = response.stripe_user_id || ''
     const accountName = response.stripe_publishable_key ? 'Connected Account' : undefined
+    const accessToken = response.access_token
+
+    if (!accessToken) {
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?error=stripe_token_missing`
+      )
+    }
 
     // Store connection in database
-    await storeStripeConnection(startupId, response.access_token, accountId, accountName)
+    await storeStripeConnection(startupId, accessToken, accountId, accountName)
 
     // Redirect back to settings page with success message
     return NextResponse.redirect(

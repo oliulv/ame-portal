@@ -91,6 +91,7 @@ export async function PATCH(request: Request) {
       bio: string | null
       linkedin_url: string | null
       x_url: string | null
+      updated_at?: string
     }> = {}
 
     if (body.full_name !== undefined) {

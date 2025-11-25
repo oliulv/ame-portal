@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     // Test the API key by making a simple request to Stripe
     try {
       const stripe = new Stripe(validatedData.api_key, {
-        apiVersion: '2024-11-20.acacia',
+        apiVersion: '2025-11-17.clover',
       })
 
       // Verify the API key works by fetching account info
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid request data', details: error.errors },
+        { error: 'Invalid request data', details: error.issues },
         { status: 400 }
       )
     }

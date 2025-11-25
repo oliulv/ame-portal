@@ -38,8 +38,8 @@ export function setupCohortsRealtime(queryClient: QueryClient): RealtimeChannel 
         // Invalidate cohorts list cache
         queryClient.invalidateQueries({ queryKey: queryKeys.cohorts.lists() })
 
-        // If it's an update or delete, also invalidate the detail cache
-        if (payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
+        // If it's a delete, invalidate the detail cache using old_record
+        if (payload.eventType === 'DELETE' && 'old_record' in payload) {
           const oldRecord = payload.old_record as Cohort
           if (oldRecord?.slug) {
             queryClient.invalidateQueries({
@@ -50,7 +50,10 @@ export function setupCohortsRealtime(queryClient: QueryClient): RealtimeChannel 
 
         // If it's an insert or update, invalidate the new detail cache
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          const newRecord = payload.new_record as Cohort
+          // INSERT events have 'record', UPDATE events have 'new_record'
+          const newRecord = (payload.eventType === 'INSERT' 
+            ? (payload as any).record 
+            : 'new_record' in payload ? payload.new_record : null) as Cohort | null
           if (newRecord?.slug) {
             queryClient.invalidateQueries({
               queryKey: queryKeys.cohorts.detail(newRecord.slug),
@@ -85,8 +88,8 @@ export function setupGoalsRealtime(queryClient: QueryClient): RealtimeChannel | 
         // Invalidate admin goals list cache
         queryClient.invalidateQueries({ queryKey: queryKeys.goals.list('admin') })
 
-        // If it's an update or delete, also invalidate the detail cache
-        if (payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
+        // If it's a delete, invalidate the detail cache using old_record
+        if (payload.eventType === 'DELETE' && 'old_record' in payload) {
           const oldRecord = payload.old_record as GoalTemplate
           if (oldRecord?.id) {
             queryClient.invalidateQueries({
@@ -97,7 +100,10 @@ export function setupGoalsRealtime(queryClient: QueryClient): RealtimeChannel | 
 
         // If it's an insert or update, invalidate the new detail cache
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          const newRecord = payload.new_record as GoalTemplate
+          // INSERT events have 'record', UPDATE events have 'new_record'
+          const newRecord = (payload.eventType === 'INSERT' 
+            ? (payload as any).record 
+            : 'new_record' in payload ? payload.new_record : null) as GoalTemplate | null
           if (newRecord?.id) {
             queryClient.invalidateQueries({
               queryKey: queryKeys.goals.detail(newRecord.id),

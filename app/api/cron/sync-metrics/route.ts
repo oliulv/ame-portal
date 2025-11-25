@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchStripeMetrics } from '@/lib/integrations/stripe'
+import { fetchTrackerMetrics } from '@/lib/integrations/tracker'
 import { storeMetrics } from '@/lib/integrations/metrics'
 
 /**
@@ -41,7 +42,6 @@ export async function POST(request: Request) {
     const { data: trackerWebsites, error: trackerError } = await supabase
       .from('tracker_websites')
       .select('startup_id')
-      .group('startup_id')
 
     if (trackerError) {
       console.error('Error fetching tracker websites:', trackerError)

@@ -74,6 +74,7 @@ export async function PATCH(request: Request) {
       location: string | null
       initial_customers: number | null
       initial_revenue: number | null
+      updated_at?: string
     }> = {}
 
     if (body.one_liner !== undefined) {

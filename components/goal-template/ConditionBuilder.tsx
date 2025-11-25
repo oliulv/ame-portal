@@ -21,7 +21,7 @@ export function ConditionBuilder({ form }: ConditionBuilderProps) {
       dataSource: 'stripe' as const,
       metric: '',
       operator: '>=' as const,
-      targetValue: undefined,
+      targetValue: 0,
       unit: '',
     })
   }

@@ -67,7 +67,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     const updateData: {
       status: string
       updated_at: string
-      admin_comment?: string
+      admin_comment?: string | null
+      approved_by_admin_id?: string
+      approved_at?: string
+      paid_at?: string
     } = {
       status,
       updated_at: new Date().toISOString(),

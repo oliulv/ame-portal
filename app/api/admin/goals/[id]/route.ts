@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { goalTemplateSchema } from '@/lib/schemas'
 import { requireAdmin } from '@/lib/auth'
+import { formatDescriptionWithConditions } from '@/lib/goalUtils'
 
 interface RouteContext {
   params: Promise<{
@@ -62,23 +63,33 @@ export async function PATCH(request: Request, context: RouteContext) {
     const supabase = await createClient()
     const { data: currentTemplate } = await supabase
       .from('goal_templates')
-      .select('is_active, cohort_id')
+      .select('is_active, cohort_id, default_weight')
       .eq('id', id)
       .single()
+
+    // Extract target value from first condition for backward compatibility
+    const firstCondition = validatedData.conditions[0]
+    const targetValue = firstCondition?.targetValue || null
+
+    // Store conditions as JSON string in description (temporary until migration)
+    const descriptionWithConditions = formatDescriptionWithConditions(
+      validatedData.description,
+      validatedData.conditions
+    )
 
     // 4. Update goal template in database
     const { data, error } = await supabase
       .from('goal_templates')
       .update({
-        cohort_id: validatedData.cohort_id,
+        cohort_id: validatedData.cohortId,
         title: validatedData.title,
-        description: validatedData.description,
+        description: descriptionWithConditions,
         category: validatedData.category,
-        default_target_value: validatedData.default_target_value,
-        default_deadline: validatedData.default_deadline,
-        default_weight: validatedData.default_weight,
-        default_funding_amount: validatedData.default_funding_amount,
-        is_active: validatedData.is_active,
+        default_deadline: validatedData.deadline || null,
+        default_target_value: targetValue,
+        default_funding_amount: validatedData.fundingUnlocked || null,
+        is_active: validatedData.isActive,
+        // Preserve existing default_weight if updating, otherwise it stays as is
       })
       .eq('id', id)
       .select()
@@ -91,14 +102,14 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     // 5. If template was just activated (changed from inactive to active), assign to existing startups
     const wasInactive = currentTemplate && !currentTemplate.is_active
-    const isNowActive = validatedData.is_active
+    const isNowActive = validatedData.isActive
 
     if (wasInactive && isNowActive && data) {
       // Fetch all startups in this cohort
       const { data: startups, error: startupsError } = await supabase
         .from('startups')
         .select('id')
-        .eq('cohort_id', validatedData.cohort_id)
+        .eq('cohort_id', validatedData.cohortId)
 
       if (startupsError) {
         console.error('Error fetching startups for goal assignment:', startupsError)
@@ -121,12 +132,12 @@ export async function PATCH(request: Request, context: RouteContext) {
               startup_id: startup.id,
               goal_template_id: id,
               title: validatedData.title,
-              description: validatedData.description,
+              description: descriptionWithConditions,
               category: validatedData.category,
-              target_value: validatedData.default_target_value,
-              deadline: validatedData.default_deadline,
-              weight: validatedData.default_weight || 1,
-              funding_amount: validatedData.default_funding_amount,
+              target_value: targetValue,
+              deadline: validatedData.deadline || null,
+              weight: currentTemplate?.default_weight || 1,
+              funding_amount: validatedData.fundingUnlocked || null,
               status: 'not_started' as const,
               progress_value: 0,
               manually_overridden: false,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { goalTemplateSchema } from '@/lib/schemas'
 import { requireAdmin } from '@/lib/auth'
+import { formatDescriptionWithConditions } from '@/lib/goalUtils'
 
 /**
  * GET /api/admin/goals
@@ -93,25 +94,35 @@ export async function POST(request: Request) {
     const { data: maxOrderData } = await supabase
       .from('goal_templates')
       .select('display_order')
-      .eq('cohort_id', validatedData.cohort_id)
+      .eq('cohort_id', validatedData.cohortId)
       .order('display_order', { ascending: false })
       .limit(1)
       .maybeSingle()
 
     const nextDisplayOrder = maxOrderData?.display_order ? maxOrderData.display_order + 1 : 1
 
+    // Extract target value from first condition for backward compatibility
+    const firstCondition = validatedData.conditions[0]
+    const targetValue = firstCondition?.targetValue || null
+
+    // Store conditions as JSON string in description (temporary until migration)
+    const descriptionWithConditions = formatDescriptionWithConditions(
+      validatedData.description,
+      validatedData.conditions
+    )
+
     const { data, error } = await supabase
       .from('goal_templates')
       .insert({
-        cohort_id: validatedData.cohort_id,
+        cohort_id: validatedData.cohortId,
         title: validatedData.title,
-        description: validatedData.description,
+        description: descriptionWithConditions,
         category: validatedData.category,
-        default_target_value: validatedData.default_target_value,
-        default_deadline: validatedData.default_deadline,
-        default_weight: validatedData.default_weight,
-        default_funding_amount: validatedData.default_funding_amount,
-        is_active: validatedData.is_active,
+        default_deadline: validatedData.deadline || null,
+        default_target_value: targetValue,
+        default_weight: 1, // Default weight
+        default_funding_amount: validatedData.fundingUnlocked || null,
+        is_active: validatedData.isActive,
         display_order: nextDisplayOrder,
       })
       .select()
@@ -123,12 +134,12 @@ export async function POST(request: Request) {
     }
 
     // 4. If template is active, assign it to existing startups in this cohort
-    if (validatedData.is_active && data) {
+    if (validatedData.isActive && data) {
       // Fetch all startups in this cohort
       const { data: startups, error: startupsError } = await supabase
         .from('startups')
         .select('id')
-        .eq('cohort_id', validatedData.cohort_id)
+        .eq('cohort_id', validatedData.cohortId)
 
       if (startupsError) {
         console.error('Error fetching startups for goal assignment:', startupsError)
@@ -149,16 +160,19 @@ export async function POST(request: Request) {
 
           // Only create if it doesn't exist
           if (!existingGoal) {
+            // Use the original description (without conditions JSON comment)
+            const cleanDescription = validatedData.description || null
+
             goalsToCreate.push({
               startup_id: startup.id,
               goal_template_id: data.id,
               title: validatedData.title,
-              description: validatedData.description,
+              description: cleanDescription,
               category: validatedData.category,
-              target_value: validatedData.default_target_value,
-              deadline: validatedData.default_deadline,
-              weight: validatedData.default_weight || 1,
-              funding_amount: validatedData.default_funding_amount,
+              target_value: targetValue, // Already extracted above
+              deadline: validatedData.deadline || null,
+              weight: 1, // Default weight
+              funding_amount: validatedData.fundingUnlocked || null,
               status: 'not_started' as const,
               progress_value: 0,
               manually_overridden: false,
