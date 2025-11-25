@@ -225,7 +225,7 @@ export default function GoalEditPage() {
                 <SubmitBar 
                   form={form} 
                   isLoading={updateGoal.isPending} 
-                  cohortSlug={cohortSlug} 
+                  cohortSlug={cohortSlug ?? undefined} 
                 />
               </div>
             </form>

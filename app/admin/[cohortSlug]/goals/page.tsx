@@ -113,7 +113,7 @@ function SortableRow({
   onDelete: (id: string) => void
   deletingId: string | null
   orderNumber: number
-  cohortSlug: string
+  cohortSlug: string | null
 }) {
   const {
     attributes,
@@ -178,7 +178,7 @@ function SortableRow({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-2">
-          <Link href={`/admin/${cohortSlug}/goals/${template.id}/edit`}>
+          <Link href={cohortSlug ? `/admin/${cohortSlug}/goals/${template.id}/edit` : `/admin/goals/${template.id}/edit`}>
             <Button variant="ghost" size="sm">
               <Edit className="h-4 w-4" />
             </Button>
@@ -474,11 +474,20 @@ export default function GoalTemplatesPage() {
                   if (!cohortId) return
                   try {
                     await goalsApi.create({
-                      cohort_id: cohortId,
+                      cohortId: cohortId,
                       title: 'Join AccelerateMe',
                       description: 'Welcome to the program! Your journey starts here.',
                       category: 'launch',
-                      is_active: true,
+                      isActive: true,
+                      conditions: [
+                        {
+                          dataSource: 'stripe',
+                          metric: '',
+                          operator: '>=',
+                          targetValue: 0,
+                          unit: '',
+                        },
+                      ],
                     })
                     // Invalidate queries to refresh the list
                     queryClient.invalidateQueries({ queryKey: queryKeys.goals.list('admin', { cohortId }) })
@@ -618,11 +627,20 @@ export default function GoalTemplatesPage() {
                 updateAccelerateMeGoal.mutate({
                   id: editingAccelerateMeGoal.id,
                   data: {
-                    cohort_id: editingAccelerateMeGoal.cohort_id,
+                    cohortId: editingAccelerateMeGoal.cohort_id,
                     title: accelerateMeTitle,
                     description: accelerateMeDescription,
                     category: 'launch',
-                    is_active: true,
+                    isActive: true,
+                    conditions: [
+                      {
+                        dataSource: 'stripe',
+                        metric: '',
+                        operator: '>=',
+                        targetValue: 0,
+                        unit: '',
+                      },
+                    ],
                   },
                 })
               }}
