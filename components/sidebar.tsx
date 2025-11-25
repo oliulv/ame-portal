@@ -16,6 +16,7 @@ import {
   Building2,
   Plus,
   Settings,
+  TrendingUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -58,6 +59,7 @@ const iconMap: Record<string, LucideIcon> = {
   'Trophy': Trophy,
   'Building2': Building2,
   'Settings': Settings,
+  'TrendingUp': TrendingUp,
 }
 
 /**

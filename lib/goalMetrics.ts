@@ -3,7 +3,7 @@
  * Defines available metrics for each data source and their associated units
  */
 
-export type DataSource = 'stripe' | 'ga4' | 'other'
+export type DataSource = 'stripe' | 'tracker' | 'other'
 
 export interface MetricConfig {
   id: string
@@ -44,9 +44,9 @@ const stripeMetrics: MetricConfig[] = [
 ]
 
 /**
- * GA4 (Google Analytics 4) metrics configuration
+ * Tracker (AccelerateMe Tracker) metrics configuration
  */
-const ga4Metrics: MetricConfig[] = [
+const trackerMetrics: MetricConfig[] = [
   {
     id: 'weekly_active_users',
     label: 'Weekly Active Users',
@@ -84,10 +84,10 @@ export const dataSourceConfigs: DataSourceConfig[] = [
     metrics: stripeMetrics,
   },
   {
-    id: 'ga4',
-    label: 'Google Analytics 4',
-    description: 'Website and app analytics from GA4',
-    metrics: ga4Metrics,
+    id: 'tracker',
+    label: 'AccelerateMe Tracker',
+    description: 'Website analytics from AccelerateMe Tracker',
+    metrics: trackerMetrics,
   },
   {
     id: 'other',
@@ -150,5 +150,160 @@ export function getMetricOptions(dataSource: DataSource) {
     description: m.description,
     unit: m.unit,
   }))
+}
+
+/**
+ * Condition evaluation types
+ */
+export interface MetricCondition {
+  dataSource: DataSource
+  metric: string
+  operator: '>=' | '>' | '=' | '<=' | '<' | 'increased_by' | 'decreased_by'
+  targetValue: number
+  unit: string
+}
+
+export interface MetricRequirement {
+  startupId: string
+  provider: 'stripe' | 'tracker'
+  metricKey: string
+  window: 'daily' | 'weekly' | 'monthly'
+  operator: '>=' | '>' | '=' | '<=' | '<' | 'increased_by' | 'decreased_by'
+  targetValue: number
+}
+
+export interface GoalEvaluationResult {
+  completed: boolean
+  progress: number // 0-1
+  currentValue?: number
+  targetValue: number
+  breakdown?: Array<{
+    condition: MetricCondition
+    met: boolean
+    currentValue?: number
+  }>
+}
+
+/**
+ * Translate a condition into a metric requirement
+ */
+export function conditionToRequirement(
+  condition: MetricCondition,
+  startupId: string,
+  window: 'daily' | 'weekly' | 'monthly' = 'daily'
+): MetricRequirement | null {
+  if (condition.dataSource === 'other') {
+    return null // Manual tracking only
+  }
+
+  return {
+    startupId,
+    provider: condition.dataSource === 'stripe' ? 'stripe' : 'tracker',
+    metricKey: condition.metric,
+    window,
+    operator: condition.operator,
+    targetValue: condition.targetValue,
+  }
+}
+
+/**
+ * Evaluate a single condition against a metric value
+ */
+export function evaluateCondition(
+  condition: MetricCondition,
+  currentValue: number | null
+): { met: boolean; progress: number } {
+  if (currentValue === null) {
+    return { met: false, progress: 0 }
+  }
+
+  let met = false
+  let progress = 0
+
+  switch (condition.operator) {
+    case '>=':
+      met = currentValue >= condition.targetValue
+      progress = Math.min(currentValue / condition.targetValue, 1)
+      break
+    case '>':
+      met = currentValue > condition.targetValue
+      progress = Math.min(currentValue / condition.targetValue, 1)
+      break
+    case '=':
+      met = Math.abs(currentValue - condition.targetValue) < 0.01 // Allow small floating point differences
+      progress = met ? 1 : Math.min(currentValue / condition.targetValue, 1)
+      break
+    case '<=':
+      met = currentValue <= condition.targetValue
+      progress = Math.min(1, condition.targetValue / currentValue)
+      break
+    case '<':
+      met = currentValue < condition.targetValue
+      progress = Math.min(1, condition.targetValue / currentValue)
+      break
+    case 'increased_by':
+      // For increase operators, we'd need a baseline value
+      // For now, treat as >= targetValue
+      met = currentValue >= condition.targetValue
+      progress = Math.min(currentValue / condition.targetValue, 1)
+      break
+    case 'decreased_by':
+      // For decrease operators, we'd need a baseline value
+      // For now, treat as <= targetValue
+      met = currentValue <= condition.targetValue
+      progress = Math.min(1, condition.targetValue / currentValue)
+      break
+  }
+
+  return { met, progress }
+}
+
+/**
+ * Evaluate multiple conditions (all must be met for goal completion)
+ */
+export function evaluateConditions(
+  conditions: MetricCondition[],
+  metricValues: Map<string, number | null>
+): GoalEvaluationResult {
+  if (conditions.length === 0) {
+    return {
+      completed: false,
+      progress: 0,
+      targetValue: 0,
+    }
+  }
+
+  const breakdown = conditions.map((condition) => {
+    const metricKey = `${condition.dataSource}:${condition.metric}`
+    const currentValue = metricValues.get(metricKey) ?? null
+    const evaluation = evaluateCondition(condition, currentValue)
+
+    return {
+      condition,
+      met: evaluation.met,
+      currentValue: currentValue ?? undefined,
+    }
+  })
+
+  // All conditions must be met
+  const completed = breakdown.every((b) => b.met)
+  
+  // Average progress across all conditions
+  const avgProgress = breakdown.reduce((sum, b) => {
+    const currentValue = b.currentValue ?? 0
+    const targetValue = b.condition.targetValue
+    const evaluation = evaluateCondition(b.condition, currentValue)
+    return sum + evaluation.progress
+  }, 0) / breakdown.length
+
+  // Use the first condition's target value as the primary target
+  const targetValue = conditions[0].targetValue
+
+  return {
+    completed,
+    progress: Math.min(avgProgress, 1),
+    targetValue,
+    breakdown,
+  }
 }
 

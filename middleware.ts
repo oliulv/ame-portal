@@ -8,6 +8,8 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up(.*)',
   '/invite(.*)',
   '/api/webhooks(.*)',
+  '/api/tracker(.*)', // Tracker endpoints are public (CORS enabled)
+  '/tracker.js', // Tracker script is public
 ])
 
 export default clerkMiddleware(async (auth, req) => {

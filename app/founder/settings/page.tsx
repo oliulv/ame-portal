@@ -27,9 +27,9 @@ import {
   type BankDetailsFormData,
 } from '@/lib/schemas'
 import { useAppMutation } from '@/lib/hooks/useAppMutation'
-import { User, Building2, CreditCard, Save, AlertCircle } from 'lucide-react'
+import { User, Building2, CreditCard, Save, AlertCircle, Plug, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 
-type SettingsTab = 'personal' | 'startup' | 'bank'
+type SettingsTab = 'personal' | 'startup' | 'bank' | 'integrations'
 
 interface FounderProfileData {
   founderProfile: {
@@ -75,6 +75,11 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [data, setData] = useState<FounderProfileData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [integrationStatus, setIntegrationStatus] = useState<{
+    stripe: { id: string; status: string; account_name?: string; connected_at?: string; last_synced_at?: string } | null
+  } | null>(null)
+  const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true)
+  const [trackerWebsites, setTrackerWebsites] = useState<Array<{ id: string; name: string; domain?: string }>>([])
 
   // Fetch data on mount
   useEffect(() => {
@@ -93,6 +98,36 @@ export default function SettingsPage() {
       }
     }
     fetchData()
+  }, [])
+
+  // Fetch integration status
+  useEffect(() => {
+    async function fetchIntegrationStatus() {
+      try {
+        const response = await fetch('/api/integrations/status')
+        if (response.ok) {
+          const status = await response.json()
+          setIntegrationStatus(status)
+        }
+      } catch (err) {
+        console.error('Failed to load integration status:', err)
+      } finally {
+        setIsLoadingIntegrations(false)
+      }
+    }
+    fetchIntegrationStatus()
+  }, [])
+
+  // Fetch tracker websites
+  useEffect(() => {
+    fetch('/api/founder/tracker-websites')
+      .then(res => res.json())
+      .then(data => {
+        if (data.websites) {
+          setTrackerWebsites(data.websites)
+        }
+      })
+      .catch(err => console.error('Failed to fetch tracker websites:', err))
   }, [])
 
   // Personal info form
@@ -249,7 +284,31 @@ export default function SettingsPage() {
     { key: 'personal', title: 'Personal Information', icon: User },
     { key: 'startup', title: 'Startup Details', icon: Building2 },
     { key: 'bank', title: 'Bank Details', icon: CreditCard },
+    { key: 'integrations', title: 'Integrations', icon: Plug },
   ]
+
+  const handleConnectStripe = () => {
+    router.push('/founder/integrations?tab=stripe')
+  }
+
+  const handleDisconnectStripe = async () => {
+    try {
+      const response = await fetch('/api/integrations/stripe/disconnect', {
+        method: 'POST',
+      })
+      if (response.ok) {
+        // Refresh integration status
+        const statusResponse = await fetch('/api/integrations/status')
+        if (statusResponse.ok) {
+          const status = await statusResponse.json()
+          setIntegrationStatus(status)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to disconnect Stripe:', err)
+    }
+  }
+
 
   if (isLoading) {
     return (
@@ -776,6 +835,95 @@ export default function SettingsPage() {
             </Form>
           </CardContent>
         </Card>
+      )}
+
+      {/* Integrations Tab */}
+      {activeTab === 'integrations' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Integrations</CardTitle>
+              <CardDescription>
+                Connect your external services to automatically track metrics and goals
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Stripe Integration */}
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold">Stripe</h3>
+                      {isLoadingIntegrations ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : integrationStatus?.stripe ? (
+                        integrationStatus.stripe.status === 'active' ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-600" />
+                        )
+                      ) : null}
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Connect your Stripe account to automatically track revenue, customers, and MRR
+                    </p>
+                    {integrationStatus?.stripe && (
+                      <div className="text-sm text-muted-foreground">
+                        {integrationStatus.stripe.account_name && (
+                          <p>Account: {integrationStatus.stripe.account_name}</p>
+                        )}
+                        {integrationStatus.stripe.connected_at && (
+                          <p>
+                            Connected: {new Date(integrationStatus.stripe.connected_at).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    {integrationStatus?.stripe && integrationStatus.stripe.status === 'active' ? (
+                      <Button variant="outline" onClick={handleDisconnectStripe}>
+                        Disconnect
+                      </Button>
+                    ) : (
+                      <Button onClick={handleConnectStripe}>
+                        Connect Stripe
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* AccelerateMe Tracker Integration */}
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold">AccelerateMe Tracker</h3>
+                      {trackerWebsites.length > 0 ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      ) : null}
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Add a lightweight tracking script to your website to track pageviews, sessions, and user activity
+                    </p>
+                    {trackerWebsites.length > 0 && (
+                      <div className="text-sm text-muted-foreground">
+                        <p>{trackerWebsites.length} tracker website{trackerWebsites.length !== 1 ? 's' : ''} configured</p>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <Button onClick={() => router.push('/founder/integrations?tab=tracker')}>
+                      {trackerWebsites.length > 0 ? 'Manage Trackers' : 'Set Up Tracker'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   )

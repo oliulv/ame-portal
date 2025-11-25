@@ -51,3 +51,11 @@ export function formatDescriptionWithConditions(
   return `${description}\n\n${conditionsComment}`
 }
 
+/**
+ * Parse conditions from description (alias for extractConditionsFromDescription)
+ */
+export function parseConditionsFromDescription(description: string | null | undefined): GoalTemplateCondition[] {
+  const { conditions } = extractConditionsFromDescription(description)
+  return conditions || []
+}
+

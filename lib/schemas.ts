@@ -30,7 +30,7 @@ export type CohortFormData = z.infer<typeof cohortSchema>
  */
 const conditionSchema = z
   .object({
-    dataSource: z.enum(['stripe', 'ga4', 'other']),
+    dataSource: z.enum(['stripe', 'other']),
     metric: z.string().min(1, 'Metric is required'),
     operator: z.enum(['>=', '>', '=', '<=', '<', 'increased_by', 'decreased_by']),
     targetValue: z.number({ message: 'Target value is required' }),
@@ -42,7 +42,7 @@ const conditionSchema = z
       if (data.dataSource === 'other') {
         return true
       }
-      // For stripe/ga4, metric should be a valid identifier (alphanumeric with underscores)
+      // For stripe, metric should be a valid identifier (alphanumeric with underscores)
       return /^[a-z0-9_]+$/.test(data.metric)
     },
     {
@@ -199,3 +199,47 @@ export const founderInvoiceUploadSchema = z.object({
 })
 
 export type FounderInvoiceUploadFormData = z.infer<typeof founderInvoiceUploadSchema>
+
+/**
+ * Validation schema for integration connections
+ */
+export const integrationConnectionSchema = z.object({
+  startup_id: z.string().uuid('Invalid startup ID'),
+  provider: z.enum(['stripe']),
+  account_id: z.string().optional(),
+  account_name: z.string().optional(),
+  status: z.enum(['active', 'error', 'disconnected']).default('active'),
+  scopes: z.array(z.string()).optional(),
+  is_active: z.boolean().default(true),
+})
+
+export type IntegrationConnectionFormData = z.infer<typeof integrationConnectionSchema>
+
+/**
+ * Validation schema for metrics data
+ */
+export const metricsDataSchema = z.object({
+  startup_id: z.string().uuid('Invalid startup ID'),
+  provider: z.enum(['stripe', 'manual', 'tracker']),
+  metric_key: z.string().min(1, 'Metric key is required'),
+  value: z.number(),
+  timestamp: z.string().datetime(),
+  window: z.enum(['daily', 'weekly', 'monthly']).default('daily'),
+  meta: z.record(z.string(), z.unknown()).optional(),
+})
+
+export type MetricsDataFormData = z.infer<typeof metricsDataSchema>
+
+/**
+ * Validation schema for metric-based goal updates
+ */
+export const metricGoalUpdateSchema = z.object({
+  data_source: z.enum(['stripe', 'tracker']).optional(),
+  metric_key: z.string().optional(),
+  aggregation_window: z.enum(['daily', 'weekly', 'monthly']).optional(),
+  target_value_metric: z.number().optional(),
+  comparison_operator: z.enum(['>=', '>', '=', '<=', '<', 'increased_by', 'decreased_by']).optional(),
+  direction: z.enum(['up', 'down']).optional(),
+})
+
+export type MetricGoalUpdateFormData = z.infer<typeof metricGoalUpdateSchema>

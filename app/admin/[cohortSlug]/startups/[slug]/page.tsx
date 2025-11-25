@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Edit, UserPlus, Target, Users, Mail, ExternalLink } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { ArrowLeft, Edit, UserPlus, Target, Users, Mail, ExternalLink, Plug, CheckCircle2, XCircle } from 'lucide-react'
 import { GoalsSection } from './GoalsSection'
 import { InvitationsTable } from './InvitationsTable'
 
@@ -97,6 +98,13 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
     .order('created_at', { ascending: false })
     .limit(5)
 
+  // Fetch integration connections for this startup
+  const { data: integrations } = await supabase
+    .from('integration_connections')
+    .select('*')
+    .eq('startup_id', startup.id)
+    .eq('is_active', true)
+
   const goalStats = {
     total: goals?.length || 0,
     completed: goals?.filter(g => g.status === 'completed').length || 0,
@@ -123,6 +131,12 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           </div>
         </div>
         <div className="flex gap-2">
+          <Link href={`/admin/${cohortSlug}/startups/${slug}/analytics`}>
+            <Button variant="outline">
+              <Plug className="mr-2 h-4 w-4" />
+              Analytics
+            </Button>
+          </Link>
           <Link href={`/admin/startups/${slug}/invite`}>
             <Button variant="default">
               <UserPlus className="mr-2 h-4 w-4" />
@@ -249,6 +263,51 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           )}
         </CardContent>
       </Card>
+
+      {/* Integration Status */}
+      {integrations && integrations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Plug className="h-5 w-5" />
+              Integrations
+            </CardTitle>
+            <CardDescription>Connected external services for automated metric tracking</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              {integrations.map((integration) => (
+                <div
+                  key={integration.id}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    {integration.status === 'active' ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-600" />
+                    )}
+                    <div>
+                      <p className="font-medium capitalize">{integration.provider}</p>
+                      {integration.account_name && (
+                        <p className="text-sm text-muted-foreground">{integration.account_name}</p>
+                      )}
+                      {integration.last_synced_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Last synced: {new Date(integration.last_synced_at).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Badge variant={integration.status === 'active' ? 'default' : 'destructive'}>
+                    {integration.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Founders & Invitations */}
       <Card>

@@ -132,6 +132,16 @@ export interface StartupGoal {
   status: GoalStatus
   progress_value: number
   manually_overridden: boolean
+  // Metric-based goal tracking fields
+  data_source?: IntegrationProvider
+  metric_key?: string
+  aggregation_window?: MetricPeriod
+  target_value_metric?: number
+  comparison_operator?: '>=' | '>' | '=' | '<=' | '<' | 'increased_by' | 'decreased_by'
+  direction?: 'up' | 'down'
+  last_metric_check_at?: string
+  auto_completed_at?: string
+  completion_source?: 'auto' | 'manual'
   created_at: string
   updated_at: string
 }
@@ -175,5 +185,86 @@ export interface StartupMetricManual {
   metric_value: number
   created_at: string
   updated_at: string
+}
+
+export type IntegrationProvider = 'stripe'
+
+export type IntegrationStatus = 'active' | 'error' | 'disconnected'
+
+export interface IntegrationConnection {
+  id: string
+  startup_id: string
+  provider: IntegrationProvider
+  account_id?: string
+  account_name?: string
+  status: IntegrationStatus
+  scopes?: string[]
+  access_token?: string
+  refresh_token?: string
+  token_expires_at?: string
+  connected_by_user_id?: string
+  connected_at?: string
+  last_synced_at?: string
+  sync_error?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type MetricPeriod = 'daily' | 'weekly' | 'monthly'
+
+export interface MetricsData {
+  id: string
+  startup_id: string
+  provider: IntegrationProvider | 'manual'
+  metric_key: string
+  value: number
+  timestamp: string
+  window: MetricPeriod
+  meta?: Record<string, unknown>
+  created_at: string
+}
+
+export interface MetricSnapshot {
+  startup_id: string
+  provider: IntegrationProvider
+  metric_key: string
+  value: number
+  timestamp: Date
+  window: MetricPeriod
+  meta?: Record<string, unknown>
+}
+
+export interface TrackerWebsite {
+  id: string
+  startup_id: string
+  name: string
+  domain?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TrackerEvent {
+  id: string
+  website_id: string
+  session_id?: string
+  event_name?: string
+  url: string
+  referrer?: string
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  utm_term?: string
+  utm_content?: string
+  country?: string
+  device?: string
+  browser?: string
+  os?: string
+  screen?: string
+  language?: string
+  title?: string
+  hostname?: string
+  data?: Record<string, unknown>
+  created_at: string
 }
 
