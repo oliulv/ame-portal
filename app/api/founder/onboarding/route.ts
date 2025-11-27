@@ -19,10 +19,10 @@ export async function POST(request: Request) {
 
     const supabase = await createClient()
 
-    // 3. Get founder's profile to find startup_id
+    // 3. Get founder's profile to find startup_id and get current name/email
     const { data: founderProfile, error: profileError } = await supabase
       .from('founder_profiles')
-      .select('id, startup_id')
+      .select('id, startup_id, full_name, personal_email')
       .eq('user_id', user.id)
       .single()
 
@@ -51,6 +51,21 @@ export async function POST(request: Request) {
     if (founderUpdateError) {
       console.error('Error updating founder profile:', founderUpdateError)
       return NextResponse.json({ error: 'Failed to update founder profile' }, { status: 500 })
+    }
+
+    // 4b. Sync name and email to users table for auto-hydration
+    const { error: userUpdateError } = await supabase
+      .from('users')
+      .update({
+        email: founderProfile.personal_email || null,
+        full_name: founderProfile.full_name || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id)
+
+    if (userUpdateError) {
+      console.error('Error syncing user profile:', userUpdateError)
+      // Don't fail the request, just log the error
     }
 
     // 5. Create or update startup profile

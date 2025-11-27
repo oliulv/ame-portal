@@ -174,6 +174,34 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Failed to update founder profile' }, { status: 500 })
     }
 
+    // 4. Sync name and email to users table for auto-hydration
+    const userUpdateData: {
+      email?: string | null
+      full_name?: string | null
+      updated_at: string
+    } = {
+      updated_at: new Date().toISOString(),
+    }
+    if (updateData.full_name !== undefined) {
+      userUpdateData.full_name = updateData.full_name || null
+    }
+    if (updateData.personal_email !== undefined) {
+      userUpdateData.email = updateData.personal_email || null
+    }
+
+    if (Object.keys(userUpdateData).length > 1) {
+      // Only update if there's something to update (besides updated_at)
+      const { error: userUpdateError } = await supabase
+        .from('users')
+        .update(userUpdateData)
+        .eq('id', user.id)
+
+      if (userUpdateError) {
+        console.error('Error syncing user profile:', userUpdateError)
+        // Don't fail the request, just log the error
+      }
+    }
+
     return NextResponse.json({
       success: true,
       founderProfile: data,

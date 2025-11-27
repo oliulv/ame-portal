@@ -43,6 +43,7 @@ interface SidebarProps {
   subtitle: string
   navItems: NavItem[]
   showCohortSelector?: boolean
+  userRole?: 'super_admin' | 'admin' | 'founder'
 }
 
 const iconMap: Record<string, LucideIcon> = {
@@ -63,7 +64,15 @@ function extractCohortSlugFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/admin\/([^/]+)(?:\/|$)/)
   if (match && match[1]) {
     const slug = match[1]
-    const excludedRoutes = ['cohorts', 'startups', 'goals', 'invoices', 'leaderboard', 'new']
+    const excludedRoutes = [
+      'cohorts',
+      'startups',
+      'goals',
+      'invoices',
+      'leaderboard',
+      'new',
+      'settings',
+    ]
     if (!excludedRoutes.includes(slug)) {
       return slug
     }
@@ -75,15 +84,41 @@ function extractCohortSlugFromPath(pathname: string): string | null {
  * Build navigation href with cohort slug
  */
 function buildNavHref(baseHref: string, cohortSlug: string | null): string {
-  if (!cohortSlug) return baseHref
+  // Never modify global admin routes (cohorts, settings, etc.)
+  const globalRoutes = ['/admin/cohorts', '/admin/settings']
+  if (globalRoutes.includes(baseHref)) {
+    return baseHref
+  }
+
+  // Routes that require a cohort slug
+  const cohortScopedRoutes = [
+    '/admin',
+    '/admin/goals',
+    '/admin/startups',
+    '/admin/invoices',
+    '/admin/leaderboard',
+    '/admin/admins',
+  ]
+
+  // Normalize cohortSlug - treat empty string as null
+  const validCohortSlug = cohortSlug && cohortSlug !== '' ? cohortSlug : null
+
+  // If this route needs a cohort slug but we don't have one, return '#' to prevent navigation
+  // The disabled check in the component will handle preventing clicks
+  if (cohortScopedRoutes.includes(baseHref) && !validCohortSlug) {
+    return '#'
+  }
+
+  if (!validCohortSlug) return baseHref
 
   // Map old routes to new cohort-scoped routes
   const routeMap: Record<string, string> = {
-    '/admin': `/admin/${cohortSlug}`,
-    '/admin/goals': `/admin/${cohortSlug}/goals`,
-    '/admin/startups': `/admin/${cohortSlug}/startups`,
-    '/admin/invoices': `/admin/${cohortSlug}/invoices`,
-    '/admin/leaderboard': `/admin/${cohortSlug}/leaderboard`,
+    '/admin': `/admin/${validCohortSlug}`,
+    '/admin/goals': `/admin/${validCohortSlug}/goals`,
+    '/admin/startups': `/admin/${validCohortSlug}/startups`,
+    '/admin/invoices': `/admin/${validCohortSlug}/invoices`,
+    '/admin/leaderboard': `/admin/${validCohortSlug}/leaderboard`,
+    '/admin/admins': `/admin/${validCohortSlug}/admins`,
   }
 
   return routeMap[baseHref] || baseHref
@@ -94,6 +129,7 @@ function SidebarContent({
   subtitle,
   navItems,
   showCohortSelector = false,
+  userRole,
   onLinkClick,
 }: SidebarProps & { onLinkClick?: () => void }) {
   const pathname = usePathname()
@@ -105,10 +141,13 @@ function SidebarContent({
 
   // Fetch cohorts using TanStack Query (only if showCohortSelector is true)
   // Use longer stale time since cohorts change infrequently, and realtime will update us
+  // Only enable query after mount to ensure we're on client side and QueryClientProvider is available
+  // QueryProvider is in root layout (app/layout.tsx), so it should always be available
+  // If you see "No QueryClient set" error, it's likely a race condition during SSR/initial render
   const { data: cohorts = [], isLoading: isLoadingCohorts } = useQuery({
     queryKey: queryKeys.cohorts.lists(),
     queryFn: () => cohortsApi.getAll(),
-    enabled: showCohortSelector,
+    enabled: showCohortSelector && mounted,
     staleTime: 1000 * 60 * 10, // 10 minutes - cohorts don't change often, realtime handles updates
   })
 
@@ -198,7 +237,10 @@ function SidebarContent({
   }
 
   const selectedCohort = cohorts.find((c) => c.slug === selectedCohortSlug)
-  const currentCohortSlug = extractCohortSlugFromPath(pathname) || selectedCohortSlug
+  // Get cohort slug from URL first, fallback to selectedCohortSlug only if it's not empty
+  const urlCohortSlug = extractCohortSlugFromPath(pathname)
+  const currentCohortSlug =
+    urlCohortSlug || (selectedCohortSlug && selectedCohortSlug !== '' ? selectedCohortSlug : null)
 
   return (
     <div className="flex h-full flex-col">
@@ -216,18 +258,23 @@ function SidebarContent({
           // Use first available cohort even before mount if cohorts are loaded (from query cache)
           // This ensures we always have a cohort slug when cohorts exist, preventing redirects
           let cohortSlugForHref: string | null = null
-          if (currentCohortSlug) {
+
+          // Determine which cohort slug to use for building hrefs
+          if (currentCohortSlug && currentCohortSlug !== '') {
             // Always use URL-based cohort slug if available (consistent on server and client)
             cohortSlugForHref = currentCohortSlug
-          } else if (selectedCohortSlug) {
+          } else if (selectedCohortSlug && selectedCohortSlug !== '') {
             // Use state-based cohort slug (updated from localStorage or URL)
             cohortSlugForHref = selectedCohortSlug
           } else if (cohorts.length > 0) {
             // Fallback to first available cohort (prevents redirect to /admin/cohorts)
             // This is safe because cohorts query result is the same on server and client
-            cohortSlugForHref =
-              (cohorts.find((c: Cohort) => c.is_active) || cohorts[0])?.slug || null
+            // CRITICAL: Always use a cohort slug if cohorts exist and route needs it
+            // This handles the case when we're on a global route like /admin/settings
+            const defaultCohort = cohorts.find((c: Cohort) => c.is_active) || cohorts[0]
+            cohortSlugForHref = defaultCohort?.slug || null
           }
+
           const href = buildNavHref(item.href, cohortSlugForHref)
 
           // For root paths like /admin, match if pathname matches the cohort-scoped version
@@ -242,21 +289,25 @@ function SidebarContent({
 
           // If we need a cohort slug but don't have one yet (and cohorts are loading), prevent navigation
           // This prevents clicking links that would redirect to /admin/cohorts
+          // Note: /admin/cohorts and /admin/settings don't need a cohort slug
           const needsCohortSlug =
             showCohortSelector &&
             !cohortSlugForHref &&
-            (item.href === '/admin/invoices' ||
+            (item.href === '/admin' ||
+              item.href === '/admin/invoices' ||
               item.href === '/admin/leaderboard' ||
               item.href === '/admin/goals' ||
-              item.href === '/admin/startups')
-          const isDisabled = needsCohortSlug && isLoadingCohorts
+              item.href === '/admin/startups' ||
+              item.href === '/admin/admins')
+          // Disable if cohorts are loading OR if href is '#' (no cohort slug available)
+          const isDisabled = (needsCohortSlug && isLoadingCohorts) || href === '#'
 
           return (
             <Link
               key={item.href}
               href={isDisabled ? '#' : href}
               onClick={(e) => {
-                if (isDisabled) {
+                if (isDisabled || href === '#') {
                   e.preventDefault()
                   return
                 }
@@ -281,7 +332,7 @@ function SidebarContent({
         <div className="border-t p-4 space-y-2">
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">Cohort</label>
-            {isLoadingCohorts ? (
+            {!mounted || isLoadingCohorts ? (
               <div className="h-9 rounded-md border bg-muted animate-pulse" />
             ) : (
               <Select value={currentCohortSlug || ''} onValueChange={handleCohortChange}>
@@ -300,12 +351,14 @@ function SidebarContent({
               </Select>
             )}
           </div>
-          <Link href="/admin/cohorts/new" onClick={onLinkClick}>
-            <Button variant="outline" size="sm" className="w-full">
-              <Plus className="mr-2 h-3 w-3" />
-              Create New Cohort
-            </Button>
-          </Link>
+          {userRole === 'super_admin' && (
+            <Link href="/admin/cohorts/new" onClick={onLinkClick}>
+              <Button variant="outline" size="sm" className="w-full">
+                <Plus className="mr-2 h-3 w-3" />
+                Create New Cohort
+              </Button>
+            </Link>
+          )}
         </div>
       )}
 
@@ -313,16 +366,24 @@ function SidebarContent({
       <div className="border-t px-4 py-3">
         <div className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground">AccelerateMe Internal Tool</p>
-          <div className="flex items-center justify-start">
-            <UserButton />
-          </div>
+          {mounted && (
+            <div className="flex items-center justify-start">
+              <UserButton />
+            </div>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-export function Sidebar({ title, subtitle, navItems, showCohortSelector = false }: SidebarProps) {
+export function Sidebar({
+  title,
+  subtitle,
+  navItems,
+  showCohortSelector = false,
+  userRole,
+}: SidebarProps) {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -356,6 +417,7 @@ export function Sidebar({ title, subtitle, navItems, showCohortSelector = false 
                 subtitle={subtitle}
                 navItems={navItems}
                 showCohortSelector={showCohortSelector}
+                userRole={userRole}
                 onLinkClick={() => setOpen(false)}
               />
             </SheetContent>
@@ -370,6 +432,7 @@ export function Sidebar({ title, subtitle, navItems, showCohortSelector = false 
           subtitle={subtitle}
           navItems={navItems}
           showCohortSelector={showCohortSelector}
+          userRole={userRole}
         />
       </aside>
     </>

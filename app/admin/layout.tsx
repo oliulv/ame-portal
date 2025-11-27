@@ -1,8 +1,9 @@
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, getCurrentUser } from '@/lib/auth'
 import { Sidebar } from '@/components/sidebar'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin()
+  const user = await getCurrentUser()
 
   const navItems = [
     { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
@@ -10,6 +11,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { title: 'Goal Templates', href: '/admin/goals', icon: 'Target' },
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },
     { title: 'Leaderboard', href: '/admin/leaderboard', icon: 'Trophy' },
+    // Only show Admins link for super_admin
+    ...(user?.role === 'super_admin'
+      ? [{ title: 'Admins', href: '/admin/admins', icon: 'Users' }]
+      : []),
+    { title: 'Settings', href: '/admin/settings', icon: 'Settings' },
   ]
 
   return (
@@ -19,6 +25,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         subtitle="Admin Portal"
         navItems={navItems}
         showCohortSelector={true}
+        userRole={user?.role}
       />
 
       {/* Main content */}

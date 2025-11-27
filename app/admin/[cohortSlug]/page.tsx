@@ -146,15 +146,6 @@ export default function AdminDashboard() {
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href="/admin/cohorts/new">
-            <Button variant="outline" className="w-full justify-between">
-              <span className="flex items-center">
-                <Plus className="mr-2 h-4 w-4" />
-                Create Cohort
-              </span>
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
           <Link href={`/admin/${cohortSlug}/goals/new`}>
             <Button variant="outline" className="w-full justify-between">
               <span className="flex items-center">
