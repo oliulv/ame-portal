@@ -58,4 +58,3 @@ Quick start:
 - `lib/` - Utility libraries (auth, email, Supabase clients)
 - `supabase/migrations/` - Database schema migrations
 - `middleware.ts` - Clerk authentication middleware
-- 
