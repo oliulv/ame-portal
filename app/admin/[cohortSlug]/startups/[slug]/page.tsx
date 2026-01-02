@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { GoalsSection } from './GoalsSection'
 import { InvitationsTable } from './InvitationsTable'
+import { cached, cacheKeys, cacheTTL } from '@/lib/cache'
 
 interface StartupDetailPageProps {
   params: Promise<{
@@ -30,23 +31,31 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
   const { cohortSlug, slug } = await params
   const supabase = await createClient()
 
-  // Fetch startup details with cohort info by slug
-  const { data: startup, error } = await supabase
-    .from('startups')
-    .select(
-      `
-      *,
-      cohorts (
-        id,
-        slug,
-        label
-      )
-    `
-    )
-    .eq('slug', slug)
-    .single()
+  // Fetch startup details with cohort info by slug (cached)
+  const startup = await cached(
+    cacheKeys.startup(slug),
+    async () => {
+      const { data, error } = await supabase
+        .from('startups')
+        .select(
+          `
+          *,
+          cohorts (
+            id,
+            slug,
+            label
+          )
+        `
+        )
+        .eq('slug', slug)
+        .single()
+      if (error || !data) return null
+      return data
+    },
+    cacheTTL.startup
+  )
 
-  if (error || !startup) {
+  if (!startup) {
     notFound()
   }
 
@@ -56,21 +65,40 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
     notFound()
   }
 
-  // Fetch goals for this startup (using id for foreign key relationships)
-  const { data: goals } = await supabase
-    .from('startup_goals')
-    .select('*')
-    .eq('startup_id', startup.id)
-    .order('created_at')
+  // Fetch all related data in parallel (instead of sequentially)
+  const [
+    { data: goals },
+    { data: invitations },
+    { data: bankDetails },
+    { data: _invoices },
+    { data: integrations },
+  ] = await Promise.all([
+    // Goals
+    supabase.from('startup_goals').select('*').eq('startup_id', startup.id).order('created_at'),
+    // Invitations
+    supabase
+      .from('invitations')
+      .select('id, full_name, email, accepted_at, created_at, expires_at')
+      .eq('startup_id', startup.id)
+      .order('created_at', { ascending: false }),
+    // Bank details
+    supabase.from('bank_details').select('*').eq('startup_id', startup.id).single(),
+    // Invoices
+    supabase
+      .from('invoices')
+      .select('id, status, amount, created_at')
+      .eq('startup_id', startup.id)
+      .order('created_at', { ascending: false })
+      .limit(5),
+    // Integrations
+    supabase
+      .from('integration_connections')
+      .select('*')
+      .eq('startup_id', startup.id)
+      .eq('is_active', true),
+  ])
 
-  // Fetch invitations for this startup
-  const { data: invitations } = await supabase
-    .from('invitations')
-    .select('id, full_name, email, accepted_at, created_at, expires_at')
-    .eq('startup_id', startup.id)
-    .order('created_at', { ascending: false })
-
-  // Fetch founder profiles for accepted invitations
+  // Fetch founder profiles for accepted invitations (depends on invitations result)
   const acceptedEmails = invitations?.filter((i) => i.accepted_at).map((i) => i.email) || []
   const { data: founderProfiles } =
     acceptedEmails.length > 0
@@ -95,28 +123,6 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
       }),
       founderProfile: founderProfileMap.get(invitation.email) || null,
     })) || []
-
-  // Fetch bank details for this startup
-  const { data: bankDetails } = await supabase
-    .from('bank_details')
-    .select('*')
-    .eq('startup_id', startup.id)
-    .single()
-
-  // Fetch invoices for this startup
-  const { data: _invoices } = await supabase
-    .from('invoices')
-    .select('id, status, amount, created_at')
-    .eq('startup_id', startup.id)
-    .order('created_at', { ascending: false })
-    .limit(5)
-
-  // Fetch integration connections for this startup
-  const { data: integrations } = await supabase
-    .from('integration_connections')
-    .select('*')
-    .eq('startup_id', startup.id)
-    .eq('is_active', true)
 
   const goalStats = {
     total: goals?.length || 0,

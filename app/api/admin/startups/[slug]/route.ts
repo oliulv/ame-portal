@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { startupSchema } from '@/lib/schemas'
 import { requireAdmin } from '@/lib/auth'
+import { invalidateStartup } from '@/lib/cache/invalidate'
 
 interface RouteContext {
   params: Promise<{
@@ -118,7 +119,13 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Failed to update startup' }, { status: 500 })
     }
 
-    // 5. Return success response with new slug if changed
+    // 5. Invalidate cache for this startup
+    await invalidateStartup(slug)
+    if (newSlug !== slug) {
+      await invalidateStartup(newSlug)
+    }
+
+    // 6. Return success response with new slug if changed
     return NextResponse.json({ ...data, slug_changed: newSlug !== slug, new_slug: newSlug })
   } catch (error) {
     console.error('Error in PATCH /api/admin/startups/[slug]:', error)

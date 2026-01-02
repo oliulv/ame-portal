@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth'
+import { invalidateInvoice } from '@/lib/cache/invalidate'
 
 interface RouteContext {
   params: Promise<{
@@ -103,6 +104,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       console.error('Database error updating invoice:', updateError)
       return NextResponse.json({ error: 'Failed to update invoice' }, { status: 500 })
     }
+
+    // Invalidate invoice cache
+    await invalidateInvoice(id)
 
     return NextResponse.json({
       success: true,

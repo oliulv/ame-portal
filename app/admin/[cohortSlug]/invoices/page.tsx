@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { FileText, AlertCircle, ExternalLink, Users, Plus } from 'lucide-react'
+import { cached, cacheKeys, cacheTTL } from '@/lib/cache'
 
 function getInvoiceStatusVariant(
   status: string
@@ -41,15 +42,22 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
 
   const supabase = await createClient()
 
-  // Verify cohort exists - only fetch what we need
-  const { data: cohort, error: cohortError } = await supabase
-    .from('cohorts')
-    .select('id, label')
-    .eq('slug', cohortSlug)
-    .single()
+  // Verify cohort exists (cached)
+  const cohort = await cached(
+    cacheKeys.cohort(cohortSlug),
+    async () => {
+      const { data, error } = await supabase
+        .from('cohorts')
+        .select('id, label')
+        .eq('slug', cohortSlug)
+        .single()
+      if (error || !data) return null
+      return data
+    },
+    cacheTTL.cohort
+  )
 
-  if (cohortError || !cohort) {
-    // Cohort doesn't exist, redirect to cohorts page
+  if (!cohort) {
     redirect('/admin/cohorts')
   }
 
@@ -88,7 +96,7 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
 
   const startupIds = startups.map((s) => s.id)
 
-  // Fetch invoices with only needed fields - optimized query
+  // Fetch invoices with only needed fields
   const { data: invoices } = await supabase
     .from('invoices')
     .select('id, vendor_name, invoice_date, amount_gbp, status, created_at, startups(id, name)')
