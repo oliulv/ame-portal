@@ -23,10 +23,10 @@ export const cacheKeys = {
 
 // TTL values in seconds
 export const cacheTTL = {
-  cohort: 300,        // 5 minutes - cohorts rarely change
-  startup: 60,        // 1 minute
-  startupDetail: 30,  // 30 seconds - includes goals, invoices etc
-  leaderboard: 30,    // 30 seconds - updates with goal completions
-  invoices: 30,       // 30 seconds - new uploads possible
-  invoice: 60,        // 1 minute - rarely edited after creation
+  cohort: 300, // 5 minutes - cohorts rarely change
+  startup: 60, // 1 minute
+  startupDetail: 30, // 30 seconds - includes goals, invoices etc
+  leaderboard: 30, // 30 seconds - updates with goal completions
+  invoices: 30, // 30 seconds - new uploads possible
+  invoice: 60, // 1 minute - rarely edited after creation
 }

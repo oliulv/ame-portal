@@ -8,10 +8,7 @@ import { cacheKeys } from './keys'
 
 // Invalidate a specific startup's cached data
 export async function invalidateStartup(slug: string) {
-  await Promise.all([
-    redis.del(cacheKeys.startup(slug)),
-    redis.del(cacheKeys.startupDetail(slug)),
-  ])
+  await Promise.all([redis.del(cacheKeys.startup(slug)), redis.del(cacheKeys.startupDetail(slug))])
 }
 
 // Invalidate all startup-related caches for a cohort (useful when startup is added/removed)
