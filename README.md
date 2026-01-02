@@ -57,4 +57,4 @@ Quick start:
 - `app/` - Next.js App Router pages and routes
 - `lib/` - Utility libraries (auth, email, Supabase clients)
 - `supabase/migrations/` - Database schema migrations
-- `middleware.ts` - Clerk authentication middleware
+- `middleware.ts` - Clerk authentication middleware.
