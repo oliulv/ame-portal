@@ -15,6 +15,7 @@ import {
   User,
 } from 'lucide-react'
 import { InvoiceActions } from './InvoiceActions'
+import { cached, cacheKeys, cacheTTL } from '@/lib/cache'
 
 function getInvoiceStatusVariant(
   status: string
@@ -42,57 +43,57 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   const { cohortSlug, id } = await params
   const supabase = await createClient()
 
-  // Verify cohort exists
-  const { data: cohort } = await supabase
-    .from('cohorts')
-    .select('id, label')
-    .eq('slug', cohortSlug)
-    .single()
+  // Fetch cohort and invoice in parallel (both are needed for validation)
+  const [cohort, invoiceResult] = await Promise.all([
+    // Verify cohort exists (cached)
+    cached(
+      cacheKeys.cohort(cohortSlug),
+      async () => {
+        const { data, error } = await supabase
+          .from('cohorts')
+          .select('id, label, slug')
+          .eq('slug', cohortSlug)
+          .single()
+        if (error || !data) return null
+        return data
+      },
+      cacheTTL.cohort
+    ),
+    // Fetch invoice with startup info
+    supabase
+      .from('invoices')
+      .select(
+        `
+        *,
+        startups (
+          id,
+          name,
+          slug,
+          cohort_id
+        )
+      `
+      )
+      .eq('id', id)
+      .single(),
+  ])
 
   if (!cohort) {
     redirect('/admin/cohorts')
   }
 
-  // Fetch invoice with related data
-  const { data: invoice, error: invoiceError } = await supabase
-    .from('invoices')
-    .select(
-      `
-      *,
-      startups (
-        id,
-        name,
-        slug
-      )
-    `
-    )
-    .eq('id', id)
-    .single()
-
-  if (invoiceError || !invoice) {
+  const invoice = invoiceResult.data
+  if (invoiceResult.error || !invoice) {
     notFound()
   }
 
   // Verify invoice belongs to a startup in this cohort
-  const startup = invoice.startups as { id: string; name: string; slug: string | null } | null
-  if (!startup) {
-    notFound()
-  }
-
-  // Verify startup belongs to cohort
-  const { data: startupCohort } = await supabase
-    .from('startups')
-    .select('cohort_id')
-    .eq('id', startup.id)
-    .single()
-
-  const { data: invoiceCohort } = await supabase
-    .from('cohorts')
-    .select('slug')
-    .eq('id', startupCohort?.cohort_id)
-    .single()
-
-  if (invoiceCohort?.slug !== cohortSlug) {
+  const startup = invoice.startups as {
+    id: string
+    name: string
+    slug: string | null
+    cohort_id: string
+  } | null
+  if (!startup || startup.cohort_id !== cohort.id) {
     notFound()
   }
 

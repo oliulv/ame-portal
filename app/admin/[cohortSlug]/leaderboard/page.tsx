@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Users, Plus } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { cached, cacheKeys, cacheTTL } from '@/lib/cache'
 
 interface PageProps {
   params: Promise<{
@@ -12,24 +13,44 @@ interface PageProps {
   }>
 }
 
+// Helper to group array by a key
+function groupBy<T>(array: T[], keyFn: (item: T) => string): Record<string, T[]> {
+  return array.reduce(
+    (acc, item) => {
+      const key = keyFn(item)
+      if (!acc[key]) acc[key] = []
+      acc[key].push(item)
+      return acc
+    },
+    {} as Record<string, T[]>
+  )
+}
+
 export default async function LeaderboardPage({ params }: PageProps) {
   const { cohortSlug } = await params
 
   const supabase = await createClient()
 
-  // Verify cohort exists - use Supabase directly for server-side calls
-  const { data: cohort, error: cohortError } = await supabase
-    .from('cohorts')
-    .select('*')
-    .eq('slug', cohortSlug)
-    .single()
+  // Verify cohort exists (cached)
+  const cohort = await cached(
+    cacheKeys.cohort(cohortSlug),
+    async () => {
+      const { data, error } = await supabase
+        .from('cohorts')
+        .select('*')
+        .eq('slug', cohortSlug)
+        .single()
+      if (error || !data) return null
+      return data
+    },
+    cacheTTL.cohort
+  )
 
-  if (cohortError || !cohort) {
-    // Cohort doesn't exist, redirect to cohorts page
+  if (!cohort) {
     redirect('/admin/cohorts')
   }
 
-  // Get startups in this cohort with their goals and metrics
+  // Get startups in this cohort
   const { data: startups } = await supabase
     .from('startups')
     .select('id, name, logo_url, website_url, cohort_id, cohorts(name)')
@@ -65,87 +86,93 @@ export default async function LeaderboardPage({ params }: PageProps) {
     )
   }
 
-  // Calculate scores for each startup
-  const startupScores = await Promise.all(
-    startups.map(async (startup) => {
-      const [goalsResult, manualMetricsResult, stripeMetricsResult, gaMetricsResult] =
-        await Promise.all([
-          supabase
-            .from('startup_goals')
-            .select('status, completion_source, data_source')
-            .eq('startup_id', startup.id),
-          supabase
-            .from('startup_metrics_manual')
-            .select('metric_name, metric_value')
-            .eq('startup_id', startup.id),
-          supabase
-            .from('metrics_data')
-            .select('metric_key, value')
-            .eq('startup_id', startup.id)
-            .eq('provider', 'stripe')
-            .order('timestamp', { ascending: false })
-            .limit(10),
-          supabase
-            .from('metrics_data')
-            .select('metric_key, value')
-            .eq('startup_id', startup.id)
-            .eq('provider', 'tracker')
-            .order('timestamp', { ascending: false })
-            .limit(10),
-        ])
+  // Get all startup IDs for batch queries
+  const startupIds = startups.map((s) => s.id)
 
-      const goals = goalsResult.data || []
-      const manualMetrics = manualMetricsResult.data || []
-      const stripeMetrics = stripeMetricsResult.data || []
-      const gaMetrics = gaMetricsResult.data || []
+  // Batch fetch ALL data for ALL startups in 4 queries (instead of 4N queries)
+  const [allGoalsResult, allManualMetricsResult, allStripeMetricsResult, allTrackerMetricsResult] =
+    await Promise.all([
+      supabase
+        .from('startup_goals')
+        .select('startup_id, status, completion_source, data_source')
+        .in('startup_id', startupIds),
+      supabase
+        .from('startup_metrics_manual')
+        .select('startup_id, metric_name, metric_value')
+        .in('startup_id', startupIds),
+      supabase
+        .from('metrics_data')
+        .select('startup_id, metric_key, value')
+        .in('startup_id', startupIds)
+        .eq('provider', 'stripe')
+        .order('timestamp', { ascending: false }),
+      supabase
+        .from('metrics_data')
+        .select('startup_id, metric_key, value')
+        .in('startup_id', startupIds)
+        .eq('provider', 'tracker')
+        .order('timestamp', { ascending: false }),
+    ])
 
-      const completedGoals = goals.filter((g) => g.status === 'completed').length
-      const autoCompletedGoals = goals.filter(
-        (g) => g.status === 'completed' && g.completion_source === 'auto'
-      ).length
-      const totalGoals = goals.length
-      const completionPercentage = totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0
+  // Group results by startup_id for O(1) lookup
+  const goalsByStartup = groupBy(allGoalsResult.data || [], (g) => g.startup_id)
+  const manualMetricsByStartup = groupBy(allManualMetricsResult.data || [], (m) => m.startup_id)
+  const stripeMetricsByStartup = groupBy(allStripeMetricsResult.data || [], (m) => m.startup_id)
+  const trackerMetricsByStartup = groupBy(allTrackerMetricsResult.data || [], (m) => m.startup_id)
 
-      // Get revenue from manual metrics or Stripe metrics
-      let revenue = 0
-      const manualRevenueMetric = manualMetrics.find((m) => m.metric_name === 'manual_revenue')
-      if (manualRevenueMetric) {
-        revenue = Number(manualRevenueMetric.metric_value)
-      } else {
-        // Try to get from Stripe metrics
-        const stripeRevenue = stripeMetrics.find((m) => m.metric_key === 'total_revenue')
-        if (stripeRevenue) {
-          revenue = Number(stripeRevenue.value)
-        }
+  // Calculate scores for each startup (no async - just JS computation)
+  const startupScores = startups.map((startup) => {
+    const goals = goalsByStartup[startup.id] || []
+    const manualMetrics = manualMetricsByStartup[startup.id] || []
+    const stripeMetrics = stripeMetricsByStartup[startup.id] || []
+    const gaMetrics = trackerMetricsByStartup[startup.id] || []
+
+    const completedGoals = goals.filter((g) => g.status === 'completed').length
+    const autoCompletedGoals = goals.filter(
+      (g) => g.status === 'completed' && g.completion_source === 'auto'
+    ).length
+    const totalGoals = goals.length
+    const completionPercentage = totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0
+
+    // Get revenue from manual metrics or Stripe metrics
+    let revenue = 0
+    const manualRevenueMetric = manualMetrics.find((m) => m.metric_name === 'manual_revenue')
+    if (manualRevenueMetric) {
+      revenue = Number(manualRevenueMetric.metric_value)
+    } else {
+      // Try to get from Stripe metrics (take first/latest)
+      const stripeRevenue = stripeMetrics.find((m) => m.metric_key === 'total_revenue')
+      if (stripeRevenue) {
+        revenue = Number(stripeRevenue.value)
       }
+    }
 
-      // Get traffic metrics from tracker
-      const sessionsMetric = gaMetrics.find((m) => m.metric_key === 'sessions')
-      const sessions = sessionsMetric ? Number(sessionsMetric.value) : 0
+    // Get traffic metrics from tracker (take first/latest)
+    const sessionsMetric = gaMetrics.find((m) => m.metric_key === 'sessions')
+    const sessions = sessionsMetric ? Number(sessionsMetric.value) : 0
 
-      // Enhanced scoring formula:
-      // - Goal completion: 40% weight (normalized to 0-40 points)
-      // - Revenue: 30% weight (normalized, £1000 = 30 points, capped)
-      // - Traffic: 20% weight (normalized, 1000 sessions = 20 points, capped)
-      // - Auto-completed goals bonus: 10% weight (bonus for metric-based automation)
-      const goalScore = completionPercentage * 0.4
-      const revenueScore = Math.min((revenue / 1000) * 30, 30)
-      const trafficScore = Math.min((sessions / 1000) * 20, 20)
-      const automationBonus = totalGoals > 0 ? (autoCompletedGoals / totalGoals) * 10 : 0
+    // Enhanced scoring formula:
+    // - Goal completion: 40% weight (normalized to 0-40 points)
+    // - Revenue: 30% weight (normalized, £1000 = 30 points, capped)
+    // - Traffic: 20% weight (normalized, 1000 sessions = 20 points, capped)
+    // - Auto-completed goals bonus: 10% weight (bonus for metric-based automation)
+    const goalScore = completionPercentage * 0.4
+    const revenueScore = Math.min((revenue / 1000) * 30, 30)
+    const trafficScore = Math.min((sessions / 1000) * 20, 20)
+    const automationBonus = totalGoals > 0 ? (autoCompletedGoals / totalGoals) * 10 : 0
 
-      const score = goalScore + revenueScore + trafficScore + automationBonus
+    const score = goalScore + revenueScore + trafficScore + automationBonus
 
-      return {
-        ...startup,
-        completionPercentage,
-        autoCompletedGoals,
-        totalGoals,
-        revenue,
-        sessions,
-        score,
-      }
-    })
-  )
+    return {
+      ...startup,
+      completionPercentage,
+      autoCompletedGoals,
+      totalGoals,
+      revenue,
+      sessions,
+      score,
+    }
+  })
 
   // Sort by score (descending)
   startupScores.sort((a, b) => b.score - a.score)
