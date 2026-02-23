@@ -1,4 +1,5 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalAction, internalQuery, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import {
   requireAdmin,
@@ -180,5 +181,302 @@ export const updateStatus = mutation({
       newProgress: args.progressValue,
       comment: args.comment,
     });
+  },
+});
+
+// ── Internal: Goal progress checking (cron) ─────────────────────────
+
+/**
+ * Get all metric-based goals that are eligible for auto-evaluation.
+ */
+export const getMetricBasedGoals = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const goals = await ctx.db.query("startupGoals").collect();
+
+    return goals.filter(
+      (g) =>
+        (g.status === "not_started" || g.status === "in_progress") &&
+        !g.manuallyOverridden &&
+        (g.dataSource || g.goalTemplateId)
+    );
+  },
+});
+
+/**
+ * Get latest metric value (internal, no auth check).
+ */
+export const getLatestMetricInternal = internalQuery({
+  args: {
+    startupId: v.id("startups"),
+    provider: v.union(v.literal("stripe"), v.literal("tracker")),
+    metricKey: v.string(),
+    window: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const metrics = await ctx.db
+      .query("metricsData")
+      .withIndex("by_startupId_provider_metricKey", (q) =>
+        q
+          .eq("startupId", args.startupId)
+          .eq("provider", args.provider)
+          .eq("metricKey", args.metricKey)
+      )
+      .filter((q) => q.eq(q.field("window"), args.window))
+      .collect();
+
+    if (metrics.length === 0) return null;
+
+    metrics.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    return metrics[0].value;
+  },
+});
+
+/**
+ * Update a goal's status/progress from the cron job (no auth required).
+ */
+export const updateGoalFromCron = internalMutation({
+  args: {
+    goalId: v.id("startupGoals"),
+    status: v.optional(
+      v.union(
+        v.literal("not_started"),
+        v.literal("in_progress"),
+        v.literal("completed"),
+        v.literal("waived")
+      )
+    ),
+    progressValue: v.optional(v.number()),
+    completionSource: v.optional(
+      v.union(v.literal("auto"), v.literal("manual"))
+    ),
+    lastMetricCheckAt: v.optional(v.string()),
+    autoCompletedAt: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { goalId, ...patch } = args;
+
+    // Remove undefined values
+    const cleanPatch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (value !== undefined) cleanPatch[key] = value;
+    }
+
+    await ctx.db.patch(goalId, cleanPatch);
+  },
+});
+
+/**
+ * Parse conditions from a goal template's description.
+ * Format: <!-- CONDITIONS_JSON:[...] -->
+ */
+function parseConditionsFromDescription(
+  description: string | undefined
+): Array<{
+  dataSource: string;
+  metric: string;
+  operator: string;
+  targetValue: number;
+  unit: string;
+}> {
+  if (!description) return [];
+
+  const match = description.match(/<!-- CONDITIONS_JSON:(.+?) -->/);
+  if (!match) return [];
+
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Evaluate a single condition against a metric value.
+ */
+function evaluateCondition(
+  operator: string,
+  currentValue: number | null,
+  targetValue: number
+): { met: boolean; progress: number } {
+  if (currentValue === null) return { met: false, progress: 0 };
+
+  let met = false;
+  let progress = 0;
+
+  switch (operator) {
+    case ">=":
+      met = currentValue >= targetValue;
+      progress = targetValue > 0 ? Math.min(currentValue / targetValue, 1) : 0;
+      break;
+    case ">":
+      met = currentValue > targetValue;
+      progress = targetValue > 0 ? Math.min(currentValue / targetValue, 1) : 0;
+      break;
+    case "=":
+      met = Math.abs(currentValue - targetValue) < 0.01;
+      progress = met ? 1 : targetValue > 0 ? Math.min(currentValue / targetValue, 1) : 0;
+      break;
+    case "<=":
+      met = currentValue <= targetValue;
+      progress = currentValue > 0 ? Math.min(1, targetValue / currentValue) : 0;
+      break;
+    case "<":
+      met = currentValue < targetValue;
+      progress = currentValue > 0 ? Math.min(1, targetValue / currentValue) : 0;
+      break;
+    case "increased_by":
+      met = currentValue >= targetValue;
+      progress = targetValue > 0 ? Math.min(currentValue / targetValue, 1) : 0;
+      break;
+    case "decreased_by":
+      met = currentValue <= targetValue;
+      progress = currentValue > 0 ? Math.min(1, targetValue / currentValue) : 0;
+      break;
+    default:
+      met = currentValue >= targetValue;
+      progress = targetValue > 0 ? Math.min(currentValue / targetValue, 1) : 0;
+  }
+
+  return { met, progress };
+}
+
+/**
+ * Check goal progress for all metric-based goals.
+ * Called by cron every 6 hours.
+ */
+export const checkAllGoalProgress = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const goals: any[] = await ctx.runQuery(
+      internal.startupGoals.getMetricBasedGoals
+    );
+
+    for (const goal of goals) {
+      try {
+        // Build conditions from template or direct configuration
+        let conditions: Array<{
+          dataSource: string;
+          metric: string;
+          operator: string;
+          targetValue: number;
+        }> = [];
+
+        if (goal.goalTemplateId) {
+          const template: any = await ctx.runQuery(
+            internal.startupGoals.getGoalTemplateInternal,
+            { templateId: goal.goalTemplateId }
+          );
+
+          if (template) {
+            const parsed = parseConditionsFromDescription(template.description);
+            conditions = parsed.map((c) => ({
+              dataSource: c.dataSource,
+              metric: c.metric,
+              operator: c.operator,
+              targetValue: c.targetValue,
+            }));
+          }
+        }
+
+        // If no conditions from template, check direct metric config
+        if (
+          conditions.length === 0 &&
+          goal.dataSource &&
+          goal.metricKey &&
+          goal.targetValueMetric
+        ) {
+          conditions = [
+            {
+              dataSource: goal.dataSource,
+              metric: goal.metricKey,
+              operator: goal.comparisonOperator || ">=",
+              targetValue: goal.targetValueMetric,
+            },
+          ];
+        }
+
+        if (conditions.length === 0) continue;
+
+        // Evaluate each condition
+        let allMet = true;
+        let totalProgress = 0;
+
+        for (const condition of conditions) {
+          if (condition.dataSource === "other") continue;
+
+          const provider = condition.dataSource as "stripe" | "tracker";
+          const value = await ctx.runQuery(
+            internal.startupGoals.getLatestMetricInternal,
+            {
+              startupId: goal.startupId,
+              provider,
+              metricKey: condition.metric,
+              window: goal.aggregationWindow || "daily",
+            }
+          );
+
+          const { met, progress } = evaluateCondition(
+            condition.operator,
+            value,
+            condition.targetValue
+          );
+
+          if (!met) allMet = false;
+          totalProgress += progress;
+        }
+
+        const avgProgress = Math.round(
+          (totalProgress / conditions.length) * 100
+        );
+        const now = new Date().toISOString();
+
+        // Determine status update
+        if (allMet && goal.status !== "completed") {
+          await ctx.runMutation(internal.startupGoals.updateGoalFromCron, {
+            goalId: goal._id,
+            status: "completed",
+            progressValue: 100,
+            completionSource: "auto",
+            autoCompletedAt: now,
+            lastMetricCheckAt: now,
+          });
+        } else if (
+          !allMet &&
+          goal.status === "not_started" &&
+          avgProgress > 0
+        ) {
+          await ctx.runMutation(internal.startupGoals.updateGoalFromCron, {
+            goalId: goal._id,
+            status: "in_progress",
+            progressValue: avgProgress,
+            lastMetricCheckAt: now,
+          });
+        } else if (avgProgress !== goal.progressValue) {
+          // Update progress even if status doesn't change
+          await ctx.runMutation(internal.startupGoals.updateGoalFromCron, {
+            goalId: goal._id,
+            progressValue: avgProgress,
+            lastMetricCheckAt: now,
+          });
+        }
+      } catch (error) {
+        console.error(`Error checking goal ${goal._id}:`, error);
+      }
+    }
+  },
+});
+
+/**
+ * Get a goal template by ID (internal, no auth).
+ */
+export const getGoalTemplateInternal = internalQuery({
+  args: { templateId: v.id("goalTemplates") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.templateId);
   },
 });

@@ -1,14 +1,4 @@
 {
   "installCommand": "bun install",
-  "buildCommand": "bun run build",
-  "crons": [
-    {
-      "path": "/api/cron/sync-metrics",
-      "schedule": "0 */12 * * *"
-    },
-    {
-      "path": "/api/cron/check-goal-progress",
-      "schedule": "0 */6 * * *"
-    }
-  ]
+  "buildCommand": "bun run build"
 }

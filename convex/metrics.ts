@@ -1,4 +1,4 @@
-import { query, mutation, action, internalAction } from "./_generated/server";
+import { query, mutation, action, internalAction, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { requireAuth, requireAdmin } from "./auth";
@@ -265,5 +265,254 @@ export const storeInternal = mutation({
     for (const snapshot of args.snapshots) {
       await ctx.db.insert("metricsData", snapshot);
     }
+  },
+});
+
+// ── Internal queries for cron jobs ──────────────────────────────────
+
+/**
+ * Get all active Stripe integration connections.
+ */
+export const getAllActiveStripeConnections = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("integrationConnections")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("provider"), "stripe"),
+          q.eq(q.field("isActive"), true),
+          q.eq(q.field("status"), "active")
+        )
+      )
+      .collect();
+  },
+});
+
+/**
+ * Get all startups that have tracker websites.
+ */
+export const getStartupsWithTrackers = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const websites = await ctx.db.query("trackerWebsites").collect();
+    const startupIds = [...new Set(websites.map((w) => w.startupId))];
+    return startupIds;
+  },
+});
+
+/**
+ * Update integration connection sync status.
+ */
+export const updateConnectionSyncStatus = mutation({
+  args: {
+    connectionId: v.id("integrationConnections"),
+    status: v.optional(
+      v.union(v.literal("active"), v.literal("error"), v.literal("disconnected"))
+    ),
+    syncError: v.optional(v.string()),
+    lastSyncedAt: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const patch: Record<string, unknown> = {};
+    if (args.status !== undefined) patch.status = args.status;
+    if (args.syncError !== undefined) patch.syncError = args.syncError;
+    if (args.lastSyncedAt !== undefined) patch.lastSyncedAt = args.lastSyncedAt;
+    await ctx.db.patch(args.connectionId, patch);
+  },
+});
+
+// ── Sync all metrics (cron job) ─────────────────────────────────────
+
+/**
+ * Sync metrics from all active integrations (Stripe + Tracker).
+ * Called by cron every 12 hours.
+ */
+export const syncAllMetrics = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    // Fetch all active Stripe connections
+    const connections = await ctx.runQuery(
+      internal.metrics.getAllActiveStripeConnections
+    );
+
+    // Sync Stripe metrics for each connection
+    for (const connection of connections) {
+      try {
+        await ctx.runAction(internal.metrics.fetchStripeMetrics, {
+          startupId: connection.startupId,
+        });
+        await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+          connectionId: connection._id,
+          lastSyncedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error(
+          `Error syncing Stripe for startup ${connection.startupId}:`,
+          error
+        );
+        await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+          connectionId: connection._id,
+          status: "error",
+          syncError:
+            error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+
+    // Fetch all startups with tracker websites
+    const startupIds = await ctx.runQuery(
+      internal.metrics.getStartupsWithTrackers
+    );
+
+    // Sync tracker metrics for each startup
+    for (const startupId of startupIds) {
+      try {
+        await ctx.runAction(internal.metrics.fetchTrackerMetrics_cron, {
+          startupId,
+        });
+      } catch (error) {
+        console.error(
+          `Error syncing tracker metrics for startup ${startupId}:`,
+          error
+        );
+      }
+    }
+  },
+});
+
+/**
+ * Fetch and store tracker metrics for a startup (used by cron).
+ * Aggregates tracker events into metric snapshots.
+ */
+export const fetchTrackerMetrics_cron = internalAction({
+  args: { startupId: v.id("startups") },
+  handler: async (ctx, args) => {
+    // Get tracker websites for this startup
+    const websites: any[] = await ctx.runQuery(
+      internal.metrics.getTrackerWebsitesForStartup,
+      { startupId: args.startupId }
+    );
+
+    if (websites.length === 0) return;
+
+    const websiteIds = websites.map((w: any) => w._id);
+
+    // Get tracker events for these websites (last 30 days)
+    const events: any[] = await ctx.runQuery(
+      internal.metrics.getTrackerEventsForWebsites,
+      {
+        websiteIds,
+        since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      }
+    );
+
+    // Aggregate events into daily buckets
+    const buckets = new Map<
+      string,
+      { pageviews: number; sessions: Set<string> }
+    >();
+
+    for (const event of events) {
+      const date = new Date(event._creationTime);
+      const bucket = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+      if (!buckets.has(bucket)) {
+        buckets.set(bucket, { pageviews: 0, sessions: new Set() });
+      }
+
+      const b = buckets.get(bucket)!;
+      if (!event.eventName) {
+        b.pageviews++;
+      }
+      if (event.sessionId) {
+        b.sessions.add(event.sessionId);
+      }
+    }
+
+    // Store aggregated metrics
+    const snapshots: Array<{
+      startupId: typeof args.startupId;
+      provider: "tracker";
+      metricKey: string;
+      value: number;
+      timestamp: string;
+      window: "daily";
+    }> = [];
+
+    for (const [bucket, data] of buckets) {
+      const timestamp = `${bucket}T00:00:00.000Z`;
+
+      snapshots.push({
+        startupId: args.startupId,
+        provider: "tracker",
+        metricKey: "pageviews",
+        value: data.pageviews,
+        timestamp,
+        window: "daily",
+      });
+
+      snapshots.push({
+        startupId: args.startupId,
+        provider: "tracker",
+        metricKey: "sessions",
+        value: data.sessions.size,
+        timestamp,
+        window: "daily",
+      });
+
+      snapshots.push({
+        startupId: args.startupId,
+        provider: "tracker",
+        metricKey: "weekly_active_users",
+        value: data.sessions.size,
+        timestamp,
+        window: "daily",
+      });
+    }
+
+    if (snapshots.length > 0) {
+      await ctx.runMutation(internal.metrics.storeInternal, { snapshots });
+    }
+  },
+});
+
+/**
+ * Get tracker websites for a startup (internal).
+ */
+export const getTrackerWebsitesForStartup = internalQuery({
+  args: { startupId: v.id("startups") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("trackerWebsites")
+      .withIndex("by_startupId", (q) => q.eq("startupId", args.startupId))
+      .collect();
+  },
+});
+
+/**
+ * Get tracker events for websites since a given date (internal).
+ */
+export const getTrackerEventsForWebsites = internalQuery({
+  args: {
+    websiteIds: v.array(v.id("trackerWebsites")),
+    since: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const sinceTime = new Date(args.since).getTime();
+    const allEvents = [];
+
+    for (const websiteId of args.websiteIds) {
+      const events = await ctx.db
+        .query("trackerEvents")
+        .withIndex("by_websiteId", (q) => q.eq("websiteId", websiteId))
+        .collect();
+
+      // Filter by creation time
+      const filtered = events.filter((e) => e._creationTime >= sinceTime);
+      allEvents.push(...filtered);
+    }
+
+    return allEvents;
   },
 });
