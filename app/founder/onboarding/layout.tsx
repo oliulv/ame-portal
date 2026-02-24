@@ -1,21 +1,49 @@
-import { requireFounder } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
 
-export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireFounder()
-  const supabase = await createClient()
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 
-  // Check if founder has already completed onboarding
-  const { data: founderProfile } = await supabase
-    .from('founder_profiles')
-    .select('onboarding_status')
-    .eq('user_id', user.id)
-    .single()
+export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const user = useQuery(api.users.current)
+  const profileData = useQuery(api.founderProfile.get)
+
+  // Redirect if not authenticated or not a founder
+  useEffect(() => {
+    if (user !== undefined && (!user || user.role !== 'founder')) {
+      window.location.href = !user ? '/login' : '/access-required'
+    }
+  }, [user])
 
   // If onboarding is already completed, redirect to dashboard
-  if (founderProfile?.onboarding_status === 'completed') {
-    redirect('/founder/dashboard')
+  useEffect(() => {
+    if (
+      profileData?.founderProfile &&
+      profileData.founderProfile.onboardingStatus === 'completed'
+    ) {
+      router.push('/founder/dashboard')
+    }
+  }, [profileData, router])
+
+  // Loading state while checking auth and onboarding status
+  if (user === undefined || profileData === undefined) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
+
+  // Not authenticated or not a founder
+  if (!user || user.role !== 'founder') {
+    return null
+  }
+
+  // Onboarding already completed - show nothing while redirecting
+  if (profileData?.founderProfile?.onboardingStatus === 'completed') {
+    return null
   }
 
   return (

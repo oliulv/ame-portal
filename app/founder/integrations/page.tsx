@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQuery, useMutation, useAction } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -16,7 +19,6 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { useAppMutation } from '@/lib/hooks/useAppMutation'
 import { z } from 'zod'
 import {
   ArrowLeft,
@@ -30,7 +32,6 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import Link from 'next/link'
-import { TrackerWebsite } from '@/lib/types'
 
 const stripeConnectSchema = z.object({
   api_key: z.string().min(1, 'API key is required'),
@@ -48,8 +49,18 @@ type TrackerWebsiteFormData = z.infer<typeof trackerWebsiteSchema>
 export default function IntegrationsPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'stripe' | 'tracker'>('stripe')
-  const [trackerWebsites, setTrackerWebsites] = useState<TrackerWebsite[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false)
+  const [isCreatingTracker, setIsCreatingTracker] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Convex queries
+  const trackerWebsites = useQuery(api.trackerWebsites.list)
+
+  // Convex mutations and actions
+  const createTrackerWebsite = useMutation(api.trackerWebsites.create)
+  const removeTrackerWebsite = useMutation(api.trackerWebsites.remove)
+  const connectStripe = useAction(api.integrations.connectStripe)
 
   const stripeForm = useForm<StripeConnectFormData>({
     resolver: zodResolver(stripeConnectSchema),
@@ -67,64 +78,35 @@ export default function IntegrationsPage() {
     },
   })
 
-  // Fetch tracker websites
-  useEffect(() => {
-    fetch('/api/founder/tracker-websites')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.websites) {
-          setTrackerWebsites(data.websites)
-        }
+  const handleCreateTracker = async (data: TrackerWebsiteFormData) => {
+    setIsCreatingTracker(true)
+    try {
+      await createTrackerWebsite({
+        name: data.name,
+        domain: data.domain || undefined,
       })
-      .catch((err) => console.error('Failed to fetch tracker websites:', err))
-  }, [])
-
-  const createTrackerWebsiteMutation = useAppMutation({
-    mutationFn: async (data: TrackerWebsiteFormData) => {
-      const response = await fetch('/api/founder/tracker-websites', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to create tracker website')
-      }
-      return response.json()
-    },
-    onSuccess: (data) => {
-      setTrackerWebsites([data.website, ...trackerWebsites])
       trackerForm.reset()
-      router.refresh()
-    },
-  })
+      toast.success('Tracker website created successfully')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create tracker website')
+    } finally {
+      setIsCreatingTracker(false)
+    }
+  }
 
-  const deleteTrackerWebsiteMutation = useAppMutation({
-    mutationFn: async (id: string) => {
-      const response = await fetch(`/api/founder/tracker-websites/${id}`, {
-        method: 'DELETE',
-      })
-      if (!response.ok) {
-        throw new Error('Failed to delete tracker website')
-      }
-      return response.json()
-    },
-    onSuccess: () => {
-      router.refresh()
-      // Refetch websites
-      fetch('/api/founder/tracker-websites')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.websites) {
-            setTrackerWebsites(data.websites)
-          }
-        })
-    },
-  })
+  const handleDeleteTracker = async (id: string) => {
+    setDeletingId(id)
+    try {
+      await removeTrackerWebsite({ id: id as any })
+      toast.success('Tracker website removed')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete tracker website')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const getTrackerSnippet = (websiteId: string) => {
-    // Use environment variable for production URL, fallback to window.location.origin for development
-    // Set NEXT_PUBLIC_TRACKER_BASE_URL to your production URL (e.g., https://app.accelerateme.com)
     const baseUrl =
       typeof window !== 'undefined' && process.env.NEXT_PUBLIC_TRACKER_BASE_URL
         ? process.env.NEXT_PUBLIC_TRACKER_BASE_URL
@@ -140,24 +122,20 @@ export default function IntegrationsPage() {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
-  const connectStripeMutation = useAppMutation({
-    mutationFn: async (data: StripeConnectFormData) => {
-      const response = await fetch('/api/integrations/stripe/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+  const handleConnectStripe = async (data: StripeConnectFormData) => {
+    setIsConnectingStripe(true)
+    try {
+      await connectStripe({
+        apiKey: data.api_key,
       })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to connect Stripe')
-      }
-      return response.json()
-    },
-    onSuccess: () => {
+      toast.success('Stripe connected successfully')
       router.push('/founder/settings?tab=integrations')
-      router.refresh()
-    },
-  })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to connect Stripe')
+    } finally {
+      setIsConnectingStripe(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -217,7 +195,7 @@ export default function IntegrationsPage() {
           <CardContent>
             <Form {...stripeForm}>
               <form
-                onSubmit={stripeForm.handleSubmit((data) => connectStripeMutation.mutate(data))}
+                onSubmit={stripeForm.handleSubmit(handleConnectStripe)}
                 className="space-y-6"
                 autoComplete="off"
               >
@@ -261,8 +239,8 @@ export default function IntegrationsPage() {
                 />
 
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={connectStripeMutation.isPending}>
-                    {connectStripeMutation.isPending ? 'Connecting...' : 'Connect Stripe'}
+                  <Button type="submit" disabled={isConnectingStripe}>
+                    {isConnectingStripe ? 'Connecting...' : 'Connect Stripe'}
                   </Button>
                 </div>
               </form>
@@ -388,9 +366,7 @@ export default function IntegrationsPage() {
             <CardContent>
               <Form {...trackerForm}>
                 <form
-                  onSubmit={trackerForm.handleSubmit((data) =>
-                    createTrackerWebsiteMutation.mutate(data)
-                  )}
+                  onSubmit={trackerForm.handleSubmit(handleCreateTracker)}
                   className="space-y-6"
                 >
                   <FormField
@@ -426,9 +402,9 @@ export default function IntegrationsPage() {
                   />
 
                   <div className="flex justify-end">
-                    <Button type="submit" disabled={createTrackerWebsiteMutation.isPending}>
+                    <Button type="submit" disabled={isCreatingTracker}>
                       <Plus className="h-4 w-4 mr-2" />
-                      {createTrackerWebsiteMutation.isPending
+                      {isCreatingTracker
                         ? 'Creating...'
                         : 'Create Tracker Website'}
                     </Button>
@@ -439,13 +415,13 @@ export default function IntegrationsPage() {
           </Card>
 
           {/* Existing Tracker Websites */}
-          {trackerWebsites.length > 0 && (
+          {trackerWebsites && trackerWebsites.length > 0 && (
             <div className="space-y-4">
               <h2 className="text-xl font-semibold">Your Tracker Websites</h2>
               {trackerWebsites.map((website) => {
-                const snippet = getTrackerSnippet(website.id)
+                const snippet = getTrackerSnippet(website._id)
                 return (
-                  <Card key={website.id}>
+                  <Card key={website._id}>
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <div>
@@ -455,8 +431,8 @@ export default function IntegrationsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => deleteTrackerWebsiteMutation.mutate(website.id)}
-                          disabled={deleteTrackerWebsiteMutation.isPending}
+                          onClick={() => handleDeleteTracker(website._id)}
+                          disabled={deletingId === website._id}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -472,9 +448,9 @@ export default function IntegrationsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => copyToClipboard(snippet, website.id)}
+                            onClick={() => copyToClipboard(snippet, website._id)}
                           >
-                            {copiedId === website.id ? (
+                            {copiedId === website._id ? (
                               <Check className="h-4 w-4" />
                             ) : (
                               <Copy className="h-4 w-4" />

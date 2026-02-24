@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQuery, useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -26,7 +29,6 @@ import {
   type StartupUpdateFormData,
   type BankDetailsFormData,
 } from '@/lib/schemas'
-import { useAppMutation } from '@/lib/hooks/useAppMutation'
 import {
   User,
   Building2,
@@ -41,112 +43,26 @@ import {
 
 type SettingsTab = 'personal' | 'startup' | 'bank' | 'integrations'
 
-interface FounderProfileData {
-  founderProfile: {
-    id: string
-    full_name: string
-    personal_email: string
-    address_line1?: string
-    address_line2?: string
-    city?: string
-    postcode?: string
-    country?: string
-    phone?: string
-    bio?: string
-    linkedin_url?: string
-    x_url?: string
-  }
-  startup: {
-    id: string
-    name: string
-    website_url?: string
-  }
-  startupProfile: {
-    one_liner?: string
-    description?: string
-    company_url?: string
-    product_url?: string
-    industry?: string
-    location?: string
-    initial_customers?: number
-    initial_revenue?: number
-  } | null
-  bankDetails: {
-    account_holder_name: string
-    sort_code: string
-    account_number: string
-    bank_name?: string
-  } | null
-}
-
 export default function SettingsPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<SettingsTab>('personal')
-  const [isLoading, setIsLoading] = useState(true)
-  const [data, setData] = useState<FounderProfileData | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [integrationStatus, setIntegrationStatus] = useState<{
-    stripe: {
-      id: string
-      status: string
-      account_name?: string
-      connected_at?: string
-      last_synced_at?: string
-    } | null
-  } | null>(null)
-  const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true)
-  const [trackerWebsites, setTrackerWebsites] = useState<
-    Array<{ id: string; name: string; domain?: string }>
-  >([])
+  const [isSavingPersonal, setIsSavingPersonal] = useState(false)
+  const [isSavingStartup, setIsSavingStartup] = useState(false)
+  const [isSavingBank, setIsSavingBank] = useState(false)
 
-  // Fetch data on mount
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const response = await fetch('/api/founder/profile')
-        if (!response.ok) {
-          throw new Error('Failed to load profile data')
-        }
-        const profileData = await response.json()
-        setData(profileData)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load data')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchData()
-  }, [])
+  // Convex queries - founderProfile.get returns { founderProfile, startup, startupProfile, bankDetails }
+  const profileData = useQuery(api.founderProfile.get)
+  const integrationStatus = useQuery(api.integrations.status)
+  const trackerWebsites = useQuery(api.trackerWebsites.list)
 
-  // Fetch integration status
-  useEffect(() => {
-    async function fetchIntegrationStatus() {
-      try {
-        const response = await fetch('/api/integrations/status')
-        if (response.ok) {
-          const status = await response.json()
-          setIntegrationStatus(status)
-        }
-      } catch (err) {
-        console.error('Failed to load integration status:', err)
-      } finally {
-        setIsLoadingIntegrations(false)
-      }
-    }
-    fetchIntegrationStatus()
-  }, [])
+  // Convex mutations
+  const updateProfile = useMutation(api.founderProfile.update)
+  const updateStartup = useMutation(api.founderStartup.update)
+  const upsertBank = useMutation(api.bankDetails.upsert)
+  const disconnectStripe = useMutation(api.integrations.disconnectStripe)
 
-  // Fetch tracker websites
-  useEffect(() => {
-    fetch('/api/founder/tracker-websites')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.websites) {
-          setTrackerWebsites(data.websites)
-        }
-      })
-      .catch((err) => console.error('Failed to fetch tracker websites:', err))
-  }, [])
+  const isLoading = profileData === undefined
+  const isLoadingIntegrations = integrationStatus === undefined
 
   // Personal info form
   const personalForm = useForm<FounderPersonalInfoUpdateFormData>({
@@ -194,116 +110,115 @@ export default function SettingsPage() {
 
   // Populate forms when data loads
   useEffect(() => {
-    if (data) {
+    if (profileData?.founderProfile) {
+      const fp = profileData.founderProfile
       personalForm.reset({
-        full_name: data.founderProfile.full_name,
-        personal_email: data.founderProfile.personal_email,
-        address_line1: data.founderProfile.address_line1 || '',
-        address_line2: data.founderProfile.address_line2 || '',
-        city: data.founderProfile.city || '',
-        postcode: data.founderProfile.postcode || '',
-        country: data.founderProfile.country || '',
-        phone: data.founderProfile.phone || '',
-        bio: data.founderProfile.bio || '',
-        linkedin_url: data.founderProfile.linkedin_url || '',
-        x_url: data.founderProfile.x_url || '',
+        full_name: fp.fullName || '',
+        personal_email: fp.personalEmail || '',
+        address_line1: fp.addressLine1 || '',
+        address_line2: fp.addressLine2 || '',
+        city: fp.city || '',
+        postcode: fp.postcode || '',
+        country: fp.country || '',
+        phone: fp.phone || '',
+        bio: fp.bio || '',
+        linkedin_url: fp.linkedinUrl || '',
+        x_url: fp.xUrl || '',
       })
-
-      startupForm.reset({
-        name: data.startup.name,
-        website_url: data.startup.website_url || '',
-        one_liner: data.startupProfile?.one_liner || '',
-        description: data.startupProfile?.description || '',
-        industry: data.startupProfile?.industry || '',
-        location: data.startupProfile?.location || '',
-        initial_customers: data.startupProfile?.initial_customers,
-        initial_revenue: data.startupProfile?.initial_revenue,
-      })
-
-      if (data.bankDetails) {
-        bankForm.reset({
-          account_holder_name: data.bankDetails.account_holder_name,
-          sort_code: data.bankDetails.sort_code,
-          account_number: data.bankDetails.account_number,
-          bank_name: data.bankDetails.bank_name || '',
-        })
-      }
     }
-  }, [data, personalForm, startupForm, bankForm])
+  }, [profileData, personalForm])
 
-  // Mutation hooks
-  const updatePersonalMutation = useAppMutation({
-    mutationFn: async (formData: FounderPersonalInfoUpdateFormData) => {
-      const response = await fetch('/api/founder/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+  useEffect(() => {
+    if (profileData?.startup) {
+      const s = profileData.startup
+      const sp = profileData.startupProfile
+      startupForm.reset({
+        name: s.name || '',
+        website_url: s.websiteUrl || '',
+        one_liner: sp?.oneLiner || '',
+        description: sp?.description || '',
+        industry: sp?.industry || '',
+        location: sp?.location || '',
+        initial_customers: sp?.initialCustomers,
+        initial_revenue: sp?.initialRevenue,
       })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to update personal information')
-      }
-      return response.json()
-    },
-    onSuccess: () => {
-      router.refresh()
-      // Refetch data
-      fetch('/api/founder/profile')
-        .then((res) => res.json())
-        .then((newData) => setData(newData))
-    },
-  })
+    }
+  }, [profileData, startupForm])
 
-  const updateStartupMutation = useAppMutation({
-    mutationFn: async (formData: StartupUpdateFormData) => {
-      const response = await fetch('/api/founder/startup', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+  useEffect(() => {
+    if (profileData?.bankDetails) {
+      const bd = profileData.bankDetails
+      bankForm.reset({
+        account_holder_name: bd.accountHolderName || '',
+        sort_code: bd.sortCode || '',
+        account_number: bd.accountNumber || '',
+        bank_name: bd.bankName || '',
       })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to update startup details')
-      }
-      return response.json()
-    },
-    onSuccess: () => {
-      router.refresh()
-      // Refetch data
-      fetch('/api/founder/profile')
-        .then((res) => res.json())
-        .then((newData) => setData(newData))
-    },
-  })
+    }
+  }, [profileData, bankForm])
 
-  const updateBankMutation = useAppMutation({
-    mutationFn: async (formData: BankDetailsFormData) => {
-      const response = await fetch('/api/founder/bank', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+  // Form submit handlers
+  const handlePersonalSubmit = async (data: FounderPersonalInfoUpdateFormData) => {
+    setIsSavingPersonal(true)
+    try {
+      await updateProfile({
+        fullName: data.full_name,
+        personalEmail: data.personal_email,
+        addressLine1: data.address_line1 || undefined,
+        addressLine2: data.address_line2 || undefined,
+        city: data.city || undefined,
+        postcode: data.postcode || undefined,
+        country: data.country || undefined,
+        phone: data.phone || undefined,
+        bio: data.bio || undefined,
+        linkedinUrl: data.linkedin_url || undefined,
+        xUrl: data.x_url || undefined,
       })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to update bank details')
-      }
-      return response.json()
-    },
-    onSuccess: () => {
-      router.refresh()
-      // Refetch data
-      fetch('/api/founder/profile')
-        .then((res) => res.json())
-        .then((newData) => setData(newData))
-    },
-  })
+      toast.success('Personal information updated successfully')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update personal information')
+    } finally {
+      setIsSavingPersonal(false)
+    }
+  }
 
-  const tabs: Array<{ key: SettingsTab; title: string; icon: typeof User }> = [
-    { key: 'personal', title: 'Personal Information', icon: User },
-    { key: 'startup', title: 'Startup Details', icon: Building2 },
-    { key: 'bank', title: 'Bank Details', icon: CreditCard },
-    { key: 'integrations', title: 'Integrations', icon: Plug },
-  ]
+  const handleStartupSubmit = async (data: StartupUpdateFormData) => {
+    setIsSavingStartup(true)
+    try {
+      await updateStartup({
+        name: data.name,
+        websiteUrl: data.website_url || undefined,
+        oneLiner: data.one_liner || undefined,
+        description: data.description || undefined,
+        industry: data.industry || undefined,
+        location: data.location || undefined,
+        initialCustomers: data.initial_customers,
+        initialRevenue: data.initial_revenue,
+      })
+      toast.success('Startup details updated successfully')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update startup details')
+    } finally {
+      setIsSavingStartup(false)
+    }
+  }
+
+  const handleBankSubmit = async (data: BankDetailsFormData) => {
+    setIsSavingBank(true)
+    try {
+      await upsertBank({
+        accountHolderName: data.account_holder_name,
+        sortCode: data.sort_code,
+        accountNumber: data.account_number,
+        bankName: data.bank_name || undefined,
+      })
+      toast.success('Bank details updated successfully')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update bank details')
+    } finally {
+      setIsSavingBank(false)
+    }
+  }
 
   const handleConnectStripe = () => {
     router.push('/founder/integrations?tab=stripe')
@@ -311,21 +226,20 @@ export default function SettingsPage() {
 
   const handleDisconnectStripe = async () => {
     try {
-      const response = await fetch('/api/integrations/stripe/disconnect', {
-        method: 'POST',
-      })
-      if (response.ok) {
-        // Refresh integration status
-        const statusResponse = await fetch('/api/integrations/status')
-        if (statusResponse.ok) {
-          const status = await statusResponse.json()
-          setIntegrationStatus(status)
-        }
-      }
+      await disconnectStripe()
+      toast.success('Stripe disconnected successfully')
     } catch (err) {
       console.error('Failed to disconnect Stripe:', err)
+      toast.error('Failed to disconnect Stripe')
     }
   }
+
+  const tabs: Array<{ key: SettingsTab; title: string; icon: typeof User }> = [
+    { key: 'personal', title: 'Personal Information', icon: User },
+    { key: 'startup', title: 'Startup Details', icon: Building2 },
+    { key: 'bank', title: 'Bank Details', icon: CreditCard },
+    { key: 'integrations', title: 'Integrations', icon: Plug },
+  ]
 
   if (isLoading) {
     return (
@@ -349,7 +263,7 @@ export default function SettingsPage() {
     )
   }
 
-  if (error || !data) {
+  if (!profileData) {
     return (
       <div className="space-y-6">
         <div>
@@ -360,7 +274,7 @@ export default function SettingsPage() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-5 w-5" />
-              <p>{error || 'Failed to load settings data'}</p>
+              <p>Failed to load settings data</p>
             </div>
           </CardContent>
         </Card>
@@ -409,7 +323,7 @@ export default function SettingsPage() {
           <CardContent>
             <Form {...personalForm}>
               <form
-                onSubmit={personalForm.handleSubmit((data) => updatePersonalMutation.mutate(data))}
+                onSubmit={personalForm.handleSubmit(handlePersonalSubmit)}
                 className="space-y-6"
               >
                 <div className="grid gap-4 md:grid-cols-2">
@@ -573,9 +487,9 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={updatePersonalMutation.isPending}>
+                  <Button type="submit" disabled={isSavingPersonal}>
                     <Save className="mr-2 h-4 w-4" />
-                    {updatePersonalMutation.isPending ? 'Saving...' : 'Save Changes'}
+                    {isSavingPersonal ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               </form>
@@ -594,7 +508,7 @@ export default function SettingsPage() {
           <CardContent>
             <Form {...startupForm}>
               <form
-                onSubmit={startupForm.handleSubmit((data) => updateStartupMutation.mutate(data))}
+                onSubmit={startupForm.handleSubmit(handleStartupSubmit)}
                 className="space-y-6"
               >
                 <FormField
@@ -735,9 +649,9 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={updateStartupMutation.isPending}>
+                  <Button type="submit" disabled={isSavingStartup}>
                     <Save className="mr-2 h-4 w-4" />
-                    {updateStartupMutation.isPending ? 'Saving...' : 'Save Changes'}
+                    {isSavingStartup ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               </form>
@@ -756,7 +670,7 @@ export default function SettingsPage() {
           <CardContent>
             <Form {...bankForm}>
               <form
-                onSubmit={bankForm.handleSubmit((data) => updateBankMutation.mutate(data))}
+                onSubmit={bankForm.handleSubmit(handleBankSubmit)}
                 className="space-y-6"
               >
                 <FormField
@@ -838,9 +752,9 @@ export default function SettingsPage() {
                 />
 
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={updateBankMutation.isPending}>
+                  <Button type="submit" disabled={isSavingBank}>
                     <Save className="mr-2 h-4 w-4" />
-                    {updateBankMutation.isPending ? 'Saving...' : 'Save Changes'}
+                    {isSavingBank ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               </form>
@@ -881,13 +795,13 @@ export default function SettingsPage() {
                     </p>
                     {integrationStatus?.stripe && (
                       <div className="text-sm text-muted-foreground">
-                        {integrationStatus.stripe.account_name && (
-                          <p>Account: {integrationStatus.stripe.account_name}</p>
+                        {integrationStatus.stripe.accountName && (
+                          <p>Account: {integrationStatus.stripe.accountName}</p>
                         )}
-                        {integrationStatus.stripe.connected_at && (
+                        {integrationStatus.stripe.connectedAt && (
                           <p>
                             Connected:{' '}
-                            {new Date(integrationStatus.stripe.connected_at).toLocaleDateString()}
+                            {new Date(integrationStatus.stripe.connectedAt).toLocaleDateString()}
                           </p>
                         )}
                       </div>
@@ -911,7 +825,7 @@ export default function SettingsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="font-semibold">AccelerateMe Tracker</h3>
-                      {trackerWebsites.length > 0 ? (
+                      {trackerWebsites && trackerWebsites.length > 0 ? (
                         <CheckCircle2 className="h-4 w-4 text-green-600" />
                       ) : null}
                     </div>
@@ -919,7 +833,7 @@ export default function SettingsPage() {
                       Add a lightweight tracking script to your website to track pageviews,
                       sessions, and user activity
                     </p>
-                    {trackerWebsites.length > 0 && (
+                    {trackerWebsites && trackerWebsites.length > 0 && (
                       <div className="text-sm text-muted-foreground">
                         <p>
                           {trackerWebsites.length} tracker website
@@ -930,7 +844,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <Button onClick={() => router.push('/founder/integrations?tab=tracker')}>
-                      {trackerWebsites.length > 0 ? 'Manage Trackers' : 'Set Up Tracker'}
+                      {trackerWebsites && trackerWebsites.length > 0 ? 'Manage Trackers' : 'Set Up Tracker'}
                     </Button>
                   </div>
                 </div>

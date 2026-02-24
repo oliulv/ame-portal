@@ -1,25 +1,14 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { Check, Clock, MinusCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { queryKeys } from '@/lib/queryKeys'
-import { goalsApi } from '@/lib/api/goals'
 
 export default function FounderGoalsPage() {
-  const {
-    data: goals = [],
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: queryKeys.goals.list('founder'),
-    queryFn: () => goalsApi.getFounderGoals(),
-    staleTime: 1000 * 60, // 1 minute - goals can change, but realtime handles most updates
-    refetchInterval: 1000 * 60 * 2, // Refetch every 2 minutes as fallback
-    refetchOnWindowFocus: true,
-  })
+  const goals = useQuery(api.startupGoals.listForFounder)
 
-  if (isLoading) {
+  if (goals === undefined) {
     return (
       <div className="max-w-3xl">
         <h1 className="text-2xl font-bold mb-8">Goals Checklist</h1>
@@ -30,20 +19,6 @@ export default function FounderGoalsPage() {
     )
   }
 
-  if (error) {
-    return (
-      <div className="max-w-3xl">
-        <h1 className="text-2xl font-bold mb-8">Goals Checklist</h1>
-        <div className="bg-white p-6 rounded-lg shadow text-center">
-          <p className="text-red-500">
-            Error: {error instanceof Error ? error.message : 'Failed to load goals'}
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  // We always have at least the initial goal, but if for some reason state is cleared:
   if (goals.length === 0) {
     return (
       <div className="max-w-3xl">
@@ -69,21 +44,18 @@ export default function FounderGoalsPage() {
             if (nextGoal) {
               if (nextGoal.status === 'completed') {
                 lineProgress = 100
-              } else if (nextGoal.target_value && nextGoal.target_value > 0) {
+              } else if (nextGoal.targetValue && nextGoal.targetValue > 0) {
                 lineProgress = Math.min(
                   100,
-                  ((nextGoal.progress_value || 0) / nextGoal.target_value) * 100
+                  ((nextGoal.progressValue || 0) / nextGoal.targetValue) * 100
                 )
               } else if (nextGoal.status === 'in_progress') {
-                // If in progress but no numeric target, show some progress (e.g. 50%) or just 0 if strictly metric based.
-                // Let's stick to 0 for the line unless there's a metric, or maybe 50% to show activity?
-                // User asked for "progress towards next goal via the colour moving", implying metric.
                 lineProgress = 0
               }
             }
 
             return (
-              <li key={goal.id}>
+              <li key={goal._id}>
                 <div className="relative pb-12">
                   {goalIdx !== goals.length - 1 ? (
                     <>
@@ -96,14 +68,10 @@ export default function FounderGoalsPage() {
                       <span
                         className="absolute top-12 left-6 -ml-px w-0.5 bg-blue-500 transition-all duration-500"
                         style={{
-                          height: `calc(${lineProgress}% - 48px)` /* Adjust calculation to be relative to segment length if needed, but h-full is easier */,
+                          height: `calc(${lineProgress}% - 48px)`,
                         }}
                         aria-hidden="true"
                       >
-                        {/* We need a better way to limit height to the segment. 
-                            'h-full' covers the whole segment. 
-                            We want 'height: lineProgress%'.
-                        */}
                         <div
                           className="absolute top-0 left-0 w-full bg-blue-500 transition-all duration-500"
                           style={{ height: `${lineProgress}%` }}
@@ -127,7 +95,7 @@ export default function FounderGoalsPage() {
                         <span
                           className={cn(
                             'h-12 w-12 rounded-full flex items-center justify-center ring-8 ring-white z-10',
-                            goal.id === 'goal-join-accelerateme' ? 'bg-indigo-600' : 'bg-green-500'
+                            goal._id === 'goal-join-accelerateme' ? 'bg-indigo-600' : 'bg-green-500'
                           )}
                         >
                           <Check className="h-6 w-6 text-white" aria-hidden="true" />
@@ -143,7 +111,7 @@ export default function FounderGoalsPage() {
                       ) : (
                         <span className="h-12 w-12 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center ring-8 ring-white z-10">
                           <span className="text-lg font-bold text-gray-500">
-                            {goalIdx} {/* Index matches step number if we start at 0 (Join) as 0 */}
+                            {goalIdx}
                           </span>
                         </span>
                       )}
@@ -179,17 +147,17 @@ export default function FounderGoalsPage() {
                           <div className="text-base text-gray-500 mb-3">{goal.description}</div>
                         )}
 
-                        {(goal.target_value || goal.deadline) && (
+                        {(goal.targetValue || goal.deadline) && (
                           <div className="flex flex-wrap gap-6 mt-3 text-sm text-gray-500">
-                            {goal.target_value && (
+                            {goal.targetValue && (
                               <div className="flex flex-col gap-1 w-full max-w-md">
                                 <div className="flex justify-between text-sm font-medium text-gray-600">
                                   <span>Progress</span>
                                   <span>
-                                    {goal.progress_value || 0} / {goal.target_value}
+                                    {goal.progressValue || 0} / {goal.targetValue}
                                   </span>
                                 </div>
-                                {goal.target_value > 0 && (
+                                {goal.targetValue > 0 && (
                                   <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
                                     <div
                                       className={cn(
@@ -197,7 +165,7 @@ export default function FounderGoalsPage() {
                                         goal.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'
                                       )}
                                       style={{
-                                        width: `${Math.min(100, ((goal.progress_value || 0) / goal.target_value) * 100)}%`,
+                                        width: `${Math.min(100, ((goal.progressValue || 0) / goal.targetValue) * 100)}%`,
                                       }}
                                     />
                                   </div>

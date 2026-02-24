@@ -1,25 +1,26 @@
-import { createClient } from '@/lib/supabase/server'
-import { getFounderStartupIds } from '@/lib/auth'
+'use client'
+
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
 
-export default async function FounderInvoicesPage() {
-  const startupIds = await getFounderStartupIds()
-  const supabase = await createClient()
+export default function FounderInvoicesPage() {
+  const invoicesData = useQuery(api.invoices.listForFounder)
 
-  if (startupIds.length === 0) {
+  if (invoicesData === undefined) {
     return (
       <div>
-        <h1 className="text-2xl font-bold mb-6">Invoices</h1>
-        <p>No startup associated with your account.</p>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Invoices</h1>
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow text-center">
+          <p className="text-gray-500">Loading invoices...</p>
+        </div>
       </div>
     )
   }
 
-  const { data: invoices } = await supabase
-    .from('invoices')
-    .select('*')
-    .in('startup_id', startupIds)
-    .order('created_at', { ascending: false })
+  const invoices = invoicesData.invoices ?? []
 
   return (
     <div>
@@ -33,7 +34,7 @@ export default async function FounderInvoicesPage() {
         </Link>
       </div>
 
-      {invoices && invoices.length > 0 ? (
+      {invoices.length > 0 ? (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -54,15 +55,15 @@ export default async function FounderInvoicesPage() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {invoices.map((invoice) => (
-                <tr key={invoice.id}>
+                <tr key={invoice._id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {invoice.vendor_name}
+                    {invoice.vendorName}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(invoice.invoice_date).toLocaleDateString()}
+                    {new Date(invoice.invoiceDate).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    £{Number(invoice.amount_gbp).toFixed(2)}
+                    {Number(invoice.amountGbp).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
