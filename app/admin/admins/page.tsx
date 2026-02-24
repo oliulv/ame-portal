@@ -1,30 +1,32 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+'use client'
 
-async function getDefaultCohortSlug(): Promise<string | null> {
-  const supabase = await createClient()
-  const { data: cohorts } = await supabase
-    .from('cohorts')
-    .select('id, slug, is_active')
-    .order('year_start', { ascending: false })
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 
-  if (!cohorts || cohorts.length === 0) {
-    return null
-  }
+export default function AdminsRedirect() {
+  const router = useRouter()
+  const cohorts = useQuery(api.cohorts.list)
 
-  // Prefer active cohort, otherwise use first cohort
-  const activeCohort = cohorts.find((c) => c.is_active)
+  useEffect(() => {
+    if (cohorts === undefined) return // still loading
+    if (!cohorts || cohorts.length === 0) {
+      router.replace('/admin/cohorts')
+      return
+    }
+    const activeCohort = cohorts.find((c) => c.isActive)
+    const slug = activeCohort?.slug || cohorts[0]?.slug
+    if (slug) {
+      router.replace(`/admin/${slug}/admins`)
+    } else {
+      router.replace('/admin/cohorts')
+    }
+  }, [cohorts, router])
 
-  return activeCohort?.slug || cohorts[0]?.slug || null
-}
-
-export default async function AdminsRedirect() {
-  const cohortSlug = await getDefaultCohortSlug()
-
-  if (!cohortSlug) {
-    // No cohorts exist, redirect to cohorts page
-    redirect('/admin/cohorts')
-  }
-
-  redirect(`/admin/${cohortSlug}/admins`)
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <div className="text-sm text-muted-foreground">Loading...</div>
+    </div>
+  )
 }

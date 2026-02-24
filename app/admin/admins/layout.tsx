@@ -1,34 +1,47 @@
-import { requireSuperAdmin } from '@/lib/auth'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+'use client'
 
-async function getDefaultCohortSlug(): Promise<string | null> {
-  const supabase = await createClient()
-  const { data: cohorts } = await supabase
-    .from('cohorts')
-    .select('id, slug, is_active')
-    .order('year_start', { ascending: false })
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 
-  if (!cohorts || cohorts.length === 0) {
-    return null
+export default function AdminsLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const user = useQuery(api.users.current)
+  const cohorts = useQuery(api.cohorts.list)
+
+  useEffect(() => {
+    if (user === undefined || cohorts === undefined) return
+    if (user?.role !== 'super_admin') {
+      router.replace('/admin')
+      return
+    }
+    if (!cohorts || cohorts.length === 0) {
+      router.replace('/admin/cohorts')
+      return
+    }
+    const activeCohort = cohorts.find((c) => c.isActive)
+    const slug = activeCohort?.slug || cohorts[0]?.slug
+    if (slug) {
+      router.replace(`/admin/${slug}/admins`)
+    }
+  }, [user, cohorts, router])
+
+  if (user === undefined) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading...</div>
+      </div>
+    )
   }
 
-  // Prefer active cohort, otherwise use first cohort
-  const activeCohort = cohorts.find((c) => c.is_active)
-
-  return activeCohort?.slug || cohorts[0]?.slug || null
-}
-
-export default async function AdminsLayout({ children }: { children: React.ReactNode }) {
-  // This ensures only super_admin can access this route
-  await requireSuperAdmin()
-
-  // Redirect to cohort-scoped route
-  const cohortSlug = await getDefaultCohortSlug()
-  if (cohortSlug) {
-    redirect(`/admin/${cohortSlug}/admins`)
+  if (user?.role !== 'super_admin') {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-sm text-muted-foreground">Access denied. Super admin required.</div>
+      </div>
+    )
   }
 
-  // If no cohorts exist, redirect to cohorts page
-  redirect('/admin/cohorts')
+  return <>{children}</>
 }
