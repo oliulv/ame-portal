@@ -1,8 +1,30 @@
-import { requireFounder } from '@/lib/auth'
+'use client'
+
+import { useEffect } from 'react'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { Sidebar } from '@/components/sidebar'
 
-export default async function FounderLayout({ children }: { children: React.ReactNode }) {
-  await requireFounder()
+export default function FounderLayout({ children }: { children: React.ReactNode }) {
+  const user = useQuery(api.users.current)
+
+  useEffect(() => {
+    if (user !== undefined && (!user || user.role !== 'founder')) {
+      window.location.href = !user ? '/login' : '/access-required'
+    }
+  }, [user])
+
+  if (user === undefined) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!user || user.role !== 'founder') {
+    return null
+  }
 
   const navItems = [
     { title: 'Dashboard', href: '/founder/dashboard', icon: 'LayoutDashboard' },

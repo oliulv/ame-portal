@@ -1,9 +1,30 @@
-import { requireAdmin, getCurrentUser } from '@/lib/auth'
+'use client'
+
+import { useEffect } from 'react'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { Sidebar } from '@/components/sidebar'
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  await requireAdmin()
-  const user = await getCurrentUser()
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const user = useQuery(api.users.current)
+
+  useEffect(() => {
+    if (user !== undefined && (!user || (user.role !== 'admin' && user.role !== 'super_admin'))) {
+      window.location.href = !user ? '/login' : '/access-required'
+    }
+  }, [user])
+
+  if (user === undefined) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
+    return null
+  }
 
   const navItems = [
     { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
@@ -11,8 +32,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { title: 'Goal Templates', href: '/admin/goals', icon: 'Target' },
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },
     { title: 'Leaderboard', href: '/admin/leaderboard', icon: 'Trophy' },
-    // Only show Admins link for super_admin
-    ...(user?.role === 'super_admin'
+    ...(user.role === 'super_admin'
       ? [{ title: 'Admins', href: '/admin/admins', icon: 'Users' }]
       : []),
     { title: 'Settings', href: '/admin/settings', icon: 'Settings' },
@@ -25,7 +45,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         subtitle="Admin Portal"
         navItems={navItems}
         showCohortSelector={true}
-        userRole={user?.role}
+        userRole={user.role}
       />
 
       {/* Main content */}
