@@ -84,6 +84,40 @@ export const create = mutation({
 });
 
 /**
+ * Ensure the current authenticated user has a record in the users table.
+ * Called on app load — if the user exists in Clerk but not in Convex
+ * (e.g. after migrating from Supabase), this creates their record.
+ */
+export const ensureUser = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+
+    if (existing) return existing._id;
+
+    // Auto-provision: create the user record.
+    // Default to super_admin for the first user during migration,
+    // since the person logging in is likely the app owner.
+    // For production invite flows, users are created with correct roles.
+    const userCount = await ctx.db.query("users").collect();
+    const role = userCount.length === 0 ? "super_admin" : "admin";
+
+    return await ctx.db.insert("users", {
+      clerkId: identity.subject,
+      role,
+      email: identity.email ?? undefined,
+      fullName: identity.name ?? undefined,
+    });
+  },
+});
+
+/**
  * Delete a user (admin only).
  */
 export const remove = mutation({

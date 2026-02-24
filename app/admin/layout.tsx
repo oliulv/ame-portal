@@ -1,20 +1,36 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Sidebar } from '@/components/sidebar'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = useQuery(api.users.current)
+  const [waitCount, setWaitCount] = useState(0)
 
   useEffect(() => {
-    if (user !== undefined && (!user || (user.role !== 'admin' && user.role !== 'super_admin'))) {
-      window.location.href = !user ? '/login' : '/access-required'
-    }
-  }, [user])
+    if (user === undefined) return // still loading
 
-  if (user === undefined) {
+    if (user && user.role !== 'admin' && user.role !== 'super_admin') {
+      // Wrong role — redirect
+      window.location.href = '/access-required'
+      return
+    }
+
+    if (!user) {
+      // No user record yet — ensureUser may still be creating it.
+      // Wait for the reactive query to update.
+      if (waitCount < 10) {
+        const timer = setTimeout(() => setWaitCount((c) => c + 1), 500)
+        return () => clearTimeout(timer)
+      }
+      // After 5 seconds, redirect
+      window.location.href = '/login'
+    }
+  }, [user, waitCount])
+
+  if (user === undefined || (!user && waitCount < 10)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-sm text-muted-foreground">Loading...</div>

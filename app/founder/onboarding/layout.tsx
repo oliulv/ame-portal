@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -10,12 +10,25 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   const user = useQuery(api.users.current)
   const profileData = useQuery(api.founderProfile.get)
 
+  const [waitCount, setWaitCount] = useState(0)
+
   // Redirect if not authenticated or not a founder
   useEffect(() => {
-    if (user !== undefined && (!user || user.role !== 'founder')) {
-      window.location.href = !user ? '/login' : '/access-required'
+    if (user === undefined) return
+
+    if (user && user.role !== 'founder') {
+      window.location.href = '/access-required'
+      return
     }
-  }, [user])
+
+    if (!user) {
+      if (waitCount < 10) {
+        const timer = setTimeout(() => setWaitCount((c) => c + 1), 500)
+        return () => clearTimeout(timer)
+      }
+      window.location.href = '/login'
+    }
+  }, [user, waitCount])
 
   // If onboarding is already completed, redirect to dashboard
   useEffect(() => {
@@ -28,7 +41,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   }, [profileData, router])
 
   // Loading state while checking auth and onboarding status
-  if (user === undefined || profileData === undefined) {
+  if (user === undefined || (!user && waitCount < 10) || profileData === undefined) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-sm text-muted-foreground">Loading...</div>

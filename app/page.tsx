@@ -1,56 +1,48 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 
 export default function Home() {
   const { userId, isLoaded } = useAuth()
+  const user = useQuery(api.users.current)
+  // Give ensureUser time to create the record before giving up
+  const [waitCount, setWaitCount] = useState(0)
 
   useEffect(() => {
-    if (!isLoaded) {
-      return
-    }
+    if (!isLoaded) return
 
-    // If not authenticated with Clerk, go to login
     if (!userId) {
       window.location.href = '/login'
       return
     }
 
-    // Fetch user data and redirect based on role
-    async function checkUserAndRedirect() {
-      try {
-        const response = await fetch('/api/user/current')
+    // Wait for Convex query to resolve
+    if (user === undefined) return
 
-        if (!response.ok) {
-          // If user doesn't exist in Supabase, send them to access-required page
-          window.location.href = '/access-required'
-          return
-        }
-
-        const user = await response.json()
-
-        if (!user) {
-          window.location.href = '/access-required'
-          return
-        }
-
-        if (user.role === 'founder') {
-          window.location.href = '/founder/dashboard'
-          return
-        }
-
-        // Default for any authenticated user with an app-level role
+    if (user) {
+      // User found — redirect based on role
+      if (user.role === 'founder') {
+        window.location.href = '/founder/dashboard'
+      } else {
         window.location.href = '/admin'
-      } catch (error) {
-        // If there's a real error getting the user, send to access-required page
-        console.error('Error getting user in home page:', error)
-        window.location.href = '/access-required'
       }
+      return
     }
 
-    checkUserAndRedirect()
-  }, [userId, isLoaded])
+    // user is null — record doesn't exist yet.
+    // EnsureUser mutation is running in the background.
+    // Wait for the reactive query to pick up the new record.
+    if (waitCount < 10) {
+      const timer = setTimeout(() => setWaitCount((c) => c + 1), 500)
+      return () => clearTimeout(timer)
+    }
+
+    // After 5 seconds of waiting, give up
+    window.location.href = '/access-required'
+  }, [userId, isLoaded, user, waitCount])
 
   return (
     <div className="flex min-h-screen items-center justify-center">
