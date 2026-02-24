@@ -37,6 +37,17 @@ export const getBySlug = query({
 });
 
 /**
+ * Get a single startup by ID.
+ */
+export const getById = query({
+  args: { id: v.id("startups") },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    return await ctx.db.get(args.id);
+  },
+});
+
+/**
  * Create a startup with cascade: startup_profiles, bank_details, and goals from templates.
  */
 export const create = mutation({

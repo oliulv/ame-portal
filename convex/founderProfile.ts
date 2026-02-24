@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { requireFounder, requireAuth } from "./auth";
+import { requireFounder, requireAuth, requireAdmin } from "./auth";
 
 /**
  * Get the current founder's full profile (founder profile + startup + startup profile + bank).
@@ -123,5 +123,20 @@ export const updateAdminProfile = mutation({
     }
 
     await ctx.db.patch(user._id, patch);
+  },
+});
+
+/**
+ * Get a founder profile by user ID (admin only, for invoice uploader info).
+ */
+export const getByUserId = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    return await ctx.db
+      .query("founderProfiles")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .first();
   },
 });

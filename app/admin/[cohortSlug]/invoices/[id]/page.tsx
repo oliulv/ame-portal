@@ -1,5 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect, notFound } from 'next/navigation'
+'use client'
+
+import { useParams, useRouter } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import type { Id } from '@/convex/_generated/dataModel'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,7 +19,6 @@ import {
   User,
 } from 'lucide-react'
 import { InvoiceActions } from './InvoiceActions'
-import { cached, cacheKeys, cacheTTL } from '@/lib/cache'
 
 function getInvoiceStatusVariant(
   status: string
@@ -32,77 +35,73 @@ function getInvoiceStatusVariant(
   }
 }
 
-interface PageProps {
-  params: Promise<{
-    cohortSlug: string
-    id: string
-  }>
-}
+export default function InvoiceDetailPage() {
+  const params = useParams<{ cohortSlug: string; id: string }>()
+  const router = useRouter()
+  const cohortSlug = params.cohortSlug ?? ''
+  const invoiceId = params.id as Id<'invoices'>
 
-export default async function InvoiceDetailPage({ params }: PageProps) {
-  const { cohortSlug, id } = await params
-  const supabase = await createClient()
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
+  const invoice = useQuery(api.invoices.getById, { id: invoiceId })
+  const startup = useQuery(
+    api.startups.getById,
+    invoice?.startupId ? { id: invoice.startupId } : 'skip'
+  )
+  const fileUrl = useQuery(
+    api.invoices.getFileUrl,
+    invoice?.storageId ? { storageId: invoice.storageId } : 'skip'
+  )
+  const founderProfile = useQuery(
+    api.founderProfile.getByUserId,
+    invoice?.uploadedByUserId ? { userId: invoice.uploadedByUserId } : 'skip'
+  )
 
-  // Fetch cohort and invoice in parallel (both are needed for validation)
-  const [cohort, invoiceResult] = await Promise.all([
-    // Verify cohort exists (cached)
-    cached(
-      cacheKeys.cohort(cohortSlug),
-      async () => {
-        const { data, error } = await supabase
-          .from('cohorts')
-          .select('id, label, slug')
-          .eq('slug', cohortSlug)
-          .single()
-        if (error || !data) return null
-        return data
-      },
-      cacheTTL.cohort
-    ),
-    // Fetch invoice with startup info
-    supabase
-      .from('invoices')
-      .select(
-        `
-        *,
-        startups (
-          id,
-          name,
-          slug,
-          cohort_id
-        )
-      `
-      )
-      .eq('id', id)
-      .single(),
-  ])
-
-  if (!cohort) {
-    redirect('/admin/cohorts')
+  // Loading state
+  if (cohort === undefined || invoice === undefined) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-sm text-muted-foreground">Loading invoice...</div>
+      </div>
+    )
   }
 
-  const invoice = invoiceResult.data
-  if (invoiceResult.error || !invoice) {
-    notFound()
+  // Cohort not found
+  if (!cohort) {
+    router.push('/admin/cohorts')
+    return null
+  }
+
+  // Invoice not found
+  if (!invoice) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Invoice Not Found</h2>
+          <p className="text-muted-foreground mb-4">This invoice does not exist.</p>
+          <Link href={`/admin/${cohortSlug}/invoices`}>
+            <Button variant="ghost">Back to Invoices</Button>
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   // Verify invoice belongs to a startup in this cohort
-  const startup = invoice.startups as {
-    id: string
-    name: string
-    slug: string | null
-    cohort_id: string
-  } | null
-  if (!startup || startup.cohort_id !== cohort.id) {
-    notFound()
+  if (startup && startup.cohortId !== cohort._id) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Invoice Not Found</h2>
+          <p className="text-muted-foreground mb-4">
+            This invoice does not belong to the current cohort.
+          </p>
+          <Link href={`/admin/${cohortSlug}/invoices`}>
+            <Button variant="ghost">Back to Invoices</Button>
+          </Link>
+        </div>
+      </div>
+    )
   }
-
-  // Fetch founder who uploaded the invoice
-  const { data: founderProfile } = await supabase
-    .from('founder_profiles')
-    .select('full_name, personal_email')
-    .eq('user_id', invoice.uploaded_by_user_id)
-    .single()
 
   const canApprove = invoice.status === 'submitted' || invoice.status === 'under_review'
   const canMarkPaid = invoice.status === 'approved'
@@ -141,29 +140,30 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Vendor Name</label>
-                  <p className="text-lg font-medium">{invoice.vendor_name}</p>
+                  <p className="text-lg font-medium">{invoice.vendorName}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Amount</label>
                   <p className="text-lg font-medium font-mono">
-                    £{Number(invoice.amount_gbp).toFixed(2)}
+                    {'\u00A3'}
+                    {Number(invoice.amountGbp).toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Invoice Date</label>
                   <p className="text-sm">
-                    {new Date(invoice.invoice_date).toLocaleDateString('en-GB', {
+                    {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'long',
                       year: 'numeric',
                     })}
                   </p>
                 </div>
-                {invoice.due_date && (
+                {invoice.dueDate && (
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Due Date</label>
                     <p className="text-sm">
-                      {new Date(invoice.due_date).toLocaleDateString('en-GB', {
+                      {new Date(invoice.dueDate).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'long',
                         year: 'numeric',
@@ -191,28 +191,32 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 <label className="text-sm font-medium text-muted-foreground mb-2 block">
                   Invoice File
                 </label>
-                <a
-                  href={invoice.file_path}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  <FileText className="h-4 w-4" />
-                  View Invoice Document
-                  <ExternalLink className="h-3 w-3" />
-                </a>
+                {fileUrl ? (
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    <FileText className="h-4 w-4" />
+                    {invoice.fileName || 'View Invoice Document'}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Loading file...</span>
+                )}
               </div>
             </CardContent>
           </Card>
 
           {/* Admin Comments */}
-          {invoice.admin_comment && (
+          {invoice.adminComment && (
             <Card>
               <CardHeader>
                 <CardTitle>Admin Comment</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm whitespace-pre-wrap">{invoice.admin_comment}</p>
+                <p className="text-sm whitespace-pre-wrap">{invoice.adminComment}</p>
               </CardContent>
             </Card>
           )}
@@ -228,12 +232,16 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             <CardContent className="space-y-2">
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-muted-foreground" />
-                <Link
-                  href={`/admin/${cohortSlug}/startups/${startup.slug}`}
-                  className="text-blue-600 hover:underline font-medium"
-                >
-                  {startup.name}
-                </Link>
+                {startup ? (
+                  <Link
+                    href={`/admin/${cohortSlug}/startups/${startup.slug}`}
+                    className="text-blue-600 hover:underline font-medium"
+                  >
+                    {startup.name}
+                  </Link>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Loading...</span>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -248,13 +256,15 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">{founderProfile.full_name}</p>
-                    <p className="text-xs text-muted-foreground">{founderProfile.personal_email}</p>
+                    <p className="text-sm font-medium">{founderProfile.fullName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {founderProfile.personalEmail}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Calendar className="h-3 w-3" />
-                  {new Date(invoice.created_at).toLocaleDateString('en-GB', {
+                  {new Date(invoice._creationTime).toLocaleDateString('en-GB', {
                     day: 'numeric',
                     month: 'short',
                     year: 'numeric',
@@ -267,25 +277,25 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           )}
 
           {/* Approval History */}
-          {(invoice.approved_at || invoice.paid_at) && (
+          {(invoice.approvedAt || invoice.paidAt) && (
             <Card>
               <CardHeader>
                 <CardTitle>History</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                {invoice.approved_at && (
+                {invoice.approvedAt && (
                   <div className="flex items-center gap-2 text-green-600">
                     <CheckCircle2 className="h-4 w-4" />
                     <span>
-                      Approved on {new Date(invoice.approved_at).toLocaleDateString('en-GB')}
+                      Approved on {new Date(invoice.approvedAt).toLocaleDateString('en-GB')}
                     </span>
                   </div>
                 )}
-                {invoice.paid_at && (
+                {invoice.paidAt && (
                   <div className="flex items-center gap-2 text-blue-600">
                     <DollarSign className="h-4 w-4" />
                     <span>
-                      Marked as paid on {new Date(invoice.paid_at).toLocaleDateString('en-GB')}
+                      Marked as paid on {new Date(invoice.paidAt).toLocaleDateString('en-GB')}
                     </span>
                   </div>
                 )}
@@ -295,7 +305,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
 
           {/* Actions */}
           {(canApprove || canMarkPaid) && (
-            <InvoiceActions invoiceId={invoice.id} currentStatus={invoice.status} />
+            <InvoiceActions invoiceId={invoice._id} currentStatus={invoice.status} />
           )}
         </div>
       </div>

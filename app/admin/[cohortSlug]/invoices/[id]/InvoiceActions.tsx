@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import type { Id } from '@/convex/_generated/dataModel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -10,12 +12,12 @@ import { CheckCircle2, XCircle, DollarSign, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface InvoiceActionsProps {
-  invoiceId: string
+  invoiceId: Id<'invoices'>
   currentStatus: string
 }
 
 export function InvoiceActions({ invoiceId, currentStatus }: InvoiceActionsProps) {
-  const router = useRouter()
+  const updateStatus = useMutation(api.invoices.updateStatus)
   const [comment, setComment] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [actionType, setActionType] = useState<'approve' | 'reject' | 'paid' | null>(null)
@@ -28,19 +30,14 @@ export function InvoiceActions({ invoiceId, currentStatus }: InvoiceActionsProps
     setActionType(action)
 
     try {
-      const response = await fetch(`/api/admin/invoices/${invoiceId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'paid',
-          admin_comment: comment.trim() || null,
-        }),
-      })
+      const status =
+        action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'paid'
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to update invoice')
-      }
+      await updateStatus({
+        id: invoiceId,
+        status: status as 'approved' | 'rejected' | 'paid',
+        adminComment: comment.trim() || undefined,
+      })
 
       toast.success(
         action === 'approve'
@@ -49,8 +46,6 @@ export function InvoiceActions({ invoiceId, currentStatus }: InvoiceActionsProps
             ? 'Invoice rejected'
             : 'Invoice marked as paid'
       )
-
-      router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update invoice')
     } finally {

@@ -1,76 +1,67 @@
-import { createClient } from '@/lib/supabase/server'
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
 import { SignUp } from '@clerk/nextjs'
+import { useQuery, useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
 
-interface InvitePageProps {
-  params: Promise<{ token: string }>
-}
+export default function InvitePage() {
+  const params = useParams<{ token: string }>()
+  const router = useRouter()
+  const { userId, isLoaded } = useAuth()
 
-export default async function InvitePage({ params }: InvitePageProps) {
-  const { token: rawToken } = await params
-  const supabase = await createClient()
-
-  // Trim and normalize the token (Next.js should decode URL params automatically)
-  const token = rawToken.trim()
-
-  // Try URL decoding in case email client encoded it (safe fallback)
-  let decodedToken = token
+  const rawToken = params.token ?? ''
+  let token = rawToken.trim()
   try {
-    decodedToken = decodeURIComponent(token)
+    token = decodeURIComponent(token)
   } catch {
-    // If decoding fails, use original token
-    decodedToken = token
+    // If decoding fails, use trimmed token
   }
 
-  // Check if invitation is valid - try exact match first
-  // Note: cohorts must be accessed through startups, not directly
-  let { data: invitation, error } = await supabase
-    .from('invitations')
-    .select('*, startups(id, name, cohort_id, cohorts(id, name))')
-    .eq('token', token)
-    .single()
+  const invitation = useQuery(api.invitations.getByToken, { token })
+  const acceptInvite = useMutation(api.invitations.accept)
 
-  // If first query failed and tokens are different, try decoded version
-  if ((error || !invitation) && token !== decodedToken) {
-    const retryResult = await supabase
-      .from('invitations')
-      .select('*, startups(id, name, cohort_id, cohorts(id, name))')
-      .eq('token', decodedToken)
-      .single()
+  const [acceptError, setAcceptError] = useState<string | null>(null)
+  const [isAccepting, setIsAccepting] = useState(false)
+  const [hasAccepted, setHasAccepted] = useState(false)
 
-    invitation = retryResult.data
-    error = retryResult.error
-  }
+  // Auto-accept when user is authenticated and invitation is valid
+  useEffect(() => {
+    if (!isLoaded || !userId) return
+    if (invitation === undefined) return // still loading
+    if (!invitation) return // invalid
+    if (invitation.acceptedAt) return // already accepted
+    if (new Date(invitation.expiresAt) < new Date()) return // expired
+    if (isAccepting || hasAccepted) return
 
-  // Final fallback: try case-insensitive match (in case of database collation issues)
-  if (error || !invitation) {
-    const fallbackResult = await supabase
-      .from('invitations')
-      .select('*, startups(id, name, cohort_id, cohorts(id, name))')
-      .ilike('token', token)
-      .single()
-
-    // Only use fallback if it found a result
-    if (fallbackResult.data) {
-      invitation = fallbackResult.data
-      error = null
+    const doAccept = async () => {
+      setIsAccepting(true)
+      try {
+        await acceptInvite({ token, clerkId: userId })
+        setHasAccepted(true)
+        router.push('/founder/onboarding')
+      } catch (err) {
+        setAcceptError(err instanceof Error ? err.message : 'Failed to accept invitation')
+        setIsAccepting(false)
+      }
     }
+    doAccept()
+  }, [isLoaded, userId, invitation, token, acceptInvite, isAccepting, hasAccepted, router])
+
+  // Loading state
+  if (invitation === undefined) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">Loading invitation...</div>
+      </div>
+    )
   }
 
-  if (error || !invitation) {
-    // Log error for debugging
-    console.error('Invitation lookup error:', {
-      error: error?.message || error,
-      token,
-      tokenLength: token.length,
-      decodedToken,
-      decodedTokenLength: decodedToken.length,
-      rawToken,
-      rawTokenLength: rawToken.length,
-    })
-
+  // Invalid invitation
+  if (!invitation) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
@@ -88,8 +79,8 @@ export default async function InvitePage({ params }: InvitePageProps) {
     )
   }
 
-  // Check if already accepted
-  if (invitation.accepted_at) {
+  // Already accepted
+  if (invitation.acceptedAt) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
@@ -105,8 +96,8 @@ export default async function InvitePage({ params }: InvitePageProps) {
     )
   }
 
-  // Check if expired
-  if (new Date(invitation.expires_at) < new Date()) {
+  // Expired
+  if (new Date(invitation.expiresAt) < new Date()) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
@@ -122,73 +113,33 @@ export default async function InvitePage({ params }: InvitePageProps) {
     )
   }
 
-  const { userId } = await auth()
-
-  // If user is already authenticated, process the invitation
+  // User is authenticated - show accepting state
   if (userId) {
-    // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id, email, full_name')
-      .eq('id', userId)
-      .single()
-
-    // Create user record if doesn't exist, or update with name/email from invitation
-    if (!existingUser) {
-      await supabase.from('users').insert({
-        id: userId,
-        role: 'founder',
-        email: invitation.email || null,
-        full_name: invitation.full_name || null,
-      })
-    } else {
-      // Update user with invitation data if not already set
-      const updateData: { email?: string; full_name?: string; updated_at: string } = {
-        updated_at: new Date().toISOString(),
-      }
-      if (!existingUser.email && invitation.email) {
-        updateData.email = invitation.email
-      }
-      if (!existingUser.full_name && invitation.full_name) {
-        updateData.full_name = invitation.full_name
-      }
-      if (Object.keys(updateData).length > 1) {
-        // Only update if there's something to update (besides updated_at)
-        await supabase.from('users').update(updateData).eq('id', userId)
-      }
+    if (acceptError) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="text-center">
+            <div className="bg-card text-card-foreground p-8 rounded-lg shadow-md border border-border max-w-md mx-4">
+              <h1 className="text-2xl font-bold mb-4 text-foreground">Error</h1>
+              <p className="text-muted-foreground mb-4">{acceptError}</p>
+              <Link href="/login" className="text-primary hover:text-primary/80 underline">
+                Go to Login
+              </Link>
+            </div>
+          </div>
+        </div>
+      )
     }
 
-    // Create founder profile
-    const { data: existingProfile } = await supabase
-      .from('founder_profiles')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('startup_id', invitation.startup_id)
-      .single()
-
-    if (!existingProfile) {
-      await supabase.from('founder_profiles').insert({
-        user_id: userId,
-        startup_id: invitation.startup_id,
-        full_name: invitation.full_name,
-        personal_email: invitation.email,
-        onboarding_status: 'pending',
-      })
-    }
-
-    // Mark invitation as accepted
-    await supabase
-      .from('invitations')
-      .update({ accepted_at: new Date().toISOString() })
-      .eq('id', invitation.id)
-
-    redirect('/founder/onboarding')
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">Accepting invitation...</div>
+      </div>
+    )
   }
 
-  // Show sign-up form
-  // Cohorts are nested inside startups in the query result
-  const cohortName = invitation.startups?.cohorts?.name || 'the cohort'
-  const startupName = invitation.startups?.name || 'your startup'
+  // Show sign-up form for unauthenticated users
+  const founderName = invitation.fullName || 'your startup'
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
@@ -196,16 +147,16 @@ export default async function InvitePage({ params }: InvitePageProps) {
         <div className="bg-card text-card-foreground p-8 rounded-lg shadow-md mb-4 border border-border">
           <h1 className="text-2xl font-bold mb-2">Welcome to AccelerateMe!</h1>
           <p className="text-muted-foreground mb-4">
-            You've been invited to join <strong className="text-foreground">{cohortName}</strong> as
-            a founder of <strong className="text-foreground">{startupName}</strong>.
+            Hi <strong className="text-foreground">{founderName}</strong>, you have been invited to
+            join as a founder.
           </p>
           <p className="text-sm text-muted-foreground mb-6">
             Please create an account to accept your invitation.
           </p>
         </div>
         <SignUp
-          afterSignUpUrl={`/invite/${token}`}
-          forceRedirectUrl={`/invite/${token}`}
+          afterSignUpUrl={`/invite/${encodeURIComponent(token)}`}
+          forceRedirectUrl={`/invite/${encodeURIComponent(token)}`}
           appearance={{
             elements: {
               // Root container
