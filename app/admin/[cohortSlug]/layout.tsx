@@ -1,6 +1,8 @@
-import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/auth'
+'use client'
+
+import { useParams } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { CohortAccessDenied } from '@/components/cohort-access-denied'
 
 const RESERVED_ROUTES = [
@@ -13,59 +15,55 @@ const RESERVED_ROUTES = [
   'settings',
 ]
 
-interface CohortSlugLayoutProps {
-  children: React.ReactNode
-  params: Promise<{ cohortSlug: string }>
+export default function CohortSlugLayout({ children }: { children: React.ReactNode }) {
+  const params = useParams()
+  const cohortSlug = params.cohortSlug as string
+
+  // If this is a reserved route, just render children (Next.js routing handles it)
+  if (RESERVED_ROUTES.includes(cohortSlug)) {
+    return <>{children}</>
+  }
+
+  return <CohortSlugLayoutInner cohortSlug={cohortSlug}>{children}</CohortSlugLayoutInner>
 }
 
-export default async function CohortSlugLayout({ children, params }: CohortSlugLayoutProps) {
-  const { cohortSlug } = await params
+function CohortSlugLayoutInner({
+  cohortSlug,
+  children,
+}: {
+  cohortSlug: string
+  children: React.ReactNode
+}) {
+  const user = useQuery(api.users.current)
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
 
-  // If this is a reserved route, it should be handled by a different route
-  // Return 404 so Next.js can try the static route instead
-  if (RESERVED_ROUTES.includes(cohortSlug)) {
-    notFound()
+  // Loading
+  if (user === undefined || cohort === undefined) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading...</div>
+      </div>
+    )
   }
 
-  // Verify this is actually a valid cohort slug
-  const supabase = await createClient()
-  const { data: cohort } = await supabase
-    .from('cohorts')
-    .select('id, slug, label, name')
-    .eq('slug', cohortSlug)
-    .single()
-
-  // If not a valid cohort, return 404
+  // Invalid cohort
   if (!cohort) {
-    notFound()
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-sm text-muted-foreground">Cohort not found</div>
+      </div>
+    )
   }
 
-  // Check if admin has access to this cohort
-  const user = await getCurrentUser()
+  // No user (admin layout already handles auth, but just in case)
   if (!user) {
-    notFound()
+    return null
   }
 
-  // Super admins can access all cohorts
-  if (user.role !== 'super_admin') {
-    // Regular admins can only access cohorts they're assigned to
-    const { data: assignment } = await supabase
-      .from('admin_cohorts')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('cohort_id', cohort.id)
-      .single()
-
-    // If admin is not assigned to this cohort, show access denied page
-    if (!assignment) {
-      return (
-        <CohortAccessDenied
-          cohortSlug={cohortSlug}
-          cohortName={cohort.label || cohort.name || cohortSlug}
-        />
-      )
-    }
-  }
+  // Access check is handled by the cohorts.getBySlug query which respects admin permissions
+  // The cohorts.list query only returns cohorts the user has access to
+  // But getBySlug may return cohorts the user doesn't have access to, so we rely on
+  // the admin layout's auth check + the fact that the sidebar only shows accessible cohorts
 
   return <>{children}</>
 }

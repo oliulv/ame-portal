@@ -1,27 +1,23 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Users, Building2, FileText, ArrowRight, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
-import { dashboardApi } from '@/lib/api/dashboard'
-import { useSelectedCohort } from '@/lib/hooks/useSelectedCohort'
 import { EmptyState } from '@/components/ui/empty-state'
 
 export default function AdminDashboard() {
   const params = useParams()
   const cohortSlug = params.cohortSlug as string
-  const { cohort } = useSelectedCohort()
 
-  // Fetch dashboard stats using TanStack Query
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['dashboard', 'stats', cohortSlug],
-    queryFn: () => dashboardApi.getStats(cohortSlug),
-    staleTime: 1000 * 30, // 30 seconds
-  })
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
+  const stats = useQuery(api.startups.dashboardStats, { cohortSlug })
+
+  const isLoading = cohort === undefined || stats === undefined
 
   if (isLoading) {
     return (
@@ -31,33 +27,17 @@ export default function AdminDashboard() {
           <Skeleton className="h-5 w-64" />
         </div>
         <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-16 mb-2" />
-              <Skeleton className="h-4 w-40" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-16 mb-2" />
-              <Skeleton className="h-4 w-40" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-16 mb-2" />
-              <Skeleton className="h-4 w-40" />
-            </CardContent>
-          </Card>
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16 mb-2" />
+                <Skeleton className="h-4 w-40" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
@@ -69,7 +49,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
@@ -77,7 +56,6 @@ export default function AdminDashboard() {
         </p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -113,7 +91,6 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      {/* Call to Action - Show when no startups */}
       {startupsCount === 0 && (
         <EmptyState
           icon={<Building2 className="h-6 w-6" />}
@@ -130,7 +107,6 @@ export default function AdminDashboard() {
         />
       )}
 
-      {/* Quick Actions */}
       <Card>
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>

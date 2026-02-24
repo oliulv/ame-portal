@@ -1,41 +1,25 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Target, FileText, Building2 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
-import { goalsApi } from '@/lib/api/goals'
-import { invoicesApi } from '@/lib/api/invoices'
-import { queryKeys } from '@/lib/queryKeys'
 
 export default function FounderDashboard() {
-  // Fetch founder goals to calculate stats
-  const { data: goals = [], isLoading: isLoadingGoals } = useQuery({
-    queryKey: queryKeys.goals.list('founder'),
-    queryFn: () => goalsApi.getFounderGoals(),
-    staleTime: 1000 * 60, // 1 minute - realtime handles most updates
-  })
+  const goals = useQuery(api.startupGoals.listForFounder)
+  const invoicesData = useQuery(api.invoices.listForFounder)
 
-  // Fetch invoices to get pending count
-  const { data: invoicesData, isLoading: isLoadingInvoices } = useQuery({
-    queryKey: queryKeys.invoices.list('founder'),
-    queryFn: () => invoicesApi.getFounderInvoices(),
-    staleTime: 1000 * 60, // 1 minute
-  })
+  const isLoading = goals === undefined || invoicesData === undefined
 
-  // Calculate stats from goals
-  const completedGoals = goals.filter((g) => g.status === 'completed').length
-  const totalGoals = goals.length
+  const completedGoals = goals?.filter((g) => g.status === 'completed').length ?? 0
+  const totalGoals = goals?.length ?? 0
   const progressPercentage = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0
-
-  // Get pending invoice count
   const pendingInvoices = invoicesData?.pendingCount ?? 0
-
-  const isLoading = isLoadingGoals || isLoadingInvoices
-  const hasStartups = goals.length > 0 // If there are goals, there's at least one startup
+  const hasStartups = (goals?.length ?? 0) > 0
 
   if (isLoading) {
     return (
@@ -85,13 +69,11 @@ export default function FounderDashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Welcome back! Here's your startup progress</p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
