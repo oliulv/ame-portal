@@ -51,7 +51,7 @@ const conditionSchema = z
  * Validation schema for goal templates with condition-based success criteria
  */
 export const goalTemplateSchema = z.object({
-  cohortId: z.string().uuid('Invalid cohort ID'),
+  cohortId: z.string().min(1, 'Cohort ID is required'),
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   category: z.enum(['launch', 'revenue', 'users', 'product', 'fundraising', 'growth', 'hiring']),
