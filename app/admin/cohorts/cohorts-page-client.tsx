@@ -1,6 +1,7 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -15,8 +16,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Plus, Users, ExternalLink } from 'lucide-react'
-import { queryKeys } from '@/lib/queryKeys'
-import { cohortsApi } from '@/lib/api/cohorts'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface CohortsPageClientProps {
@@ -24,12 +23,9 @@ interface CohortsPageClientProps {
 }
 
 export function CohortsPageClient({ isSuperAdmin }: CohortsPageClientProps) {
-  const { data: cohorts, isLoading } = useQuery({
-    queryKey: queryKeys.cohorts.lists(),
-    queryFn: () => cohortsApi.getAll(),
-  })
+  const cohorts = useQuery(api.cohorts.list)
 
-  if (isLoading) {
+  if (cohorts === undefined) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -52,7 +48,6 @@ export function CohortsPageClient({ isSuperAdmin }: CohortsPageClientProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Cohorts</h1>
@@ -68,7 +63,6 @@ export function CohortsPageClient({ isSuperAdmin }: CohortsPageClientProps) {
         )}
       </div>
 
-      {/* Table */}
       {cohorts && cohorts.length > 0 ? (
         <Card>
           <Table>
@@ -82,7 +76,7 @@ export function CohortsPageClient({ isSuperAdmin }: CohortsPageClientProps) {
             </TableHeader>
             <TableBody>
               {cohorts.map((cohort) => (
-                <TableRow key={cohort.id}>
+                <TableRow key={cohort._id}>
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">{cohort.label}</span>
@@ -91,12 +85,12 @@ export function CohortsPageClient({ isSuperAdmin }: CohortsPageClientProps) {
                   </TableCell>
                   <TableCell>
                     <span className="text-sm">
-                      {cohort.year_start} - {cohort.year_end}
+                      {cohort.yearStart} - {cohort.yearEnd}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={cohort.is_active ? 'success' : 'secondary'}>
-                      {cohort.is_active ? 'Active' : 'Inactive'}
+                    <Badge variant={cohort.isActive ? 'success' : 'secondary'}>
+                      {cohort.isActive ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">

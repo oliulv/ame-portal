@@ -1,8 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
+import { useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -19,12 +22,13 @@ import { Switch } from '@/components/ui/switch'
 import { cohortSchema, type CohortFormData } from '@/lib/schemas'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
-import { useAppMutation } from '@/lib/hooks/useAppMutation'
-import { cohortsApi } from '@/lib/api/cohorts'
-import { queryKeys } from '@/lib/queryKeys'
+import { toast } from 'sonner'
 
 export default function NewCohortPage() {
   const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const createCohort = useMutation(api.cohorts.create)
 
   const form = useForm<CohortFormData>({
     resolver: zodResolver(cohortSchema),
@@ -37,17 +41,24 @@ export default function NewCohortPage() {
     },
   })
 
-  const createCohort = useAppMutation({
-    mutationFn: (data: CohortFormData) => cohortsApi.create(data),
-    invalidateQueries: [queryKeys.cohorts.lists()],
-    successMessage: 'Cohort created successfully',
-    onSuccess: () => {
-      router.push('/admin/cohorts')
-    },
-  })
-
   async function onSubmit(data: CohortFormData) {
-    createCohort.mutate(data)
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await createCohort({
+        name: data.name,
+        label: data.label,
+        yearStart: data.year_start,
+        yearEnd: data.year_end,
+        isActive: data.is_active,
+      })
+      toast.success('Cohort created successfully')
+      router.push('/admin/cohorts')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -67,9 +78,9 @@ export default function NewCohortPage() {
           <CardDescription>Add a new cohort to organize startups by program year</CardDescription>
         </CardHeader>
         <CardContent>
-          {createCohort.isError && (
+          {error && (
             <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {createCohort.error?.message || 'An error occurred'}
+              {error}
             </div>
           )}
 
@@ -162,8 +173,8 @@ export default function NewCohortPage() {
               />
 
               <div className="flex gap-4">
-                <Button type="submit" disabled={createCohort.isPending}>
-                  {createCohort.isPending ? 'Creating...' : 'Create Cohort'}
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Creating...' : 'Create Cohort'}
                 </Button>
                 <Link href="/admin/cohorts">
                   <Button type="button" variant="outline">
