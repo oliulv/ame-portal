@@ -1,9 +1,21 @@
-import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+'use client'
+
+import { useParams } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   ArrowLeft,
   Edit,
@@ -13,116 +25,114 @@ import {
   Mail,
   ExternalLink,
   Plug,
-  CheckCircle2,
-  XCircle,
 } from 'lucide-react'
-import { GoalsSection } from './GoalsSection'
-import { InvitationsTable } from './InvitationsTable'
-import { cached, cacheKeys, cacheTTL } from '@/lib/cache'
 
-interface StartupDetailPageProps {
-  params: Promise<{
-    cohortSlug: string
-    slug: string
-  }>
-}
+export default function StartupDetailPage() {
+  const params = useParams()
+  const cohortSlug = params.cohortSlug as string
+  const slug = params.slug as string
 
-export default async function StartupDetailPage({ params }: StartupDetailPageProps) {
-  const { cohortSlug, slug } = await params
-  const supabase = await createClient()
-
-  // Fetch startup details with cohort info by slug (cached)
-  const startup = await cached(
-    cacheKeys.startup(slug),
-    async () => {
-      const { data, error } = await supabase
-        .from('startups')
-        .select(
-          `
-          *,
-          cohorts (
-            id,
-            slug,
-            label
-          )
-        `
-        )
-        .eq('slug', slug)
-        .single()
-      if (error || !data) return null
-      return data
-    },
-    cacheTTL.startup
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
+  const startup = useQuery(api.startups.getBySlug, { slug })
+  const goals = useQuery(
+    api.startupGoals.listByStartup,
+    startup ? { startupId: startup._id } : 'skip'
+  )
+  const invitations = useQuery(
+    api.invitations.list,
+    startup ? { startupId: startup._id } : 'skip'
+  )
+  const invoices = useQuery(
+    api.invoices.listForAdmin,
+    startup ? { startupId: startup._id } : 'skip'
   )
 
-  if (!startup) {
-    notFound()
+  // Loading state
+  if (startup === undefined || cohort === undefined) {
+    return (
+      <div className="space-y-6">
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-9 w-36" />
+            <div>
+              <Skeleton className="h-9 w-64" />
+              <Skeleton className="mt-1 h-5 w-32" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-28" />
+            <Skeleton className="h-10 w-36" />
+            <Skeleton className="h-10 w-20" />
+          </div>
+        </div>
+
+        {/* Stats skeleton */}
+        <div className="grid gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-12" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Details skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-36" />
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </CardContent>
+        </Card>
+
+        {/* Invitations skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-40 w-full" />
+          </CardContent>
+        </Card>
+
+        {/* Goals skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-24" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-40 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
-  // Verify the startup belongs to the cohort in the URL
-  const cohort = startup.cohorts as { id: string; slug: string; label: string } | null
-  if (cohort?.slug !== cohortSlug) {
-    notFound()
+  // Not found
+  if (startup === null || cohort === null) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <h1 className="text-2xl font-bold">Startup not found</h1>
+        <p className="mt-2 text-muted-foreground">
+          The startup you are looking for does not exist or does not belong to this cohort.
+        </p>
+        <Link href={`/admin/${cohortSlug}/startups`} className="mt-4">
+          <Button variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Startups
+          </Button>
+        </Link>
+      </div>
+    )
   }
-
-  // Fetch all related data in parallel (instead of sequentially)
-  const [
-    { data: goals },
-    { data: invitations },
-    { data: bankDetails },
-    { data: _invoices },
-    { data: integrations },
-  ] = await Promise.all([
-    // Goals
-    supabase.from('startup_goals').select('*').eq('startup_id', startup.id).order('created_at'),
-    // Invitations
-    supabase
-      .from('invitations')
-      .select('id, full_name, email, accepted_at, created_at, expires_at')
-      .eq('startup_id', startup.id)
-      .order('created_at', { ascending: false }),
-    // Bank details
-    supabase.from('bank_details').select('*').eq('startup_id', startup.id).single(),
-    // Invoices
-    supabase
-      .from('invoices')
-      .select('id, status, amount, created_at')
-      .eq('startup_id', startup.id)
-      .order('created_at', { ascending: false })
-      .limit(5),
-    // Integrations
-    supabase
-      .from('integration_connections')
-      .select('*')
-      .eq('startup_id', startup.id)
-      .eq('is_active', true),
-  ])
-
-  // Fetch founder profiles for accepted invitations (depends on invitations result)
-  const acceptedEmails = invitations?.filter((i) => i.accepted_at).map((i) => i.email) || []
-  const { data: founderProfiles } =
-    acceptedEmails.length > 0
-      ? await supabase
-          .from('founder_profiles')
-          .select('*')
-          .eq('startup_id', startup.id)
-          .in('personal_email', acceptedEmails)
-      : { data: null }
-
-  // Create a map of email -> founder profile for easy lookup
-  const founderProfileMap = new Map(founderProfiles?.map((fp) => [fp.personal_email, fp]) || [])
-
-  // Format dates on the server to avoid hydration mismatches
-  const formattedInvitations =
-    invitations?.map((invitation) => ({
-      ...invitation,
-      created_at_formatted: new Date(invitation.created_at).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      }),
-      founderProfile: founderProfileMap.get(invitation.email) || null,
-    })) || []
 
   const goalStats = {
     total: goals?.length || 0,
@@ -204,7 +214,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {invitations?.filter((i) => i.accepted_at).length || 0}
+              {invitations?.filter((i) => i.acceptedAt).length || 0}
             </div>
           </CardContent>
         </Card>
@@ -233,14 +243,14 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           <div>
             <span className="text-sm font-medium text-muted-foreground">Website</span>
             <p className="mt-1">
-              {startup.website_url ? (
+              {startup.websiteUrl ? (
                 <a
-                  href={startup.website_url}
+                  href={startup.websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline inline-flex items-center"
                 >
-                  {startup.website_url}
+                  {startup.websiteUrl}
                   <ExternalLink className="ml-1 h-3 w-3" />
                 </a>
               ) : (
@@ -248,36 +258,6 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
               )}
             </p>
           </div>
-          {bankDetails && (
-            <div className="md:col-span-2 border-t pt-4">
-              <span className="text-sm font-medium text-muted-foreground">Bank Details</span>
-              <div className="mt-2 grid gap-2 md:grid-cols-2">
-                <div>
-                  <span className="text-xs text-muted-foreground">Account Holder</span>
-                  <p className="text-sm font-medium">{bankDetails.account_holder_name}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground">Bank Name</span>
-                  <p className="text-sm font-medium">{bankDetails.bank_name || '-'}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground">Sort Code</span>
-                  <p className="text-sm font-medium font-mono">{bankDetails.sort_code}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground">Account Number</span>
-                  <p className="text-sm font-medium font-mono">{bankDetails.account_number}</p>
-                </div>
-                {bankDetails.verified && (
-                  <div className="md:col-span-2">
-                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                      Verified
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
           {startup.notes && (
             <div className="md:col-span-2 border-t pt-4">
               <span className="text-sm font-medium text-muted-foreground">Internal Notes</span>
@@ -286,53 +266,6 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           )}
         </CardContent>
       </Card>
-
-      {/* Integration Status */}
-      {integrations && integrations.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plug className="h-5 w-5" />
-              Integrations
-            </CardTitle>
-            <CardDescription>
-              Connected external services for automated metric tracking
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2">
-              {integrations.map((integration) => (
-                <div
-                  key={integration.id}
-                  className="flex items-center justify-between p-3 border rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    {integration.status === 'active' ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-red-600" />
-                    )}
-                    <div>
-                      <p className="font-medium capitalize">{integration.provider}</p>
-                      {integration.account_name && (
-                        <p className="text-sm text-muted-foreground">{integration.account_name}</p>
-                      )}
-                      {integration.last_synced_at && (
-                        <p className="text-xs text-muted-foreground">
-                          Last synced: {new Date(integration.last_synced_at).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <Badge variant={integration.status === 'active' ? 'default' : 'destructive'}>
-                    {integration.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Founders & Invitations */}
       <Card>
@@ -351,12 +284,121 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           </div>
         </CardHeader>
         <CardContent>
-          <InvitationsTable invitations={formattedInvitations} />
+          {invitations && invitations.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Sent</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invitations.map((invitation) => {
+                  const isAccepted = !!invitation.acceptedAt
+                  const isExpired =
+                    !isAccepted && invitation.expiresAt
+                      ? new Date(invitation.expiresAt) < new Date()
+                      : false
+                  const status = isAccepted ? 'accepted' : isExpired ? 'expired' : 'pending'
+
+                  return (
+                    <TableRow key={invitation._id}>
+                      <TableCell className="font-medium">{invitation.fullName}</TableCell>
+                      <TableCell>{invitation.email}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            status === 'accepted'
+                              ? 'success'
+                              : status === 'expired'
+                                ? 'destructive'
+                                : 'info'
+                          }
+                        >
+                          {status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(invitation._creationTime).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No founders invited yet
+            </p>
+          )}
         </CardContent>
       </Card>
 
       {/* Goals */}
-      <GoalsSection goals={goals || []} startupSlug={slug} />
+      <Card>
+        <CardHeader>
+          <CardTitle>Goals</CardTitle>
+          <CardDescription>Assigned goals and progress</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {goals && goals.length > 0 ? (
+            <div className="space-y-4">
+              {goals.map((goal) => (
+                <div
+                  key={goal._id}
+                  className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium">{goal.title}</span>
+                      <Badge variant="outline" className="capitalize">
+                        {goal.category}
+                      </Badge>
+                      <Badge
+                        variant={
+                          goal.status === 'completed'
+                            ? 'success'
+                            : goal.status === 'in_progress'
+                              ? 'info'
+                              : 'secondary'
+                        }
+                      >
+                        {goal.status.replace('_', ' ')}
+                      </Badge>
+                    </div>
+                    {goal.description && (
+                      <p className="text-sm text-muted-foreground mt-1">{goal.description}</p>
+                    )}
+                    {goal.targetValue && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Target: {goal.targetValue}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 ml-4">
+                    {goal.fundingAmount && (
+                      <div className="text-right mr-4">
+                        <div className="text-sm font-medium">
+                          £{goal.fundingAmount.toLocaleString('en-GB')}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Funding</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">No goals assigned yet</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

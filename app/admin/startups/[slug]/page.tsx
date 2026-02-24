@@ -1,5 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+'use client'
+
+import { useParams } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,58 +15,108 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, Edit, UserPlus, Target, Users, Mail, ExternalLink } from 'lucide-react'
 
-interface StartupDetailPageProps {
-  params: Promise<{
-    slug: string
-  }>
-}
+export default function StartupDetailPage() {
+  const params = useParams()
+  const slug = params.slug as string
 
-export default async function StartupDetailPage({ params }: StartupDetailPageProps) {
-  const { slug } = await params
-  const supabase = await createClient()
+  const startup = useQuery(api.startups.getBySlug, { slug })
+  const goals = useQuery(
+    api.startupGoals.listByStartup,
+    startup ? { startupId: startup._id } : 'skip'
+  )
+  const invitations = useQuery(
+    api.invitations.list,
+    startup ? { startupId: startup._id } : 'skip'
+  )
 
-  // Fetch startup details with cohort info by slug
-  const { data: startup, error } = await supabase
-    .from('startups')
-    .select(
-      `
-      *,
-      cohorts (
-        id,
-        label
-      )
-    `
+  // Loading state
+  if (startup === undefined) {
+    return (
+      <div className="space-y-6">
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-9 w-24" />
+            <div>
+              <Skeleton className="h-9 w-64" />
+              <Skeleton className="mt-1 h-5 w-32" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-36" />
+            <Skeleton className="h-10 w-20" />
+          </div>
+        </div>
+
+        {/* Stats skeleton */}
+        <div className="grid gap-4 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-12" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Details skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-36" />
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </CardContent>
+        </Card>
+
+        {/* Invitations skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-40 w-full" />
+          </CardContent>
+        </Card>
+
+        {/* Goals skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-24" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-40 w-full" />
+          </CardContent>
+        </Card>
+      </div>
     )
-    .eq('slug', slug)
-    .single()
-
-  if (error || !startup) {
-    notFound()
   }
 
-  // Fetch goals for this startup (using id for foreign key relationships)
-  const { data: goals } = await supabase
-    .from('startup_goals')
-    .select('*')
-    .eq('startup_id', startup.id)
-    .order('created_at')
-
-  // Fetch invitations for this startup
-  const { data: invitations } = await supabase
-    .from('invitations')
-    .select('*')
-    .eq('startup_id', startup.id)
-    .order('created_at', { ascending: false })
-
-  // Fetch invoices for this startup
-  const { data: _invoices } = await supabase
-    .from('invoices')
-    .select('id, status, amount, created_at')
-    .eq('startup_id', startup.id)
-    .order('created_at', { ascending: false })
-    .limit(5)
+  // Not found
+  if (startup === null) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <h1 className="text-2xl font-bold">Startup not found</h1>
+        <p className="mt-2 text-muted-foreground">
+          The startup you are looking for does not exist.
+        </p>
+        <Link href="/admin" className="mt-4">
+          <Button variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </Link>
+      </div>
+    )
+  }
 
   const goalStats = {
     total: goals?.length || 0,
@@ -86,7 +139,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{startup.name}</h1>
             <p className="text-muted-foreground">
-              {(startup.cohorts as { label: string } | null)?.label || 'No cohort'}
+              {startup.cohortId ? 'Cohort startup' : 'No cohort'}
             </p>
           </div>
         </div>
@@ -141,7 +194,7 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {invitations?.filter((i) => i.status === 'accepted').length || 0}
+              {invitations?.filter((i) => i.acceptedAt).length || 0}
             </div>
           </CardContent>
         </Card>
@@ -170,14 +223,14 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
           <div>
             <span className="text-sm font-medium text-muted-foreground">Website</span>
             <p className="mt-1">
-              {startup.website_url ? (
+              {startup.websiteUrl ? (
                 <a
-                  href={startup.website_url}
+                  href={startup.websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline inline-flex items-center"
                 >
-                  {startup.website_url}
+                  {startup.websiteUrl}
                   <ExternalLink className="ml-1 h-3 w-3" />
                 </a>
               ) : (
@@ -223,13 +276,16 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
               </TableHeader>
               <TableBody>
                 {invitations.map((invitation) => {
-                  const isAccepted = !!invitation.accepted_at
-                  const isExpired = !isAccepted && new Date(invitation.expires_at) < new Date()
+                  const isAccepted = !!invitation.acceptedAt
+                  const isExpired =
+                    !isAccepted && invitation.expiresAt
+                      ? new Date(invitation.expiresAt) < new Date()
+                      : false
                   const status = isAccepted ? 'accepted' : isExpired ? 'expired' : 'pending'
 
                   return (
-                    <TableRow key={invitation.id}>
-                      <TableCell className="font-medium">{invitation.full_name}</TableCell>
+                    <TableRow key={invitation._id}>
+                      <TableCell className="font-medium">{invitation.fullName}</TableCell>
                       <TableCell>{invitation.email}</TableCell>
                       <TableCell>
                         <Badge
@@ -245,7 +301,11 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {new Date(invitation.created_at).toLocaleDateString()}
+                        {new Date(invitation._creationTime).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
                       </TableCell>
                     </TableRow>
                   )
@@ -271,11 +331,11 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
             <div className="space-y-4">
               {goals.map((goal) => (
                 <div
-                  key={goal.id}
+                  key={goal._id}
                   className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
                 >
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{goal.title}</span>
                       <Badge variant="outline" className="capitalize">
                         {goal.category}
@@ -292,12 +352,19 @@ export default async function StartupDetailPage({ params }: StartupDetailPagePro
                         {goal.status.replace('_', ' ')}
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">{goal.description}</p>
+                    {goal.description && (
+                      <p className="text-sm text-muted-foreground mt-1">{goal.description}</p>
+                    )}
+                    {goal.targetValue && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Target: {goal.targetValue}
+                      </p>
+                    )}
                   </div>
-                  {goal.funding_amount && (
+                  {goal.fundingAmount && (
                     <div className="text-right ml-4">
                       <div className="text-sm font-medium">
-                        £{goal.funding_amount.toLocaleString()}
+                        £{goal.fundingAmount.toLocaleString('en-GB')}
                       </div>
                       <div className="text-xs text-muted-foreground">Funding</div>
                     </div>
