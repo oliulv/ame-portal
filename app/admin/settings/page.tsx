@@ -1,6 +1,8 @@
 'use client'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -18,7 +20,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Save } from 'lucide-react'
-import { useAppMutation } from '@/lib/hooks/useAppMutation'
+import { toast } from 'sonner'
 
 const profileSchema = z.object({
   email: z.string().email('Please enter a valid email address').optional().or(z.literal('')),
@@ -28,17 +30,12 @@ const profileSchema = z.object({
 type ProfileFormData = z.infer<typeof profileSchema>
 
 export default function AdminSettingsPage() {
-  const queryClient = useQueryClient()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Fetch current profile
-  const { data: profile, isLoading } = useQuery({
-    queryKey: ['admin-profile'],
-    queryFn: async () => {
-      const response = await fetch('/api/admin/profile')
-      if (!response.ok) throw new Error('Failed to fetch profile')
-      return response.json()
-    },
-  })
+  // Fetch current profile via Convex
+  const profile = useQuery(api.founderProfile.getAdminProfile)
+
+  const updateAdminProfile = useMutation(api.founderProfile.updateAdminProfile)
 
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -49,33 +46,24 @@ export default function AdminSettingsPage() {
     values: profile
       ? {
           email: profile.email || '',
-          full_name: profile.full_name || '',
+          full_name: profile.fullName || '',
         }
       : undefined,
   })
 
-  const updateProfile = useAppMutation({
-    mutationFn: async (data: ProfileFormData) => {
-      const response = await fetch('/api/admin/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: data.email || null,
-          full_name: data.full_name,
-        }),
+  async function onSubmit(data: ProfileFormData) {
+    setIsSubmitting(true)
+    try {
+      await updateAdminProfile({
+        email: data.email || undefined,
+        fullName: data.full_name,
       })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to update profile')
-      }
-      return response.json()
-    },
-    invalidateQueries: [['admin-profile'], ['admin-users']],
-    successMessage: 'Profile updated successfully',
-  })
-
-  function onSubmit(data: ProfileFormData) {
-    updateProfile.mutate(data)
+      toast.success('Profile updated successfully')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update profile')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -99,7 +87,7 @@ export default function AdminSettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {profile === undefined ? (
             <div className="space-y-4">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
@@ -142,9 +130,9 @@ export default function AdminSettingsPage() {
                 />
 
                 <div className="flex gap-2">
-                  <Button type="submit" disabled={updateProfile.isPending}>
+                  <Button type="submit" disabled={isSubmitting}>
                     <Save className="mr-2 h-4 w-4" />
-                    {updateProfile.isPending ? 'Saving...' : 'Save Changes'}
+                    {isSubmitting ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               </form>

@@ -1,63 +1,54 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import { useParams, useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Users, Plus } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { cached, cacheKeys, cacheTTL } from '@/lib/cache'
+import { useMemo } from 'react'
 
-interface PageProps {
-  params: Promise<{
-    cohortSlug: string
-  }>
-}
+export default function LeaderboardPage() {
+  const params = useParams()
+  const router = useRouter()
+  const cohortSlug = params.cohortSlug as string
 
-// Helper to group array by a key
-function groupBy<T>(array: T[], keyFn: (item: T) => string): Record<string, T[]> {
-  return array.reduce(
-    (acc, item) => {
-      const key = keyFn(item)
-      if (!acc[key]) acc[key] = []
-      acc[key].push(item)
-      return acc
-    },
-    {} as Record<string, T[]>
-  )
-}
-
-export default async function LeaderboardPage({ params }: PageProps) {
-  const { cohortSlug } = await params
-
-  const supabase = await createClient()
-
-  // Verify cohort exists (cached)
-  const cohort = await cached(
-    cacheKeys.cohort(cohortSlug),
-    async () => {
-      const { data, error } = await supabase
-        .from('cohorts')
-        .select('*')
-        .eq('slug', cohortSlug)
-        .single()
-      if (error || !data) return null
-      return data
-    },
-    cacheTTL.cohort
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
+  const startups = useQuery(
+    api.startups.list,
+    cohort ? { cohortId: cohort._id } : 'skip'
   )
 
-  if (!cohort) {
-    redirect('/admin/cohorts')
+  // Sort startups alphabetically by name
+  const sortedStartups = useMemo(() => {
+    if (!startups) return undefined
+    return [...startups].sort((a, b) => a.name.localeCompare(b.name))
+  }, [startups])
+
+  const isLoading = cohort === undefined || startups === undefined
+
+  // Redirect if cohort not found (returned null)
+  if (cohort === null) {
+    router.push('/admin/cohorts')
+    return null
   }
 
-  // Get startups in this cohort
-  const { data: startups } = await supabase
-    .from('startups')
-    .select('id, name, logo_url, website_url, cohort_id, cohorts(name)')
-    .eq('cohort_id', cohort.id)
-    .order('name')
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-9 w-48 mb-2" />
+          <Skeleton className="h-5 w-64" />
+        </div>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    )
+  }
 
-  if (!startups || startups.length === 0) {
+  if (!sortedStartups || sortedStartups.length === 0) {
     return (
       <div className="space-y-6">
         {/* Header */}
@@ -85,97 +76,6 @@ export default async function LeaderboardPage({ params }: PageProps) {
       </div>
     )
   }
-
-  // Get all startup IDs for batch queries
-  const startupIds = startups.map((s) => s.id)
-
-  // Batch fetch ALL data for ALL startups in 4 queries (instead of 4N queries)
-  const [allGoalsResult, allManualMetricsResult, allStripeMetricsResult, allTrackerMetricsResult] =
-    await Promise.all([
-      supabase
-        .from('startup_goals')
-        .select('startup_id, status, completion_source, data_source')
-        .in('startup_id', startupIds),
-      supabase
-        .from('startup_metrics_manual')
-        .select('startup_id, metric_name, metric_value')
-        .in('startup_id', startupIds),
-      supabase
-        .from('metrics_data')
-        .select('startup_id, metric_key, value')
-        .in('startup_id', startupIds)
-        .eq('provider', 'stripe')
-        .order('timestamp', { ascending: false }),
-      supabase
-        .from('metrics_data')
-        .select('startup_id, metric_key, value')
-        .in('startup_id', startupIds)
-        .eq('provider', 'tracker')
-        .order('timestamp', { ascending: false }),
-    ])
-
-  // Group results by startup_id for O(1) lookup
-  const goalsByStartup = groupBy(allGoalsResult.data || [], (g) => g.startup_id)
-  const manualMetricsByStartup = groupBy(allManualMetricsResult.data || [], (m) => m.startup_id)
-  const stripeMetricsByStartup = groupBy(allStripeMetricsResult.data || [], (m) => m.startup_id)
-  const trackerMetricsByStartup = groupBy(allTrackerMetricsResult.data || [], (m) => m.startup_id)
-
-  // Calculate scores for each startup (no async - just JS computation)
-  const startupScores = startups.map((startup) => {
-    const goals = goalsByStartup[startup.id] || []
-    const manualMetrics = manualMetricsByStartup[startup.id] || []
-    const stripeMetrics = stripeMetricsByStartup[startup.id] || []
-    const gaMetrics = trackerMetricsByStartup[startup.id] || []
-
-    const completedGoals = goals.filter((g) => g.status === 'completed').length
-    const autoCompletedGoals = goals.filter(
-      (g) => g.status === 'completed' && g.completion_source === 'auto'
-    ).length
-    const totalGoals = goals.length
-    const completionPercentage = totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0
-
-    // Get revenue from manual metrics or Stripe metrics
-    let revenue = 0
-    const manualRevenueMetric = manualMetrics.find((m) => m.metric_name === 'manual_revenue')
-    if (manualRevenueMetric) {
-      revenue = Number(manualRevenueMetric.metric_value)
-    } else {
-      // Try to get from Stripe metrics (take first/latest)
-      const stripeRevenue = stripeMetrics.find((m) => m.metric_key === 'total_revenue')
-      if (stripeRevenue) {
-        revenue = Number(stripeRevenue.value)
-      }
-    }
-
-    // Get traffic metrics from tracker (take first/latest)
-    const sessionsMetric = gaMetrics.find((m) => m.metric_key === 'sessions')
-    const sessions = sessionsMetric ? Number(sessionsMetric.value) : 0
-
-    // Enhanced scoring formula:
-    // - Goal completion: 40% weight (normalized to 0-40 points)
-    // - Revenue: 30% weight (normalized, £1000 = 30 points, capped)
-    // - Traffic: 20% weight (normalized, 1000 sessions = 20 points, capped)
-    // - Auto-completed goals bonus: 10% weight (bonus for metric-based automation)
-    const goalScore = completionPercentage * 0.4
-    const revenueScore = Math.min((revenue / 1000) * 30, 30)
-    const trafficScore = Math.min((sessions / 1000) * 20, 20)
-    const automationBonus = totalGoals > 0 ? (autoCompletedGoals / totalGoals) * 10 : 0
-
-    const score = goalScore + revenueScore + trafficScore + automationBonus
-
-    return {
-      ...startup,
-      completionPercentage,
-      autoCompletedGoals,
-      totalGoals,
-      revenue,
-      sessions,
-      score,
-    }
-  })
-
-  // Sort by score (descending)
-  startupScores.sort((a, b) => b.score - a.score)
 
   return (
     <div className="space-y-6">
@@ -212,16 +112,16 @@ export default async function LeaderboardPage({ params }: PageProps) {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {startupScores.map((startup, index) => (
-              <tr key={startup.id}>
+            {sortedStartups.map((startup, index) => (
+              <tr key={startup._id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   #{index + 1}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    {startup.logo_url && (
+                    {startup.logoUrl && (
                       <Image
-                        src={startup.logo_url}
+                        src={startup.logoUrl}
                         alt={startup.name}
                         width={40}
                         height={40}
@@ -230,44 +130,30 @@ export default async function LeaderboardPage({ params }: PageProps) {
                     )}
                     <div>
                       <div className="text-sm font-medium text-gray-900">{startup.name}</div>
-                      {startup.website_url && (
+                      {startup.websiteUrl && (
                         <a
-                          href={startup.website_url}
+                          href={startup.websiteUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs text-blue-600 hover:underline"
                         >
-                          {startup.website_url}
+                          {startup.websiteUrl}
                         </a>
                       )}
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex items-center gap-2">
-                    <span>{startup.completionPercentage.toFixed(1)}%</span>
-                    {startup.autoCompletedGoals > 0 && (
-                      <span
-                        className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded"
-                        title={`${startup.autoCompletedGoals} goal(s) auto-completed via metrics`}
-                      >
-                        {startup.autoCompletedGoals} auto
-                      </span>
-                    )}
-                  </div>
+                  <span className="text-xs text-gray-400 italic">Scoring data loading...</span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  £
-                  {startup.revenue.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  <span className="text-xs text-gray-400 italic">Scoring data loading...</span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {startup.sessions > 0 ? startup.sessions.toLocaleString() : '-'}
+                  <span className="text-xs text-gray-400 italic">Scoring data loading...</span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {startup.score.toFixed(1)}
+                  <span className="text-xs text-gray-400 italic">Scoring data loading...</span>
                 </td>
               </tr>
             ))}
@@ -297,8 +183,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
           </li>
         </ul>
         <p className="text-sm text-gray-600 mt-2">
-          Goals marked with "auto" badges are automatically completed when metric thresholds are
-          met.
+          Detailed scoring will be available once Convex metric queries are implemented.
         </p>
       </div>
     </div>

@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,64 +17,22 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Plus, Building2, ExternalLink, Users, Target, Edit } from 'lucide-react'
-import { Startup, GoalTemplate } from '@/lib/types'
-import { useSelectedCohort } from '@/lib/hooks/useSelectedCohort'
 
 export default function StartupsPage() {
   const params = useParams()
   const cohortSlug = params.cohortSlug as string
-  const { cohort } = useSelectedCohort()
-  const [startups, setStartups] = useState<Startup[]>([])
-  const [goalTemplates, setGoalTemplates] = useState<GoalTemplate[]>([])
-  const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const loadStartups = async () => {
-      if (!cohort) return
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
+  const startups = useQuery(
+    api.startups.list,
+    cohort ? { cohortId: cohort._id } : 'skip'
+  )
+  const goalTemplates = useQuery(
+    api.goalTemplates.list,
+    cohort ? { cohortId: cohort._id } : 'skip'
+  )
 
-      try {
-        setIsLoading(true)
-
-        // Fetch startups and goal templates using the cohort id
-        const [startupsResponse, goalsResponse] = await Promise.all([
-          fetch(`/api/admin/startups?cohort_id=${cohort.id}`),
-          fetch(`/api/admin/goals?cohort_id=${cohort.id}`),
-        ])
-
-        if (startupsResponse.ok) {
-          const startupsData: Startup[] = await startupsResponse.json()
-          setStartups(startupsData)
-        }
-
-        if (goalsResponse.ok) {
-          const goalsData: GoalTemplate[] = await goalsResponse.json()
-          // Filter out duplicate "Join AccelerateMe" goals - keep only the first one
-          const seenAccelerateMe = new Set<string>()
-          const filteredGoals = goalsData.filter((goal) => {
-            const isAccelerateMe =
-              goal.title === 'Join AccelerateMe' ||
-              goal.title.toLowerCase().includes('join accelerateme')
-            if (isAccelerateMe) {
-              if (seenAccelerateMe.has(goal.cohort_id || '')) {
-                return false // Skip duplicate
-              }
-              seenAccelerateMe.add(goal.cohort_id || '')
-            }
-            return true
-          })
-          setGoalTemplates(filteredGoals)
-        }
-      } catch (error) {
-        console.error('Failed to load data:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    if (cohort) {
-      loadStartups()
-    }
-  }, [cohort])
+  const isLoading = cohort === undefined || (cohort && (startups === undefined || goalTemplates === undefined))
 
   if (isLoading) {
     return (
@@ -108,8 +67,8 @@ export default function StartupsPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold tracking-tight">{cohort.label}</h1>
-            <Badge variant={cohort.is_active ? 'success' : 'secondary'}>
-              {cohort.is_active ? 'Active' : 'Inactive'}
+            <Badge variant={cohort.isActive ? 'success' : 'secondary'}>
+              {cohort.isActive ? 'Active' : 'Inactive'}
             </Badge>
           </div>
           <p className="text-muted-foreground">{cohort.name}</p>
@@ -138,7 +97,7 @@ export default function StartupsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {cohort.year_start} - {cohort.year_end}
+              {cohort.yearStart} - {cohort.yearEnd}
             </div>
           </CardContent>
         </Card>
@@ -184,7 +143,7 @@ export default function StartupsPage() {
               </TableHeader>
               <TableBody>
                 {startups.map((startup) => (
-                  <TableRow key={startup.id}>
+                  <TableRow key={startup._id}>
                     <TableCell className="font-medium">{startup.name}</TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">{startup.sector || '-'}</span>
@@ -194,18 +153,18 @@ export default function StartupsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="capitalize">
-                        {startup.onboarding_status.replace('_', ' ')}
+                        {startup.onboardingStatus.replace('_', ' ')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Link href={`/admin/${cohortSlug}/startups/${startup.slug || startup.id}`}>
+                        <Link href={`/admin/${cohortSlug}/startups/${startup.slug || startup._id}`}>
                           <Button variant="ghost" size="sm">
                             <ExternalLink className="h-4 w-4" />
                           </Button>
                         </Link>
                         <Link
-                          href={`/admin/${cohortSlug}/startups/${startup.slug || startup.id}/edit`}
+                          href={`/admin/${cohortSlug}/startups/${startup.slug || startup._id}/edit`}
                         >
                           <Button variant="ghost" size="sm">
                             <Edit className="h-4 w-4" />
@@ -257,21 +216,21 @@ export default function StartupsPage() {
                 </TableHeader>
                 <TableBody>
                   {goalTemplates.map((template) => (
-                    <TableRow key={template.id}>
+                    <TableRow key={template._id}>
                       <TableCell className="font-medium">{template.title}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
                           {template.category}
                         </Badge>
                       </TableCell>
-                      <TableCell>{template.default_target_value || '-'}</TableCell>
+                      <TableCell>{template.defaultTargetValue || '-'}</TableCell>
                       <TableCell>
-                        <Badge variant={template.is_active ? 'success' : 'secondary'}>
-                          {template.is_active ? 'Active' : 'Inactive'}
+                        <Badge variant={template.isActive ? 'success' : 'secondary'}>
+                          {template.isActive ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link href={`/admin/${cohortSlug}/goals/${template.id}/edit`}>
+                        <Link href={`/admin/${cohortSlug}/goals/${template._id}/edit`}>
                           <Button variant="ghost" size="sm">
                             Edit
                           </Button>

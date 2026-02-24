@@ -1,10 +1,14 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -14,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { FileText, AlertCircle, ExternalLink, Users, Plus } from 'lucide-react'
-import { cached, cacheKeys, cacheTTL } from '@/lib/cache'
+import { useMemo } from 'react'
 
 function getInvoiceStatusVariant(
   status: string
@@ -31,41 +35,59 @@ function getInvoiceStatusVariant(
   }
 }
 
-interface PageProps {
-  params: Promise<{
-    cohortSlug: string
-  }>
-}
+export default function AdminInvoicesPage() {
+  const params = useParams()
+  const router = useRouter()
+  const cohortSlug = params.cohortSlug as string
 
-export default async function AdminInvoicesPage({ params }: PageProps) {
-  const { cohortSlug } = await params
-
-  const supabase = await createClient()
-
-  // Verify cohort exists (cached)
-  const cohort = await cached(
-    cacheKeys.cohort(cohortSlug),
-    async () => {
-      const { data, error } = await supabase
-        .from('cohorts')
-        .select('id, label')
-        .eq('slug', cohortSlug)
-        .single()
-      if (error || !data) return null
-      return data
-    },
-    cacheTTL.cohort
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
+  const startups = useQuery(
+    api.startups.list,
+    cohort ? { cohortId: cohort._id } : 'skip'
   )
+  const allInvoices = useQuery(api.invoices.listForAdmin, {})
 
-  if (!cohort) {
-    redirect('/admin/cohorts')
+  // Build a startup ID set and name lookup for this cohort
+  const startupIdSet = useMemo(() => {
+    if (!startups) return new Set<string>()
+    return new Set(startups.map((s) => s._id))
+  }, [startups])
+
+  const startupNameMap = useMemo(() => {
+    if (!startups) return new Map<string, string>()
+    return new Map(startups.map((s) => [s._id, s.name]))
+  }, [startups])
+
+  // Filter invoices to only those belonging to startups in this cohort
+  const invoices = useMemo(() => {
+    if (!allInvoices || !startups) return undefined
+    return allInvoices
+      .filter((invoice) => startupIdSet.has(invoice.startupId))
+      .slice(0, 50)
+  }, [allInvoices, startups, startupIdSet])
+
+  const isLoading = cohort === undefined || startups === undefined || allInvoices === undefined
+
+  // Redirect if cohort not found (returned null)
+  if (cohort === null) {
+    router.push('/admin/cohorts')
+    return null
   }
 
-  // Fetch startups in this cohort - only need IDs
-  const { data: startups } = await supabase.from('startups').select('id').eq('cohort_id', cohort.id)
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-9 w-48 mb-2" />
+          <Skeleton className="h-5 w-64" />
+        </div>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    )
+  }
 
   // If no startups, show empty state with call to action
-  if (!startups || startups.length === 0) {
+  if (startups.length === 0) {
     return (
       <div className="space-y-6">
         {/* Header */}
@@ -93,16 +115,6 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
       </div>
     )
   }
-
-  const startupIds = startups.map((s) => s.id)
-
-  // Fetch invoices with only needed fields
-  const { data: invoices } = await supabase
-    .from('invoices')
-    .select('id, vendor_name, invoice_date, amount_gbp, status, created_at, startups(id, name)')
-    .in('startup_id', startupIds)
-    .order('created_at', { ascending: false })
-    .limit(50)
 
   const pendingCount =
     invoices?.filter((i) => i.status === 'submitted' || i.status === 'under_review').length || 0
@@ -148,21 +160,20 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
             </TableHeader>
             <TableBody>
               {invoices.map((invoice) => (
-                <TableRow key={invoice.id}>
+                <TableRow key={invoice._id}>
                   <TableCell className="font-medium">
-                    {(invoice.startups as { id: string; name: string }[] | null)?.[0]?.name ||
-                      'Unknown'}
+                    {startupNameMap.get(invoice.startupId) || 'Unknown'}
                   </TableCell>
-                  <TableCell>{invoice.vendor_name}</TableCell>
+                  <TableCell>{invoice.vendorName}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {new Date(invoice.invoice_date).toLocaleDateString('en-GB', {
+                    {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric',
                     })}
                   </TableCell>
                   <TableCell className="font-mono text-sm">
-                    £{Number(invoice.amount_gbp).toFixed(2)}
+                    £{Number(invoice.amountGbp).toFixed(2)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={getInvoiceStatusVariant(invoice.status)}>
@@ -170,7 +181,7 @@ export default async function AdminInvoicesPage({ params }: PageProps) {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/admin/${cohortSlug}/invoices/${invoice.id}`}>
+                    <Link href={`/admin/${cohortSlug}/invoices/${invoice._id}`}>
                       <Button variant="ghost" size="sm">
                         Review
                         <ExternalLink className="ml-2 h-3 w-3" />

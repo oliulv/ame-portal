@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { useParams } from 'next/navigation'
+import { toast } from 'sonner'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -38,29 +40,11 @@ import { Input } from '@/components/ui/input'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Users, Mail, UserPlus, RotateCw, X, Trash2 } from 'lucide-react'
-import { adminInvitationsApi } from '@/lib/api/admin-invitations'
-import { adminUsersApi } from '@/lib/api/admin-users'
-import { cohortsApi } from '@/lib/api/cohorts'
-import { queryKeys } from '@/lib/queryKeys'
-import { useAppMutation } from '@/lib/hooks/useAppMutation'
-import { AdminInvitation } from '@/lib/types'
-
-interface AdminUserWithDetails {
-  id: string
-  role: 'super_admin' | 'admin'
-  created_at: string
-  updated_at: string
-  email: string | null
-  full_name: string | null
-  first_name: string | null
-  last_name: string | null
-  cohort_ids?: string[]
-}
 
 const adminInvitationSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
-  invited_name: z.string().min(1, 'Name is required'),
-  expires_in_days: z.number().min(1).max(30).default(14),
+  invitedName: z.string().min(1, 'Name is required'),
+  expiresInDays: z.number().min(1).max(30).default(14),
 })
 
 type AdminInvitationFormData = z.infer<typeof adminInvitationSchema>
@@ -68,143 +52,128 @@ type AdminInvitationFormData = z.infer<typeof adminInvitationSchema>
 export default function AdminsPage() {
   const params = useParams()
   const cohortSlug = params.cohortSlug as string
-  const queryClient = useQueryClient()
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [userToDelete, setUserToDelete] = useState<AdminUserWithDetails | null>(null)
+  const [userToDelete, setUserToDelete] = useState<{
+    _id: string
+    role: string
+    email?: string
+    fullName?: string
+    cohortIds: string[]
+  } | null>(null)
 
-  // Fetch cohort details to get cohort_id
-  const { data: cohort, isLoading: isLoadingCohort } = useQuery({
-    queryKey: ['cohort', cohortSlug],
-    queryFn: () => cohortsApi.getBySlug(cohortSlug),
-    enabled: !!cohortSlug,
-  })
+  // Mutation pending states
+  const [isCreating, setIsCreating] = useState(false)
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+  const [isRemoving, setIsRemoving] = useState(false)
 
-  // Fetch admin users with Clerk data, filtered by cohort
-  const { data: adminUsers, isLoading: isLoadingUsers } = useQuery<AdminUserWithDetails[]>({
-    queryKey: ['admin-users', cohort?.id],
-    queryFn: async () => {
-      const url = cohort?.id ? `/api/admin/users?cohort_id=${cohort.id}` : '/api/admin/users'
-      const response = await fetch(url)
-      if (!response.ok) throw new Error('Failed to fetch admin users')
-      return response.json()
-    },
-    enabled: !!cohort?.id,
-  })
+  // Fetch cohort details to get cohort _id
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
+
+  // Fetch admin users filtered by cohort (skip if cohort not loaded yet)
+  const adminUsers = useQuery(
+    api.adminUsers.list,
+    cohort ? { cohortId: cohort._id } : 'skip'
+  )
 
   // Fetch admin invitations for this cohort
-  const {
-    data: invitations = [],
-    isLoading: isLoadingInvitations,
-    error: invitationsError,
-  } = useQuery<AdminInvitation[]>({
-    queryKey: queryKeys.adminInvitations.list(cohort?.id),
-    queryFn: () => adminInvitationsApi.list(cohort?.id),
-    enabled: !!cohort?.id,
-  })
+  const invitations = useQuery(
+    api.adminInvitations.list,
+    cohort ? { cohortId: cohort._id } : 'skip'
+  )
+
+  // Mutations
+  const createInvitation = useMutation(api.adminInvitations.create)
+  const resendInvitation = useMutation(api.adminInvitations.resend)
+  const revokeInvitation = useMutation(api.adminInvitations.revoke)
+  const removeAdminFromCohort = useMutation(api.adminCohorts.remove)
 
   const form = useForm({
     resolver: zodResolver(adminInvitationSchema),
     defaultValues: {
       email: '',
-      invited_name: '',
-      expires_in_days: 14,
+      invitedName: '',
+      expiresInDays: 14,
     },
     mode: 'onChange',
   })
 
-  const createInvitation = useAppMutation({
-    mutationFn: (data: AdminInvitationFormData) => {
-      if (!cohort?.id) {
-        throw new Error('Cohort not found')
-      }
-      return adminInvitationsApi.create({
-        ...data,
-        cohort_id: cohort.id,
-      })
-    },
-    invalidateQueries: [],
-    successMessage: 'Admin invitation created and email sent successfully',
-    onSuccess: () => {
-      // Invalidate queries with the actual cohort ID
-      if (cohort?.id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.adminInvitations.list(cohort.id) })
-        // Also invalidate the broader pattern to catch any variations
-        queryClient.invalidateQueries({ queryKey: queryKeys.adminInvitations.lists() })
-      }
-      form.reset()
-      setShowCreateForm(false)
-    },
-  })
-
-  const resendInvitation = useAppMutation({
-    mutationFn: (invitationId: string) => adminInvitationsApi.resend(invitationId),
-    invalidateQueries: [],
-    successMessage: 'Invitation email resent successfully',
-    onSuccess: () => {
-      // Invalidate queries with the actual cohort ID
-      if (cohort?.id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.adminInvitations.list(cohort.id) })
-        // Also invalidate the broader pattern to catch any variations
-        queryClient.invalidateQueries({ queryKey: queryKeys.adminInvitations.lists() })
-      }
-    },
-  })
-
-  const revokeInvitation = useAppMutation({
-    mutationFn: (invitationId: string) => adminInvitationsApi.revoke(invitationId),
-    invalidateQueries: [],
-    successMessage: 'Invitation revoked successfully',
-    onSuccess: () => {
-      // Invalidate queries with the actual cohort ID
-      if (cohort?.id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.adminInvitations.list(cohort.id) })
-        // Also invalidate the broader pattern to catch any variations
-        queryClient.invalidateQueries({ queryKey: queryKeys.adminInvitations.lists() })
-      }
-    },
-  })
-
-  const removeAdminFromCohort = useAppMutation({
-    mutationFn: (userId: string) => {
-      if (!cohort?.id) {
-        throw new Error('Cohort not found')
-      }
-      return adminUsersApi.removeFromCohort(userId, cohort.id)
-    },
-    invalidateQueries: [],
-    successMessage: 'Admin removed from cohort successfully',
-    onSuccess: () => {
-      // Invalidate admin users query
-      if (cohort?.id) {
-        queryClient.invalidateQueries({ queryKey: ['admin-users', cohort.id] })
-      }
-      setUserToDelete(null)
-    },
-  })
-
-  function handleDeleteClick(user: AdminUserWithDetails) {
+  function handleDeleteClick(user: NonNullable<typeof adminUsers>[number]) {
     setUserToDelete(user)
   }
 
-  function handleConfirmDelete() {
-    if (userToDelete) {
-      removeAdminFromCohort.mutate(userToDelete.id)
+  async function handleConfirmDelete() {
+    if (!userToDelete || !cohort) return
+    setIsRemoving(true)
+    try {
+      await removeAdminFromCohort({
+        userId: userToDelete._id as any,
+        cohortId: cohort._id,
+      })
+      toast.success('Admin removed from cohort successfully')
+      setUserToDelete(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove admin')
+    } finally {
+      setIsRemoving(false)
     }
   }
 
-  function onSubmit(data: AdminInvitationFormData) {
-    createInvitation.mutate(data)
+  async function onSubmit(data: AdminInvitationFormData) {
+    if (!cohort) return
+    setIsCreating(true)
+    try {
+      await createInvitation({
+        email: data.email,
+        invitedName: data.invitedName,
+        cohortId: cohort._id,
+        expiresInDays: data.expiresInDays,
+      })
+      toast.success('Admin invitation created and email sent successfully')
+      form.reset()
+      setShowCreateForm(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create invitation')
+    } finally {
+      setIsCreating(false)
+    }
   }
 
-  function getInvitationStatus(invitation: AdminInvitation): 'pending' | 'accepted' | 'expired' {
-    if (invitation.accepted_at) return 'accepted'
-    if (new Date(invitation.expires_at) < new Date()) return 'expired'
+  async function handleResend(invitationId: string) {
+    setResendingId(invitationId)
+    try {
+      await resendInvitation({ id: invitationId as any })
+      toast.success('Invitation email resent successfully')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to resend invitation')
+    } finally {
+      setResendingId(null)
+    }
+  }
+
+  async function handleRevoke(invitationId: string) {
+    setRevokingId(invitationId)
+    try {
+      await revokeInvitation({ id: invitationId as any })
+      toast.success('Invitation revoked successfully')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke invitation')
+    } finally {
+      setRevokingId(null)
+    }
+  }
+
+  function getInvitationStatus(invitation: {
+    acceptedAt?: string
+    expiresAt: string
+  }): 'pending' | 'accepted' | 'expired' {
+    if (invitation.acceptedAt) return 'accepted'
+    if (new Date(invitation.expiresAt) < new Date()) return 'expired'
     return 'pending'
   }
 
-  const isLoading = isLoadingCohort || isLoadingUsers || isLoadingInvitations
-
-  if (isLoadingCohort) {
+  // Convex useQuery returns undefined while loading, null if not found
+  if (cohort === undefined) {
     return (
       <div className="space-y-6">
         <div>
@@ -216,7 +185,7 @@ export default function AdminsPage() {
     )
   }
 
-  if (!cohort) {
+  if (cohort === null) {
     return (
       <div className="space-y-6">
         <div>
@@ -247,7 +216,7 @@ export default function AdminsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoadingUsers ? (
+          {adminUsers === undefined ? (
             <div className="space-y-2">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
@@ -269,12 +238,12 @@ export default function AdminsPage() {
                     // Only show delete button for regular admins (not super admins)
                     // and only if they're assigned to this cohort (not just appearing because they're super admin)
                     const canDelete =
-                      user.role === 'admin' && cohort?.id && user.cohort_ids?.includes(cohort.id)
+                      user.role === 'admin' && user.cohortIds?.includes(cohort._id)
 
                     return (
-                      <TableRow key={user.id}>
+                      <TableRow key={user._id}>
                         <TableCell className="font-medium">
-                          {user.full_name || user.first_name || user.last_name || (
+                          {user.fullName || (
                             <span className="text-muted-foreground italic">No name set</span>
                           )}
                         </TableCell>
@@ -289,9 +258,7 @@ export default function AdminsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {user.created_at
-                            ? new Date(user.created_at).toLocaleDateString()
-                            : 'Unknown'}
+                          {new Date(user._creationTime).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-right">
                           {canDelete && (
@@ -299,7 +266,7 @@ export default function AdminsPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleDeleteClick(user)}
-                              disabled={removeAdminFromCohort.isPending}
+                              disabled={isRemoving}
                             >
                               <Trash2 className="mr-1 h-3 w-3" />
                               Remove
@@ -373,7 +340,7 @@ export default function AdminsPage() {
 
                   <FormField
                     control={form.control}
-                    name="invited_name"
+                    name="invitedName"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Name</FormLabel>
@@ -388,7 +355,7 @@ export default function AdminsPage() {
 
                   <FormField
                     control={form.control}
-                    name="expires_in_days"
+                    name="expiresInDays"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Expires In (Days)</FormLabel>
@@ -410,8 +377,8 @@ export default function AdminsPage() {
                   />
 
                   <div className="flex gap-2">
-                    <Button type="submit" disabled={createInvitation.isPending}>
-                      {createInvitation.isPending ? 'Creating...' : 'Create Invitation'}
+                    <Button type="submit" disabled={isCreating}>
+                      {isCreating ? 'Creating...' : 'Create Invitation'}
                     </Button>
                     <Button
                       type="button"
@@ -430,16 +397,12 @@ export default function AdminsPage() {
           )}
 
           {/* Invitations Table */}
-          {isLoadingInvitations ? (
+          {invitations === undefined ? (
             <div className="space-y-2">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : invitationsError ? (
-            <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-              Failed to load invitations. Please refresh the page.
-            </div>
-          ) : invitations.length > 0 ? (
+          ) : invitations && invitations.length > 0 ? (
             <div className="border rounded-md">
               <Table>
                 <TableHeader>
@@ -458,9 +421,9 @@ export default function AdminsPage() {
                     const isPending = status === 'pending'
 
                     return (
-                      <TableRow key={invitation.id}>
+                      <TableRow key={invitation._id}>
                         <TableCell className="font-medium">{invitation.email}</TableCell>
-                        <TableCell>{invitation.invited_name || '-'}</TableCell>
+                        <TableCell>{invitation.invitedName || '-'}</TableCell>
                         <TableCell>
                           <Badge
                             variant={
@@ -479,10 +442,10 @@ export default function AdminsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {new Date(invitation.expires_at).toLocaleDateString()}
+                          {new Date(invitation.expiresAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {new Date(invitation.created_at).toLocaleDateString()}
+                          {new Date(invitation._creationTime).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -491,8 +454,8 @@ export default function AdminsPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => resendInvitation.mutate(invitation.id)}
-                                  disabled={resendInvitation.isPending}
+                                  onClick={() => handleResend(invitation._id)}
+                                  disabled={resendingId === invitation._id}
                                 >
                                   <RotateCw className="mr-1 h-3 w-3" />
                                   Resend
@@ -500,8 +463,8 @@ export default function AdminsPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => revokeInvitation.mutate(invitation.id)}
-                                  disabled={revokeInvitation.isPending}
+                                  onClick={() => handleRevoke(invitation._id)}
+                                  disabled={revokingId === invitation._id}
                                 >
                                   <X className="mr-1 h-3 w-3" />
                                   Revoke
@@ -540,9 +503,8 @@ export default function AdminsPage() {
             <DialogDescription>
               Are you sure you want to remove{' '}
               <strong>
-                {userToDelete?.full_name ||
+                {userToDelete?.fullName ||
                   userToDelete?.email ||
-                  userToDelete?.first_name ||
                   'this admin'}
               </strong>{' '}
               from <strong>{cohort?.label}</strong>? They will lose access to this cohort but will
@@ -553,16 +515,16 @@ export default function AdminsPage() {
             <Button
               variant="outline"
               onClick={() => setUserToDelete(null)}
-              disabled={removeAdminFromCohort.isPending}
+              disabled={isRemoving}
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={handleConfirmDelete}
-              disabled={removeAdminFromCohort.isPending}
+              disabled={isRemoving}
             >
-              {removeAdminFromCohort.isPending ? 'Removing...' : 'Remove Admin'}
+              {isRemoving ? 'Removing...' : 'Remove Admin'}
             </Button>
           </DialogFooter>
         </DialogContent>
