@@ -26,12 +26,6 @@ export type CohortFormData = z.infer<typeof cohortSchema>
  */
 export const startupSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  cohort_id: z.string().uuid('Invalid cohort ID'),
-  slug: z
-    .string()
-    .min(1, 'Slug is required')
-    .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens only')
-    .optional(),
   logo_url: z.string().url().optional().or(z.literal('')),
   sector: z.string().optional(),
   stage: z.string().optional(),

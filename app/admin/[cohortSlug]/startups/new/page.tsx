@@ -40,7 +40,6 @@ export default function NewStartupPage() {
     resolver: zodResolver(startupSchema),
     defaultValues: {
       name: '',
-      cohort_id: '',
       logo_url: '',
       sector: '',
       website_url: '',
