@@ -1,8 +1,9 @@
-// TODO: Migrate to Convex — currently uses broken /api/founder/onboarding endpoint
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQuery, useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
@@ -27,38 +28,63 @@ import {
   type BankDetailsFormData,
 } from '@/lib/schemas'
 import { ChevronLeft, ChevronRight, Check, AlertCircle } from 'lucide-react'
+import { toast } from 'sonner'
 
 type OnboardingStep = 'personal' | 'startup' | 'bank'
+
+/** Map snake_case form fields to camelCase for Convex. */
+function mapPersonalInfo(data: FounderPersonalInfoFormData) {
+  return {
+    addressLine1: data.address_line1,
+    addressLine2: data.address_line2 || undefined,
+    city: data.city,
+    postcode: data.postcode,
+    country: data.country,
+    phone: data.phone,
+    bio: data.bio || undefined,
+    linkedinUrl: data.linkedin_url || undefined,
+    xUrl: data.x_url || undefined,
+  }
+}
+
+function mapStartupProfile(data: StartupProfileFormData) {
+  return {
+    oneLiner: data.one_liner,
+    description: data.description,
+    companyUrl: data.company_url || undefined,
+    productUrl: data.product_url || undefined,
+    industry: data.industry,
+    location: data.location,
+    initialCustomers: data.initial_customers,
+    initialRevenue: data.initial_revenue,
+  }
+}
+
+function mapBankDetails(data: BankDetailsFormData) {
+  return {
+    accountHolderName: data.account_holder_name,
+    sortCode: data.sort_code,
+    accountNumber: data.account_number,
+    bankName: data.bank_name || undefined,
+  }
+}
 
 export default function OnboardingPage() {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('personal')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [hasBankDetails, setHasBankDetails] = useState<boolean | null>(null)
-  const [isCheckingBankStatus, setIsCheckingBankStatus] = useState(true)
 
   // Store completed step data
   const [personalData, setPersonalData] = useState<FounderPersonalInfoFormData | null>(null)
   const [startupData, setStartupData] = useState<StartupProfileFormData | null>(null)
 
-  // Check if bank details already exist for this startup
-  useEffect(() => {
-    async function checkBankStatus() {
-      try {
-        const response = await fetch('/api/founder/onboarding/bank-status')
-        if (response.ok) {
-          const data = await response.json()
-          setHasBankDetails(data.hasBankDetails)
-        }
-      } catch (err) {
-        console.error('Failed to check bank status:', err)
-      } finally {
-        setIsCheckingBankStatus(false)
-      }
-    }
-    checkBankStatus()
-  }, [])
+  // Convex queries and mutations
+  const bankStatusResult = useQuery(api.founderOnboarding.bankStatus)
+  const completeOnboarding = useMutation(api.founderOnboarding.complete)
+
+  const hasBankDetails = bankStatusResult?.hasBankDetails ?? null
+  const isCheckingBankStatus = bankStatusResult === undefined
 
   // Forms for each step
   const personalForm = useForm<FounderPersonalInfoFormData>({
@@ -124,15 +150,16 @@ export default function OnboardingPage() {
     setStartupData(data)
     // Skip bank step if bank details already exist
     if (hasBankDetails === true) {
-      // Bank details already exist, skip to completion
-      await handleSubmitWithoutBank(data)
+      await submitOnboarding(data, undefined)
     } else {
-      // Show bank step (with option to skip)
       setCurrentStep('bank')
     }
   }
 
-  async function handleSubmitWithoutBank(startupData: StartupProfileFormData) {
+  async function submitOnboarding(
+    startup: StartupProfileFormData,
+    bank: BankDetailsFormData | undefined
+  ) {
     if (!personalData) {
       setError('Please complete all previous steps')
       return
@@ -142,24 +169,13 @@ export default function OnboardingPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/founder/onboarding', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          founderInfo: personalData,
-          startupProfile: startupData,
-          // bankDetails omitted
-        }),
+      await completeOnboarding({
+        founderInfo: mapPersonalInfo(personalData),
+        startupProfile: mapStartupProfile(startup),
+        bankDetails: bank ? mapBankDetails(bank) : undefined,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to complete onboarding')
-      }
-
-      // Success! Redirect to founder dashboard
+      toast.success('Onboarding completed!')
       router.push('/founder/dashboard')
       router.refresh()
     } catch (err) {
@@ -170,49 +186,19 @@ export default function OnboardingPage() {
   }
 
   async function handleBankSubmit(data: BankDetailsFormData) {
-    if (!personalData || !startupData) {
+    if (!startupData) {
       setError('Please complete all previous steps')
       return
     }
-
-    setIsSubmitting(true)
-    setError(null)
-
-    try {
-      const response = await fetch('/api/founder/onboarding', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          founderInfo: personalData,
-          startupProfile: startupData,
-          bankDetails: data,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to complete onboarding')
-      }
-
-      // Success! Redirect to founder dashboard
-      router.push('/founder/dashboard')
-      router.refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setIsSubmitting(false)
-    }
+    await submitOnboarding(startupData, data)
   }
 
   async function handleSkipBank() {
-    if (!personalData || !startupData) {
+    if (!startupData) {
       setError('Please complete all previous steps')
       return
     }
-
-    await handleSubmitWithoutBank(startupData)
+    await submitOnboarding(startupData, undefined)
   }
 
   function handleBack() {
@@ -254,7 +240,6 @@ export default function OnboardingPage() {
               const state = getStepState(index)
               const isCompleted = state === 'completed'
               const isCurrent = state === 'current'
-              const _isUpcoming = state === 'upcoming'
 
               return (
                 <div key={step.key} className="relative z-10 flex flex-col items-center flex-1">
@@ -749,7 +734,7 @@ export default function OnboardingPage() {
                   />
 
                   <div className="rounded-md bg-blue-50 p-4 text-sm text-blue-900">
-                    <p className="font-medium mb-1">🔒 Your data is secure</p>
+                    <p className="font-medium mb-1">Your data is secure</p>
                     <p className="text-blue-800">
                       Your bank details are encrypted and stored securely. They will only be used
                       for legitimate funding disbursements.

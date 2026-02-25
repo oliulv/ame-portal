@@ -109,22 +109,26 @@ export default function InvoiceDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href={`/admin/${cohortSlug}/invoices`}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Invoices
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">Invoice Review</h1>
-          <p className="text-muted-foreground">
-            Review invoice details and approve or reject reimbursement
-          </p>
+      <div className="space-y-4">
+        <div>
+          <Link href={`/admin/${cohortSlug}/invoices`}>
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Invoices
+            </Button>
+          </Link>
         </div>
-        <Badge variant={getInvoiceStatusVariant(invoice.status)} className="text-sm">
-          {invoice.status.replace('_', ' ')}
-        </Badge>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Invoice Review</h1>
+            <p className="text-muted-foreground">
+              Review invoice details and approve or reject reimbursement
+            </p>
+          </div>
+          <Badge variant={getInvoiceStatusVariant(invoice.status)} className="text-sm">
+            {invoice.status.replace('_', ' ')}
+          </Badge>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">

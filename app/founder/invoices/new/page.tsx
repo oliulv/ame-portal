@@ -77,13 +77,15 @@ export default function NewInvoicePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href="/founder/invoices">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Invoices
-          </Button>
-        </Link>
+      <div className="space-y-4">
+        <div>
+          <Link href="/founder/invoices">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Invoices
+            </Button>
+          </Link>
+        </div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Upload Invoice</h1>
           <p className="text-muted-foreground">Submit a new invoice for review and reimbursement</p>

@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import { useParams } from 'next/navigation'
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -15,8 +16,29 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Edit, UserPlus, Target, Users, Mail, ExternalLink, Plug } from 'lucide-react'
+import {
+  ArrowLeft,
+  Edit,
+  UserPlus,
+  Target,
+  Users,
+  Mail,
+  ExternalLink,
+  Plug,
+  RotateCw,
+} from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function StartupDetailPage() {
   const params = useParams()
@@ -31,22 +53,64 @@ export default function StartupDetailPage() {
   )
   const invitations = useQuery(api.invitations.list, startup ? { startupId: startup._id } : 'skip')
 
+  const createInvitation = useMutation(api.invitations.create)
+  const resendInvitation = useMutation(api.invitations.resend)
+
+  const [showInviteDialog, setShowInviteDialog] = useState(false)
+  const [inviteFullName, setInviteFullName] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [isInviting, setIsInviting] = useState(false)
+  const [resendingId, setResendingId] = useState<string | null>(null)
+
+  async function handleInvite() {
+    if (!inviteFullName.trim() || !inviteEmail.trim() || !startup) return
+
+    setIsInviting(true)
+    try {
+      await createInvitation({
+        startupId: startup._id,
+        email: inviteEmail.trim(),
+        fullName: inviteFullName.trim(),
+      })
+      toast.success('Invitation sent successfully')
+      setShowInviteDialog(false)
+      setInviteFullName('')
+      setInviteEmail('')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send invitation')
+    } finally {
+      setIsInviting(false)
+    }
+  }
+
+  async function handleResend(invitationId: string) {
+    setResendingId(invitationId)
+    try {
+      await resendInvitation({ id: invitationId as any })
+      toast.success('Invitation resent')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to resend invitation')
+    } finally {
+      setResendingId(null)
+    }
+  }
+
   // Loading state
   if (startup === undefined || cohort === undefined) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-9 w-36" />
+        <div className="space-y-4">
+          <Skeleton className="h-9 w-36" />
+          <div className="flex items-center justify-between">
             <div>
               <Skeleton className="h-9 w-64" />
               <Skeleton className="mt-1 h-5 w-32" />
             </div>
-          </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-10 w-28" />
-            <Skeleton className="h-10 w-36" />
-            <Skeleton className="h-10 w-20" />
+            <div className="flex gap-2">
+              <Skeleton className="h-10 w-28" />
+              <Skeleton className="h-10 w-36" />
+              <Skeleton className="h-10 w-20" />
+            </div>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-4">
@@ -87,43 +151,42 @@ export default function StartupDetailPage() {
   const potential = milestones?.reduce((sum, m) => sum + m.amount, 0) ?? 0
   const unlocked =
     milestones?.filter((m) => m.status === 'approved').reduce((sum, m) => sum + m.amount, 0) ?? 0
-  const deployed = startup.fundingDeployed ?? 0
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="space-y-4">
+        <div>
           <Link href={`/admin/${cohortSlug}/startups`}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Startups
             </Button>
           </Link>
+        </div>
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{startup.name}</h1>
             <p className="text-muted-foreground">{cohort?.label || 'No cohort'}</p>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Link href={`/admin/${cohortSlug}/startups/${slug}/analytics`}>
-            <Button variant="outline">
-              <Plug className="mr-2 h-4 w-4" />
-              Analytics
-            </Button>
-          </Link>
-          <Link href={`/admin/startups/${slug}/invite`}>
-            <Button variant="default">
+          <div className="flex gap-2">
+            <Link href={`/admin/${cohortSlug}/startups/${slug}/analytics`}>
+              <Button variant="outline">
+                <Plug className="mr-2 h-4 w-4" />
+                Analytics
+              </Button>
+            </Link>
+            <Button variant="default" onClick={() => setShowInviteDialog(true)}>
               <UserPlus className="mr-2 h-4 w-4" />
               Invite Founder
             </Button>
-          </Link>
-          <Link href={`/admin/${cohortSlug}/startups/${slug}/edit`}>
-            <Button variant="outline">
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </Button>
-          </Link>
+            <Link href={`/admin/${cohortSlug}/startups/${slug}/edit`}>
+              <Button variant="outline">
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -223,12 +286,10 @@ export default function StartupDetailPage() {
               <CardTitle>Founders & Invitations</CardTitle>
               <CardDescription>Team members and pending invitations</CardDescription>
             </div>
-            <Link href={`/admin/startups/${slug}/invite`}>
-              <Button size="sm">
-                <UserPlus className="mr-2 h-4 w-4" />
-                Invite Founder
-              </Button>
-            </Link>
+            <Button size="sm" onClick={() => setShowInviteDialog(true)}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Invite Founder
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -240,6 +301,7 @@ export default function StartupDetailPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Sent</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -274,6 +336,21 @@ export default function StartupDetailPage() {
                           month: 'short',
                           year: 'numeric',
                         })}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {status === 'pending' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleResend(invitation._id)}
+                            disabled={resendingId === invitation._id}
+                          >
+                            <RotateCw
+                              className={`h-4 w-4 mr-1 ${resendingId === invitation._id ? 'animate-spin' : ''}`}
+                            />
+                            Resend
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   )
@@ -346,6 +423,57 @@ export default function StartupDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Invite Founder Dialog */}
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite Founder</DialogTitle>
+            <DialogDescription>
+              Send an invitation to join {startup.name} as a founder.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="invite-name">Full Name</Label>
+              <Input
+                id="invite-name"
+                value={inviteFullName}
+                onChange={(e) => setInviteFullName(e.target.value)}
+                placeholder="Jane Doe"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">Email</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="jane@example.com"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowInviteDialog(false)
+                setInviteFullName('')
+                setInviteEmail('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleInvite}
+              disabled={isInviting || !inviteFullName.trim() || !inviteEmail.trim()}
+            >
+              {isInviting ? 'Sending...' : 'Send Invitation'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -354,23 +354,25 @@ export default function MilestoneTemplatesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="space-y-4">
+        <div>
           <Link href={`/admin/${cohortSlug}/funding`}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Funding
             </Button>
           </Link>
+        </div>
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Milestone Templates</h1>
             <p className="text-muted-foreground">Default milestones for {cohort.label}</p>
           </div>
+          <Button onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Template
+          </Button>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Template
-        </Button>
       </div>
 
       {/* Templates table */}

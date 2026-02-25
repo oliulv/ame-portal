@@ -106,6 +106,14 @@ export const accept = mutation({
     let userId
     if (existingUser) {
       userId = existingUser._id
+      // Ensure role is set to founder (EnsureUser may have created with admin role)
+      if (existingUser.role !== 'founder') {
+        await ctx.db.patch(existingUser._id, {
+          role: 'founder',
+          email: invitation.email,
+          fullName: invitation.fullName,
+        })
+      }
     } else {
       userId = await ctx.db.insert('users', {
         clerkId: args.clerkId,
@@ -115,14 +123,22 @@ export const accept = mutation({
       })
     }
 
-    // Create founder profile
-    await ctx.db.insert('founderProfiles', {
-      userId,
-      startupId: invitation.startupId,
-      fullName: invitation.fullName,
-      personalEmail: invitation.email,
-      onboardingStatus: 'pending',
-    })
+    // Guard against duplicate profiles (React StrictMode can trigger the effect twice)
+    const existingProfile = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_userId', (q) => q.eq('userId', userId))
+      .filter((q) => q.eq(q.field('startupId'), invitation.startupId))
+      .first()
+
+    if (!existingProfile) {
+      await ctx.db.insert('founderProfiles', {
+        userId,
+        startupId: invitation.startupId,
+        fullName: invitation.fullName,
+        personalEmail: invitation.email,
+        onboardingStatus: 'pending',
+      })
+    }
 
     // Mark invitation as accepted
     await ctx.db.patch(invitation._id, {
