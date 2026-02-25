@@ -2,7 +2,7 @@
 
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,10 +16,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Target, Settings, ExternalLink } from 'lucide-react'
+import { Target, Settings } from 'lucide-react'
 
 export default function AdminFundingPage() {
   const params = useParams()
+  const router = useRouter()
   const cohortSlug = params.cohortSlug as string
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
@@ -142,12 +143,17 @@ export default function AdminFundingPage() {
                   <TableHead className="text-right">Unlocked</TableHead>
                   <TableHead className="text-right">Deployed</TableHead>
                   <TableHead className="text-right">Milestones</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {startups.map((startup) => (
-                  <TableRow key={startup._id}>
+                  <TableRow
+                    key={startup._id}
+                    className="cursor-pointer transition-colors hover:bg-muted/50"
+                    onClick={() =>
+                      router.push(`/admin/${cohortSlug}/funding/${startup.slug || startup._id}`)
+                    }
+                  >
                     <TableCell className="font-medium">{startup.name}</TableCell>
                     <TableCell className="text-right">
                       {'\u00A3'}
@@ -162,13 +168,6 @@ export default function AdminFundingPage() {
                       {startup.deployed.toLocaleString('en-GB')}
                     </TableCell>
                     <TableCell className="text-right">{startup.milestoneCount}</TableCell>
-                    <TableCell className="text-right">
-                      <Link href={`/admin/${cohortSlug}/funding/${startup.slug || startup._id}`}>
-                        <Button variant="ghost" size="sm">
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
@@ -15,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Users, ExternalLink } from 'lucide-react'
+import { Plus, Users, Edit } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface CohortsPageClientProps {
@@ -23,6 +24,7 @@ interface CohortsPageClientProps {
 }
 
 export function CohortsPageClient({ isSuperAdmin }: CohortsPageClientProps) {
+  const router = useRouter()
   const cohorts = useQuery(api.cohorts.list)
 
   if (cohorts === undefined) {
@@ -71,12 +73,16 @@ export function CohortsPageClient({ isSuperAdmin }: CohortsPageClientProps) {
                 <TableHead>Name</TableHead>
                 <TableHead>Years</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                {isSuperAdmin && <TableHead className="w-12"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {cohorts.map((cohort) => (
-                <TableRow key={cohort._id}>
+                <TableRow
+                  key={cohort._id}
+                  className="cursor-pointer transition-colors hover:bg-muted/50"
+                  onClick={() => router.push(`/admin/${cohort.slug}`)}
+                >
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">{cohort.label}</span>
@@ -93,16 +99,20 @@ export function CohortsPageClient({ isSuperAdmin }: CohortsPageClientProps) {
                       {cohort.isActive ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
-                    {isSuperAdmin && (
-                      <Link href={`/admin/cohorts/${cohort.slug}/edit`}>
-                        <Button variant="ghost" size="sm">
-                          Edit
-                          <ExternalLink className="ml-2 h-3 w-3" />
-                        </Button>
-                      </Link>
-                    )}
-                  </TableCell>
+                  {isSuperAdmin && (
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/admin/cohorts/${cohort.slug}/edit`)
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

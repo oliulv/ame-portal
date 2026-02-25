@@ -7,8 +7,16 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { MetricChart } from '@/components/analytics/metric-chart'
-import { ArrowLeft, RefreshCw, TrendingUp, Eye } from 'lucide-react'
+import { ArrowLeft, RefreshCw, TrendingUp, Eye, Plug } from 'lucide-react'
 
 interface AnalyticsData {
   stripe: {
@@ -97,15 +105,16 @@ export default function AdminStartupAnalyticsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            value={range}
-            onChange={(e) => setRange(e.target.value)}
-            className="px-3 py-2 border rounded-md text-sm"
-          >
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-          </select>
+          <Select value={range} onValueChange={setRange}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7">Last 7 days</SelectItem>
+              <SelectItem value="30">Last 30 days</SelectItem>
+              <SelectItem value="90">Last 90 days</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -115,27 +124,20 @@ export default function AdminStartupAnalyticsPage() {
 
       {/* No Data */}
       {!hasStripe && !hasTracker && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <p className="text-muted-foreground">
-                No integrations connected. Metrics will appear here once the startup connects Stripe
-                or adds the AccelerateMe Tracker.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={<Plug className="h-6 w-6" />}
+          title="No integrations connected"
+          description="Metrics will appear here once the startup connects Stripe or adds the AccelerateMe Tracker."
+        />
       )}
 
       {/* Stripe Metrics */}
       {hasStripe && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-              <TrendingUp className="h-6 w-6" />
-              Revenue Metrics
-            </h2>
-          </div>
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-muted-foreground" />
+            Revenue Metrics
+          </h2>
 
           {data?.stripe?.revenue && (
             <MetricChart
@@ -172,13 +174,11 @@ export default function AdminStartupAnalyticsPage() {
 
       {/* Tracker Metrics */}
       {hasTracker && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-              <Eye className="h-6 w-6" />
-              Traffic Metrics
-            </h2>
-          </div>
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Eye className="h-5 w-5 text-muted-foreground" />
+            Traffic Metrics
+          </h2>
 
           {data?.tracker?.sessions && (
             <MetricChart

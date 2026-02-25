@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -16,10 +16,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Building2, ExternalLink, Users, Edit } from 'lucide-react'
+import { Plus, Building2, Users, Edit } from 'lucide-react'
 
 export default function StartupsPage() {
   const params = useParams()
+  const router = useRouter()
   const cohortSlug = params.cohortSlug as string
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
@@ -121,42 +122,49 @@ export default function StartupsPage() {
                   <TableHead>Sector</TableHead>
                   <TableHead>Stage</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-12"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {startups.map((startup) => (
-                  <TableRow key={startup._id}>
-                    <TableCell className="font-medium">{startup.name}</TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">{startup.sector || '-'}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">{startup.stage || '-'}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {startup.onboardingStatus.replace('_', ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link href={`/admin/${cohortSlug}/startups/${startup.slug || startup._id}`}>
-                          <Button variant="ghost" size="sm">
-                            <ExternalLink className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                        <Link
-                          href={`/admin/${cohortSlug}/startups/${startup.slug || startup._id}/edit`}
+                {startups.map((startup) => {
+                  const href = `/admin/${cohortSlug}/startups/${startup.slug || startup._id}`
+                  return (
+                    <TableRow
+                      key={startup._id}
+                      className="cursor-pointer transition-colors hover:bg-muted/50"
+                      onClick={() => router.push(href)}
+                    >
+                      <TableCell className="font-medium">{startup.name}</TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {startup.sector || '-'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {startup.stage || '-'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {startup.onboardingStatus.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            router.push(`${href}/edit`)
+                          }}
                         >
-                          <Button variant="ghost" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           ) : (

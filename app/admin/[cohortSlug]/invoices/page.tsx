@@ -150,12 +150,16 @@ export default function AdminInvoicesPage() {
                 <TableHead>Date</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {invoices.map((invoice) => (
-                <TableRow key={invoice._id}>
+                <TableRow
+                  key={invoice._id}
+                  className="cursor-pointer transition-colors hover:bg-muted/50"
+                  onClick={() => router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)}
+                >
                   <TableCell className="font-medium">
                     {startupNameMap.get(invoice.startupId) || 'Unknown'}
                   </TableCell>
@@ -176,12 +180,17 @@ export default function AdminInvoicesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/admin/${cohortSlug}/invoices/${invoice._id}`}>
-                      <Button variant="ghost" size="sm">
-                        Review
-                        <ExternalLink className="ml-2 h-3 w-3" />
-                      </Button>
-                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)
+                      }}
+                    >
+                      Review
+                      <ExternalLink className="ml-2 h-3 w-3" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}

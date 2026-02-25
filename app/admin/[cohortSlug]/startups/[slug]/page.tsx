@@ -118,7 +118,7 @@ export default function StartupDetailPage() {
               Invite Founder
             </Button>
           </Link>
-          <Link href={`/admin/startups/${slug}/edit`}>
+          <Link href={`/admin/${cohortSlug}/startups/${slug}/edit`}>
             <Button variant="outline">
               <Edit className="mr-2 h-4 w-4" />
               Edit
