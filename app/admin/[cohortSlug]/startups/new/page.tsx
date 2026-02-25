@@ -80,7 +80,7 @@ export default function NewStartupPage() {
 
   if (isLoadingCohort) {
     return (
-      <div className="container max-w-2xl py-8">
+      <div className="space-y-6">
         <Skeleton className="mb-6 h-10 w-32" />
         <Card>
           <CardHeader>
@@ -98,8 +98,8 @@ export default function NewStartupPage() {
   }
 
   return (
-    <div className="container max-w-2xl py-8">
-      <div className="mb-6">
+    <div className="space-y-6">
+      <div>
         <Link href={`/admin/${cohortSlug}/startups`}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -112,8 +112,8 @@ export default function NewStartupPage() {
         <CardHeader>
           <CardTitle>Create New Startup</CardTitle>
           <CardDescription>
-            Add a new startup to the accelerator program. Goals will be automatically assigned from
-            the cohort's templates.
+            Add a new startup to the accelerator program. Milestones will be automatically assigned
+            from the cohort's templates.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -138,7 +138,7 @@ export default function NewStartupPage() {
                     {cohort.label} ({cohort.yearStart} - {cohort.yearEnd})
                   </p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Goals from this cohort will be automatically assigned to the new startup
+                    Milestones from this cohort will be automatically assigned to the new startup
                   </p>
                 </div>
               )}
