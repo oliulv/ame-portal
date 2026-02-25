@@ -1,0 +1,266 @@
+import { query, mutation } from './_generated/server'
+import { v } from 'convex/values'
+import { requireAdmin, requireFounder, getFounderStartupIds } from './auth'
+
+/**
+ * List milestones for a startup (admin).
+ */
+export const listByStartup = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const milestones = await ctx.db
+      .query('milestones')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+
+    return milestones.sort((a, b) => a.sortOrder - b.sortOrder)
+  },
+})
+
+/**
+ * List milestones for the current founder's startup.
+ */
+export const listForFounder = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+
+    if (startupIds.length === 0) return []
+
+    const milestones = await ctx.db
+      .query('milestones')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
+      .collect()
+
+    return milestones.sort((a, b) => a.sortOrder - b.sortOrder)
+  },
+})
+
+/**
+ * Funding overview for all startups in a cohort (admin).
+ */
+export const fundingOverview = query({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const startups = await ctx.db
+      .query('startups')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    let totalPotential = 0
+    let totalUnlocked = 0
+    let totalDeployed = 0
+
+    const rows = await Promise.all(
+      startups.map(async (startup) => {
+        const milestones = await ctx.db
+          .query('milestones')
+          .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+          .collect()
+
+        const potential = milestones.reduce((sum, m) => sum + m.amount, 0)
+        const unlocked = milestones
+          .filter((m) => m.status === 'approved')
+          .reduce((sum, m) => sum + m.amount, 0)
+        const deployed = startup.fundingDeployed ?? 0
+
+        totalPotential += potential
+        totalUnlocked += unlocked
+        totalDeployed += deployed
+
+        return {
+          _id: startup._id,
+          name: startup.name,
+          slug: startup.slug,
+          potential,
+          unlocked,
+          deployed,
+          milestoneCount: milestones.length,
+        }
+      })
+    )
+
+    return {
+      startups: rows,
+      totals: {
+        potential: totalPotential,
+        unlocked: totalUnlocked,
+        deployed: totalDeployed,
+      },
+    }
+  },
+})
+
+/**
+ * Create a milestone (admin).
+ */
+export const create = mutation({
+  args: {
+    startupId: v.id('startups'),
+    title: v.string(),
+    description: v.string(),
+    amount: v.number(),
+    status: v.optional(
+      v.union(
+        v.literal('locked'),
+        v.literal('active'),
+        v.literal('submitted'),
+        v.literal('approved')
+      )
+    ),
+    dueDate: v.optional(v.string()),
+    sortOrder: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    let sortOrder = args.sortOrder
+    if (sortOrder === undefined) {
+      const existing = await ctx.db
+        .query('milestones')
+        .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+        .collect()
+      sortOrder = existing.length
+    }
+
+    return await ctx.db.insert('milestones', {
+      startupId: args.startupId,
+      title: args.title,
+      description: args.description,
+      amount: args.amount,
+      status: args.status ?? 'active',
+      dueDate: args.dueDate,
+      sortOrder,
+    })
+  },
+})
+
+/**
+ * Update a milestone (admin).
+ */
+export const update = mutation({
+  args: {
+    id: v.id('milestones'),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    amount: v.optional(v.number()),
+    status: v.optional(
+      v.union(
+        v.literal('locked'),
+        v.literal('active'),
+        v.literal('submitted'),
+        v.literal('approved')
+      )
+    ),
+    dueDate: v.optional(v.string()),
+    sortOrder: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const { id, ...updates } = args
+    const milestone = await ctx.db.get(id)
+    if (!milestone) throw new Error('Milestone not found')
+
+    const patch: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        patch[key] = value
+      }
+    }
+
+    await ctx.db.patch(id, patch)
+  },
+})
+
+/**
+ * Delete a milestone (admin).
+ */
+export const remove = mutation({
+  args: { id: v.id('milestones') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const milestone = await ctx.db.get(args.id)
+    if (!milestone) throw new Error('Milestone not found')
+
+    await ctx.db.delete(args.id)
+  },
+})
+
+/**
+ * Approve a submitted milestone (admin). Changes submitted → approved.
+ */
+export const approve = mutation({
+  args: { id: v.id('milestones') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const milestone = await ctx.db.get(args.id)
+    if (!milestone) throw new Error('Milestone not found')
+    if (milestone.status !== 'submitted') {
+      throw new Error('Only submitted milestones can be approved')
+    }
+
+    await ctx.db.patch(args.id, { status: 'approved' })
+  },
+})
+
+/**
+ * Submit a milestone (founder). Changes active → submitted.
+ */
+export const submit = mutation({
+  args: { id: v.id('milestones') },
+  handler: async (ctx, args) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+
+    const milestone = await ctx.db.get(args.id)
+    if (!milestone) throw new Error('Milestone not found')
+    if (!startupIds.includes(milestone.startupId)) {
+      throw new Error('Not authorized')
+    }
+    if (milestone.status !== 'active') {
+      throw new Error('Only active milestones can be submitted')
+    }
+
+    await ctx.db.patch(args.id, { status: 'submitted' })
+  },
+})
+
+/**
+ * Reorder milestones (admin).
+ */
+export const reorder = mutation({
+  args: { milestoneIds: v.array(v.id('milestones')) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    for (let i = 0; i < args.milestoneIds.length; i++) {
+      await ctx.db.patch(args.milestoneIds[i], { sortOrder: i })
+    }
+  },
+})
+
+/**
+ * Update the funding deployed amount for a startup (admin).
+ */
+export const updateFundingDeployed = mutation({
+  args: {
+    startupId: v.id('startups'),
+    amount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const startup = await ctx.db.get(args.startupId)
+    if (!startup) throw new Error('Startup not found')
+
+    await ctx.db.patch(args.startupId, { fundingDeployed: args.amount })
+  },
+})

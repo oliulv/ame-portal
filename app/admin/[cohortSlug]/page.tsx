@@ -122,11 +122,11 @@ export default function AdminDashboard() {
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href={`/admin/${cohortSlug}/goals/new`}>
+          <Link href={`/admin/${cohortSlug}/funding`}>
             <Button variant="outline" className="w-full justify-between">
               <span className="flex items-center">
                 <Plus className="mr-2 h-4 w-4" />
-                Create Goal Template
+                Manage Funding
               </span>
               <ArrowRight className="h-4 w-4" />
             </Button>
@@ -137,9 +137,9 @@ export default function AdminDashboard() {
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href={`/admin/${cohortSlug}/goals`}>
+          <Link href={`/admin/${cohortSlug}/funding/templates`}>
             <Button variant="outline" className="w-full justify-between">
-              Manage Goal Templates
+              Milestone Templates
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>

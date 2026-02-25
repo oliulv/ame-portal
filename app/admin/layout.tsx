@@ -35,7 +35,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
     { title: 'Startups', href: '/admin/startups', icon: 'Building2' },
-    { title: 'Goal Templates', href: '/admin/goals', icon: 'Target' },
+    { title: 'Funding', href: '/admin/funding', icon: 'Target' },
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },
     { title: 'Leaderboard', href: '/admin/leaderboard', icon: 'Trophy' },
     ...(user.role === 'super_admin'

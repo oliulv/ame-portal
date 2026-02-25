@@ -44,6 +44,7 @@ export default defineSchema({
       v.literal('in_progress'),
       v.literal('completed')
     ),
+    fundingDeployed: v.optional(v.number()),
   })
     .index('by_cohortId', ['cohortId'])
     .index('by_slug', ['slug']),
@@ -95,89 +96,35 @@ export default defineSchema({
     verified: v.boolean(),
   }).index('by_startupId', ['startupId']),
 
-  // ── Goal Templates ─────────────────────────────────────────────────
-  goalTemplates: defineTable({
+  // ── Milestone Templates ────────────────────────────────────────────
+  milestoneTemplates: defineTable({
     cohortId: v.id('cohorts'),
     title: v.string(),
-    description: v.optional(v.string()),
-    category: v.optional(v.string()),
-    defaultTargetValue: v.optional(v.number()),
-    defaultDeadline: v.optional(v.string()),
-    defaultWeight: v.number(),
-    defaultFundingAmount: v.optional(v.number()),
+    description: v.string(),
+    amount: v.number(),
+    dueDate: v.optional(v.string()),
+    sortOrder: v.number(),
     isActive: v.boolean(),
-    sortOrder: v.optional(v.number()),
   }).index('by_cohortId', ['cohortId']),
 
-  // ── Startup Goals ──────────────────────────────────────────────────
-  startupGoals: defineTable({
+  // ── Milestones ────────────────────────────────────────────────────
+  milestones: defineTable({
     startupId: v.id('startups'),
-    goalTemplateId: v.optional(v.id('goalTemplates')),
+    milestoneTemplateId: v.optional(v.id('milestoneTemplates')),
     title: v.string(),
-    description: v.optional(v.string()),
-    category: v.optional(v.string()),
-    targetValue: v.optional(v.number()),
-    deadline: v.optional(v.string()),
-    weight: v.number(),
-    fundingAmount: v.optional(v.number()),
+    description: v.string(),
+    amount: v.number(),
     status: v.union(
-      v.literal('not_started'),
-      v.literal('in_progress'),
-      v.literal('completed'),
-      v.literal('waived')
+      v.literal('locked'),
+      v.literal('active'),
+      v.literal('submitted'),
+      v.literal('approved')
     ),
-    progressValue: v.number(),
-    manuallyOverridden: v.boolean(),
-    // Metric-based tracking
-    dataSource: v.optional(v.union(v.literal('stripe'), v.literal('tracker'))),
-    metricKey: v.optional(v.string()),
-    aggregationWindow: v.optional(
-      v.union(v.literal('daily'), v.literal('weekly'), v.literal('monthly'))
-    ),
-    targetValueMetric: v.optional(v.number()),
-    comparisonOperator: v.optional(
-      v.union(
-        v.literal('>='),
-        v.literal('>'),
-        v.literal('='),
-        v.literal('<='),
-        v.literal('<'),
-        v.literal('increased_by'),
-        v.literal('decreased_by')
-      )
-    ),
-    direction: v.optional(v.union(v.literal('up'), v.literal('down'))),
-    lastMetricCheckAt: v.optional(v.string()),
-    autoCompletedAt: v.optional(v.string()),
-    completionSource: v.optional(v.union(v.literal('auto'), v.literal('manual'))),
+    dueDate: v.optional(v.string()),
+    sortOrder: v.number(),
   })
     .index('by_startupId', ['startupId'])
-    .index('by_goalTemplateId', ['goalTemplateId']),
-
-  // ── Goal Updates (audit trail) ─────────────────────────────────────
-  goalUpdates: defineTable({
-    startupGoalId: v.id('startupGoals'),
-    userId: v.id('users'),
-    previousStatus: v.optional(
-      v.union(
-        v.literal('not_started'),
-        v.literal('in_progress'),
-        v.literal('completed'),
-        v.literal('waived')
-      )
-    ),
-    newStatus: v.optional(
-      v.union(
-        v.literal('not_started'),
-        v.literal('in_progress'),
-        v.literal('completed'),
-        v.literal('waived')
-      )
-    ),
-    previousProgress: v.optional(v.number()),
-    newProgress: v.optional(v.number()),
-    comment: v.optional(v.string()),
-  }).index('by_startupGoalId', ['startupGoalId']),
+    .index('by_milestoneTemplateId', ['milestoneTemplateId']),
 
   // ── Invitations (founder) ──────────────────────────────────────────
   invitations: defineTable({

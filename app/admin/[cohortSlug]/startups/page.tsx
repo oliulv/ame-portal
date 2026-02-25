@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Building2, ExternalLink, Users, Target, Edit } from 'lucide-react'
+import { Plus, Building2, ExternalLink, Users, Edit } from 'lucide-react'
 
 export default function StartupsPage() {
   const params = useParams()
@@ -24,10 +24,8 @@ export default function StartupsPage() {
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
-  const goalTemplates = useQuery(api.goalTemplates.list, cohort ? { cohortId: cohort._id } : 'skip')
 
-  const isLoading =
-    cohort === undefined || (cohort && (startups === undefined || goalTemplates === undefined))
+  const isLoading = cohort === undefined || (cohort && startups === undefined)
 
   if (isLoading) {
     return (
@@ -85,7 +83,7 @@ export default function StartupsPage() {
       </div>
 
       {/* Overview Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Program Years</CardTitle>
@@ -104,16 +102,6 @@ export default function StartupsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{startups?.length || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Goal Templates</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{goalTemplates?.length || 0}</div>
           </CardContent>
         </Card>
       </div>
@@ -186,70 +174,6 @@ export default function StartupsPage() {
                 </Link>
               }
             />
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Goal Templates Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Goal Templates</CardTitle>
-          <CardDescription>Default goals assigned to new startups in this cohort</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {goalTemplates && goalTemplates.length > 0 ? (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Target Value</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {goalTemplates.map((template) => (
-                    <TableRow key={template._id}>
-                      <TableCell className="font-medium">{template.title}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {template.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{template.defaultTargetValue || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant={template.isActive ? 'success' : 'secondary'}>
-                          {template.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Link href={`/admin/${cohortSlug}/goals/${template._id}/edit`}>
-                          <Button variant="ghost" size="sm">
-                            Edit
-                          </Button>
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {goalTemplates.length === 1 && goalTemplates[0].title === 'Join AccelerateMe' && (
-                <div className="mt-4 flex justify-center">
-                  <Link href={`/admin/${cohortSlug}/goals/new`}>
-                    <Button variant="outline">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create More Goal Templates
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No goal templates configured for this cohort
-            </p>
           )}
         </CardContent>
       </Card>

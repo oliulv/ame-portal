@@ -10,16 +10,17 @@ import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function FounderDashboard() {
-  const goals = useQuery(api.startupGoals.listForFounder)
+  const milestones = useQuery(api.milestones.listForFounder)
   const invoicesData = useQuery(api.invoices.listForFounder)
 
-  const isLoading = goals === undefined || invoicesData === undefined
+  const isLoading = milestones === undefined || invoicesData === undefined
 
-  const completedGoals = goals?.filter((g) => g.status === 'completed').length ?? 0
-  const totalGoals = goals?.length ?? 0
-  const progressPercentage = totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0
+  const potential = milestones?.reduce((sum, m) => sum + m.amount, 0) ?? 0
+  const unlocked =
+    milestones?.filter((m) => m.status === 'approved').reduce((sum, m) => sum + m.amount, 0) ?? 0
+  const unlockedPct = potential > 0 ? Math.round((unlocked / potential) * 100) : 0
   const pendingInvoices = invoicesData?.pendingCount ?? 0
-  const hasStartups = (goals?.length ?? 0) > 0
+  const hasStartups = (milestones?.length ?? 0) > 0
 
   if (isLoading) {
     return (
@@ -77,28 +78,28 @@ export default function FounderDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Goals Progress</CardTitle>
+            <CardTitle className="text-sm font-medium">Funding</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {totalGoals > 0 ? `${completedGoals}/${totalGoals}` : '0'}
+              {'\u00A3'}
+              {unlocked.toLocaleString('en-GB')} / {'\u00A3'}
+              {potential.toLocaleString('en-GB')}
             </div>
             <div className="mt-2 flex items-center gap-2">
               <div className="h-2 flex-1 rounded-full bg-muted">
                 <div
-                  className="h-2 rounded-full bg-primary transition-all"
-                  style={{ width: `${progressPercentage}%` }}
+                  className="h-2 rounded-full bg-green-500 transition-all"
+                  style={{ width: `${unlockedPct}%` }}
                 />
               </div>
-              <span className="text-xs text-muted-foreground">{progressPercentage}%</span>
+              <span className="text-xs text-muted-foreground">{unlockedPct}%</span>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {totalGoals - completedGoals} remaining
-            </p>
-            <Link href="/founder/goals" className="mt-3 inline-block">
+            <p className="mt-2 text-xs text-muted-foreground">{unlockedPct}% unlocked</p>
+            <Link href="/founder/funding" className="mt-3 inline-block">
               <Button variant="link" size="sm" className="h-auto p-0">
-                View all goals →
+                View funding details →
               </Button>
             </Link>
           </CardContent>

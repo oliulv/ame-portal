@@ -25,21 +25,16 @@ export default function StartupDetailPage() {
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const startup = useQuery(api.startups.getBySlug, { slug })
-  const goals = useQuery(
-    api.startupGoals.listByStartup,
+  const milestones = useQuery(
+    api.milestones.listByStartup,
     startup ? { startupId: startup._id } : 'skip'
   )
   const invitations = useQuery(api.invitations.list, startup ? { startupId: startup._id } : 'skip')
-  const invoices = useQuery(
-    api.invoices.listForAdmin,
-    startup ? { startupId: startup._id } : 'skip'
-  )
 
   // Loading state
   if (startup === undefined || cohort === undefined) {
     return (
       <div className="space-y-6">
-        {/* Header skeleton */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Skeleton className="h-9 w-36" />
@@ -54,8 +49,6 @@ export default function StartupDetailPage() {
             <Skeleton className="h-10 w-20" />
           </div>
         </div>
-
-        {/* Stats skeleton */}
         <div className="grid gap-4 md:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
@@ -69,37 +62,6 @@ export default function StartupDetailPage() {
             </Card>
           ))}
         </div>
-
-        {/* Details skeleton */}
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-36" />
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-          </CardContent>
-        </Card>
-
-        {/* Invitations skeleton */}
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-40 w-full" />
-          </CardContent>
-        </Card>
-
-        {/* Goals skeleton */}
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-24" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-40 w-full" />
-          </CardContent>
-        </Card>
       </div>
     )
   }
@@ -122,12 +84,10 @@ export default function StartupDetailPage() {
     )
   }
 
-  const goalStats = {
-    total: goals?.length || 0,
-    completed: goals?.filter((g) => g.status === 'completed').length || 0,
-    inProgress: goals?.filter((g) => g.status === 'in_progress').length || 0,
-    notStarted: goals?.filter((g) => g.status === 'not_started').length || 0,
-  }
+  const potential = milestones?.reduce((sum, m) => sum + m.amount, 0) ?? 0
+  const unlocked =
+    milestones?.filter((m) => m.status === 'approved').reduce((sum, m) => sum + m.amount, 0) ?? 0
+  const deployed = startup.fundingDeployed ?? 0
 
   return (
     <div className="space-y-6">
@@ -171,26 +131,26 @@ export default function StartupDetailPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Goals</CardTitle>
+            <CardTitle className="text-sm font-medium">Potential Funding</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{goalStats.total}</div>
+            <div className="text-2xl font-bold">
+              {'\u00A3'}
+              {potential.toLocaleString('en-GB')}
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <Target
-              className={`h-4 w-4 ${goalStats.completed > 0 ? 'text-green-600' : 'text-muted-foreground'}`}
-            />
+            <CardTitle className="text-sm font-medium">Unlocked</CardTitle>
+            <Target className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div
-              className={`text-2xl font-bold ${goalStats.completed > 0 ? 'text-green-600' : ''}`}
-            >
-              {goalStats.completed}
+            <div className="text-2xl font-bold text-green-600">
+              {'\u00A3'}
+              {unlocked.toLocaleString('en-GB')}
             </div>
           </CardContent>
         </Card>
@@ -328,62 +288,61 @@ export default function StartupDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Goals */}
+      {/* Milestones summary */}
       <Card>
         <CardHeader>
-          <CardTitle>Goals</CardTitle>
-          <CardDescription>Assigned goals and progress</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Milestones</CardTitle>
+              <CardDescription>Funding milestones and progress</CardDescription>
+            </div>
+            <Link href={`/admin/${cohortSlug}/funding/${slug}`}>
+              <Button variant="outline" size="sm">
+                Manage Milestones
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
-          {goals && goals.length > 0 ? (
-            <div className="space-y-4">
-              {goals.map((goal) => (
+          {milestones && milestones.length > 0 ? (
+            <div className="space-y-3">
+              {milestones.map((milestone) => (
                 <div
-                  key={goal._id}
-                  className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
+                  key={milestone._id}
+                  className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">{goal.title}</span>
-                      <Badge variant="outline" className="capitalize">
-                        {goal.category}
-                      </Badge>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{milestone.title}</span>
                       <Badge
                         variant={
-                          goal.status === 'completed'
+                          milestone.status === 'approved'
                             ? 'success'
-                            : goal.status === 'in_progress'
-                              ? 'info'
-                              : 'secondary'
+                            : milestone.status === 'submitted'
+                              ? 'warning'
+                              : milestone.status === 'active'
+                                ? 'info'
+                                : 'secondary'
                         }
                       >
-                        {goal.status.replace('_', ' ')}
+                        {milestone.status}
                       </Badge>
                     </div>
-                    {goal.description && (
-                      <p className="text-sm text-muted-foreground mt-1">{goal.description}</p>
-                    )}
-                    {goal.targetValue && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Target: {goal.targetValue}
-                      </p>
-                    )}
+                    <p className="text-sm text-muted-foreground mt-0.5">{milestone.description}</p>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    {goal.fundingAmount && (
-                      <div className="text-right mr-4">
-                        <div className="text-sm font-medium">
-                          £{goal.fundingAmount.toLocaleString('en-GB')}
-                        </div>
-                        <div className="text-xs text-muted-foreground">Funding</div>
-                      </div>
-                    )}
+                  <div className="text-right ml-4">
+                    <div className="text-sm font-medium">
+                      {'\u00A3'}
+                      {milestone.amount.toLocaleString('en-GB')}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">No goals assigned yet</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No milestones assigned yet
+            </p>
           )}
         </CardContent>
       </Card>

@@ -22,49 +22,6 @@ export const cohortSchema = z
 export type CohortFormData = z.infer<typeof cohortSchema>
 
 /**
- * Validation schema for goal template success conditions
- */
-const conditionSchema = z
-  .object({
-    dataSource: z.enum(['stripe', 'other']),
-    metric: z.string().min(1, 'Metric is required'),
-    operator: z.enum(['>=', '>', '=', '<=', '<', 'increased_by', 'decreased_by']),
-    targetValue: z.number({ message: 'Target value is required' }),
-    unit: z.string().min(1, 'Unit is required'),
-  })
-  .refine(
-    (data) => {
-      // For 'other' data source, allow any metric/unit
-      if (data.dataSource === 'other') {
-        return true
-      }
-      // For stripe, metric should be a valid identifier (alphanumeric with underscores)
-      return /^[a-z0-9_]+$/.test(data.metric)
-    },
-    {
-      message: 'Metric must be a valid identifier (lowercase letters, numbers, underscores)',
-      path: ['metric'],
-    }
-  )
-
-/**
- * Validation schema for goal templates with condition-based success criteria
- */
-export const goalTemplateSchema = z.object({
-  cohortId: z.string().min(1, 'Cohort ID is required'),
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
-  category: z.enum(['launch', 'revenue', 'users', 'product', 'fundraising', 'growth', 'hiring']),
-  deadline: z.string().optional(), // ISO date string
-  isActive: z.boolean(),
-  conditions: z.array(conditionSchema).min(1, 'At least one success condition is required'),
-  fundingUnlocked: z.number().min(0).optional(),
-})
-
-export type GoalTemplateFormData = z.infer<typeof goalTemplateSchema>
-export type GoalTemplateCondition = z.infer<typeof conditionSchema>
-
-/**
  * Validation schema for startups
  */
 export const startupSchema = z.object({
@@ -229,19 +186,3 @@ export const metricsDataSchema = z.object({
 })
 
 export type MetricsDataFormData = z.infer<typeof metricsDataSchema>
-
-/**
- * Validation schema for metric-based goal updates
- */
-export const metricGoalUpdateSchema = z.object({
-  data_source: z.enum(['stripe', 'tracker']).optional(),
-  metric_key: z.string().optional(),
-  aggregation_window: z.enum(['daily', 'weekly', 'monthly']).optional(),
-  target_value_metric: z.number().optional(),
-  comparison_operator: z
-    .enum(['>=', '>', '=', '<=', '<', 'increased_by', 'decreased_by'])
-    .optional(),
-  direction: z.enum(['up', 'down']).optional(),
-})
-
-export type MetricGoalUpdateFormData = z.infer<typeof metricGoalUpdateSchema>

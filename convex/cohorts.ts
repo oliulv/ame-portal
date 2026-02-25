@@ -74,17 +74,6 @@ export const create = mutation({
       isActive: args.isActive,
     })
 
-    // Create default "Join AccelerateMe" goal template
-    await ctx.db.insert('goalTemplates', {
-      cohortId,
-      title: 'Join AccelerateMe',
-      description: 'Welcome to the program! Your journey starts here.',
-      category: 'launch',
-      isActive: true,
-      defaultWeight: 1,
-      sortOrder: 0,
-    })
-
     return cohortId
   },
 })
