@@ -3,7 +3,7 @@
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, FileText, Building2 } from 'lucide-react'
+import { Target, FileText, Building2, Plug } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -12,8 +12,15 @@ import { Skeleton } from '@/components/ui/skeleton'
 export default function FounderDashboard() {
   const milestones = useQuery(api.milestones.listForFounder)
   const invoicesData = useQuery(api.invoices.listForFounder)
+  const integrationStatus = useQuery(api.integrations.status)
+  const trackerWebsites = useQuery(api.trackerWebsites.list)
 
   const isLoading = milestones === undefined || invoicesData === undefined
+
+  const hasStripe = integrationStatus?.stripe?.status === 'active'
+  const hasTracker = (trackerWebsites?.length ?? 0) > 0
+  const hasAnyIntegration = hasStripe || hasTracker
+  const integrationsLoaded = integrationStatus !== undefined && trackerWebsites !== undefined
 
   const potential = milestones?.reduce((sum, m) => sum + m.amount, 0) ?? 0
   const unlocked =
@@ -123,6 +130,36 @@ export default function FounderDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Integration setup prompt */}
+      {integrationsLoaded && !hasAnyIntegration && (
+        <Card className="border-dashed">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <div className="rounded-full bg-muted p-3">
+                <Plug className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold">Set up integrations</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Connect Stripe to track revenue automatically, or add the AccelerateMe Tracker to
+                  monitor website traffic. Your analytics dashboard will populate once connected.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Link href="/founder/settings?tab=integrations">
+                    <Button size="sm">Connect Integrations</Button>
+                  </Link>
+                  <Link href="/founder/analytics">
+                    <Button variant="outline" size="sm">
+                      View Analytics
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
