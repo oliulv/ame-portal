@@ -136,6 +136,7 @@ function SidebarContent({
 
     const urlCohortSlug = extractCohortSlugFromPath(pathname)
 
+    // URL already has a valid cohort slug — sync state to it
     if (urlCohortSlug && cohorts.find((c) => c.slug === urlCohortSlug)) {
       setSelectedCohortSlug(urlCohortSlug)
       if (mounted) {
@@ -144,6 +145,7 @@ function SidebarContent({
       return
     }
 
+    // No cohort slug in URL — determine the right one and navigate
     if (!mounted) {
       const activeCohort = cohorts.find((c) => c.isActive) || cohorts[0]
       if (activeCohort) {
@@ -152,18 +154,34 @@ function SidebarContent({
       return
     }
 
+    let resolvedSlug: string | null = null
     const storedCohortSlug = localStorage.getItem('selectedCohortSlug')
 
     if (storedCohortSlug && cohorts.find((c) => c.slug === storedCohortSlug)) {
-      setSelectedCohortSlug(storedCohortSlug)
+      resolvedSlug = storedCohortSlug
     } else {
       const activeCohort = cohorts.find((c) => c.isActive) || cohorts[0]
       if (activeCohort) {
-        setSelectedCohortSlug(activeCohort.slug)
-        localStorage.setItem('selectedCohortSlug', activeCohort.slug)
+        resolvedSlug = activeCohort.slug
       }
     }
-  }, [showCohortSelector, cohorts, pathname, mounted])
+
+    if (resolvedSlug) {
+      setSelectedCohortSlug(resolvedSlug)
+      localStorage.setItem('selectedCohortSlug', resolvedSlug)
+
+      // Auto-navigate to include the cohort slug in the URL
+      if (!urlCohortSlug && pathname.startsWith('/admin')) {
+        if (pathname === '/admin' || pathname === '/admin/') {
+          router.replace(`/admin/${resolvedSlug}`)
+        } else {
+          // e.g. /admin/funding → /admin/{slug}/funding
+          const subPath = pathname.replace(/^\/admin/, '')
+          router.replace(`/admin/${resolvedSlug}${subPath}`)
+        }
+      }
+    }
+  }, [showCohortSelector, cohorts, pathname, mounted, router])
 
   const handleCohortChange = (newCohortSlug: string) => {
     setSelectedCohortSlug(newCohortSlug)
