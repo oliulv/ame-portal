@@ -1,0 +1,87 @@
+/* eslint-disable */
+/**
+ * Generated `api` utility.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
+
+import type * as adminCohorts from "../adminCohorts.js";
+import type * as adminInvitations from "../adminInvitations.js";
+import type * as adminUsers from "../adminUsers.js";
+import type * as auth from "../auth.js";
+import type * as bankDetails from "../bankDetails.js";
+import type * as cohorts from "../cohorts.js";
+import type * as crons from "../crons.js";
+import type * as founderOnboarding from "../founderOnboarding.js";
+import type * as founderProfile from "../founderProfile.js";
+import type * as founderStartup from "../founderStartup.js";
+import type * as goalTemplates from "../goalTemplates.js";
+import type * as http from "../http.js";
+import type * as integrations from "../integrations.js";
+import type * as invitations from "../invitations.js";
+import type * as invoices from "../invoices.js";
+import type * as metrics from "../metrics.js";
+import type * as startupGoals from "../startupGoals.js";
+import type * as startups from "../startups.js";
+import type * as trackerWebsites from "../trackerWebsites.js";
+import type * as users from "../users.js";
+
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
+declare const fullApi: ApiFromModules<{
+  adminCohorts: typeof adminCohorts;
+  adminInvitations: typeof adminInvitations;
+  adminUsers: typeof adminUsers;
+  auth: typeof auth;
+  bankDetails: typeof bankDetails;
+  cohorts: typeof cohorts;
+  crons: typeof crons;
+  founderOnboarding: typeof founderOnboarding;
+  founderProfile: typeof founderProfile;
+  founderStartup: typeof founderStartup;
+  goalTemplates: typeof goalTemplates;
+  http: typeof http;
+  integrations: typeof integrations;
+  invitations: typeof invitations;
+  invoices: typeof invoices;
+  metrics: typeof metrics;
+  startupGoals: typeof startupGoals;
+  startups: typeof startups;
+  trackerWebsites: typeof trackerWebsites;
+  users: typeof users;
+}>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
+
+export declare const components: {};
