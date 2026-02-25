@@ -91,19 +91,10 @@ export const ensureUser = mutation({
 
     if (existing) return existing._id
 
-    // Auto-provision: create the user record.
-    // Default to super_admin for the first user during migration,
-    // since the person logging in is likely the app owner.
-    // For production invite flows, users are created with correct roles.
-    const userCount = await ctx.db.query('users').collect()
-    const role = userCount.length === 0 ? 'super_admin' : 'admin'
-
-    return await ctx.db.insert('users', {
-      clerkId: identity.subject,
-      role,
-      email: identity.email ?? undefined,
-      fullName: identity.name ?? undefined,
-    })
+    // Don't auto-provision unknown users with elevated roles.
+    // User records are created through invitation acceptance flows
+    // (founder via invitations.accept, admin via adminInvitations.accept).
+    return null
   },
 })
 

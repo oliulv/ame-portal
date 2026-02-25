@@ -188,30 +188,26 @@ export default function InvitePage() {
   }
 
   // Show sign-up form for unauthenticated users
-  const founderName = invitation.fullName || 'your startup'
+  const founderName = invitation.fullName || 'Founder'
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md px-4">
-        <div className="bg-card text-card-foreground p-8 rounded-lg shadow-md mb-4 border border-border">
-          <h1 className="text-2xl font-bold mb-2">Welcome to AccelerateMe!</h1>
-          <p className="text-muted-foreground mb-4">
-            Hi <strong className="text-foreground">{founderName}</strong>, you have been invited to
-            join as a founder.
-          </p>
-          <p className="text-sm text-muted-foreground mb-6">
-            Please create an account to accept your invitation.
-          </p>
-        </div>
         <SignUp
+          routing="hash"
           afterSignUpUrl={`/invite/${encodeURIComponent(token)}`}
           forceRedirectUrl={`/invite/${encodeURIComponent(token)}`}
+          initialValues={{
+            emailAddress: invitation.email,
+            firstName: invitation.fullName?.split(' ')[0] || '',
+            lastName: invitation.fullName?.split(' ').slice(1).join(' ') || '',
+          }}
           appearance={{
             elements: {
               // Root container
               rootBox: 'mx-auto w-full',
 
-              // Main card container - match your Card component
+              // Main card container
               card: 'bg-card text-card-foreground rounded-lg border border-border shadow-sm p-0',
               cardBox: 'bg-card text-card-foreground rounded-lg border border-border shadow-sm',
 
@@ -220,20 +216,20 @@ export default function InvitePage() {
               headerSubtitle: 'text-muted-foreground text-sm',
               headerTitleContainer: 'mb-4',
 
-              // Form fields - match your Input component
+              // Form fields
               formFieldInput:
                 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
               formFieldLabel: 'text-foreground text-sm font-medium leading-none',
               formFieldInputShowPasswordButton: 'text-muted-foreground hover:text-foreground',
               formFieldInputGroup: 'space-y-2',
 
-              // Buttons - match your Button component
+              // Buttons
               formButtonPrimary:
                 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full',
               formButtonReset:
                 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
 
-              // Social buttons - match your secondary button style
+              // Social buttons
               socialButtonsBlockButton:
                 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full border border-input',
               socialButtonsBlockButtonText: 'text-sm font-medium',
@@ -243,7 +239,7 @@ export default function InvitePage() {
               dividerLine: 'bg-border',
               dividerText: 'text-muted-foreground text-sm',
 
-              // Footer - hide sign-in link
+              // Footer - hide sign-in link (founders must use invite)
               footerActionLink: 'hidden',
               footerAction: 'hidden',
               footer: 'hidden',
