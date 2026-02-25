@@ -17,10 +17,7 @@ export default function LeaderboardPage() {
   const cohortSlug = params.cohortSlug as string
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
-  const startups = useQuery(
-    api.startups.list,
-    cohort ? { cohortId: cohort._id } : 'skip'
-  )
+  const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
 
   // Sort startups alphabetically by name
   const sortedStartups = useMemo(() => {

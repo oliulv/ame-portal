@@ -1,6 +1,6 @@
-import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
-import { requireFounder } from "./auth";
+import { query, mutation } from './_generated/server'
+import { v } from 'convex/values'
+import { requireFounder } from './auth'
 
 /**
  * Get bank details for the current founder's startup.
@@ -8,23 +8,21 @@ import { requireFounder } from "./auth";
 export const get = query({
   args: {},
   handler: async (ctx) => {
-    const user = await requireFounder(ctx);
+    const user = await requireFounder(ctx)
 
     const founderProfile = await ctx.db
-      .query("founderProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
+      .query('founderProfiles')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .first()
 
-    if (!founderProfile) return null;
+    if (!founderProfile) return null
 
     return await ctx.db
-      .query("bankDetails")
-      .withIndex("by_startupId", (q) =>
-        q.eq("startupId", founderProfile.startupId)
-      )
-      .first();
+      .query('bankDetails')
+      .withIndex('by_startupId', (q) => q.eq('startupId', founderProfile.startupId))
+      .first()
   },
-});
+})
 
 /**
  * Create or update bank details.
@@ -37,21 +35,19 @@ export const upsert = mutation({
     bankName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireFounder(ctx);
+    const user = await requireFounder(ctx)
 
     const founderProfile = await ctx.db
-      .query("founderProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
+      .query('founderProfiles')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .first()
 
-    if (!founderProfile) throw new Error("Founder profile not found");
+    if (!founderProfile) throw new Error('Founder profile not found')
 
     const existing = await ctx.db
-      .query("bankDetails")
-      .withIndex("by_startupId", (q) =>
-        q.eq("startupId", founderProfile.startupId)
-      )
-      .first();
+      .query('bankDetails')
+      .withIndex('by_startupId', (q) => q.eq('startupId', founderProfile.startupId))
+      .first()
 
     const data = {
       accountHolderName: args.accountHolderName,
@@ -59,19 +55,19 @@ export const upsert = mutation({
       accountNumber: args.accountNumber,
       bankName: args.bankName,
       verified: false, // Reset on update
-    };
+    }
 
     if (existing) {
-      await ctx.db.patch(existing._id, data);
-      return existing._id;
+      await ctx.db.patch(existing._id, data)
+      return existing._id
     } else {
-      return await ctx.db.insert("bankDetails", {
+      return await ctx.db.insert('bankDetails', {
         startupId: founderProfile.startupId,
         ...data,
-      });
+      })
     }
   },
-});
+})
 
 /**
  * Delete bank details.
@@ -79,24 +75,22 @@ export const upsert = mutation({
 export const remove = mutation({
   args: {},
   handler: async (ctx) => {
-    const user = await requireFounder(ctx);
+    const user = await requireFounder(ctx)
 
     const founderProfile = await ctx.db
-      .query("founderProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
+      .query('founderProfiles')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .first()
 
-    if (!founderProfile) throw new Error("Founder profile not found");
+    if (!founderProfile) throw new Error('Founder profile not found')
 
     const existing = await ctx.db
-      .query("bankDetails")
-      .withIndex("by_startupId", (q) =>
-        q.eq("startupId", founderProfile.startupId)
-      )
-      .first();
+      .query('bankDetails')
+      .withIndex('by_startupId', (q) => q.eq('startupId', founderProfile.startupId))
+      .first()
 
     if (existing) {
-      await ctx.db.delete(existing._id);
+      await ctx.db.delete(existing._id)
     }
   },
-});
+})

@@ -164,11 +164,7 @@ export default function NewGoalTemplatePage() {
 
               {/* Section D: Submit Controls */}
               <div className="border-t pt-6">
-                <SubmitBar
-                  form={form}
-                  isLoading={isSubmitting}
-                  cohortSlug={cohortSlug}
-                />
+                <SubmitBar form={form} isLoading={isSubmitting} cohortSlug={cohortSlug} />
               </div>
             </form>
           </Form>

@@ -1,6 +1,7 @@
+// TODO: Migrate to Convex — currently uses broken /api/founder/analytics endpoint
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -27,7 +28,7 @@ export default function FounderAnalyticsPage() {
   const [range, setRange] = useState('30')
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const fetchAnalytics = useCallback(async () => {
+  async function fetchAnalytics() {
     try {
       const response = await fetch(`/api/founder/analytics?range=${range}`)
       if (response.ok) {
@@ -40,12 +41,13 @@ export default function FounderAnalyticsPage() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }, [range])
+  }
 
   useEffect(() => {
     setIsLoading(true)
     fetchAnalytics()
-  }, [fetchAnalytics])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range])
 
   const handleRefresh = () => {
     setIsRefreshing(true)

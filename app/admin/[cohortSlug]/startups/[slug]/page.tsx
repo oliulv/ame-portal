@@ -16,16 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  ArrowLeft,
-  Edit,
-  UserPlus,
-  Target,
-  Users,
-  Mail,
-  ExternalLink,
-  Plug,
-} from 'lucide-react'
+import { ArrowLeft, Edit, UserPlus, Target, Users, Mail, ExternalLink, Plug } from 'lucide-react'
 
 export default function StartupDetailPage() {
   const params = useParams()
@@ -38,10 +29,7 @@ export default function StartupDetailPage() {
     api.startupGoals.listByStartup,
     startup ? { startupId: startup._id } : 'skip'
   )
-  const invitations = useQuery(
-    api.invitations.list,
-    startup ? { startupId: startup._id } : 'skip'
-  )
+  const invitations = useQuery(api.invitations.list, startup ? { startupId: startup._id } : 'skip')
   const invoices = useQuery(
     api.invoices.listForAdmin,
     startup ? { startupId: startup._id } : 'skip'

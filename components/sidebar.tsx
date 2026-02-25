@@ -309,43 +309,36 @@ export function Sidebar({
   userRole,
 }: SidebarProps) {
   const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   return (
     <>
-      {mounted && (
-        <div className="lg:hidden">
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="fixed left-4 top-4 z-40 lg:hidden"
-                aria-label="Open menu"
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0 bg-white">
-              <SheetHeader className="sr-only">
-                <SheetTitle>{title}</SheetTitle>
-              </SheetHeader>
-              <SidebarContent
-                title={title}
-                subtitle={subtitle}
-                navItems={navItems}
-                showCohortSelector={showCohortSelector}
-                userRole={userRole}
-                onLinkClick={() => setOpen(false)}
-              />
-            </SheetContent>
-          </Sheet>
-        </div>
-      )}
+      <div className="lg:hidden">
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="fixed left-4 top-4 z-40 lg:hidden"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64 p-0 bg-white">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{title}</SheetTitle>
+            </SheetHeader>
+            <SidebarContent
+              title={title}
+              subtitle={subtitle}
+              navItems={navItems}
+              showCohortSelector={showCohortSelector}
+              userRole={userRole}
+              onLinkClick={() => setOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
+      </div>
 
       <aside className="hidden fixed left-0 top-0 z-30 h-screen w-64 flex-col border-r bg-white lg:flex">
         <SidebarContent

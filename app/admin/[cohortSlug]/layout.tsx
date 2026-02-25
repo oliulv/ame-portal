@@ -3,7 +3,6 @@
 import { useParams } from 'next/navigation'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { CohortAccessDenied } from '@/components/cohort-access-denied'
 
 const RESERVED_ROUTES = [
   'cohorts',

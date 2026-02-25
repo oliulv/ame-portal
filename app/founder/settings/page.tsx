@@ -507,10 +507,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <Form {...startupForm}>
-              <form
-                onSubmit={startupForm.handleSubmit(handleStartupSubmit)}
-                className="space-y-6"
-              >
+              <form onSubmit={startupForm.handleSubmit(handleStartupSubmit)} className="space-y-6">
                 <FormField
                   control={startupForm.control}
                   name="name"
@@ -669,10 +666,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <Form {...bankForm}>
-              <form
-                onSubmit={bankForm.handleSubmit(handleBankSubmit)}
-                className="space-y-6"
-              >
+              <form onSubmit={bankForm.handleSubmit(handleBankSubmit)} className="space-y-6">
                 <FormField
                   control={bankForm.control}
                   name="account_holder_name"
@@ -844,7 +838,9 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <Button onClick={() => router.push('/founder/integrations?tab=tracker')}>
-                      {trackerWebsites && trackerWebsites.length > 0 ? 'Manage Trackers' : 'Set Up Tracker'}
+                      {trackerWebsites && trackerWebsites.length > 0
+                        ? 'Manage Trackers'
+                        : 'Set Up Tracker'}
                     </Button>
                   </div>
                 </div>

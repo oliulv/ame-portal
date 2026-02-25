@@ -41,10 +41,7 @@ export default function AdminInvoicesPage() {
   const cohortSlug = params.cohortSlug as string
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
-  const startups = useQuery(
-    api.startups.list,
-    cohort ? { cohortId: cohort._id } : 'skip'
-  )
+  const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
   const allInvoices = useQuery(api.invoices.listForAdmin, {})
 
   // Build a startup ID set and name lookup for this cohort
@@ -61,9 +58,7 @@ export default function AdminInvoicesPage() {
   // Filter invoices to only those belonging to startups in this cohort
   const invoices = useMemo(() => {
     if (!allInvoices || !startups) return undefined
-    return allInvoices
-      .filter((invoice) => startupIdSet.has(invoice.startupId))
-      .slice(0, 50)
+    return allInvoices.filter((invoice) => startupIdSet.has(invoice.startupId)).slice(0, 50)
   }, [allInvoices, startups, startupIdSet])
 
   const isLoading = cohort === undefined || startups === undefined || allInvoices === undefined

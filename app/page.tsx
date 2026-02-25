@@ -1,15 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useAuth } from '@clerk/nextjs'
-import { useQuery } from 'convex/react'
-import { api } from '@/convex/_generated/api'
+import { useWaitForUser } from '@/hooks/useWaitForUser'
 
 export default function Home() {
   const { userId, isLoaded } = useAuth()
-  const user = useQuery(api.users.current)
-  // Give ensureUser time to create the record before giving up
-  const [waitCount, setWaitCount] = useState(0)
+  const { user, isLoading, timedOut } = useWaitForUser()
 
   useEffect(() => {
     if (!isLoaded) return
@@ -19,11 +16,9 @@ export default function Home() {
       return
     }
 
-    // Wait for Convex query to resolve
-    if (user === undefined) return
+    if (isLoading) return
 
     if (user) {
-      // User found — redirect based on role
       if (user.role === 'founder') {
         window.location.href = '/founder/dashboard'
       } else {
@@ -32,17 +27,10 @@ export default function Home() {
       return
     }
 
-    // user is null — record doesn't exist yet.
-    // EnsureUser mutation is running in the background.
-    // Wait for the reactive query to pick up the new record.
-    if (waitCount < 10) {
-      const timer = setTimeout(() => setWaitCount((c) => c + 1), 500)
-      return () => clearTimeout(timer)
+    if (timedOut) {
+      window.location.href = '/access-required'
     }
-
-    // After 5 seconds of waiting, give up
-    window.location.href = '/access-required'
-  }, [userId, isLoaded, user, waitCount])
+  }, [userId, isLoaded, user, isLoading, timedOut])
 
   return (
     <div className="flex min-h-screen items-center justify-center">

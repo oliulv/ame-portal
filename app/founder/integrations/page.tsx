@@ -404,9 +404,7 @@ export default function IntegrationsPage() {
                   <div className="flex justify-end">
                     <Button type="submit" disabled={isCreatingTracker}>
                       <Plus className="h-4 w-4 mr-2" />
-                      {isCreatingTracker
-                        ? 'Creating...'
-                        : 'Create Tracker Website'}
+                      {isCreatingTracker ? 'Creating...' : 'Create Tracker Website'}
                     </Button>
                   </div>
                 </form>

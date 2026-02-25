@@ -219,10 +219,7 @@ export default function GoalTemplatesPage() {
   const cohortSlug = params.cohortSlug as string
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
 
-  const allGoals = useQuery(
-    api.goalTemplates.list,
-    cohort?._id ? { cohortId: cohort._id } : 'skip'
-  )
+  const allGoals = useQuery(api.goalTemplates.list, cohort?._id ? { cohortId: cohort._id } : 'skip')
 
   const removeGoal = useMutation(api.goalTemplates.remove)
   const reorderGoals = useMutation(api.goalTemplates.reorder)
@@ -272,8 +269,7 @@ export default function GoalTemplatesPage() {
 
   const goalTemplates: GoalTemplate[] = allGoalsList.filter(
     (goal) =>
-      goal.title !== 'Join AccelerateMe' &&
-      !goal.title.toLowerCase().includes('join accelerateme')
+      goal.title !== 'Join AccelerateMe' && !goal.title.toLowerCase().includes('join accelerateme')
   )
 
   const hasDefaultGoal = !!accelerateMeGoal

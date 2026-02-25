@@ -1,81 +1,67 @@
-import {
-  QueryCtx,
-  MutationCtx,
-  ActionCtx,
-} from "./_generated/server";
-import { Doc } from "./_generated/dataModel";
+import { QueryCtx, MutationCtx } from './_generated/server'
+import { Doc } from './_generated/dataModel'
 
-export type UserRole = "super_admin" | "admin" | "founder";
+export type UserRole = 'super_admin' | 'admin' | 'founder'
 
 /**
  * Get the current authenticated user from the Clerk JWT identity
  * and look up their record in the users table.
  */
-export async function getCurrentUser(
-  ctx: QueryCtx | MutationCtx
-): Promise<Doc<"users"> | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) return null;
+export async function getCurrentUser(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'> | null> {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) return null
 
   // identity.subject is the Clerk userId
   const user = await ctx.db
-    .query("users")
-    .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
-    .unique();
+    .query('users')
+    .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+    .unique()
 
-  return user;
+  return user
 }
 
 /**
  * Get the current user or throw — used in mutations/queries that require auth.
  */
-export async function requireAuth(
-  ctx: QueryCtx | MutationCtx
-): Promise<Doc<"users">> {
-  const user = await getCurrentUser(ctx);
+export async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'>> {
+  const user = await getCurrentUser(ctx)
   if (!user) {
-    throw new Error("Not authenticated");
+    throw new Error('Not authenticated')
   }
-  return user;
+  return user
 }
 
 /**
  * Require the user to be an admin (admin or super_admin).
  */
-export async function requireAdmin(
-  ctx: QueryCtx | MutationCtx
-): Promise<Doc<"users">> {
-  const user = await requireAuth(ctx);
-  if (user.role !== "admin" && user.role !== "super_admin") {
-    throw new Error("Admin access required");
+export async function requireAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'>> {
+  const user = await requireAuth(ctx)
+  if (user.role !== 'admin' && user.role !== 'super_admin') {
+    throw new Error('Admin access required')
   }
-  return user;
+  return user
 }
 
 /**
  * Require the user to be a super admin.
  */
-export async function requireSuperAdmin(
-  ctx: QueryCtx | MutationCtx
-): Promise<Doc<"users">> {
-  const user = await requireAuth(ctx);
-  if (user.role !== "super_admin") {
-    throw new Error("Super admin access required");
+export async function requireSuperAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'>> {
+  const user = await requireAuth(ctx)
+  if (user.role !== 'super_admin') {
+    throw new Error('Super admin access required')
   }
-  return user;
+  return user
 }
 
 /**
  * Require the user to be a founder.
  */
-export async function requireFounder(
-  ctx: QueryCtx | MutationCtx
-): Promise<Doc<"users">> {
-  const user = await requireAuth(ctx);
-  if (user.role !== "founder") {
-    throw new Error("Founder access required");
+export async function requireFounder(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'>> {
+  const user = await requireAuth(ctx)
+  if (user.role !== 'founder') {
+    throw new Error('Founder access required')
   }
-  return user;
+  return user
 }
 
 /**
@@ -83,24 +69,12 @@ export async function requireFounder(
  */
 export async function getFounderStartupIds(
   ctx: QueryCtx | MutationCtx,
-  userId: Doc<"users">["_id"]
-): Promise<Doc<"startups">["_id"][]> {
+  userId: Doc<'users'>['_id']
+): Promise<Doc<'startups'>['_id'][]> {
   const profiles = await ctx.db
-    .query("founderProfiles")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .collect();
+    .query('founderProfiles')
+    .withIndex('by_userId', (q) => q.eq('userId', userId))
+    .collect()
 
-  return profiles.map((p) => p.startupId);
-}
-
-/**
- * Get Clerk identity from an action context.
- * Actions don't have ctx.db, so we just verify the identity.
- */
-export async function getActionIdentity(
-  ctx: ActionCtx
-): Promise<{ subject: string } | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) return null;
-  return { subject: identity.subject };
+  return profiles.map((p) => p.startupId)
 }

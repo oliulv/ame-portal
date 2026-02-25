@@ -23,6 +23,8 @@ import type * as http from "../http.js";
 import type * as integrations from "../integrations.js";
 import type * as invitations from "../invitations.js";
 import type * as invoices from "../invoices.js";
+import type * as lib_slugify from "../lib/slugify.js";
+import type * as lib_tokens from "../lib/tokens.js";
 import type * as metrics from "../metrics.js";
 import type * as startupGoals from "../startupGoals.js";
 import type * as startups from "../startups.js";
@@ -51,6 +53,8 @@ declare const fullApi: ApiFromModules<{
   integrations: typeof integrations;
   invitations: typeof invitations;
   invoices: typeof invoices;
+  "lib/slugify": typeof lib_slugify;
+  "lib/tokens": typeof lib_tokens;
   metrics: typeof metrics;
   startupGoals: typeof startupGoals;
   startups: typeof startups;

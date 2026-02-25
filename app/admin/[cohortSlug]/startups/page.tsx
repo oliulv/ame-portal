@@ -23,16 +23,11 @@ export default function StartupsPage() {
   const cohortSlug = params.cohortSlug as string
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
-  const startups = useQuery(
-    api.startups.list,
-    cohort ? { cohortId: cohort._id } : 'skip'
-  )
-  const goalTemplates = useQuery(
-    api.goalTemplates.list,
-    cohort ? { cohortId: cohort._id } : 'skip'
-  )
+  const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
+  const goalTemplates = useQuery(api.goalTemplates.list, cohort ? { cohortId: cohort._id } : 'skip')
 
-  const isLoading = cohort === undefined || (cohort && (startups === undefined || goalTemplates === undefined))
+  const isLoading =
+    cohort === undefined || (cohort && (startups === undefined || goalTemplates === undefined))
 
   if (isLoading) {
     return (

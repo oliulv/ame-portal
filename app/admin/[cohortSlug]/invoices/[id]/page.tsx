@@ -257,9 +257,7 @@ export default function InvoiceDetailPage() {
                   <User className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">{founderProfile.fullName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {founderProfile.personalEmail}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{founderProfile.personalEmail}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">

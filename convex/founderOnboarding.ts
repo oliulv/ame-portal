@@ -1,6 +1,6 @@
-import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
-import { requireFounder, getFounderStartupIds } from "./auth";
+import { query, mutation } from './_generated/server'
+import { v } from 'convex/values'
+import { requireFounder } from './auth'
 
 /**
  * Complete multi-step onboarding: personal info, startup profile, bank details.
@@ -38,15 +38,15 @@ export const complete = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await requireFounder(ctx);
+    const user = await requireFounder(ctx)
 
     // Get founder profile
     const founderProfile = await ctx.db
-      .query("founderProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
+      .query('founderProfiles')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .first()
 
-    if (!founderProfile) throw new Error("Founder profile not found");
+    if (!founderProfile) throw new Error('Founder profile not found')
 
     // Update founder profile with personal info
     await ctx.db.patch(founderProfile._id, {
@@ -59,22 +59,20 @@ export const complete = mutation({
       bio: args.founderInfo.bio,
       linkedinUrl: args.founderInfo.linkedinUrl,
       xUrl: args.founderInfo.xUrl,
-      onboardingStatus: "completed",
-    });
+      onboardingStatus: 'completed',
+    })
 
     // Sync name/email to users table
     await ctx.db.patch(user._id, {
       email: founderProfile.personalEmail,
       fullName: founderProfile.fullName,
-    });
+    })
 
     // Upsert startup profile
     const existingProfile = await ctx.db
-      .query("startupProfiles")
-      .withIndex("by_startupId", (q) =>
-        q.eq("startupId", founderProfile.startupId)
-      )
-      .first();
+      .query('startupProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', founderProfile.startupId))
+      .first()
 
     const profileData = {
       oneLiner: args.startupProfile.oneLiner,
@@ -85,25 +83,23 @@ export const complete = mutation({
       location: args.startupProfile.location,
       initialCustomers: args.startupProfile.initialCustomers,
       initialRevenue: args.startupProfile.initialRevenue,
-    };
+    }
 
     if (existingProfile) {
-      await ctx.db.patch(existingProfile._id, profileData);
+      await ctx.db.patch(existingProfile._id, profileData)
     } else {
-      await ctx.db.insert("startupProfiles", {
+      await ctx.db.insert('startupProfiles', {
         startupId: founderProfile.startupId,
         ...profileData,
-      });
+      })
     }
 
     // Upsert bank details if provided
     if (args.bankDetails) {
       const existingBank = await ctx.db
-        .query("bankDetails")
-        .withIndex("by_startupId", (q) =>
-          q.eq("startupId", founderProfile.startupId)
-        )
-        .first();
+        .query('bankDetails')
+        .withIndex('by_startupId', (q) => q.eq('startupId', founderProfile.startupId))
+        .first()
 
       const bankData = {
         accountHolderName: args.bankDetails.accountHolderName,
@@ -111,24 +107,24 @@ export const complete = mutation({
         accountNumber: args.bankDetails.accountNumber,
         bankName: args.bankDetails.bankName,
         verified: false,
-      };
+      }
 
       if (existingBank) {
-        await ctx.db.patch(existingBank._id, bankData);
+        await ctx.db.patch(existingBank._id, bankData)
       } else {
-        await ctx.db.insert("bankDetails", {
+        await ctx.db.insert('bankDetails', {
           startupId: founderProfile.startupId,
           ...bankData,
-        });
+        })
       }
     }
 
     // Update startup onboarding status
     await ctx.db.patch(founderProfile.startupId, {
-      onboardingStatus: "completed",
-    });
+      onboardingStatus: 'completed',
+    })
   },
-});
+})
 
 /**
  * Check if bank details exist for the current founder's startup.
@@ -136,22 +132,20 @@ export const complete = mutation({
 export const bankStatus = query({
   args: {},
   handler: async (ctx) => {
-    const user = await requireFounder(ctx);
+    const user = await requireFounder(ctx)
 
     const founderProfile = await ctx.db
-      .query("founderProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
+      .query('founderProfiles')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .first()
 
-    if (!founderProfile) return { hasBankDetails: false };
+    if (!founderProfile) return { hasBankDetails: false }
 
     const bankDetails = await ctx.db
-      .query("bankDetails")
-      .withIndex("by_startupId", (q) =>
-        q.eq("startupId", founderProfile.startupId)
-      )
-      .first();
+      .query('bankDetails')
+      .withIndex('by_startupId', (q) => q.eq('startupId', founderProfile.startupId))
+      .first()
 
-    return { hasBankDetails: !!bankDetails };
+    return { hasBankDetails: !!bankDetails }
   },
-});
+})

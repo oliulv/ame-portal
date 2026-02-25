@@ -1,3 +1,4 @@
+// TODO: Migrate to Convex — currently uses broken /api/founder/onboarding endpoint
 'use client'
 
 import { useState, useEffect } from 'react'

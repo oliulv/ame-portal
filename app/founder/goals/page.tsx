@@ -110,9 +110,7 @@ export default function FounderGoalsPage() {
                         </span>
                       ) : (
                         <span className="h-12 w-12 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center ring-8 ring-white z-10">
-                          <span className="text-lg font-bold text-gray-500">
-                            {goalIdx}
-                          </span>
+                          <span className="text-lg font-bold text-gray-500">{goalIdx}</span>
                         </span>
                       )}
                     </div>

@@ -1,3 +1,4 @@
+// TODO: Migrate to Convex — currently uses broken /api/founder/invoices endpoint
 'use client'
 
 import { useState } from 'react'

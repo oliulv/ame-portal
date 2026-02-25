@@ -11,10 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
 import { goalTemplateSchema, type GoalTemplateFormData } from '@/lib/schemas'
-import {
-  extractConditionsFromDescription,
-  formatDescriptionWithConditions,
-} from '@/lib/goalUtils'
+import { extractConditionsFromDescription, formatDescriptionWithConditions } from '@/lib/goalUtils'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -247,11 +244,7 @@ export default function GoalEditPage() {
 
               {/* Section D: Submit Controls */}
               <div className="border-t pt-6">
-                <SubmitBar
-                  form={form}
-                  isLoading={isSubmitting}
-                  cohortSlug={cohortSlug}
-                />
+                <SubmitBar form={form} isLoading={isSubmitting} cohortSlug={cohortSlug} />
               </div>
             </form>
           </Form>

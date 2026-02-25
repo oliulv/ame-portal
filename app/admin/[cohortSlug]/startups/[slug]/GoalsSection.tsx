@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import type { Doc, Id } from '@/convex/_generated/dataModel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -35,35 +37,33 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Edit, Trash2 } from 'lucide-react'
-import { StartupGoal } from '@/lib/types'
 
 const goalUpdateSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   category: z.enum(['launch', 'revenue', 'users', 'product', 'fundraising', 'growth', 'hiring']),
-  target_value: z.number().optional(),
+  targetValue: z.number().optional(),
   deadline: z.string().optional(),
   weight: z.number().min(0).optional(),
-  funding_amount: z.number().min(0).optional(),
+  fundingAmount: z.number().min(0).optional(),
   status: z.enum(['not_started', 'in_progress', 'completed']),
-  progress_value: z.number().min(0).max(100).optional(),
+  progressValue: z.number().min(0).max(100).optional(),
 })
 
 type GoalUpdateFormData = z.infer<typeof goalUpdateSchema>
 
+type Goal = Doc<'startupGoals'> & { templateSortOrder: number | null }
+
 interface GoalsSectionProps {
-  goals: StartupGoal[]
-  startupSlug: string
+  goals: Goal[]
 }
 
-export function GoalsSection({
-  goals: initialGoals,
-  startupSlug: _startupSlug,
-}: GoalsSectionProps) {
-  const router = useRouter()
-  const [goals, setGoals] = useState<StartupGoal[]>(initialGoals)
-  const [editingGoal, setEditingGoal] = useState<StartupGoal | null>(null)
-  const [isDeleting, setIsDeleting] = useState<string | null>(null)
+export function GoalsSection({ goals }: GoalsSectionProps) {
+  const updateGoal = useMutation(api.startupGoals.update)
+  const removeGoal = useMutation(api.startupGoals.remove)
+
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
+  const [deletingGoalId, setDeletingGoalId] = useState<Id<'startupGoals'> | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -73,20 +73,18 @@ export function GoalsSection({
       title: '',
       description: '',
       category: 'launch',
-      target_value: undefined,
+      targetValue: undefined,
       deadline: '',
       weight: 1,
-      funding_amount: undefined,
+      fundingAmount: undefined,
       status: 'not_started',
-      progress_value: 0,
+      progressValue: 0,
     },
   })
 
-  const handleEditClick = (goal: StartupGoal) => {
+  const handleEditClick = (goal: Goal) => {
     setEditingGoal(goal)
-    // Convert 'waived' status to 'not_started' since form doesn't support 'waived'
     const formStatus = goal.status === 'waived' ? 'not_started' : goal.status
-    // Validate category against allowed values
     const validCategories = [
       'launch',
       'revenue',
@@ -104,38 +102,22 @@ export function GoalsSection({
       title: goal.title,
       description: goal.description || '',
       category,
-      target_value: goal.target_value || undefined,
+      targetValue: goal.targetValue || undefined,
       deadline: goal.deadline || '',
       weight: goal.weight || 1,
-      funding_amount: goal.funding_amount || undefined,
+      fundingAmount: goal.fundingAmount || undefined,
       status: formStatus as 'not_started' | 'in_progress' | 'completed',
-      progress_value: goal.progress_value || 0,
+      progressValue: goal.progressValue || 0,
     })
     setError(null)
   }
 
-  const handleDeleteClick = (goal: StartupGoal) => {
-    setIsDeleting(goal.id)
-    setError(null)
-  }
-
   const handleDeleteConfirm = async () => {
-    if (!isDeleting) return
+    if (!deletingGoalId) return
 
     try {
-      const response = await fetch(`/api/admin/startup-goals/${isDeleting}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to delete goal')
-      }
-
-      // Remove goal from list
-      setGoals(goals.filter((g) => g.id !== isDeleting))
-      setIsDeleting(null)
-      router.refresh()
+      await removeGoal({ id: deletingGoalId })
+      setDeletingGoalId(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     }
@@ -148,26 +130,20 @@ export function GoalsSection({
     setError(null)
 
     try {
-      const response = await fetch(`/api/admin/startup-goals/${editingGoal.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+      await updateGoal({
+        id: editingGoal._id,
+        title: data.title,
+        description: data.description,
+        category: data.category,
+        targetValue: data.targetValue,
+        deadline: data.deadline,
+        weight: data.weight,
+        fundingAmount: data.fundingAmount,
+        status: data.status,
+        progressValue: data.progressValue,
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to update goal')
-      }
-
-      const updatedGoal = await response.json()
-
-      // Update goal in list
-      setGoals(goals.map((g) => (g.id === editingGoal.id ? updatedGoal : g)))
       setEditingGoal(null)
       form.reset()
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -187,7 +163,7 @@ export function GoalsSection({
             <div className="space-y-4">
               {goals.map((goal) => (
                 <div
-                  key={goal.id}
+                  key={goal._id}
                   className="flex items-start justify-between border-b pb-4 last:border-0 last:pb-0"
                 >
                   <div className="flex-1">
@@ -211,9 +187,9 @@ export function GoalsSection({
                     {goal.description && (
                       <p className="text-sm text-muted-foreground mt-1">{goal.description}</p>
                     )}
-                    {goal.target_value && (
+                    {goal.targetValue && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        Target: {goal.target_value}
+                        Target: {goal.targetValue}
                       </p>
                     )}
                     {goal.deadline && (
@@ -228,10 +204,10 @@ export function GoalsSection({
                     )}
                   </div>
                   <div className="flex items-center gap-2 ml-4">
-                    {goal.funding_amount && (
+                    {goal.fundingAmount && (
                       <div className="text-right mr-4">
                         <div className="text-sm font-medium">
-                          £{goal.funding_amount.toLocaleString('en-GB')}
+                          £{goal.fundingAmount.toLocaleString('en-GB')}
                         </div>
                         <div className="text-xs text-muted-foreground">Funding</div>
                       </div>
@@ -239,7 +215,14 @@ export function GoalsSection({
                     <Button variant="ghost" size="sm" onClick={() => handleEditClick(goal)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(goal)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setDeletingGoalId(goal._id)
+                        setError(null)
+                      }}
+                    >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
@@ -353,7 +336,7 @@ export function GoalsSection({
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="target_value"
+                  name="targetValue"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Target Value</FormLabel>
@@ -374,7 +357,7 @@ export function GoalsSection({
 
                 <FormField
                   control={form.control}
-                  name="progress_value"
+                  name="progressValue"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Progress (%)</FormLabel>
@@ -424,7 +407,7 @@ export function GoalsSection({
 
                 <FormField
                   control={form.control}
-                  name="funding_amount"
+                  name="fundingAmount"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Funding Amount (£)</FormLabel>
@@ -482,7 +465,7 @@ export function GoalsSection({
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!isDeleting} onOpenChange={(open) => !open && setIsDeleting(null)}>
+      <Dialog open={!!deletingGoalId} onOpenChange={(open) => !open && setDeletingGoalId(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Goal</DialogTitle>
@@ -494,7 +477,7 @@ export function GoalsSection({
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsDeleting(null)}>
+            <Button type="button" variant="outline" onClick={() => setDeletingGoalId(null)}>
               Cancel
             </Button>
             <Button type="button" variant="destructive" onClick={handleDeleteConfirm}>

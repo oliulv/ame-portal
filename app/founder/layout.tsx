@@ -1,32 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useQuery } from 'convex/react'
-import { api } from '@/convex/_generated/api'
+import { useEffect } from 'react'
 import { Sidebar } from '@/components/sidebar'
+import { useWaitForUser } from '@/hooks/useWaitForUser'
 
 export default function FounderLayout({ children }: { children: React.ReactNode }) {
-  const user = useQuery(api.users.current)
-  const [waitCount, setWaitCount] = useState(0)
+  const { user, isLoading, timedOut } = useWaitForUser()
 
   useEffect(() => {
-    if (user === undefined) return
+    if (isLoading) return
 
     if (user && user.role !== 'founder') {
       window.location.href = '/access-required'
       return
     }
 
-    if (!user) {
-      if (waitCount < 10) {
-        const timer = setTimeout(() => setWaitCount((c) => c + 1), 500)
-        return () => clearTimeout(timer)
-      }
+    if (!user || timedOut) {
       window.location.href = '/login'
     }
-  }, [user, waitCount])
+  }, [user, isLoading, timedOut])
 
-  if (user === undefined || (!user && waitCount < 10)) {
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-sm text-muted-foreground">Loading...</div>

@@ -62,7 +62,10 @@ export default function AdminInvitePage() {
         title = 'Admin Invitation Already Accepted'
         description =
           'This admin invitation has already been accepted. You can sign in with your account to access the admin portal.'
-      } else if (errorMessage?.includes('expired') || errorMessage?.includes('Invitation expired')) {
+      } else if (
+        errorMessage?.includes('expired') ||
+        errorMessage?.includes('Invitation expired')
+      ) {
         title = 'Admin Invitation Expired'
         description =
           'This admin invitation link has expired. Please ask a super admin to send you a new invitation.'

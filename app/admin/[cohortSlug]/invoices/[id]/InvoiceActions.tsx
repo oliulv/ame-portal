@@ -30,8 +30,7 @@ export function InvoiceActions({ invoiceId, currentStatus }: InvoiceActionsProps
     setActionType(action)
 
     try {
-      const status =
-        action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'paid'
+      const status = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'paid'
 
       await updateStatus({
         id: invoiceId,

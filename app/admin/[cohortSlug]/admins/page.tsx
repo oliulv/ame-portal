@@ -71,10 +71,7 @@ export default function AdminsPage() {
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
 
   // Fetch admin users filtered by cohort (skip if cohort not loaded yet)
-  const adminUsers = useQuery(
-    api.adminUsers.list,
-    cohort ? { cohortId: cohort._id } : 'skip'
-  )
+  const adminUsers = useQuery(api.adminUsers.list, cohort ? { cohortId: cohort._id } : 'skip')
 
   // Fetch admin invitations for this cohort
   const invitations = useQuery(
@@ -237,8 +234,7 @@ export default function AdminsPage() {
                   {adminUsers.map((user) => {
                     // Only show delete button for regular admins (not super admins)
                     // and only if they're assigned to this cohort (not just appearing because they're super admin)
-                    const canDelete =
-                      user.role === 'admin' && user.cohortIds?.includes(cohort._id)
+                    const canDelete = user.role === 'admin' && user.cohortIds?.includes(cohort._id)
 
                     return (
                       <TableRow key={user._id}>
@@ -502,28 +498,16 @@ export default function AdminsPage() {
             <DialogTitle>Remove Admin from Cohort</DialogTitle>
             <DialogDescription>
               Are you sure you want to remove{' '}
-              <strong>
-                {userToDelete?.fullName ||
-                  userToDelete?.email ||
-                  'this admin'}
-              </strong>{' '}
-              from <strong>{cohort?.label}</strong>? They will lose access to this cohort but will
-              remain an admin user.
+              <strong>{userToDelete?.fullName || userToDelete?.email || 'this admin'}</strong> from{' '}
+              <strong>{cohort?.label}</strong>? They will lose access to this cohort but will remain
+              an admin user.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setUserToDelete(null)}
-              disabled={isRemoving}
-            >
+            <Button variant="outline" onClick={() => setUserToDelete(null)} disabled={isRemoving}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmDelete}
-              disabled={isRemoving}
-            >
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isRemoving}>
               {isRemoving ? 'Removing...' : 'Remove Admin'}
             </Button>
           </DialogFooter>

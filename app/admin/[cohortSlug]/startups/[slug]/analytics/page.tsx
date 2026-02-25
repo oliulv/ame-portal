@@ -1,3 +1,4 @@
+// TODO: Migrate to Convex — currently uses broken /api/admin/startups/.../analytics endpoint
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
