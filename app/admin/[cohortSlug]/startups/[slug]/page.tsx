@@ -37,6 +37,7 @@ import {
   ExternalLink,
   Plug,
   RotateCw,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -55,12 +56,14 @@ export default function StartupDetailPage() {
 
   const createInvitation = useMutation(api.invitations.create)
   const resendInvitation = useMutation(api.invitations.resend)
+  const removeFounder = useMutation(api.invitations.removeFounder)
 
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [inviteFullName, setInviteFullName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [isInviting, setIsInviting] = useState(false)
   const [resendingId, setResendingId] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   async function handleInvite() {
     if (!inviteFullName.trim() || !inviteEmail.trim() || !startup) return
@@ -92,6 +95,19 @@ export default function StartupDetailPage() {
       toast.error(error instanceof Error ? error.message : 'Failed to resend invitation')
     } finally {
       setResendingId(null)
+    }
+  }
+
+  async function handleRemove(invitationId: string, name: string) {
+    if (!confirm(`Remove ${name}? This deletes their founder profile and invitation.`)) return
+    setRemovingId(invitationId)
+    try {
+      await removeFounder({ id: invitationId as any })
+      toast.success(`${name} removed`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to remove founder')
+    } finally {
+      setRemovingId(null)
     }
   }
 
@@ -338,19 +354,30 @@ export default function StartupDetailPage() {
                         })}
                       </TableCell>
                       <TableCell className="text-right">
-                        {status === 'pending' && (
+                        <div className="flex items-center justify-end gap-1">
+                          {status === 'pending' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResend(invitation._id)}
+                              disabled={resendingId === invitation._id}
+                            >
+                              <RotateCw
+                                className={`h-4 w-4 mr-1 ${resendingId === invitation._id ? 'animate-spin' : ''}`}
+                              />
+                              Resend
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleResend(invitation._id)}
-                            disabled={resendingId === invitation._id}
+                            onClick={() => handleRemove(invitation._id, invitation.fullName)}
+                            disabled={removingId === invitation._id}
+                            title="Remove founder"
                           >
-                            <RotateCw
-                              className={`h-4 w-4 mr-1 ${resendingId === invitation._id ? 'animate-spin' : ''}`}
-                            />
-                            Resend
+                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
-                        )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )

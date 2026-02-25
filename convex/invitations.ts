@@ -151,6 +151,34 @@ export const accept = mutation({
 })
 
 /**
+ * Remove a founder from a startup (admin). Deletes founderProfile and resets invitation.
+ */
+export const removeFounder = mutation({
+  args: { id: v.id('invitations') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const invitation = await ctx.db.get(args.id)
+    if (!invitation) throw new Error('Invitation not found')
+
+    // Delete the founderProfile linked to this invitation's email + startup
+    const profiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', invitation.startupId))
+      .collect()
+
+    for (const profile of profiles) {
+      if (profile.personalEmail === invitation.email) {
+        await ctx.db.delete(profile._id)
+      }
+    }
+
+    // Delete the invitation itself
+    await ctx.db.delete(invitation._id)
+  },
+})
+
+/**
  * Resend invitation email (action).
  */
 export const resend = mutation({

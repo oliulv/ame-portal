@@ -214,13 +214,6 @@ export default defineSchema({
     .index('by_startupId_provider_metricKey', ['startupId', 'provider', 'metricKey'])
     .index('by_startupId_metricKey_timestamp', ['startupId', 'metricKey', 'timestamp']),
 
-  // ── Startup Metric Manual ──────────────────────────────────────────
-  startupMetricsManual: defineTable({
-    startupId: v.id('startups'),
-    metricName: v.string(),
-    metricValue: v.number(),
-  }).index('by_startupId', ['startupId']),
-
   // ── Tracker Websites ───────────────────────────────────────────────
   trackerWebsites: defineTable({
     startupId: v.id('startups'),

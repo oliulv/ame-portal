@@ -43,6 +43,7 @@ export default function EditStartupPage() {
       name: '',
       logo_url: '',
       sector: '',
+      stage: '',
       website_url: '',
       notes: '',
     },
