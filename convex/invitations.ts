@@ -107,18 +107,20 @@ export const accept = mutation({
     if (existingUser) {
       userId = existingUser._id
       // Never overwrite admin/super_admin role — they keep their admin role
-      // and get founder access via founderProfile
+      // and get founder access via founderProfile.
+      // Never overwrite email/fullName — those are synced from Clerk by ensureUser().
+      // Invitation data (email, fullName) is stored in the founderProfile instead.
       if (existingUser.role !== 'admin' && existingUser.role !== 'super_admin') {
         await ctx.db.patch(existingUser._id, {
           role: 'founder',
-          email: invitation.email,
-          fullName: invitation.fullName,
         })
       }
     } else {
       userId = await ctx.db.insert('users', {
         clerkId: args.clerkId,
         role: 'founder',
+        // Set email/fullName from invitation for new users — ensureUser()
+        // will sync from Clerk on subsequent logins.
         email: invitation.email,
         fullName: invitation.fullName,
       })

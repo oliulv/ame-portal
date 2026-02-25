@@ -89,7 +89,21 @@ export const ensureUser = mutation({
       .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
       .unique()
 
-    if (existing) return existing._id
+    if (existing) {
+      // Sync email and name from Clerk on every login so Convex
+      // always reflects the canonical Clerk profile data.
+      const updates: Partial<{ email: string; fullName: string }> = {}
+      if (identity.email && identity.email !== existing.email) {
+        updates.email = identity.email
+      }
+      if (identity.name && identity.name !== existing.fullName) {
+        updates.fullName = identity.name
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(existing._id, updates)
+      }
+      return existing._id
+    }
 
     // Don't auto-provision unknown users with elevated roles.
     // User records are created through invitation acceptance flows
