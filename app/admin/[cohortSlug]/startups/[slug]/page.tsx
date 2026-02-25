@@ -397,9 +397,7 @@ export default function StartupDetailPage() {
                             ? 'success'
                             : milestone.status === 'submitted'
                               ? 'warning'
-                              : milestone.status === 'active'
-                                ? 'info'
-                                : 'secondary'
+                              : 'secondary'
                         }
                       >
                         {milestone.status}

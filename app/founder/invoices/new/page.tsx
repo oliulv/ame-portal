@@ -1,8 +1,9 @@
-// TODO: Migrate to Convex — currently uses broken /api/founder/invoices endpoint
 'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,9 @@ export default function NewInvoicePage() {
   const [file, setFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
+  const createInvoice = useMutation(api.invoices.create)
+
   const form = useForm<FounderInvoiceUploadFormData>({
     resolver: zodResolver(founderInvoiceUploadSchema),
     defaultValues: {
@@ -46,24 +50,29 @@ export default function NewInvoicePage() {
     setIsSubmitting(true)
 
     try {
-      const formData = new FormData()
-      formData.append('vendor_name', data.vendor_name)
-      formData.append('invoice_date', data.invoice_date)
-      formData.append('amount_gbp', data.amount_gbp.toString())
-      if (data.description) {
-        formData.append('description', data.description)
-      }
-      formData.append('file', file)
-
-      const response = await fetch('/api/founder/invoices', {
+      // Upload file to Convex storage
+      const uploadUrl = await generateUploadUrl()
+      const uploadResult = await fetch(uploadUrl, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': file.type },
+        body: file,
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to upload invoice')
+      if (!uploadResult.ok) {
+        throw new Error('Failed to upload file')
       }
+
+      const { storageId } = await uploadResult.json()
+
+      // Create invoice record
+      await createInvoice({
+        storageId,
+        fileName: file.name,
+        vendorName: data.vendor_name,
+        invoiceDate: data.invoice_date,
+        amountGbp: data.amount_gbp,
+        description: data.description || undefined,
+      })
 
       toast.success('Invoice uploaded successfully')
       router.push('/founder/invoices')
@@ -141,9 +150,9 @@ export default function NewInvoicePage() {
                       <FormControl>
                         <Input
                           type="number"
-                          step="0.01"
-                          min="0.01"
-                          placeholder="0.00"
+                          step="10"
+                          min="0"
+                          placeholder="0"
                           {...field}
                           onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                         />

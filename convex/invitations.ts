@@ -106,8 +106,9 @@ export const accept = mutation({
     let userId
     if (existingUser) {
       userId = existingUser._id
-      // Ensure role is set to founder (EnsureUser may have created with admin role)
-      if (existingUser.role !== 'founder') {
+      // Never overwrite admin/super_admin role — they keep their admin role
+      // and get founder access via founderProfile
+      if (existingUser.role !== 'admin' && existingUser.role !== 'super_admin') {
         await ctx.db.patch(existingUser._id, {
           role: 'founder',
           email: invitation.email,

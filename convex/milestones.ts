@@ -1,6 +1,6 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
-import { requireAdmin, requireFounder, getFounderStartupIds } from './auth'
+import { requireAdmin, requireAuth, requireFounder, getFounderStartupIds } from './auth'
 
 /**
  * List milestones for a startup (admin).
@@ -106,12 +106,7 @@ export const create = mutation({
     description: v.string(),
     amount: v.number(),
     status: v.optional(
-      v.union(
-        v.literal('locked'),
-        v.literal('active'),
-        v.literal('submitted'),
-        v.literal('approved')
-      )
+      v.union(v.literal('waiting'), v.literal('submitted'), v.literal('approved'))
     ),
     dueDate: v.optional(v.string()),
     sortOrder: v.optional(v.number()),
@@ -133,7 +128,7 @@ export const create = mutation({
       title: args.title,
       description: args.description,
       amount: args.amount,
-      status: args.status ?? 'active',
+      status: args.status ?? 'waiting',
       dueDate: args.dueDate,
       sortOrder,
     })
@@ -150,12 +145,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     amount: v.optional(v.number()),
     status: v.optional(
-      v.union(
-        v.literal('locked'),
-        v.literal('active'),
-        v.literal('submitted'),
-        v.literal('approved')
-      )
+      v.union(v.literal('waiting'), v.literal('submitted'), v.literal('approved'))
     ),
     dueDate: v.optional(v.string()),
     sortOrder: v.optional(v.number()),
@@ -212,10 +202,16 @@ export const approve = mutation({
 })
 
 /**
- * Submit a milestone (founder). Changes active → submitted.
+ * Submit a milestone (founder). Changes waiting → submitted.
+ * Requires at least a plan link or uploaded plan file as evidence.
  */
 export const submit = mutation({
-  args: { id: v.id('milestones') },
+  args: {
+    id: v.id('milestones'),
+    planLink: v.optional(v.string()),
+    planStorageId: v.optional(v.id('_storage')),
+    planFileName: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
@@ -225,11 +221,20 @@ export const submit = mutation({
     if (!startupIds.includes(milestone.startupId)) {
       throw new Error('Not authorized')
     }
-    if (milestone.status !== 'active') {
-      throw new Error('Only active milestones can be submitted')
+    if (milestone.status !== 'waiting') {
+      throw new Error('Only waiting milestones can be submitted')
     }
 
-    await ctx.db.patch(args.id, { status: 'submitted' })
+    if (!args.planLink && !args.planStorageId) {
+      throw new Error('Please provide a plan link or upload a plan file')
+    }
+
+    await ctx.db.patch(args.id, {
+      status: 'submitted',
+      planLink: args.planLink,
+      planStorageId: args.planStorageId,
+      planFileName: args.planFileName,
+    })
   },
 })
 
@@ -244,6 +249,27 @@ export const reorder = mutation({
     for (let i = 0; i < args.milestoneIds.length; i++) {
       await ctx.db.patch(args.milestoneIds[i], { sortOrder: i })
     }
+  },
+})
+
+/**
+ * Generate a pre-signed upload URL for milestone plan files.
+ */
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx)
+    return await ctx.storage.generateUploadUrl()
+  },
+})
+
+/**
+ * Get a URL for a stored milestone plan file.
+ */
+export const getFileUrl = query({
+  args: { storageId: v.id('_storage') },
+  handler: async (ctx, args) => {
+    return await ctx.storage.getUrl(args.storageId)
   },
 })
 

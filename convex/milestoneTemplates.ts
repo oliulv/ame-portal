@@ -73,7 +73,7 @@ export const create = mutation({
           title: args.title,
           description: args.description,
           amount: args.amount,
-          status: 'active',
+          status: 'waiting',
           dueDate: args.dueDate,
           sortOrder: milestones.length,
         })

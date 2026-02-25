@@ -115,7 +115,7 @@ export const create = mutation({
         title: template.title,
         description: template.description,
         amount: template.amount,
-        status: 'active',
+        status: 'waiting',
         dueDate: template.dueDate,
         sortOrder: i + 1, // +1 because "Submit Plan" is at 0
       })

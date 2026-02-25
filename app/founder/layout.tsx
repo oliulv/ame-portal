@@ -7,10 +7,15 @@ import { useWaitForUser } from '@/hooks/useWaitForUser'
 export default function FounderLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, timedOut } = useWaitForUser()
 
+  // Allow founder role, or admin/super_admin (who may also have a founderProfile).
+  // Backend queries (requireFounder) handle the real access control.
+  const hasFounderAccess =
+    user?.role === 'founder' || user?.role === 'admin' || user?.role === 'super_admin'
+
   useEffect(() => {
     if (isLoading) return
 
-    if (user && user.role !== 'founder') {
+    if (user && !hasFounderAccess) {
       window.location.href = '/access-required'
       return
     }
@@ -18,7 +23,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
     if (!user || timedOut) {
       window.location.href = '/login'
     }
-  }, [user, isLoading, timedOut])
+  }, [user, isLoading, timedOut, hasFounderAccess])
 
   if (isLoading) {
     return (
@@ -28,7 +33,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
     )
   }
 
-  if (!user || user.role !== 'founder') {
+  if (!user || !hasFounderAccess) {
     return null
   }
 

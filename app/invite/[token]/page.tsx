@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useAuth } from '@clerk/nextjs'
+import { useAuth, useUser, useClerk } from '@clerk/nextjs'
 import { SignUp } from '@clerk/nextjs'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -12,6 +12,8 @@ export default function InvitePage() {
   const params = useParams<{ token: string }>()
   const router = useRouter()
   const { userId, isLoaded } = useAuth()
+  const { user: clerkUser } = useUser()
+  const { signOut } = useClerk()
 
   const rawToken = params.token ?? ''
   let token = rawToken.trim()
@@ -27,8 +29,9 @@ export default function InvitePage() {
   const [acceptError, setAcceptError] = useState<string | null>(null)
   const [isAccepting, setIsAccepting] = useState(false)
   const [hasAccepted, setHasAccepted] = useState(false)
+  const [emailMismatch, setEmailMismatch] = useState(false)
 
-  // Auto-accept when user is authenticated and invitation is valid
+  // Check email match and auto-accept when user is authenticated and invitation is valid
   useEffect(() => {
     if (!isLoaded || !userId) return
     if (invitation === undefined) return // still loading
@@ -36,6 +39,13 @@ export default function InvitePage() {
     if (invitation.acceptedAt) return // already accepted
     if (new Date(invitation.expiresAt) < new Date()) return // expired
     if (isAccepting || hasAccepted) return
+
+    // Check if logged-in user's email matches the invitation email
+    const currentEmail = clerkUser?.primaryEmailAddress?.emailAddress
+    if (currentEmail && currentEmail.toLowerCase() !== invitation.email.toLowerCase()) {
+      setEmailMismatch(true)
+      return
+    }
 
     const doAccept = async () => {
       setIsAccepting(true)
@@ -49,7 +59,17 @@ export default function InvitePage() {
       }
     }
     doAccept()
-  }, [isLoaded, userId, invitation, token, acceptInvite, isAccepting, hasAccepted, router])
+  }, [
+    isLoaded,
+    userId,
+    clerkUser,
+    invitation,
+    token,
+    acceptInvite,
+    isAccepting,
+    hasAccepted,
+    router,
+  ])
 
   // Loading state
   if (invitation === undefined) {
@@ -107,6 +127,35 @@ export default function InvitePage() {
             <Link href="/login" className="text-primary hover:text-primary/80 underline">
               Go to Login
             </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Email mismatch - logged-in user is not the invited founder
+  if (userId && emailMismatch && invitation) {
+    const currentEmail = clerkUser?.primaryEmailAddress?.emailAddress
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="bg-card text-card-foreground p-8 rounded-lg shadow-md border border-border max-w-md mx-4">
+            <h1 className="text-2xl font-bold mb-4 text-foreground">Wrong Account</h1>
+            <p className="text-muted-foreground mb-2">
+              This invitation was sent to{' '}
+              <strong className="text-foreground">{invitation.email}</strong>.
+            </p>
+            <p className="text-muted-foreground mb-6">
+              You are currently signed in as{' '}
+              <strong className="text-foreground">{currentEmail}</strong>. Please sign out and
+              create a new account with the invited email address.
+            </p>
+            <button
+              onClick={() => signOut({ redirectUrl: `/invite/${encodeURIComponent(token)}` })}
+              className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium shadow hover:bg-primary/90"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       </div>

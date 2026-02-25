@@ -27,6 +27,14 @@ import {
   type StartupProfileFormData,
   type BankDetailsFormData,
 } from '@/lib/schemas'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { ChevronLeft, ChevronRight, Check, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -74,6 +82,7 @@ export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('personal')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showBankSkipWarning, setShowBankSkipWarning] = useState(false)
 
   // Store completed step data
   const [personalData, setPersonalData] = useState<FounderPersonalInfoFormData | null>(null)
@@ -110,7 +119,7 @@ export default function OnboardingPage() {
       company_url: '',
       product_url: '',
       industry: '',
-      location: '',
+      location: 'Manchester, UK',
       initial_customers: undefined,
       initial_revenue: undefined,
     },
@@ -193,11 +202,17 @@ export default function OnboardingPage() {
     await submitOnboarding(startupData, data)
   }
 
-  async function handleSkipBank() {
+  function handleSkipBank() {
     if (!startupData) {
       setError('Please complete all previous steps')
       return
     }
+    setShowBankSkipWarning(true)
+  }
+
+  async function confirmSkipBank() {
+    if (!startupData) return
+    setShowBankSkipWarning(false)
     await submitOnboarding(startupData, undefined)
   }
 
@@ -210,8 +225,8 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white py-12">
-      <div className="container max-w-3xl">
+    <div className="py-6">
+      <div>
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Welcome to AccelerateMe!</h1>
           <p className="text-muted-foreground">
@@ -764,6 +779,26 @@ export default function OnboardingPage() {
             </CardContent>
           </Card>
         )}
+        {/* Bank Skip Warning Dialog */}
+        <Dialog open={showBankSkipWarning} onOpenChange={setShowBankSkipWarning}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Bank details required for funding</DialogTitle>
+              <DialogDescription>
+                You can complete onboarding without bank details, but you won&apos;t be able to
+                receive any funding disbursements until you set them up in Settings.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowBankSkipWarning(false)}>
+                Go Back
+              </Button>
+              <Button onClick={confirmSkipBank} disabled={isSubmitting}>
+                {isSubmitting ? 'Completing...' : 'Continue Without Bank Details'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

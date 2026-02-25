@@ -53,11 +53,37 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ArrowLeft, Plus, Edit, Trash2, Check, GripVertical, Target } from 'lucide-react'
+import {
+  ArrowLeft,
+  Plus,
+  Edit,
+  Trash2,
+  Check,
+  GripVertical,
+  Target,
+  ExternalLink,
+  FileText,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id, Doc } from '@/convex/_generated/dataModel'
 
 type Milestone = Doc<'milestones'>
+
+function PlanFileLink({ storageId, fileName }: { storageId: Id<'_storage'>; fileName?: string }) {
+  const fileUrl = useQuery(api.milestones.getFileUrl, { storageId })
+  if (!fileUrl) return <span className="text-xs text-muted-foreground">Loading file...</span>
+  return (
+    <a
+      href={fileUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+    >
+      <FileText className="h-3 w-3" />
+      {fileName || 'View Plan'}
+    </a>
+  )
+}
 
 function SortableRow({
   milestone,
@@ -92,8 +118,30 @@ function SortableRow({
         </button>
       </TableCell>
       <TableCell className="font-medium">{milestone.title}</TableCell>
-      <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
-        {milestone.description}
+      <TableCell className="max-w-[250px] text-sm text-muted-foreground">
+        <div className="truncate">{milestone.description}</div>
+        {(milestone.status === 'submitted' || milestone.status === 'approved') &&
+          (milestone.planLink || milestone.planStorageId) && (
+            <div className="flex items-center gap-3 mt-1">
+              {milestone.planLink && (
+                <a
+                  href={milestone.planLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Plan Link
+                </a>
+              )}
+              {milestone.planStorageId && (
+                <PlanFileLink
+                  storageId={milestone.planStorageId}
+                  fileName={milestone.planFileName}
+                />
+              )}
+            </div>
+          )}
       </TableCell>
       <TableCell className="text-right">
         {'\u00A3'}
@@ -106,9 +154,7 @@ function SortableRow({
               ? 'success'
               : milestone.status === 'submitted'
                 ? 'warning'
-                : milestone.status === 'active'
-                  ? 'info'
-                  : 'secondary'
+                : 'secondary'
           }
         >
           {milestone.status}
@@ -164,9 +210,7 @@ export default function StartupFundingPage() {
   const [formTitle, setFormTitle] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formAmount, setFormAmount] = useState('')
-  const [formStatus, setFormStatus] = useState<'locked' | 'active' | 'submitted' | 'approved'>(
-    'active'
-  )
+  const [formStatus, setFormStatus] = useState<'waiting' | 'submitted' | 'approved'>('waiting')
   const [formDueDate, setFormDueDate] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
@@ -215,7 +259,7 @@ export default function StartupFundingPage() {
     setFormTitle('')
     setFormDescription('')
     setFormAmount('')
-    setFormStatus('active')
+    setFormStatus('waiting')
     setFormDueDate('')
   }
 
@@ -391,8 +435,7 @@ export default function StartupFundingPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="locked">Locked</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="waiting">Waiting</SelectItem>
                   <SelectItem value="submitted">Submitted</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                 </SelectContent>

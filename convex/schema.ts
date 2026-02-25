@@ -114,14 +114,12 @@ export default defineSchema({
     title: v.string(),
     description: v.string(),
     amount: v.number(),
-    status: v.union(
-      v.literal('locked'),
-      v.literal('active'),
-      v.literal('submitted'),
-      v.literal('approved')
-    ),
+    status: v.union(v.literal('waiting'), v.literal('submitted'), v.literal('approved')),
     dueDate: v.optional(v.string()),
     sortOrder: v.number(),
+    planLink: v.optional(v.string()),
+    planStorageId: v.optional(v.id('_storage')),
+    planFileName: v.optional(v.string()),
   })
     .index('by_startupId', ['startupId'])
     .index('by_milestoneTemplateId', ['milestoneTemplateId']),
