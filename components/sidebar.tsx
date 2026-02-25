@@ -83,7 +83,7 @@ function buildNavHref(baseHref: string, cohortSlug: string | null): string {
 
   const cohortScopedRoutes = [
     '/admin',
-    '/admin/goals',
+    '/admin/funding',
     '/admin/startups',
     '/admin/invoices',
     '/admin/leaderboard',
@@ -100,7 +100,7 @@ function buildNavHref(baseHref: string, cohortSlug: string | null): string {
 
   const routeMap: Record<string, string> = {
     '/admin': `/admin/${validCohortSlug}`,
-    '/admin/goals': `/admin/${validCohortSlug}/goals`,
+    '/admin/funding': `/admin/${validCohortSlug}/funding`,
     '/admin/startups': `/admin/${validCohortSlug}/startups`,
     '/admin/invoices': `/admin/${validCohortSlug}/invoices`,
     '/admin/leaderboard': `/admin/${validCohortSlug}/leaderboard`,
