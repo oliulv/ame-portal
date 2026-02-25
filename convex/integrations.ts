@@ -1,7 +1,7 @@
 import { query, mutation, action } from './_generated/server'
 import { v } from 'convex/values'
 import { requireFounder, getFounderStartupIds } from './auth'
-import { api, internal } from './_generated/api'
+import { api } from './_generated/api'
 
 /**
  * Get integration connection status for the current founder's startup.
@@ -113,7 +113,7 @@ export const connectStripe = action({
     if (!identity) throw new Error('Not authenticated')
 
     // Look up user to get startup
-    const user = await ctx.runQuery(internal.users.current)
+    const user = await ctx.runQuery(api.users.current)
     if (!user || user.role !== 'founder') throw new Error('Founder access required')
 
     // We need to fetch startup IDs via an internal query
@@ -128,7 +128,7 @@ export const connectStripe = action({
     const accountName = account.business_profile?.name || account.email || 'Stripe Account'
 
     // Get founder's startup IDs
-    const founderProfiles = await ctx.runQuery(internal.integrations.getFounderStartupId)
+    const founderProfiles = await ctx.runQuery(api.integrations.getFounderStartupId)
 
     if (!founderProfiles) {
       throw new Error('No startup found')

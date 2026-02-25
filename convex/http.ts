@@ -95,10 +95,10 @@ http.route({
 export default http
 
 // ── Internal mutations used by HTTP actions ───────────────────────────
-import { mutation } from './_generated/server'
+import { internalMutation } from './_generated/server'
 import { v } from 'convex/values'
 
-export const insertTrackerEvent = mutation({
+export const insertTrackerEvent = internalMutation({
   args: {
     websiteId: v.string(), // Passed as string from external, validated below
     eventName: v.optional(v.string()),
@@ -142,7 +142,7 @@ export const insertTrackerEvent = mutation({
   },
 })
 
-export const deleteUserByClerkId = mutation({
+export const deleteUserByClerkId = internalMutation({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
     const user = await ctx.db

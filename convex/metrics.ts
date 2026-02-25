@@ -1,4 +1,10 @@
-import { query, mutation, internalAction, internalQuery } from './_generated/server'
+import {
+  query,
+  mutation,
+  internalAction,
+  internalMutation,
+  internalQuery,
+} from './_generated/server'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAuth } from './auth'
@@ -190,7 +196,7 @@ export const fetchStripeMetrics = internalAction({
 /**
  * Internal query to get Stripe connection for a startup.
  */
-export const getStripeConnection = query({
+export const getStripeConnection = internalQuery({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
     return await ctx.db
@@ -206,7 +212,7 @@ export const getStripeConnection = query({
 /**
  * Internal mutation to store metrics (used by actions).
  */
-export const storeInternal = mutation({
+export const storeInternal = internalMutation({
   args: {
     snapshots: v.array(
       v.object({
@@ -262,7 +268,7 @@ export const getStartupsWithTrackers = internalQuery({
 /**
  * Update integration connection sync status.
  */
-export const updateConnectionSyncStatus = mutation({
+export const updateConnectionSyncStatus = internalMutation({
   args: {
     connectionId: v.id('integrationConnections'),
     status: v.optional(v.union(v.literal('active'), v.literal('error'), v.literal('disconnected'))),

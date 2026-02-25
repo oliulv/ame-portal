@@ -1,4 +1,4 @@
-import { query, mutation, action } from './_generated/server'
+import { query, mutation, internalAction } from './_generated/server'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAdmin } from './auth'
@@ -159,7 +159,7 @@ export const resend = mutation({
 /**
  * Internal action to send invitation email via Resend.
  */
-export const sendEmail = action({
+export const sendEmail = internalAction({
   args: {
     to: v.string(),
     founderName: v.string(),
