@@ -1,6 +1,6 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
-import { requireAdmin, requireFounder, getFounderStartupIds } from './auth'
+import { requireAdmin, requireAuth, requireFounder, getFounderStartupIds } from './auth'
 
 /**
  * List perks for a cohort with claim counts (admin).
@@ -69,9 +69,10 @@ export const getById = query({
 export const listForFounder = query({
   args: {},
   handler: async (ctx) => {
-    const user = await requireFounder(ctx)
-    const startupIds = await getFounderStartupIds(ctx, user._id)
+    const user = await requireAuth(ctx)
 
+    // Find founder profile — works for founders and admins with a founderProfile
+    const startupIds = await getFounderStartupIds(ctx, user._id)
     if (startupIds.length === 0) return []
 
     const startup = await ctx.db.get(startupIds[0])
@@ -210,7 +211,7 @@ export const remove = mutation({
 export const claim = mutation({
   args: { perkId: v.id('perks') },
   handler: async (ctx, args) => {
-    const user = await requireFounder(ctx)
+    const user = await requireAuth(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
 
     if (startupIds.length === 0) throw new Error('No startup found')
@@ -248,7 +249,7 @@ export const claim = mutation({
 export const unclaim = mutation({
   args: { perkId: v.id('perks') },
   handler: async (ctx, args) => {
-    const user = await requireFounder(ctx)
+    const user = await requireAuth(ctx)
 
     const claim = await ctx.db
       .query('perkClaims')
