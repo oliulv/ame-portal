@@ -136,7 +136,6 @@ function SidebarContent({
 
     const urlCohortSlug = extractCohortSlugFromPath(pathname)
 
-    // URL already has a valid cohort slug — sync state to it
     if (urlCohortSlug && cohorts.find((c) => c.slug === urlCohortSlug)) {
       setSelectedCohortSlug(urlCohortSlug)
       if (mounted) {
@@ -145,7 +144,6 @@ function SidebarContent({
       return
     }
 
-    // No cohort slug in URL — determine the right one and navigate
     if (!mounted) {
       const activeCohort = cohorts.find((c) => c.isActive) || cohorts[0]
       if (activeCohort) {
@@ -170,12 +168,10 @@ function SidebarContent({
       setSelectedCohortSlug(resolvedSlug)
       localStorage.setItem('selectedCohortSlug', resolvedSlug)
 
-      // Auto-navigate to include the cohort slug in the URL
       if (!urlCohortSlug && pathname.startsWith('/admin')) {
         if (pathname === '/admin' || pathname === '/admin/') {
           router.replace(`/admin/${resolvedSlug}`)
         } else {
-          // e.g. /admin/funding → /admin/{slug}/funding
           const subPath = pathname.replace(/^\/admin/, '')
           router.replace(`/admin/${resolvedSlug}${subPath}`)
         }
@@ -205,114 +201,140 @@ function SidebarContent({
   const currentCohortSlug =
     urlCohortSlug || (selectedCohortSlug && selectedCohortSlug !== '' ? selectedCohortSlug : null)
 
+  // Split nav items: settings goes to bottom
+  const mainNavItems = navItems.filter((item) => item.icon !== 'Settings')
+  const bottomNavItems = navItems.filter((item) => item.icon === 'Settings')
+
+  const renderNavItem = (item: NavItem) => {
+    let cohortSlugForHref: string | null = null
+
+    if (currentCohortSlug && currentCohortSlug !== '') {
+      cohortSlugForHref = currentCohortSlug
+    } else if (selectedCohortSlug && selectedCohortSlug !== '') {
+      cohortSlugForHref = selectedCohortSlug
+    } else if (cohorts.length > 0) {
+      const defaultCohort = cohorts.find((c) => c.isActive) || cohorts[0]
+      cohortSlugForHref = defaultCohort?.slug || null
+    }
+
+    const href = buildNavHref(item.href, cohortSlugForHref)
+
+    const isActive =
+      item.href === '/admin'
+        ? pathname === href ||
+          (pathname.startsWith(`/admin/${currentCohortSlug}/`) &&
+            !pathname.match(/^\/admin\/[^/]+\/(goals|startups|invoices|leaderboard|funding|admins)/))
+        : pathname === href || pathname.startsWith(href + '/')
+    const Icon = iconMap[item.icon] || LayoutDashboard
+
+    const needsCohortSlug =
+      showCohortSelector &&
+      !cohortSlugForHref &&
+      (item.href === '/admin' ||
+        item.href === '/admin/invoices' ||
+        item.href === '/admin/leaderboard' ||
+        item.href === '/admin/goals' ||
+        item.href === '/admin/startups' ||
+        item.href === '/admin/admins')
+    const isDisabled = (needsCohortSlug && isLoadingCohorts) || href === '#'
+
+    return (
+      <Link
+        key={item.href}
+        href={isDisabled ? '#' : href}
+        onClick={(e) => {
+          if (isDisabled || href === '#') {
+            e.preventDefault()
+            return
+          }
+          onLinkClick?.()
+        }}
+        className={cn(
+          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
+          isActive
+            ? 'bg-sidebar-active text-sidebar-active-foreground'
+            : 'text-sidebar-foreground hover:bg-sidebar-hover hover:text-sidebar-active-foreground',
+          isDisabled && 'pointer-events-none opacity-40'
+        )}
+      >
+        <Icon className="h-5 w-5 shrink-0" />
+        {item.title}
+      </Link>
+    )
+  }
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 flex-col justify-center border-b bg-white px-6">
-        <h1 className="text-xl font-bold tracking-tight">{title}</h1>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
+      {/* Brand */}
+      <div className="px-5 pt-5 pb-1">
+        <h1 className="text-lg font-semibold tracking-tight text-sidebar-active-foreground">
+          {title}
+        </h1>
+        <p className="mt-0.5 text-xs text-sidebar-muted">{subtitle}</p>
       </div>
 
-      <nav className="flex-1 space-y-1 p-4">
-        {navItems.map((item) => {
-          let cohortSlugForHref: string | null = null
-
-          if (currentCohortSlug && currentCohortSlug !== '') {
-            cohortSlugForHref = currentCohortSlug
-          } else if (selectedCohortSlug && selectedCohortSlug !== '') {
-            cohortSlugForHref = selectedCohortSlug
-          } else if (cohorts.length > 0) {
-            const defaultCohort = cohorts.find((c) => c.isActive) || cohorts[0]
-            cohortSlugForHref = defaultCohort?.slug || null
-          }
-
-          const href = buildNavHref(item.href, cohortSlugForHref)
-
-          const isActive =
-            item.href === '/admin'
-              ? pathname === href ||
-                (pathname.startsWith(`/admin/${currentCohortSlug}/`) &&
-                  !pathname.match(/^\/admin\/[^/]+\/(goals|startups|invoices|leaderboard)/))
-              : pathname === href || pathname.startsWith(href + '/')
-          const Icon = iconMap[item.icon] || LayoutDashboard
-
-          const needsCohortSlug =
-            showCohortSelector &&
-            !cohortSlugForHref &&
-            (item.href === '/admin' ||
-              item.href === '/admin/invoices' ||
-              item.href === '/admin/leaderboard' ||
-              item.href === '/admin/goals' ||
-              item.href === '/admin/startups' ||
-              item.href === '/admin/admins')
-          const isDisabled = (needsCohortSlug && isLoadingCohorts) || href === '#'
-
-          return (
-            <Link
-              key={item.href}
-              href={isDisabled ? '#' : href}
-              onClick={(e) => {
-                if (isDisabled || href === '#') {
-                  e.preventDefault()
-                  return
-                }
-                onLinkClick?.()
-              }}
-              className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {item.title}
-            </Link>
-          )
-        })}
-      </nav>
-
+      {/* Cohort selector (admin only) */}
       {showCohortSelector && (
-        <div className="border-t p-4 space-y-2">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Cohort</label>
-            {!mounted || isLoadingCohorts ? (
-              <div className="h-9 rounded-md border bg-muted animate-pulse" />
-            ) : (
-              <Select value={currentCohortSlug || ''} onValueChange={handleCohortChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select cohort">
-                    {selectedCohort ? selectedCohort.label : 'Select cohort'}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {cohorts.map((cohort) => (
-                    <SelectItem key={cohort._id} value={cohort.slug}>
-                      {cohort.label} ({cohort.yearStart} - {cohort.yearEnd})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+        <div className="px-3 pt-3 pb-1">
+          <label className="mb-1.5 block px-1 text-[11px] font-medium uppercase tracking-wider text-sidebar-muted">
+            Cohort
+          </label>
+          {!mounted || isLoadingCohorts ? (
+            <div className="h-9 rounded-lg bg-sidebar-active animate-pulse" />
+          ) : (
+            <Select value={currentCohortSlug || ''} onValueChange={handleCohortChange}>
+              <SelectTrigger className="w-full rounded-lg border-sidebar-border bg-sidebar-active text-sidebar-active-foreground text-sm h-9 focus:ring-0 focus:ring-offset-0">
+                <SelectValue placeholder="Select cohort">
+                  {selectedCohort ? selectedCohort.label : 'Select cohort'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="rounded-lg border-sidebar-border bg-[hsl(0,0%,11%)]">
+                {cohorts.map((cohort) => (
+                  <SelectItem
+                    key={cohort._id}
+                    value={cohort.slug}
+                    className="text-[hsl(0,0%,90%)] focus:bg-[hsl(0,0%,16%)] focus:text-white rounded-md"
+                  >
+                    {cohort.label} ({cohort.yearStart} - {cohort.yearEnd})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {userRole === 'super_admin' && (
-            <Link href="/admin/cohorts/new" onClick={onLinkClick}>
-              <Button variant="outline" size="sm" className="w-full">
-                <Plus className="mr-2 h-3 w-3" />
-                Create New Cohort
-              </Button>
+            <Link href="/admin/cohorts/new" onClick={onLinkClick} className="mt-2 block">
+              <button className="flex w-full items-center justify-center gap-2 rounded-lg border border-sidebar-border px-3 py-1.5 text-xs font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-sidebar-active-foreground">
+                <Plus className="h-3.5 w-3.5" />
+                New Cohort
+              </button>
             </Link>
           )}
         </div>
       )}
 
-      <div className="border-t px-4 py-3">
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">AccelerateMe Internal Tool</p>
-          {mounted && (
-            <div className="flex items-center justify-start">
-              <UserButton />
-            </div>
-          )}
+      {/* Divider */}
+      <div className="mx-4 my-3 border-t border-sidebar-border" />
+
+      {/* Main navigation */}
+      <nav className="flex-1 space-y-1 px-3 overflow-y-auto">
+        {mainNavItems.map(renderNavItem)}
+      </nav>
+
+      {/* Bottom section */}
+      <div className="mt-auto">
+        {/* Bottom nav items (Settings) */}
+        {bottomNavItems.length > 0 && (
+          <div className="space-y-1 px-3 pb-2">
+            {bottomNavItems.map(renderNavItem)}
+          </div>
+        )}
+
+        {/* User area */}
+        <div className="border-t border-sidebar-border px-4 py-3">
+          <div className="flex items-center gap-3">
+            {mounted && <UserButton />}
+            <span className="text-[11px] text-sidebar-muted">Accelerate ME</span>
+          </div>
         </div>
       </div>
     </div>
@@ -330,19 +352,20 @@ export function Sidebar({
 
   return (
     <>
+      {/* Mobile menu */}
       <div className="lg:hidden">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="fixed left-4 top-4 z-40 lg:hidden"
+              className="fixed left-4 top-4 z-40 lg:hidden bg-sidebar text-sidebar-active-foreground hover:bg-sidebar-active"
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-0 bg-white">
+          <SheetContent side="left" className="w-64 p-0 bg-sidebar border-sidebar-border">
             <SheetHeader className="sr-only">
               <SheetTitle>{title}</SheetTitle>
             </SheetHeader>
@@ -358,7 +381,8 @@ export function Sidebar({
         </Sheet>
       </div>
 
-      <aside className="hidden fixed left-0 top-0 z-30 h-screen w-64 flex-col border-r bg-white lg:flex">
+      {/* Desktop sidebar */}
+      <aside className="hidden fixed left-0 top-0 z-30 h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
         <SidebarContent
           title={title}
           subtitle={subtitle}

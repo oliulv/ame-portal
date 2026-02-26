@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'AccelerateMe Internal Tool',
+  title: 'Accelerate ME',
   description: 'Internal tool for managing cohorts, startups, and founders',
 }
 

@@ -142,7 +142,7 @@ export default function FounderDashboard() {
               <div className="flex-1">
                 <h3 className="font-semibold">Set up integrations</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Connect Stripe to track revenue automatically, or add the AccelerateMe Tracker to
+                  Connect Stripe to track revenue automatically, or add the Accelerate ME Tracker to
                   monitor website traffic. Your analytics dashboard will populate once connected.
                 </p>
                 <div className="mt-3 flex gap-2">

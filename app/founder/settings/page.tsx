@@ -813,12 +813,12 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* AccelerateMe Tracker Integration */}
+              {/* Accelerate ME Tracker Integration */}
               <div className="border rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold">AccelerateMe Tracker</h3>
+                      <h3 className="font-semibold">Accelerate ME Tracker</h3>
                       {trackerWebsites && trackerWebsites.length > 0 ? (
                         <CheckCircle2 className="h-4 w-4 text-green-600" />
                       ) : null}

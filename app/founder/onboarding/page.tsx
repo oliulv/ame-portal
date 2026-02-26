@@ -228,7 +228,7 @@ export default function OnboardingPage() {
     <div className="py-6">
       <div>
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Welcome to AccelerateMe!</h1>
+          <h1 className="text-3xl font-bold mb-2">Welcome to Accelerate ME!</h1>
           <p className="text-muted-foreground">
             Let's get you set up. This should only take a few minutes.
           </p>

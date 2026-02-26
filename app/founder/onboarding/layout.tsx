@@ -43,7 +43,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   // Loading state while checking auth and onboarding status
   if (user === undefined || (!user && waitCount < 10) || profileData === undefined) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-sm text-muted-foreground">Loading...</div>
       </div>
     )
@@ -60,7 +60,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       {/* Page content */}
       <main className="flex-1">{children}</main>
     </div>

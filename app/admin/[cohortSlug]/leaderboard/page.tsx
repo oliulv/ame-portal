@@ -84,34 +84,34 @@ export default function LeaderboardPage() {
         </p>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="bg-card rounded-lg border overflow-hidden">
+        <table className="min-w-full divide-y divide-border">
+          <thead className="bg-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Rank
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Startup
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Goals Completion
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Revenue
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Traffic
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Score
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-card divide-y divide-border">
             {sortedStartups.map((startup, index) => (
               <tr key={startup._id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
                   #{index + 1}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -126,13 +126,13 @@ export default function LeaderboardPage() {
                       />
                     )}
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{startup.name}</div>
+                      <div className="text-sm font-medium text-foreground">{startup.name}</div>
                       {startup.websiteUrl && (
                         <a
                           href={startup.websiteUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:underline"
+                          className="text-xs text-primary hover:underline"
                         >
                           {startup.websiteUrl}
                         </a>
@@ -140,17 +140,17 @@ export default function LeaderboardPage() {
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <span className="text-xs text-gray-400 italic">Scoring data loading...</span>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                  <span className="text-xs text-muted-foreground/60 italic">Scoring data loading...</span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <span className="text-xs text-gray-400 italic">Scoring data loading...</span>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                  <span className="text-xs text-muted-foreground/60 italic">Scoring data loading...</span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <span className="text-xs text-gray-400 italic">Scoring data loading...</span>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                  <span className="text-xs text-muted-foreground/60 italic">Scoring data loading...</span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  <span className="text-xs text-gray-400 italic">Scoring data loading...</span>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
+                  <span className="text-xs text-muted-foreground/60 italic">Scoring data loading...</span>
                 </td>
               </tr>
             ))}
@@ -158,11 +158,11 @@ export default function LeaderboardPage() {
         </table>
       </div>
 
-      <div className="mt-6 bg-gray-50 p-4 rounded-lg">
-        <p className="text-sm text-gray-600 mb-2">
-          <strong>Scoring Formula:</strong> Leaderboard score combines multiple factors:
+      <div className="mt-6 bg-muted p-4 rounded-lg">
+        <p className="text-sm text-muted-foreground mb-2">
+          <strong className="text-foreground">Scoring Formula:</strong> Leaderboard score combines multiple factors:
         </p>
-        <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+        <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
           <li>
             <strong>Goal Completion (40%):</strong> Percentage of completed goals
           </li>
@@ -171,7 +171,7 @@ export default function LeaderboardPage() {
             points, capped)
           </li>
           <li>
-            <strong>Traffic (20%):</strong> Sessions from AccelerateMe Tracker (1000 sessions = 20
+            <strong>Traffic (20%):</strong> Sessions from Accelerate ME Tracker (1000 sessions = 20
             points, capped)
           </li>
           <li>
@@ -179,7 +179,7 @@ export default function LeaderboardPage() {
             tracking
           </li>
         </ul>
-        <p className="text-sm text-gray-600 mt-2">
+        <p className="text-sm text-muted-foreground mt-2">
           Detailed scoring will be available once Convex metric queries are implemented.
         </p>
       </div>

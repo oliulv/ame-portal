@@ -27,7 +27,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-sm text-muted-foreground">Loading...</div>
       </div>
     )
@@ -46,9 +46,9 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
   ]
 
   return (
-    <div className="flex min-h-screen bg-muted/40">
+    <div className="flex min-h-screen bg-background">
       <Sidebar
-        title="AccelerateMe"
+        title="Accelerate ME"
         subtitle="Founder Portal"
         navItems={navItems}
         showCohortSelector={false}
@@ -56,13 +56,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
 
       {/* Main content */}
       <div className="flex flex-1 flex-col lg:ml-64">
-        {/* Top bar */}
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-white px-6 lg:px-6">
-          <h2 className="ml-12 text-lg font-semibold lg:ml-0">Founder Portal</h2>
-        </header>
-
-        {/* Page content */}
-        <main className="flex-1 p-4 lg:p-6">{children}</main>
+        <main className="flex-1 p-4 pt-16 lg:p-8 lg:pt-8">{children}</main>
       </div>
     </div>
   )

@@ -103,7 +103,7 @@ export default function AdminInvitePage() {
           <CardHeader>
             <CardTitle>Accept Admin Invitation</CardTitle>
             <CardDescription>
-              You have been invited to join the AccelerateMe internal tool as an admin.
+              You have been invited to join the Accelerate ME internal tool as an admin.
             </CardDescription>
           </CardHeader>
           <CardContent>

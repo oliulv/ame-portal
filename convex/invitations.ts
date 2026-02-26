@@ -220,9 +220,9 @@ export const sendEmail = internalAction({
     const inviteUrl = `${appUrl}/invite/${encodeURIComponent(args.inviteToken)}`
 
     await resend.emails.send({
-      from: 'AccelerateMe <onboarding@resend.dev>',
+      from: 'Accelerate ME <onboarding@resend.dev>',
       to: args.to,
-      subject: `You're invited to join ${args.startupName} on AccelerateMe`,
+      subject: `You're invited to join ${args.startupName} on Accelerate ME`,
       html: generateInvitationHtml({
         founderName: args.founderName,
         startupName: args.startupName,
@@ -244,15 +244,15 @@ function generateInvitationHtml(params: {
   const { founderName, startupName, invitationLink, expirationDays } = params
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px">
-<div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:40px 20px;text-align:center;border-radius:8px 8px 0 0">
-<h1 style="color:white;margin:0;font-size:28px">AccelerateMe</h1></div>
-<div style="background:white;padding:40px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-<h2 style="color:#1f2937;margin-top:0">Welcome to AccelerateMe!</h2>
+<div style="background:#1a1714;padding:40px 20px;text-align:center;border-radius:8px 8px 0 0">
+<h1 style="color:#faf8f4;margin:0;font-size:28px;font-weight:600">Accelerate ME</h1></div>
+<div style="background:#ffffff;padding:40px;border:1px solid #e8e4de;border-top:none;border-radius:0 0 8px 8px">
+<h2 style="color:#1a1714;margin-top:0">Welcome to Accelerate ME!</h2>
 <p>Hi ${founderName},</p>
-<p>You've been invited to join <strong>${startupName}</strong> on the AccelerateMe platform.</p>
+<p>You've been invited to join <strong>${startupName}</strong> on the Accelerate ME platform.</p>
 <div style="text-align:center;margin:32px 0">
-<a href="${invitationLink}" style="background:#667eea;color:white;padding:14px 32px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:600">Accept Invitation</a></div>
-<p style="color:#6b7280;font-size:14px">Or copy and paste this link:<br><a href="${invitationLink}" style="color:#667eea;word-break:break-all">${invitationLink}</a></p>
+<a href="${invitationLink}" style="background:#1a1714;color:#faf8f4;padding:14px 32px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:600">Accept Invitation</a></div>
+<p style="color:#6b7280;font-size:14px">Or copy and paste this link:<br><a href="${invitationLink}" style="color:#1a1714;word-break:break-all">${invitationLink}</a></p>
 <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:12px;margin:24px 0;border-radius:4px">
 <p style="margin:0;color:#92400e;font-size:14px"><strong>This invitation expires in ${expirationDays} days.</strong></p></div>
 </div></body></html>`

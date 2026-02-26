@@ -180,7 +180,7 @@ export default function IntegrationsPage() {
             }`}
           >
             <Code className="h-4 w-4" />
-            AccelerateMe Tracker
+            Accelerate ME Tracker
           </button>
         </nav>
       </div>
@@ -262,7 +262,7 @@ export default function IntegrationsPage() {
                 <CardTitle>How to Install the Tracker</CardTitle>
               </div>
               <CardDescription>
-                Follow these simple steps to add the AccelerateMe Tracker to your website
+                Follow these simple steps to add the Accelerate ME Tracker to your website
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

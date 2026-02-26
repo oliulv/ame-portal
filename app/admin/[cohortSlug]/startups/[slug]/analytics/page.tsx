@@ -129,7 +129,7 @@ export default function AdminStartupAnalyticsPage() {
         <EmptyState
           icon={<Plug className="h-6 w-6" />}
           title="No integrations connected"
-          description="Metrics will appear here once the startup connects Stripe or adds the AccelerateMe Tracker."
+          description="Metrics will appear here once the startup connects Stripe or adds the Accelerate ME Tracker."
         />
       )}
 
