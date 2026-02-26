@@ -273,45 +273,6 @@ function SidebarContent({
         <p className="mt-0.5 text-xs text-sidebar-muted">{subtitle}</p>
       </div>
 
-      {/* Cohort selector (admin only) */}
-      {showCohortSelector && (
-        <div className="px-3 pt-3 pb-1">
-          <label className="mb-1.5 block px-1 text-[11px] font-medium uppercase tracking-wider text-sidebar-muted">
-            Cohort
-          </label>
-          {!mounted || isLoadingCohorts ? (
-            <div className="h-9 rounded-lg bg-sidebar-active animate-pulse" />
-          ) : (
-            <Select value={currentCohortSlug || ''} onValueChange={handleCohortChange}>
-              <SelectTrigger className="w-full rounded-lg border-sidebar-border bg-sidebar-active text-sidebar-active-foreground text-sm h-9 focus:ring-0 focus:ring-offset-0">
-                <SelectValue placeholder="Select cohort">
-                  {selectedCohort ? selectedCohort.label : 'Select cohort'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="rounded-lg border-sidebar-border bg-[hsl(0,0%,11%)]">
-                {cohorts.map((cohort) => (
-                  <SelectItem
-                    key={cohort._id}
-                    value={cohort.slug}
-                    className="text-[hsl(0,0%,90%)] focus:bg-[hsl(0,0%,16%)] focus:text-white rounded-md"
-                  >
-                    {cohort.label} ({cohort.yearStart} - {cohort.yearEnd})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {userRole === 'super_admin' && (
-            <Link href="/admin/cohorts/new" onClick={onLinkClick} className="mt-2 block">
-              <button className="flex w-full items-center justify-center gap-2 rounded-lg border border-sidebar-border px-3 py-1.5 text-xs font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-sidebar-active-foreground">
-                <Plus className="h-3.5 w-3.5" />
-                New Cohort
-              </button>
-            </Link>
-          )}
-        </div>
-      )}
-
       {/* Divider */}
       <div className="mx-4 my-3 border-t border-sidebar-border" />
 
@@ -322,6 +283,45 @@ function SidebarContent({
 
       {/* Bottom section */}
       <div className="mt-auto">
+        {/* Cohort selector (admin only) */}
+        {showCohortSelector && (
+          <div className="border-t border-sidebar-border px-3 pt-3 pb-2">
+            <label className="mb-1.5 block px-1 text-[11px] font-medium uppercase tracking-wider text-sidebar-muted">
+              Cohort
+            </label>
+            {!mounted || isLoadingCohorts ? (
+              <div className="h-9 rounded-lg bg-sidebar-active animate-pulse" />
+            ) : (
+              <Select value={currentCohortSlug || ''} onValueChange={handleCohortChange}>
+                <SelectTrigger className="w-full rounded-lg border-sidebar-border bg-sidebar-active text-sidebar-active-foreground text-sm h-9 focus:ring-0 focus:ring-offset-0">
+                  <SelectValue placeholder="Select cohort">
+                    {selectedCohort ? selectedCohort.label : 'Select cohort'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="rounded-lg border-sidebar-border bg-[hsl(0,0%,11%)]">
+                  {cohorts.map((cohort) => (
+                    <SelectItem
+                      key={cohort._id}
+                      value={cohort.slug}
+                      className="text-[hsl(0,0%,90%)] focus:bg-[hsl(0,0%,16%)] focus:text-white rounded-md"
+                    >
+                      {cohort.label} ({cohort.yearStart} - {cohort.yearEnd})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {userRole === 'super_admin' && (
+              <Link href="/admin/cohorts/new" onClick={onLinkClick} className="mt-2 block">
+                <button className="flex w-full items-center justify-center gap-2 rounded-lg border border-sidebar-border px-3 py-1.5 text-xs font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-sidebar-active-foreground">
+                  <Plus className="h-3.5 w-3.5" />
+                  New Cohort
+                </button>
+              </Link>
+            )}
+          </div>
+        )}
+
         {/* Bottom nav items (Settings) */}
         {bottomNavItems.length > 0 && (
           <div className="space-y-1 px-3 pb-2">
