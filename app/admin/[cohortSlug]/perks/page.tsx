@@ -343,7 +343,13 @@ export default function AdminPerksPage() {
                     </TableCell>
                     <TableCell>
                       {perk.category ? (
-                        <Badge variant="outline">{perk.category}</Badge>
+                        <div className="flex flex-wrap gap-1">
+                          {perk.category.split(',').map((cat) => (
+                            <Badge key={cat.trim()} variant="outline">
+                              {cat.trim()}
+                            </Badge>
+                          ))}
+                        </div>
                       ) : (
                         '—'
                       )}

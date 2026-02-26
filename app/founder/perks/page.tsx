@@ -169,8 +169,12 @@ export default function FounderPerksPage() {
                 )}
               </div>
               {perk.category && (
-                <div className="mt-3">
-                  <Badge variant="outline">{perk.category}</Badge>
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {perk.category.split(',').map((cat) => (
+                    <Badge key={cat.trim()} variant="outline">
+                      {cat.trim()}
+                    </Badge>
+                  ))}
                 </div>
               )}
             </CardContent>
@@ -193,8 +197,12 @@ export default function FounderPerksPage() {
               <p className="text-sm text-muted-foreground">{selectedPerk.details}</p>
             )}
             {selectedPerk?.category && (
-              <div>
-                <Badge variant="outline">{selectedPerk.category}</Badge>
+              <div className="flex flex-wrap gap-1">
+                {selectedPerk.category.split(',').map((cat) => (
+                  <Badge key={cat.trim()} variant="outline">
+                    {cat.trim()}
+                  </Badge>
+                ))}
               </div>
             )}
             {selectedPerk?.isClaimed && selectedPerk.claimedAt && (
