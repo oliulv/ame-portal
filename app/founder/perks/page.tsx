@@ -1,26 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Gift, ExternalLink, Check } from 'lucide-react'
+import { Gift } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
+import { PerkCard } from './_components/perk-card'
+import { PerkDetailDialog } from './_components/perk-detail-dialog'
+import { PerksToolbar } from './_components/perks-toolbar'
 
-type FounderPerk = {
+export type FounderPerk = {
   _id: Id<'perks'>
   _creationTime: number
   cohortId: Id<'cohorts'>
@@ -42,8 +35,99 @@ export default function FounderPerksPage() {
   const claimPerk = useMutation(api.perks.claim)
   const unclaimPerk = useMutation(api.perks.unclaim)
 
-  const [selectedPerk, setSelectedPerk] = useState<FounderPerk | null>(null)
+  const [selectedPerkId, setSelectedPerkId] = useState<Id<'perks'> | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+
+  const allCategories = useMemo(() => {
+    if (!perks) return []
+    const cats = new Set<string>()
+    for (const perk of perks) {
+      if (perk.category) {
+        for (const cat of perk.category.split(',')) {
+          cats.add(cat.trim())
+        }
+      }
+    }
+    return Array.from(cats).sort()
+  }, [perks])
+
+  const filteredPerks = useMemo(() => {
+    if (!perks) return []
+    return perks.filter((perk) => {
+      if (categoryFilter !== 'all') {
+        const perkCategories = perk.category ? perk.category.split(',').map((c) => c.trim()) : []
+        if (!perkCategories.includes(categoryFilter)) return false
+      }
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        const matchesTitle = perk.title.toLowerCase().includes(query)
+        const matchesDescription = perk.description.toLowerCase().includes(query)
+        const matchesProvider = perk.providerName?.toLowerCase().includes(query) ?? false
+        if (!matchesTitle && !matchesDescription && !matchesProvider) return false
+      }
+      return true
+    })
+  }, [perks, searchQuery, categoryFilter])
+
+  const selectedPerk = useMemo(() => {
+    if (!selectedPerkId || !perks) return null
+    return perks.find((p) => p._id === selectedPerkId) ?? null
+  }, [selectedPerkId, perks])
+
+  const claimedCount = useMemo(() => {
+    if (!perks) return 0
+    return perks.filter((p) => p.isClaimed).length
+  }, [perks])
+
+  const handleClaim = useCallback(
+    async (perkId: Id<'perks'>) => {
+      setIsProcessing(true)
+      try {
+        await claimPerk({ perkId })
+        toast.success('Perk claimed!')
+      } catch (error) {
+        console.error('Failed to claim perk:', error)
+        toast.error(error instanceof Error ? error.message : 'Failed to claim perk')
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [claimPerk]
+  )
+
+  const handleUnclaim = useCallback(
+    async (perkId: Id<'perks'>) => {
+      setIsProcessing(true)
+      try {
+        await unclaimPerk({ perkId })
+        toast.success('Perk unclaimed')
+      } catch (error) {
+        console.error('Failed to unclaim perk:', error)
+        toast.error(error instanceof Error ? error.message : 'Failed to unclaim perk')
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [unclaimPerk]
+  )
+
+  const handleSelectPerk = useCallback((perk: FounderPerk) => {
+    setSelectedPerkId(perk._id)
+  }, [])
+
+  const handleCloseDialog = useCallback(() => {
+    setSelectedPerkId(null)
+  }, [])
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value)
+  }, [])
+
+  const handleCategoryChange = useCallback((value: string) => {
+    setCategoryFilter(value)
+  }, [])
 
   if (perks === undefined) {
     return (
@@ -78,40 +162,7 @@ export default function FounderPerksPage() {
     )
   }
 
-  const claimedCount = perks.filter((p) => p.isClaimed).length
-
-  async function handleClaim(perkId: Id<'perks'>) {
-    setIsProcessing(true)
-    try {
-      await claimPerk({ perkId })
-      toast.success('Perk claimed!')
-      // Update selected perk state
-      if (selectedPerk && selectedPerk._id === perkId) {
-        setSelectedPerk({ ...selectedPerk, isClaimed: true, claimedAt: new Date().toISOString() })
-      }
-    } catch (error) {
-      console.error('Failed to claim perk:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to claim perk')
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  async function handleUnclaim(perkId: Id<'perks'>) {
-    setIsProcessing(true)
-    try {
-      await unclaimPerk({ perkId })
-      toast.success('Perk unclaimed')
-      if (selectedPerk && selectedPerk._id === perkId) {
-        setSelectedPerk({ ...selectedPerk, isClaimed: false, claimedAt: undefined })
-      }
-    } catch (error) {
-      console.error('Failed to unclaim perk:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to unclaim perk')
-    } finally {
-      setIsProcessing(false)
-    }
-  }
+  const hasActiveFilters = searchQuery !== '' || categoryFilter !== 'all'
 
   return (
     <div className="space-y-6">
@@ -132,118 +183,53 @@ export default function FounderPerksPage() {
           <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
             <div
               className="h-full rounded-full bg-green-500 transition-all"
-              style={{ width: `${perks.length > 0 ? (claimedCount / perks.length) * 100 : 0}%` }}
+              style={{
+                width: `${perks.length > 0 ? (claimedCount / perks.length) * 100 : 0}%`,
+              }}
             />
           </div>
         </CardContent>
       </Card>
 
+      {/* Toolbar */}
+      <PerksToolbar
+        searchQuery={searchQuery}
+        onSearchChange={handleSearchChange}
+        categoryFilter={categoryFilter}
+        onCategoryChange={handleCategoryChange}
+        categories={allCategories}
+      />
+
+      {/* Result count */}
+      {hasActiveFilters && (
+        <p className="text-sm text-muted-foreground">
+          Showing {filteredPerks.length} of {perks.length} perks
+        </p>
+      )}
+
       {/* Perks grid */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {perks.map((perk) => (
-          <Card
-            key={perk._id}
-            className={`cursor-pointer transition-all hover:shadow-md ${
-              perk.isClaimed ? 'border-l-4 border-l-green-500' : ''
-            }`}
-            onClick={() => setSelectedPerk(perk)}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  {perk.providerName && (
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
-                      {perk.providerName}
-                    </p>
-                  )}
-                  <h3 className="font-semibold leading-tight">{perk.title}</h3>
-                  <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2">
-                    {perk.description}
-                  </p>
-                </div>
-                {perk.isClaimed && (
-                  <Badge variant="success" className="shrink-0">
-                    <Check className="mr-1 h-3 w-3" />
-                    Claimed
-                  </Badge>
-                )}
-              </div>
-              {perk.category && (
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {perk.category.split(',').map((cat) => (
-                    <Badge key={cat.trim()} variant="outline">
-                      {cat.trim()}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {filteredPerks.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredPerks.map((perk) => (
+            <PerkCard key={perk._id} perk={perk} onSelect={handleSelectPerk} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          icon={<Gift className="h-6 w-6" />}
+          title="No perks found"
+          description="Try adjusting your search or filter to find what you're looking for."
+        />
+      )}
 
       {/* Perk detail dialog */}
-      <Dialog open={!!selectedPerk} onOpenChange={(open) => !open && setSelectedPerk(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selectedPerk?.title}</DialogTitle>
-            {selectedPerk?.providerName && (
-              <DialogDescription>by {selectedPerk.providerName}</DialogDescription>
-            )}
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <p className="text-sm">{selectedPerk?.description}</p>
-            {selectedPerk?.details && (
-              <p className="text-sm text-muted-foreground">{selectedPerk.details}</p>
-            )}
-            {selectedPerk?.category && (
-              <div className="flex flex-wrap gap-1">
-                {selectedPerk.category.split(',').map((cat) => (
-                  <Badge key={cat.trim()} variant="outline">
-                    {cat.trim()}
-                  </Badge>
-                ))}
-              </div>
-            )}
-            {selectedPerk?.isClaimed && selectedPerk.claimedAt && (
-              <p className="text-xs text-muted-foreground">
-                Claimed on{' '}
-                {new Date(selectedPerk.claimedAt).toLocaleDateString('en-GB', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              </p>
-            )}
-          </div>
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
-            {selectedPerk?.url && (
-              <Button variant="outline" asChild>
-                <a href={selectedPerk.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Visit Link
-                </a>
-              </Button>
-            )}
-            {selectedPerk?.isClaimed ? (
-              <Button
-                variant="outline"
-                onClick={() => selectedPerk && handleUnclaim(selectedPerk._id)}
-                disabled={isProcessing}
-              >
-                {isProcessing ? 'Processing...' : 'Unclaim'}
-              </Button>
-            ) : (
-              <Button
-                onClick={() => selectedPerk && handleClaim(selectedPerk._id)}
-                disabled={isProcessing}
-              >
-                {isProcessing ? 'Processing...' : 'Claim Perk'}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PerkDetailDialog
+        perk={selectedPerk}
+        isProcessing={isProcessing}
+        onClose={handleCloseDialog}
+        onClaim={handleClaim}
+        onUnclaim={handleUnclaim}
+      />
     </div>
   )
 }
