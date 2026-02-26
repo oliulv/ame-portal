@@ -168,7 +168,12 @@ function SidebarContent({
       setSelectedCohortSlug(resolvedSlug)
       localStorage.setItem('selectedCohortSlug', resolvedSlug)
 
-      if (!urlCohortSlug && pathname.startsWith('/admin')) {
+      const globalRoutePrefixes = ['/admin/settings', '/admin/cohorts']
+      const isGlobalRoute = globalRoutePrefixes.some(
+        (prefix) => pathname === prefix || pathname.startsWith(prefix + '/')
+      )
+
+      if (!urlCohortSlug && pathname.startsWith('/admin') && !isGlobalRoute) {
         if (pathname === '/admin' || pathname === '/admin/') {
           router.replace(`/admin/${resolvedSlug}`)
         } else {
