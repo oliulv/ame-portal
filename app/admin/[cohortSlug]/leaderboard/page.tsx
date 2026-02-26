@@ -141,16 +141,24 @@ export default function LeaderboardPage() {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  <span className="text-xs text-muted-foreground/60 italic">Scoring data loading...</span>
+                  <span className="text-xs text-muted-foreground/60 italic">
+                    Scoring data loading...
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  <span className="text-xs text-muted-foreground/60 italic">Scoring data loading...</span>
+                  <span className="text-xs text-muted-foreground/60 italic">
+                    Scoring data loading...
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  <span className="text-xs text-muted-foreground/60 italic">Scoring data loading...</span>
+                  <span className="text-xs text-muted-foreground/60 italic">
+                    Scoring data loading...
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
-                  <span className="text-xs text-muted-foreground/60 italic">Scoring data loading...</span>
+                  <span className="text-xs text-muted-foreground/60 italic">
+                    Scoring data loading...
+                  </span>
                 </td>
               </tr>
             ))}
@@ -160,7 +168,8 @@ export default function LeaderboardPage() {
 
       <div className="mt-6 bg-muted p-4 rounded-lg">
         <p className="text-sm text-muted-foreground mb-2">
-          <strong className="text-foreground">Scoring Formula:</strong> Leaderboard score combines multiple factors:
+          <strong className="text-foreground">Scoring Formula:</strong> Leaderboard score combines
+          multiple factors:
         </p>
         <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
           <li>

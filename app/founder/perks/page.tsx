@@ -23,7 +23,6 @@ import type { Id } from '@/convex/_generated/dataModel'
 type FounderPerk = {
   _id: Id<'perks'>
   _creationTime: number
-  cohortId: Id<'cohorts'>
   title: string
   description: string
   details?: string

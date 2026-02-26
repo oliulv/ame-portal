@@ -231,7 +231,9 @@ function SidebarContent({
       item.href === '/admin'
         ? pathname === href ||
           (pathname.startsWith(`/admin/${currentCohortSlug}/`) &&
-            !pathname.match(/^\/admin\/[^/]+\/(goals|startups|invoices|leaderboard|funding|admins|perks)/))
+            !pathname.match(
+              /^\/admin\/[^/]+\/(goals|startups|invoices|leaderboard|funding|admins|perks)/
+            ))
         : pathname === href || pathname.startsWith(href + '/')
     const Icon = iconMap[item.icon] || LayoutDashboard
 
