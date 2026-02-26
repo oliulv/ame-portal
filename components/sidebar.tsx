@@ -201,9 +201,7 @@ function SidebarContent({
   const currentCohortSlug =
     urlCohortSlug || (selectedCohortSlug && selectedCohortSlug !== '' ? selectedCohortSlug : null)
 
-  // Split nav items: settings goes to bottom
-  const mainNavItems = navItems.filter((item) => item.icon !== 'Settings')
-  const bottomNavItems = navItems.filter((item) => item.icon === 'Settings')
+  const allNavItems = navItems
 
   const renderNavItem = (item: NavItem) => {
     let cohortSlugForHref: string | null = null
@@ -266,26 +264,23 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col">
       {/* Brand */}
-      <div className="px-5 pt-5 pb-1">
+      <div className="px-5 pt-5 pb-3 border-b border-sidebar-border">
         <h1 className="text-lg font-semibold tracking-tight text-sidebar-active-foreground">
           {title}
         </h1>
         <p className="mt-0.5 text-xs text-sidebar-muted">{subtitle}</p>
       </div>
 
-      {/* Divider */}
-      <div className="mx-4 my-3 border-t border-sidebar-border" />
-
-      {/* Main navigation */}
-      <nav className="flex-1 space-y-1 px-3 overflow-y-auto">
-        {mainNavItems.map(renderNavItem)}
+      {/* Navigation */}
+      <nav className="flex-1 space-y-1 px-3 pt-3 overflow-y-auto">
+        {allNavItems.map(renderNavItem)}
       </nav>
 
       {/* Bottom section */}
       <div className="mt-auto">
         {/* Cohort selector (admin only) */}
         {showCohortSelector && (
-          <div className="border-t border-sidebar-border px-3 pt-3 pb-2">
+          <div className="px-3 pb-3">
             <label className="mb-1.5 block px-1 text-[11px] font-medium uppercase tracking-wider text-sidebar-muted">
               Cohort
             </label>
@@ -319,13 +314,6 @@ function SidebarContent({
                 </button>
               </Link>
             )}
-          </div>
-        )}
-
-        {/* Bottom nav items (Settings) */}
-        {bottomNavItems.length > 0 && (
-          <div className="space-y-1 px-3 pb-2">
-            {bottomNavItems.map(renderNavItem)}
           </div>
         )}
 
