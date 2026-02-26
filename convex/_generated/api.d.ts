@@ -27,6 +27,7 @@ import type * as lib_tokens from "../lib/tokens.js";
 import type * as metrics from "../metrics.js";
 import type * as milestoneTemplates from "../milestoneTemplates.js";
 import type * as milestones from "../milestones.js";
+import type * as perks from "../perks.js";
 import type * as startups from "../startups.js";
 import type * as trackerWebsites from "../trackerWebsites.js";
 import type * as users from "../users.js";
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   metrics: typeof metrics;
   milestoneTemplates: typeof milestoneTemplates;
   milestones: typeof milestones;
+  perks: typeof perks;
   startups: typeof startups;
   trackerWebsites: typeof trackerWebsites;
   users: typeof users;

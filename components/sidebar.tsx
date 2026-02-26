@@ -18,6 +18,7 @@ import {
   Plus,
   Settings,
   TrendingUp,
+  Gift,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -53,6 +54,7 @@ const iconMap: Record<string, LucideIcon> = {
   Building2: Building2,
   Settings: Settings,
   TrendingUp: TrendingUp,
+  Gift: Gift,
 }
 
 function extractCohortSlugFromPath(pathname: string): string | null {
@@ -67,6 +69,7 @@ function extractCohortSlugFromPath(pathname: string): string | null {
       'leaderboard',
       'new',
       'settings',
+      'perks',
     ]
     if (!excludedRoutes.includes(slug)) {
       return slug
@@ -88,6 +91,7 @@ function buildNavHref(baseHref: string, cohortSlug: string | null): string {
     '/admin/invoices',
     '/admin/leaderboard',
     '/admin/admins',
+    '/admin/perks',
   ]
 
   const validCohortSlug = cohortSlug && cohortSlug !== '' ? cohortSlug : null
@@ -105,6 +109,7 @@ function buildNavHref(baseHref: string, cohortSlug: string | null): string {
     '/admin/invoices': `/admin/${validCohortSlug}/invoices`,
     '/admin/leaderboard': `/admin/${validCohortSlug}/leaderboard`,
     '/admin/admins': `/admin/${validCohortSlug}/admins`,
+    '/admin/perks': `/admin/${validCohortSlug}/perks`,
   }
 
   return routeMap[baseHref] || baseHref
@@ -226,7 +231,7 @@ function SidebarContent({
       item.href === '/admin'
         ? pathname === href ||
           (pathname.startsWith(`/admin/${currentCohortSlug}/`) &&
-            !pathname.match(/^\/admin\/[^/]+\/(goals|startups|invoices|leaderboard|funding|admins)/))
+            !pathname.match(/^\/admin\/[^/]+\/(goals|startups|invoices|leaderboard|funding|admins|perks)/))
         : pathname === href || pathname.startsWith(href + '/')
     const Icon = iconMap[item.icon] || LayoutDashboard
 
@@ -238,7 +243,8 @@ function SidebarContent({
         item.href === '/admin/leaderboard' ||
         item.href === '/admin/goals' ||
         item.href === '/admin/startups' ||
-        item.href === '/admin/admins')
+        item.href === '/admin/admins' ||
+        item.href === '/admin/perks')
     const isDisabled = (needsCohortSlug && isLoadingCohorts) || href === '#'
 
     return (

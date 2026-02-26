@@ -245,4 +245,29 @@ export default defineSchema({
   })
     .index('by_websiteId', ['websiteId'])
     .index('by_websiteId_eventName', ['websiteId', 'eventName']),
+
+  // ── Perks ───────────────────────────────────────────────────────
+  perks: defineTable({
+    cohortId: v.id('cohorts'),
+    title: v.string(),
+    description: v.string(),
+    details: v.optional(v.string()),
+    category: v.optional(v.string()),
+    providerName: v.optional(v.string()),
+    providerLogoUrl: v.optional(v.string()),
+    url: v.optional(v.string()),
+    isActive: v.boolean(),
+    sortOrder: v.number(),
+  }).index('by_cohortId', ['cohortId']),
+
+  // ── Perk Claims ────────────────────────────────────────────────
+  perkClaims: defineTable({
+    perkId: v.id('perks'),
+    userId: v.id('users'),
+    startupId: v.id('startups'),
+    claimedAt: v.string(),
+  })
+    .index('by_perkId', ['perkId'])
+    .index('by_userId', ['userId'])
+    .index('by_perkId_userId', ['perkId', 'userId']),
 })
