@@ -3,6 +3,7 @@ import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAdmin } from './auth'
 import { generateToken, getExpiration } from './lib/tokens'
+import { evaluateUserCleanup } from './lib/userCleanup'
 
 /**
  * List invitations for a specific startup.
@@ -153,7 +154,8 @@ export const accept = mutation({
 })
 
 /**
- * Remove a founder from a startup (admin). Deletes founderProfile and resets invitation.
+ * Remove a founder from a startup (admin). Deletes founderProfile and invitation,
+ * then evaluates whether the user should be fully cleaned up (Convex + Clerk).
  */
 export const removeFounder = mutation({
   args: { id: v.id('invitations') },
@@ -164,6 +166,8 @@ export const removeFounder = mutation({
     if (!invitation) throw new Error('Invitation not found')
 
     // Delete the founderProfile linked to this invitation's email + startup
+    // and capture the userId for cleanup evaluation
+    let userId: (typeof profiles)[0]['userId'] | null = null
     const profiles = await ctx.db
       .query('founderProfiles')
       .withIndex('by_startupId', (q) => q.eq('startupId', invitation.startupId))
@@ -171,12 +175,18 @@ export const removeFounder = mutation({
 
     for (const profile of profiles) {
       if (profile.personalEmail === invitation.email) {
+        userId = profile.userId
         await ctx.db.delete(profile._id)
       }
     }
 
     // Delete the invitation itself
     await ctx.db.delete(invitation._id)
+
+    // If the invitation was accepted (had a user), evaluate full cleanup
+    if (userId) {
+      await evaluateUserCleanup(ctx, userId)
+    }
   },
 })
 

@@ -53,8 +53,8 @@ export default function FounderAnalyticsPage() {
               <Plug className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Integrations Connected</h3>
               <p className="text-muted-foreground mb-4 max-w-md">
-                Connect Stripe to track revenue and customers automatically, or add the Accelerate ME
-                Tracker to monitor website traffic and user activity.
+                Connect Stripe to track revenue and customers automatically, or add the Accelerate
+                ME Tracker to monitor website traffic and user activity.
               </p>
               <Link href="/founder/settings?tab=integrations">
                 <Button>Set Up Integrations</Button>

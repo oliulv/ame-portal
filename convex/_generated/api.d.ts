@@ -24,6 +24,7 @@ import type * as invitations from "../invitations.js";
 import type * as invoices from "../invoices.js";
 import type * as lib_slugify from "../lib/slugify.js";
 import type * as lib_tokens from "../lib/tokens.js";
+import type * as lib_userCleanup from "../lib/userCleanup.js";
 import type * as metrics from "../metrics.js";
 import type * as milestoneTemplates from "../milestoneTemplates.js";
 import type * as milestones from "../milestones.js";
@@ -55,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   invoices: typeof invoices;
   "lib/slugify": typeof lib_slugify;
   "lib/tokens": typeof lib_tokens;
+  "lib/userCleanup": typeof lib_userCleanup;
   metrics: typeof metrics;
   milestoneTemplates: typeof milestoneTemplates;
   milestones: typeof milestones;

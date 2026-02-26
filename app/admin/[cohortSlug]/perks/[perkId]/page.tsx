@@ -73,9 +73,7 @@ export default function AdminPerkClaimsPage() {
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm">{perkData.description}</p>
-          {perkData.details && (
-            <p className="text-sm text-muted-foreground">{perkData.details}</p>
-          )}
+          {perkData.details && <p className="text-sm text-muted-foreground">{perkData.details}</p>}
           {perkData.url && (
             <p className="text-sm">
               <span className="text-muted-foreground">URL: </span>
