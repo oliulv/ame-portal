@@ -105,6 +105,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex min-h-screen bg-background">
       <Sidebar
         title="Accelerate ME"
+        subtitle="Admin Portal"
         navItems={navItems}
         showCohortSelector={true}
         userRole={user.role}
