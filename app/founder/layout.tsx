@@ -57,7 +57,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
       />
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col lg:ml-64">
+      <div className="flex flex-1 flex-col lg:ml-56">
         <main className="flex-1 p-4 pt-16 lg:p-8 lg:pt-8">{children}</main>
       </div>
     </div>

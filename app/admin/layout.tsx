@@ -1,8 +1,63 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { Sidebar } from '@/components/sidebar'
 import { useWaitForUser } from '@/hooks/useWaitForUser'
+import { Users, Settings } from 'lucide-react'
+import { UserButton } from '@clerk/nextjs'
+import { cn } from '@/lib/utils'
+
+function AdminHeader({ userRole }: { userRole: string }) {
+  const pathname = usePathname()
+  const [cohortSlug, setCohortSlug] = useState<string | null>(null)
+
+  useEffect(() => {
+    const match = pathname.match(/^\/admin\/([^/]+)(?:\/|$)/)
+    if (match && match[1] && match[1] !== 'cohorts' && match[1] !== 'settings') {
+      setCohortSlug(match[1])
+      return
+    }
+    setCohortSlug(localStorage.getItem('selectedCohortSlug'))
+  }, [pathname])
+
+  const adminsHref = cohortSlug ? `/admin/${cohortSlug}/admins` : '#'
+
+  return (
+    <header className="hidden lg:flex items-center justify-end h-12 border-b px-6 gap-1">
+      {userRole === 'super_admin' && (
+        <Link
+          href={adminsHref}
+          className={cn(
+            'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+            pathname.includes('/admins')
+              ? 'text-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Users className="h-3.5 w-3.5" />
+          Admins
+        </Link>
+      )}
+      <Link
+        href="/admin/settings"
+        className={cn(
+          'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+          pathname.startsWith('/admin/settings')
+            ? 'text-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        <Settings className="h-3.5 w-3.5" />
+        Settings
+      </Link>
+      <div className="ml-2 flex items-center">
+        <UserButton />
+      </div>
+    </header>
+  )
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, timedOut } = useWaitForUser()
@@ -41,24 +96,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { title: 'Events', href: '/admin/events', icon: 'Calendar' },
     { title: 'Leaderboard', href: '/admin/leaderboard', icon: 'Trophy' },
     ...(user.role === 'super_admin'
-      ? [{ title: 'Admins', href: '/admin/admins', icon: 'Users' }]
+      ? [{ title: 'Admins', href: '/admin/admins', icon: 'Users', mobileOnly: true }]
       : []),
-    { title: 'Settings', href: '/admin/settings', icon: 'Settings' },
+    { title: 'Settings', href: '/admin/settings', icon: 'Settings', mobileOnly: true },
   ]
 
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar
         title="Accelerate ME"
-        subtitle="Admin Portal"
         navItems={navItems}
         showCohortSelector={true}
         userRole={user.role}
       />
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col lg:ml-64">
-        <main className="flex-1 p-4 pt-16 lg:p-8 lg:pt-8">{children}</main>
+      <div className="flex flex-1 flex-col lg:ml-56">
+        <AdminHeader userRole={user.role} />
+        <main className="flex-1 p-4 pt-16 lg:p-8">{children}</main>
       </div>
     </div>
   )
