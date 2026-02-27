@@ -92,6 +92,7 @@ function buildNavHref(baseHref: string, cohortSlug: string | null): string {
     '/admin/leaderboard',
     '/admin/admins',
     '/admin/perks',
+    '/admin/events',
   ]
 
   const validCohortSlug = cohortSlug && cohortSlug !== '' ? cohortSlug : null
@@ -110,6 +111,7 @@ function buildNavHref(baseHref: string, cohortSlug: string | null): string {
     '/admin/leaderboard': `/admin/${validCohortSlug}/leaderboard`,
     '/admin/admins': `/admin/${validCohortSlug}/admins`,
     '/admin/perks': `/admin/${validCohortSlug}/perks`,
+    '/admin/events': `/admin/${validCohortSlug}/events`,
   }
 
   return routeMap[baseHref] || baseHref
