@@ -255,7 +255,7 @@ export default function FounderDashboard() {
                       href={nextEvent.lumaEmbedUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="luma-checkout--button inline-flex shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                      className="luma-checkout--button inline-flex shrink-0 items-center gap-1 rounded bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                       data-luma-action="checkout"
                       data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
                     >
