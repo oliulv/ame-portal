@@ -38,6 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { title: 'Funding', href: '/admin/funding', icon: 'Target' },
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },
     { title: 'Perks', href: '/admin/perks', icon: 'Gift' },
+    { title: 'Events', href: '/admin/events', icon: 'Calendar' },
     { title: 'Leaderboard', href: '/admin/leaderboard', icon: 'Trophy' },
     ...(user.role === 'super_admin'
       ? [{ title: 'Admins', href: '/admin/admins', icon: 'Users' }]
