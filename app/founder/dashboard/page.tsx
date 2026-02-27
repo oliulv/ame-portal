@@ -31,8 +31,13 @@ export default function FounderDashboard() {
   const hasStartups = (milestones?.length ?? 0) > 0
 
   const upcomingMilestones = (milestones ?? [])
-    .filter((m) => (m.status === 'waiting' || m.status === 'submitted') && m.dueDate)
-    .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
+    .filter((m) => m.status === 'waiting' || m.status === 'submitted')
+    .sort((a, b) => {
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+      if (a.dueDate) return -1
+      if (b.dueDate) return 1
+      return a.sortOrder - b.sortOrder
+    })
     .slice(0, 3)
 
   if (isLoading) {
@@ -159,12 +164,16 @@ export default function FounderDashboard() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{m.title}</p>
                       <p className="text-xs text-muted-foreground">
-                        Due{' '}
-                        {new Date(m.dueDate!).toLocaleDateString('en-GB', {
-                          day: 'numeric',
-                          month: 'short',
-                        })}
-                        {' · '}
+                        {m.dueDate && (
+                          <>
+                            Due{' '}
+                            {new Date(m.dueDate).toLocaleDateString('en-GB', {
+                              day: 'numeric',
+                              month: 'short',
+                            })}
+                            {' · '}
+                          </>
+                        )}
                         {'\u00A3'}
                         {m.amount.toLocaleString('en-GB')}
                       </p>
