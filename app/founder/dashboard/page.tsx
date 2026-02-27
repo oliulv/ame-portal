@@ -173,9 +173,12 @@ export default function FounderDashboard() {
           <CardContent className="flex flex-1 flex-col">
             {upcomingMilestones.length > 0 ? (
               <>
-                <div className="flex-1 divide-y">
+                <div className="flex-1 space-y-2">
                   {upcomingMilestones.map((m) => (
-                    <div key={m._id} className="flex items-center gap-3 py-2.5 first:pt-0">
+                    <div
+                      key={m._id}
+                      className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2.5"
+                    >
                       <div className="flex-shrink-0">
                         {m.status === 'submitted' ? (
                           <Clock className="h-4 w-4 text-amber-600" />
@@ -233,27 +236,33 @@ export default function FounderDashboard() {
           <CardContent className="flex flex-1 flex-col">
             {nextEvent ? (
               <>
-                <div className="flex-1 space-y-3">
-                  <div>
-                    <p className="text-sm font-medium">{nextEvent.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(nextEvent.date).toLocaleDateString('en-GB', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </p>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2.5">
+                    <div className="flex-shrink-0">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{nextEvent.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(nextEvent.date).toLocaleDateString('en-GB', {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </p>
+                    </div>
+                    <a
+                      href={nextEvent.lumaEmbedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="luma-checkout--button inline-flex shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                      data-luma-action="checkout"
+                      data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
+                    >
+                      Register
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
                   </div>
-                  <a
-                    href={nextEvent.lumaEmbedUrl}
-                    className="luma-checkout--button inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                    data-luma-action="checkout"
-                    data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
-                  >
-                    Register
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
                 </div>
                 <Link href="/founder/calendar" className="mt-auto pt-3 inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">

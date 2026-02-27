@@ -70,12 +70,14 @@ export default function FounderCalendarPage() {
                   </div>
                   <a
                     href={event.lumaEmbedUrl}
-                    className="luma-checkout--button inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="luma-checkout--button inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                     data-luma-action="checkout"
                     data-luma-event-id={eventId}
                   >
                     Register
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    <ExternalLink className="h-3 w-3" />
                   </a>
                 </CardContent>
               </Card>
