@@ -18,6 +18,8 @@ export default defineSchema({
     yearEnd: v.number(),
     label: v.string(),
     isActive: v.boolean(),
+    fundingBudget: v.optional(v.number()),
+    baseFunding: v.optional(v.number()),
   }).index('by_slug', ['slug']),
 
   // ── Admin ↔ Cohort assignments ────────────────────────────────────
@@ -144,7 +146,7 @@ export default defineSchema({
   adminInvitations: defineTable({
     email: v.string(),
     token: v.string(),
-    role: v.literal('admin'),
+    role: v.union(v.literal('admin'), v.literal('super_admin')),
     invitedName: v.optional(v.string()),
     expiresAt: v.string(),
     acceptedAt: v.optional(v.string()),
@@ -272,6 +274,16 @@ export default defineSchema({
     isActive: v.boolean(),
     sortOrder: v.number(),
   }),
+
+  // ── Event Registrations ────────────────────────────────────────
+  eventRegistrations: defineTable({
+    eventId: v.id('cohortEvents'),
+    userId: v.id('users'),
+    registeredAt: v.string(),
+  })
+    .index('by_eventId', ['eventId'])
+    .index('by_userId', ['userId'])
+    .index('by_eventId_userId', ['eventId', 'userId']),
 
   // ── Perk Claims ────────────────────────────────────────────────
   perkClaims: defineTable({

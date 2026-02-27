@@ -1,12 +1,17 @@
 'use client'
 
+import { useState } from 'react'
 import Script from 'next/script'
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Calendar, ExternalLink } from 'lucide-react'
+import { Calendar, ExternalLink, Check } from 'lucide-react'
+import { toast } from 'sonner'
+import type { Id } from '@/convex/_generated/dataModel'
 
 function extractLumaEventId(url: string): string | null {
   const match = url.match(/(evt-[a-zA-Z0-9]+)/)
@@ -15,8 +20,35 @@ function extractLumaEventId(url: string): string | null {
 
 export default function FounderCalendarPage() {
   const events = useQuery(api.cohortEvents.listForFounder)
+  const registerEvent = useMutation(api.cohortEvents.register)
+  const unregisterEvent = useMutation(api.cohortEvents.unregister)
+  const [togglingId, setTogglingId] = useState<Id<'cohortEvents'> | null>(null)
 
   const isLoading = events === undefined
+
+  async function handleRegister(eventId: Id<'cohortEvents'>) {
+    setTogglingId(eventId)
+    try {
+      await registerEvent({ eventId })
+      toast.success('Registered for event')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to register')
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
+  async function handleUnregister(eventId: Id<'cohortEvents'>) {
+    setTogglingId(eventId)
+    try {
+      await unregisterEvent({ eventId })
+      toast.success('Unregistered from event')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to unregister')
+    } finally {
+      setTogglingId(null)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -51,11 +83,24 @@ export default function FounderCalendarPage() {
         <div className="space-y-3">
           {events.map((event) => {
             const eventId = extractLumaEventId(event.lumaEmbedUrl)
+            const isToggling = togglingId === event._id
+
             return (
-              <Card key={event._id}>
+              <Card
+                key={event._id}
+                className={event.isRegistered ? 'border-green-200 bg-green-50/50' : ''}
+              >
                 <CardContent className="flex items-center justify-between gap-4 py-4">
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium">{event.title}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{event.title}</p>
+                      {event.isRegistered && (
+                        <Badge variant="success" className="text-[10px] px-1.5 py-0">
+                          <Check className="mr-0.5 h-2.5 w-2.5" />
+                          Registered
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">
                       {new Date(event.date).toLocaleDateString('en-GB', {
                         weekday: 'long',
@@ -68,17 +113,39 @@ export default function FounderCalendarPage() {
                       <p className="text-sm text-muted-foreground mt-1">{event.description}</p>
                     )}
                   </div>
-                  <a
-                    href={event.lumaEmbedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="luma-checkout--button inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                    data-luma-action="checkout"
-                    data-luma-event-id={eventId}
-                  >
-                    Register
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {event.isRegistered ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground"
+                        onClick={() => handleUnregister(event._id)}
+                        disabled={isToggling}
+                      >
+                        Undo
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRegister(event._id)}
+                        disabled={isToggling}
+                      >
+                        {isToggling ? '...' : "I'm Registered"}
+                      </Button>
+                    )}
+                    <a
+                      href={event.lumaEmbedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="luma-checkout--button inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                      data-luma-action="checkout"
+                      data-luma-event-id={eventId}
+                    >
+                      {event.isRegistered ? 'View Event' : 'Register'}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
                 </CardContent>
               </Card>
             )

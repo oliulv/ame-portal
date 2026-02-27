@@ -1,7 +1,7 @@
 import { query, mutation, internalAction } from './_generated/server'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
-import { requireSuperAdmin } from './auth'
+import { requireAdmin } from './auth'
 import { generateToken, getExpiration } from './lib/tokens'
 
 /**
@@ -10,7 +10,7 @@ import { generateToken, getExpiration } from './lib/tokens'
 export const list = query({
   args: { cohortId: v.optional(v.id('cohorts')) },
   handler: async (ctx, args) => {
-    await requireSuperAdmin(ctx)
+    await requireAdmin(ctx)
 
     if (args.cohortId) {
       return await ctx.db
@@ -32,13 +32,18 @@ export const create = mutation({
     invitedName: v.optional(v.string()),
     cohortId: v.id('cohorts'),
     expiresInDays: v.optional(v.number()),
+    role: v.optional(v.union(v.literal('admin'), v.literal('super_admin'))),
   },
   handler: async (ctx, args) => {
-    const superAdmin = await requireSuperAdmin(ctx)
+    const inviter = await requireAdmin(ctx)
 
     // Verify cohort exists
     const cohort = await ctx.db.get(args.cohortId)
     if (!cohort) throw new Error('Cohort not found')
+
+    // Only super_admins can invite as super_admin
+    const invitedRole: 'admin' | 'super_admin' =
+      inviter.role === 'super_admin' && args.role === 'super_admin' ? 'super_admin' : 'admin'
 
     const expiresInDays = Math.min(args.expiresInDays ?? 14, 30)
 
@@ -60,9 +65,9 @@ export const create = mutation({
       email: args.email,
       invitedName: args.invitedName,
       token,
-      role: 'admin',
+      role: invitedRole,
       expiresAt,
-      createdByUserId: superAdmin._id,
+      createdByUserId: inviter._id,
       cohortId: args.cohortId,
     })
 
@@ -84,7 +89,7 @@ export const create = mutation({
 export const resend = mutation({
   args: { id: v.id('adminInvitations') },
   handler: async (ctx, args) => {
-    await requireSuperAdmin(ctx)
+    await requireAdmin(ctx)
 
     const invitation = await ctx.db.get(args.id)
     if (!invitation) throw new Error('Invitation not found')
@@ -111,7 +116,7 @@ export const resend = mutation({
 export const revoke = mutation({
   args: { id: v.id('adminInvitations') },
   handler: async (ctx, args) => {
-    await requireSuperAdmin(ctx)
+    await requireAdmin(ctx)
 
     const invitation = await ctx.db.get(args.id)
     if (!invitation) throw new Error('Invitation not found')
@@ -146,12 +151,12 @@ export const accept = mutation({
 
     let userId
     if (existingUser) {
-      await ctx.db.patch(existingUser._id, { role: 'admin' })
+      await ctx.db.patch(existingUser._id, { role: invitation.role })
       userId = existingUser._id
     } else {
       userId = await ctx.db.insert('users', {
         clerkId: args.clerkId,
-        role: 'admin',
+        role: invitation.role,
         email: invitation.email,
         fullName: invitation.invitedName,
       })

@@ -41,6 +41,7 @@ export const create = mutation({
     startupId: v.id('startups'),
     email: v.string(),
     fullName: v.string(),
+    expiresInDays: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx)
@@ -56,9 +57,11 @@ export const create = mutation({
       throw new Error('This email has already accepted an invitation for this startup')
     }
 
+    const expiresInDays = Math.min(args.expiresInDays ?? 14, 30)
+
     // Generate token
     const token = generateToken()
-    const expiresAt = getExpiration(14)
+    const expiresAt = getExpiration(expiresInDays)
 
     const invitationId = await ctx.db.insert('invitations', {
       startupId: args.startupId,
@@ -78,6 +81,7 @@ export const create = mutation({
       founderName: args.fullName,
       startupName: startup?.name ?? 'Unknown Startup',
       inviteToken: token,
+      expirationDays: expiresInDays,
     })
 
     return invitationId
@@ -223,6 +227,7 @@ export const sendEmail = internalAction({
     founderName: v.string(),
     startupName: v.string(),
     inviteToken: v.string(),
+    expirationDays: v.optional(v.number()),
   },
   handler: async (_ctx, args) => {
     const { Resend } = await import('resend')
@@ -238,7 +243,7 @@ export const sendEmail = internalAction({
         founderName: args.founderName,
         startupName: args.startupName,
         invitationLink: inviteUrl,
-        expirationDays: 14,
+        expirationDays: args.expirationDays ?? 14,
       }),
     })
   },

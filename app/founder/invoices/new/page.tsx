@@ -36,7 +36,6 @@ export default function NewInvoicePage() {
     defaultValues: {
       vendor_name: '',
       invoice_date: '',
-      amount_gbp: 0,
       description: '',
     },
   })
@@ -150,11 +149,17 @@ export default function NewInvoicePage() {
                       <FormControl>
                         <Input
                           type="number"
-                          step="10"
-                          min="0"
-                          placeholder="0"
+                          step="0.01"
+                          min="0.01"
+                          inputMode="decimal"
+                          placeholder="500"
                           {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                          value={field.value ?? ''}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            field.onChange(value === '' ? undefined : Number(value))
+                          }}
                         />
                       </FormControl>
                       <FormMessage />

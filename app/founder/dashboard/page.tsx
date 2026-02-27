@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useCallback } from 'react'
 import Script from 'next/script'
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -15,11 +16,15 @@ import {
   Calendar,
   ExternalLink,
   Eye,
+  CheckCircle,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from 'sonner'
+import type { Id } from '@/convex/_generated/dataModel'
 
 function extractLumaEventId(url: string): string | null {
   const match = url.match(/(evt-[a-zA-Z0-9]+)/)
@@ -32,6 +37,38 @@ export default function FounderDashboard() {
   const nextEvent = useQuery(api.cohortEvents.nextForFounder)
   const integrationStatus = useQuery(api.integrations.status)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
+  const withdrawMilestone = useMutation(api.milestones.withdraw)
+  const registerEvent = useMutation(api.cohortEvents.register)
+  const [withdrawingId, setWithdrawingId] = useState<Id<'milestones'> | null>(null)
+  const [isRegistering, setIsRegistering] = useState(false)
+
+  const handleRegister = useCallback(
+    async (eventId: Id<'cohortEvents'>) => {
+      setIsRegistering(true)
+      try {
+        await registerEvent({ eventId })
+        toast.success('Registered for event')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to register')
+      } finally {
+        setIsRegistering(false)
+      }
+    },
+    [registerEvent]
+  )
+
+  async function handleWithdraw(id: Id<'milestones'>) {
+    setWithdrawingId(id)
+    try {
+      await withdrawMilestone({ id })
+      toast.success('Submission withdrawn — you can now re-submit')
+    } catch (error) {
+      console.error('Failed to withdraw milestone:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to withdraw milestone')
+    } finally {
+      setWithdrawingId(null)
+    }
+  }
 
   const isLoading = milestones === undefined || invoicesData === undefined
 
@@ -189,7 +226,14 @@ export default function FounderDashboard() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{m.title}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium truncate">{m.title}</p>
+                          {m.status === 'submitted' && (
+                            <Badge variant="warning" className="shrink-0 text-[10px] px-1.5 py-0">
+                              Pending Review
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {m.dueDate && (
                             <>
@@ -205,6 +249,26 @@ export default function FounderDashboard() {
                           {m.amount.toLocaleString('en-GB')}
                         </p>
                       </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {m.status === 'waiting' && (
+                          <Link href="/founder/funding">
+                            <Button size="sm" variant="outline" className="h-7 text-xs">
+                              Submit
+                            </Button>
+                          </Link>
+                        )}
+                        {m.status === 'submitted' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => handleWithdraw(m._id)}
+                            disabled={withdrawingId === m._id}
+                          >
+                            {withdrawingId === m._id ? 'Withdrawing...' : 'Withdraw'}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -216,10 +280,20 @@ export default function FounderDashboard() {
               </>
             ) : (
               <>
-                <p className="text-sm text-muted-foreground flex-1">
-                  <Check className="inline h-4 w-4 text-green-600 mr-1" />
-                  All caught up!
-                </p>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50/50 px-3 py-2.5">
+                    <div className="flex-shrink-0">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">All caught up</p>
+                      <p className="text-xs text-muted-foreground">
+                        No milestones need action right now.
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-medium text-green-600">On track</span>
+                  </div>
+                </div>
                 <Link href="/founder/funding" className="mt-auto pt-3 inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">
                     View funding details →
@@ -239,9 +313,15 @@ export default function FounderDashboard() {
             {nextEvent ? (
               <>
                 <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                  <div
+                    className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${nextEvent.isRegistered ? 'border-green-200 bg-green-50/50' : ''}`}
+                  >
                     <div className="flex-shrink-0">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      {nextEvent.isRegistered ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{nextEvent.title}</p>
@@ -253,17 +333,35 @@ export default function FounderDashboard() {
                         })}
                       </p>
                     </div>
-                    <a
-                      href={nextEvent.lumaEmbedUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="luma-checkout--button inline-flex shrink-0 items-center gap-1 rounded bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                      data-luma-action="checkout"
-                      data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
-                    >
-                      Register
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {nextEvent.isRegistered ? (
+                        <span className="text-[10px] text-green-600 font-medium flex items-center gap-0.5">
+                          <Check className="h-2.5 w-2.5" />
+                          Going
+                        </span>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-[10px] px-1.5"
+                          onClick={() => handleRegister(nextEvent._id)}
+                          disabled={isRegistering}
+                        >
+                          {isRegistering ? '...' : "I'm Registered"}
+                        </Button>
+                      )}
+                      <a
+                        href={nextEvent.lumaEmbedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="luma-checkout--button inline-flex shrink-0 items-center gap-1 rounded bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                        data-luma-action="checkout"
+                        data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
+                      >
+                        {nextEvent.isRegistered ? 'View Event' : 'Register'}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                   </div>
                 </div>
                 <Link href="/founder/calendar" className="mt-auto pt-3 inline-block">

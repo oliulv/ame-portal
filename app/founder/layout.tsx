@@ -13,7 +13,7 @@ function FounderHeader() {
   const pathname = usePathname()
 
   return (
-    <header className="hidden lg:flex items-center justify-end h-12 border-b px-6 gap-1 sticky top-0 z-20 bg-background">
+    <header className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b bg-background px-6 lg:flex">
       <Link
         href="/founder/settings"
         className={cn(
@@ -56,7 +56,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex h-[100dvh] items-center justify-center bg-background">
         <div className="text-sm text-muted-foreground">Loading...</div>
       </div>
     )
@@ -77,7 +77,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
   ]
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="fixed inset-0 flex overflow-hidden bg-background">
       <Sidebar
         title="Accelerate ME"
         subtitle="Founder Portal"
@@ -86,9 +86,11 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
       />
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col lg:ml-56">
+      <div className="flex min-h-0 flex-1 flex-col lg:ml-56">
         <FounderHeader />
-        <main className="flex-1 p-4 pt-16 lg:p-8">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none p-4 pt-16 lg:p-8">
+          {children}
+        </main>
       </div>
     </div>
   )
