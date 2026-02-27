@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -36,7 +36,7 @@ export function PerkDetailDialog({
         {perk?.category && (
           <div className="flex flex-wrap gap-1">
             {perk.category.split(',').map((cat) => (
-              <Badge key={cat.trim()} variant="secondary">
+              <Badge key={cat.trim()} variant="secondary" className="border-border">
                 {cat.trim()}
               </Badge>
             ))}
@@ -61,12 +61,15 @@ export function PerkDetailDialog({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {perk?.url && (
-              <Button variant="outline" size="sm" className="whitespace-nowrap" asChild>
-                <a href={perk.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                  Visit
-                </a>
-              </Button>
+              <a
+                href={perk.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Visit
+              </a>
             )}
             {perk?.isClaimed ? (
               <Button
