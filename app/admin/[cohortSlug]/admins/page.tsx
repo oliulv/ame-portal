@@ -46,7 +46,7 @@ import {
 } from '@/components/ui/select'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Users, Mail, UserPlus, RotateCw, X, Trash2 } from 'lucide-react'
+import { Users, UserPlus, RotateCw, X, Trash2 } from 'lucide-react'
 
 const adminInvitationSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -455,9 +455,7 @@ export default function AdminsPage() {
                         <TableCell>{invitation.invitedName || '-'}</TableCell>
                         <TableCell>
                           <Badge
-                            variant={
-                              invitation.role === 'super_admin' ? 'destructive' : 'default'
-                            }
+                            variant={invitation.role === 'super_admin' ? 'destructive' : 'default'}
                           >
                             {invitation.role === 'super_admin' ? 'Super Admin' : 'Admin'}
                           </Badge>

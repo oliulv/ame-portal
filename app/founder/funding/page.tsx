@@ -24,6 +24,7 @@ import type { Id } from '@/convex/_generated/dataModel'
 
 export default function FounderFundingPage() {
   const milestones = useQuery(api.milestones.listForFounder)
+  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
   const submitMilestone = useMutation(api.milestones.submit)
   const withdrawMilestone = useMutation(api.milestones.withdraw)
   const generateUploadUrl = useMutation(api.milestones.generateUploadUrl)
@@ -71,7 +72,6 @@ export default function FounderFundingPage() {
   const unlocked = milestones
     .filter((m) => m.status === 'approved')
     .reduce((sum, m) => sum + m.amount, 0)
-  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
   const deployed = fundingSummary?.deployed ?? 0
   const available = Math.max(0, unlocked - deployed)
 

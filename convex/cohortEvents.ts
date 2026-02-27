@@ -114,16 +114,16 @@ export const listForFounder = query({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
       .collect()
 
-    const activeEvents = events.filter((e) => e.isActive).sort((a, b) => a.date.localeCompare(b.date))
+    const activeEvents = events
+      .filter((e) => e.isActive)
+      .sort((a, b) => a.date.localeCompare(b.date))
 
     // Check registration status for each event
     return await Promise.all(
       activeEvents.map(async (event) => {
         const registration = await ctx.db
           .query('eventRegistrations')
-          .withIndex('by_eventId_userId', (q) =>
-            q.eq('eventId', event._id).eq('userId', user._id)
-          )
+          .withIndex('by_eventId_userId', (q) => q.eq('eventId', event._id).eq('userId', user._id))
           .unique()
 
         return {
@@ -165,9 +165,7 @@ export const nextForFounder = query({
 
     const registration = await ctx.db
       .query('eventRegistrations')
-      .withIndex('by_eventId_userId', (q) =>
-        q.eq('eventId', next._id).eq('userId', user._id)
-      )
+      .withIndex('by_eventId_userId', (q) => q.eq('eventId', next._id).eq('userId', user._id))
       .unique()
 
     return { ...next, isRegistered: !!registration }
@@ -188,9 +186,7 @@ export const register = mutation({
     // Check if already registered
     const existing = await ctx.db
       .query('eventRegistrations')
-      .withIndex('by_eventId_userId', (q) =>
-        q.eq('eventId', args.eventId).eq('userId', user._id)
-      )
+      .withIndex('by_eventId_userId', (q) => q.eq('eventId', args.eventId).eq('userId', user._id))
       .unique()
 
     if (existing) return existing._id
@@ -213,9 +209,7 @@ export const unregister = mutation({
 
     const existing = await ctx.db
       .query('eventRegistrations')
-      .withIndex('by_eventId_userId', (q) =>
-        q.eq('eventId', args.eventId).eq('userId', user._id)
-      )
+      .withIndex('by_eventId_userId', (q) => q.eq('eventId', args.eventId).eq('userId', user._id))
       .unique()
 
     if (existing) {

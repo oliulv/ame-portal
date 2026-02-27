@@ -67,6 +67,11 @@
   --chart-5: 270 50% 58%;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));

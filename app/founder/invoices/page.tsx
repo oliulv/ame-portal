@@ -49,7 +49,10 @@ export default function FounderInvoicesPage() {
                 ? 'All unlocked funds have been deployed. Complete more milestones to unlock additional funding.'
                 : 'No milestones have been set up yet. Contact your program admin for more information.'}
             </p>
-            <Link href="/founder/funding" className="text-sm font-medium text-amber-900 hover:underline mt-1 inline-block">
+            <Link
+              href="/founder/funding"
+              className="text-sm font-medium text-amber-900 hover:underline mt-1 inline-block"
+            >
               View funding details →
             </Link>
           </div>

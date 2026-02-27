@@ -41,17 +41,20 @@ export default function FounderDashboard() {
   const [withdrawingId, setWithdrawingId] = useState<Id<'milestones'> | null>(null)
   const [isRegistering, setIsRegistering] = useState(false)
 
-  const handleRegister = useCallback(async (eventId: Id<'cohortEvents'>) => {
-    setIsRegistering(true)
-    try {
-      await registerEvent({ eventId })
-      toast.success('Registered for event')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to register')
-    } finally {
-      setIsRegistering(false)
-    }
-  }, [registerEvent])
+  const handleRegister = useCallback(
+    async (eventId: Id<'cohortEvents'>) => {
+      setIsRegistering(true)
+      try {
+        await registerEvent({ eventId })
+        toast.success('Registered for event')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to register')
+      } finally {
+        setIsRegistering(false)
+      }
+    },
+    [registerEvent]
+  )
 
   async function handleWithdraw(id: Id<'milestones'>) {
     setWithdrawingId(id)

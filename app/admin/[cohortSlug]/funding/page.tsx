@@ -15,7 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Target, Settings } from 'lucide-react'
 
@@ -65,7 +64,11 @@ export default function AdminFundingPage() {
     )
   }
 
-  const { startups, totals, cohort: cohortFunding } = overview ?? {
+  const {
+    startups,
+    totals,
+    cohort: cohortFunding,
+  } = overview ?? {
     startups: [],
     totals: { potential: 0, unlocked: 0, deployed: 0, available: 0 },
     cohort: { fundingBudget: null, baseFunding: null, startupCount: 0 },
@@ -113,7 +116,9 @@ export default function AdminFundingPage() {
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-muted-foreground">Remaining:</span>
-                  <span className={`font-medium ${budgetRemaining != null && budgetRemaining < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  <span
+                    className={`font-medium ${budgetRemaining != null && budgetRemaining < 0 ? 'text-red-600' : 'text-green-600'}`}
+                  >
                     {'\u00A3'}
                     {(budgetRemaining ?? 0).toLocaleString('en-GB')}
                   </span>
@@ -128,11 +133,13 @@ export default function AdminFundingPage() {
             </div>
             <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-muted-foreground">
-                {Math.round((totals.potential / budget) * 100)}% allocated across {cohortFunding.startupCount} startups
+                {Math.round((totals.potential / budget) * 100)}% allocated across{' '}
+                {cohortFunding.startupCount} startups
               </p>
               {baseFunding != null && (
                 <p className="text-xs text-muted-foreground">
-                  Base funding: {'\u00A3'}{baseFunding.toLocaleString('en-GB')}/startup
+                  Base funding: {'\u00A3'}
+                  {baseFunding.toLocaleString('en-GB')}/startup
                 </p>
               )}
             </div>
@@ -150,7 +157,8 @@ export default function AdminFundingPage() {
               {totals.unlocked.toLocaleString('en-GB')}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              of {'\u00A3'}{totals.potential.toLocaleString('en-GB')} potential
+              of {'\u00A3'}
+              {totals.potential.toLocaleString('en-GB')} potential
             </p>
           </CardContent>
         </Card>
