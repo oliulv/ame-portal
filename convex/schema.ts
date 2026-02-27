@@ -248,7 +248,7 @@ export default defineSchema({
 
   // ── Perks ───────────────────────────────────────────────────────
   perks: defineTable({
-    cohortId: v.id('cohorts'),
+    cohortId: v.optional(v.id('cohorts')),
     title: v.string(),
     description: v.string(),
     details: v.optional(v.string()),
@@ -258,7 +258,7 @@ export default defineSchema({
     url: v.optional(v.string()),
     isActive: v.boolean(),
     sortOrder: v.number(),
-  }).index('by_cohortId', ['cohortId']),
+  }),
 
   // ── Perk Claims ────────────────────────────────────────────────
   perkClaims: defineTable({

@@ -1,19 +1,16 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
-import { requireAdmin, requireAuth, requireFounder, getFounderStartupIds } from './auth'
+import { requireAdmin, requireAuth, getFounderStartupIds } from './auth'
 
 /**
- * List perks for a cohort with claim counts (admin).
+ * List all perks with claim counts (admin).
  */
 export const list = query({
-  args: { cohortId: v.id('cohorts') },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     await requireAdmin(ctx)
 
-    const perks = await ctx.db
-      .query('perks')
-      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
-      .collect()
+    const perks = await ctx.db.query('perks').collect()
 
     const sorted = perks.sort((a, b) => a.sortOrder - b.sortOrder)
 
@@ -64,36 +61,22 @@ export const getById = query({
 })
 
 /**
- * List active perks for the current founder's cohort with claim status.
+ * List all active perks with claim status for the current founder.
  */
 export const listForFounder = query({
   args: {},
   handler: async (ctx) => {
     const user = await requireAuth(ctx)
 
-    // Find founder profile — works for founders and admins with a founderProfile
-    const startupIds = await getFounderStartupIds(ctx, user._id)
-    if (startupIds.length === 0) return []
+    const perks = await ctx.db.query('perks').collect()
 
-    const startup = await ctx.db.get(startupIds[0])
-    if (!startup) return []
-
-    const perks = await ctx.db
-      .query('perks')
-      .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
-      .collect()
-
-    const activePerks = perks
-      .filter((p) => p.isActive)
-      .sort((a, b) => a.sortOrder - b.sortOrder)
+    const activePerks = perks.filter((p) => p.isActive).sort((a, b) => a.sortOrder - b.sortOrder)
 
     const perksWithClaimStatus = await Promise.all(
       activePerks.map(async (perk) => {
         const claim = await ctx.db
           .query('perkClaims')
-          .withIndex('by_perkId_userId', (q) =>
-            q.eq('perkId', perk._id).eq('userId', user._id)
-          )
+          .withIndex('by_perkId_userId', (q) => q.eq('perkId', perk._id).eq('userId', user._id))
           .first()
         return {
           ...perk,
@@ -112,7 +95,7 @@ export const listForFounder = query({
  */
 export const create = mutation({
   args: {
-    cohortId: v.id('cohorts'),
+    cohortId: v.optional(v.id('cohorts')),
     title: v.string(),
     description: v.string(),
     details: v.optional(v.string()),
@@ -125,10 +108,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
 
-    const existing = await ctx.db
-      .query('perks')
-      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
-      .collect()
+    const existing = await ctx.db.query('perks').collect()
 
     const sortOrder = existing.length
 
@@ -222,14 +202,11 @@ export const claim = mutation({
     const perk = await ctx.db.get(args.perkId)
     if (!perk) throw new Error('Perk not found')
     if (!perk.isActive) throw new Error('Perk is not active')
-    if (perk.cohortId !== startup.cohortId) throw new Error('Perk not in your cohort')
 
     // Check not already claimed
     const existing = await ctx.db
       .query('perkClaims')
-      .withIndex('by_perkId_userId', (q) =>
-        q.eq('perkId', args.perkId).eq('userId', user._id)
-      )
+      .withIndex('by_perkId_userId', (q) => q.eq('perkId', args.perkId).eq('userId', user._id))
       .first()
 
     if (existing) throw new Error('Already claimed')
@@ -253,9 +230,7 @@ export const unclaim = mutation({
 
     const claim = await ctx.db
       .query('perkClaims')
-      .withIndex('by_perkId_userId', (q) =>
-        q.eq('perkId', args.perkId).eq('userId', user._id)
-      )
+      .withIndex('by_perkId_userId', (q) => q.eq('perkId', args.perkId).eq('userId', user._id))
       .first()
 
     if (!claim) throw new Error('Claim not found')

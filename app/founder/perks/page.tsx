@@ -16,7 +16,7 @@ import { PerksToolbar } from './_components/perks-toolbar'
 export type FounderPerk = {
   _id: Id<'perks'>
   _creationTime: number
-  cohortId: Id<'cohorts'>
+  cohortId?: Id<'cohorts'>
   title: string
   description: string
   details?: string

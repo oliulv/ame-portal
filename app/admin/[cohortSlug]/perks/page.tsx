@@ -37,7 +37,7 @@ import type { Id } from '@/convex/_generated/dataModel'
 type PerkWithCount = {
   _id: Id<'perks'>
   _creationTime: number
-  cohortId: Id<'cohorts'>
+  cohortId?: Id<'cohorts'>
   title: string
   description: string
   details?: string
@@ -55,10 +55,7 @@ export default function AdminPerksPage() {
   const cohortSlug = params.cohortSlug as string
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
-  const perks = useQuery(
-    api.perks.list,
-    cohort?._id ? { cohortId: cohort._id } : 'skip'
-  ) as PerkWithCount[] | undefined
+  const perks = useQuery(api.perks.list) as PerkWithCount[] | undefined
 
   const createPerk = useMutation(api.perks.create)
   const updatePerk = useMutation(api.perks.update)
@@ -155,7 +152,6 @@ export default function AdminPerksPage() {
         setEditingPerk(null)
       } else {
         await createPerk({
-          cohortId: cohort!._id,
           title: formTitle,
           description: formDescription,
           details: formDetails || undefined,
@@ -204,9 +200,7 @@ export default function AdminPerksPage() {
         <DialogHeader>
           <DialogTitle>{editingPerk ? 'Edit Perk' : 'Add Perk'}</DialogTitle>
           <DialogDescription>
-            {editingPerk
-              ? 'Update perk details.'
-              : 'Add a new perk or partner deal for founders.'}
+            {editingPerk ? 'Update perk details.' : 'Add a new perk or partner deal for founders.'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
