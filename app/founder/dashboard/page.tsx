@@ -1,13 +1,29 @@
 'use client'
 
+import Script from 'next/script'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, FileText, Building2, Plug, Clock, Send, Check, Calendar } from 'lucide-react'
+import {
+  Target,
+  FileText,
+  Building2,
+  Plug,
+  Clock,
+  Send,
+  Check,
+  Calendar,
+  ExternalLink,
+} from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
+
+function extractLumaEventId(url: string): string | null {
+  const match = url.match(/(evt-[a-zA-Z0-9]+)/)
+  return match?.[1] ?? null
+}
 
 export default function FounderDashboard() {
   const milestones = useQuery(api.milestones.listForFounder)
@@ -88,6 +104,11 @@ export default function FounderDashboard() {
 
   return (
     <div className="space-y-8">
+      <Script
+        id="luma-checkout"
+        src="https://embed.lu.ma/checkout-button.js"
+        strategy="afterInteractive"
+      />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Welcome back! Here's your startup progress</p>
@@ -221,13 +242,15 @@ export default function FounderDashboard() {
                     })}
                   </p>
                 </div>
-                <iframe
-                  src={nextEvent.lumaEmbedUrl}
-                  className="w-full rounded-lg border"
-                  style={{ height: 300 }}
-                  allowFullScreen
-                  aria-hidden="false"
-                />
+                <a
+                  href={nextEvent.lumaEmbedUrl}
+                  className="luma-checkout--button inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                  data-luma-action="checkout"
+                  data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
+                >
+                  Register
+                  <ExternalLink className="h-3 w-3" />
+                </a>
                 <Link href="/founder/calendar" className="inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">
                     View calendar →

@@ -33,9 +33,18 @@ import { Plus, Edit, Trash2, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
-function extractLumaEmbedUrl(html: string): string | null {
-  const match = html.match(/src="(https:\/\/lu(?:\.ma|ma\.com)\/embed\/[^"]+)"/)
-  return match?.[1] ?? null
+function extractLumaUrl(input: string): string | null {
+  const trimmed = input.trim()
+  // Direct URL
+  if (trimmed.startsWith('https://') && (trimmed.includes('lu.ma') || trimmed.includes('luma.com')))
+    return trimmed
+  // Extract href from checkout button anchor tag
+  const hrefMatch = trimmed.match(/href="(https?:\/\/(?:lu\.ma|luma\.com)[^"]+)"/)
+  if (hrefMatch) return hrefMatch[1]
+  // Backwards compat: extract src from iframe
+  const srcMatch = trimmed.match(/src="(https?:\/\/(?:lu\.ma|luma\.com)[^"]+)"/)
+  if (srcMatch) return srcMatch[1]
+  return null
 }
 
 type CohortEvent = {
@@ -118,19 +127,9 @@ export default function AdminEventsPage() {
       return
     }
 
-    // Parse embed code: accept raw URL or HTML iframe
-    let lumaUrl = formEmbedCode.trim()
-    if (lumaUrl.startsWith('<')) {
-      const extracted = extractLumaEmbedUrl(lumaUrl)
-      if (!extracted) {
-        toast.error('Could not extract Luma embed URL from the pasted code')
-        return
-      }
-      lumaUrl = extracted
-    }
-
+    const lumaUrl = extractLumaUrl(formEmbedCode)
     if (!lumaUrl) {
-      toast.error('Please provide a Luma embed URL or iframe code')
+      toast.error('Please provide a valid Luma event URL or checkout button code')
       return
     }
 
@@ -195,7 +194,7 @@ export default function AdminEventsPage() {
           <DialogDescription>
             {editingEvent
               ? 'Update event details.'
-              : 'Add a new event with a Luma embed for founders.'}
+              : 'Add a new event with a Luma registration link for founders.'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
@@ -228,17 +227,17 @@ export default function AdminEventsPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="event-embed">Luma Embed Code</Label>
+            <Label htmlFor="event-embed">Luma Event URL</Label>
             <Textarea
               id="event-embed"
               className="font-mono text-xs bg-muted"
               value={formEmbedCode}
               onChange={(e) => setFormEmbedCode(e.target.value)}
-              placeholder={'<iframe src="https://lu.ma/embed/event/..." ...></iframe>'}
+              placeholder="https://lu.ma/event/evt-... or paste the checkout button HTML"
               rows={3}
             />
             <p className="text-xs text-muted-foreground">
-              Paste the full iframe embed code from Luma, or just the embed URL.
+              Paste the Luma event URL or the checkout button code snippet.
             </p>
           </div>
           <div className="flex items-center gap-2">

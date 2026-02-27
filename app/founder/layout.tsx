@@ -13,7 +13,7 @@ function FounderHeader() {
   const pathname = usePathname()
 
   return (
-    <header className="hidden lg:flex items-center justify-end h-12 border-b px-6 gap-1">
+    <header className="hidden lg:flex items-center justify-end h-12 border-b px-6 gap-1 sticky top-0 z-20 bg-background">
       <Link
         href="/founder/settings"
         className={cn(
