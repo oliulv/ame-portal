@@ -115,37 +115,36 @@ export default function FounderCalendarPage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {event.isRegistered ? (
-                      <>
-                        <a
-                          href={event.lumaEmbedUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="luma-checkout--button inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                          data-luma-action="checkout"
-                          data-luma-event-id={eventId}
-                        >
-                          View Event
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs text-muted-foreground"
-                          onClick={() => handleUnregister(event._id)}
-                          disabled={isToggling}
-                        >
-                          Undo
-                        </Button>
-                      </>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground"
+                        onClick={() => handleUnregister(event._id)}
+                        disabled={isToggling}
+                      >
+                        Undo
+                      </Button>
                     ) : (
                       <Button
+                        variant="outline"
                         size="sm"
                         onClick={() => handleRegister(event._id)}
                         disabled={isToggling}
                       >
-                        {isToggling ? 'Registering...' : "I'm Registered"}
+                        {isToggling ? '...' : "I'm Registered"}
                       </Button>
                     )}
+                    <a
+                      href={event.lumaEmbedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="luma-checkout--button inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                      data-luma-action="checkout"
+                      data-luma-event-id={eventId}
+                    >
+                      {event.isRegistered ? 'View Event' : 'Register'}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
                   </div>
                 </CardContent>
               </Card>

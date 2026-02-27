@@ -318,7 +318,23 @@ export default function FounderDashboard() {
                         })}
                       </p>
                     </div>
-                    {nextEvent.isRegistered ? (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {nextEvent.isRegistered ? (
+                        <span className="text-[10px] text-green-600 font-medium flex items-center gap-0.5">
+                          <Check className="h-2.5 w-2.5" />
+                          Going
+                        </span>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-[10px] px-1.5"
+                          onClick={() => handleRegister(nextEvent._id)}
+                          disabled={isRegistering}
+                        >
+                          {isRegistering ? '...' : "I'm Registered"}
+                        </Button>
+                      )}
                       <a
                         href={nextEvent.lumaEmbedUrl}
                         target="_blank"
@@ -327,19 +343,10 @@ export default function FounderDashboard() {
                         data-luma-action="checkout"
                         data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
                       >
-                        View Event
+                        {nextEvent.isRegistered ? 'View Event' : 'Register'}
                         <ExternalLink className="h-3 w-3" />
                       </a>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="h-6 text-[11px] px-2"
-                        onClick={() => handleRegister(nextEvent._id)}
-                        disabled={isRegistering}
-                      >
-                        {isRegistering ? '...' : "I'm Registered"}
-                      </Button>
-                    )}
+                    </div>
                   </div>
                 </div>
                 <Link href="/founder/calendar" className="mt-auto pt-3 inline-block">
