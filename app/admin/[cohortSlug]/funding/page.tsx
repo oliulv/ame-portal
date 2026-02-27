@@ -76,7 +76,49 @@ export default function AdminFundingPage() {
 
   const budget = cohortFunding.fundingBudget
   const baseFunding = cohortFunding.baseFunding
+  const startupCount = cohortFunding.startupCount
   const budgetRemaining = budget != null ? budget - totals.potential : null
+  const avgUnlocked = startupCount > 0 ? totals.unlocked / startupCount : 0
+  const avgDeployed = startupCount > 0 ? totals.deployed / startupCount : 0
+  const avgAvailable = startupCount > 0 ? totals.available / startupCount : 0
+
+  const baseCommitmentTotal = baseFunding != null ? baseFunding * startupCount : null
+  const baseUnlockedTotal =
+    baseFunding != null
+      ? startups.reduce((sum, startup) => sum + Math.min(startup.unlocked, baseFunding), 0)
+      : null
+  const baseDeployedTotal =
+    baseFunding != null
+      ? startups.reduce((sum, startup) => sum + Math.min(startup.deployed, baseFunding), 0)
+      : null
+  const baseAvailableTotal =
+    baseUnlockedTotal != null && baseDeployedTotal != null
+      ? Math.max(0, baseUnlockedTotal - baseDeployedTotal)
+      : null
+
+  const topUpBudgetTotal =
+    budget != null && baseCommitmentTotal != null ? budget - baseCommitmentTotal : null
+  const topUpPotentialAllocated =
+    baseFunding != null
+      ? startups.reduce((sum, startup) => sum + Math.max(0, startup.potential - baseFunding), 0)
+      : null
+  const topUpBudgetRemaining =
+    topUpBudgetTotal != null && topUpPotentialAllocated != null
+      ? topUpBudgetTotal - topUpPotentialAllocated
+      : null
+
+  const topUpUnlockedTotal =
+    baseUnlockedTotal != null ? Math.max(0, totals.unlocked - baseUnlockedTotal) : null
+  const topUpDeployedTotal =
+    baseDeployedTotal != null ? Math.max(0, totals.deployed - baseDeployedTotal) : null
+  const topUpAvailableTotal =
+    topUpUnlockedTotal != null && topUpDeployedTotal != null
+      ? Math.max(0, topUpUnlockedTotal - topUpDeployedTotal)
+      : null
+
+  const potentialPct = budget != null && budget > 0 ? (totals.potential / budget) * 100 : 0
+  const unlockedPct = totals.potential > 0 ? (totals.unlocked / totals.potential) * 100 : 0
+  const deployedPct = totals.potential > 0 ? (totals.deployed / totals.potential) * 100 : 0
 
   return (
     <div className="space-y-6">
@@ -94,108 +136,144 @@ export default function AdminFundingPage() {
         </Link>
       </div>
 
-      {/* Cohort budget overview */}
       {budget != null && (
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-sm font-medium">Cohort Budget</p>
-                <p className="text-2xl font-bold">
-                  {'\u00A3'}
-                  {budget.toLocaleString('en-GB')}
-                </p>
-              </div>
-              <div className="text-right space-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">Allocated:</span>
-                  <span className="font-medium">
-                    {'\u00A3'}
-                    {totals.potential.toLocaleString('en-GB')}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">Remaining:</span>
-                  <span
-                    className={`font-medium ${budgetRemaining != null && budgetRemaining < 0 ? 'text-red-600' : 'text-green-600'}`}
-                  >
-                    {'\u00A3'}
-                    {(budgetRemaining ?? 0).toLocaleString('en-GB')}
-                  </span>
-                </div>
-              </div>
+          <CardContent className="space-y-3 pt-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium">Cohort budget usage</p>
+              <p className="text-xs text-muted-foreground">
+                £{totals.potential.toLocaleString('en-GB')} allocated of £
+                {budget.toLocaleString('en-GB')}
+              </p>
             </div>
-            <div className="h-3 rounded-full bg-muted overflow-hidden">
+            <div className="relative h-3 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full bg-foreground/80 rounded-full transition-all"
-                style={{ width: `${Math.min(100, (totals.potential / budget) * 100)}%` }}
+                className="absolute inset-y-0 left-0 bg-emerald-500/25"
+                style={{ width: `${Math.min(100, unlockedPct)}%` }}
+              />
+              <div
+                className="absolute inset-y-0 left-0 bg-blue-600"
+                style={{ width: `${Math.min(100, deployedPct)}%` }}
               />
             </div>
-            <div className="flex items-center justify-between mt-2">
-              <p className="text-xs text-muted-foreground">
-                {Math.round((totals.potential / budget) * 100)}% allocated across{' '}
-                {cohortFunding.startupCount} startups
-              </p>
-              {baseFunding != null && (
-                <p className="text-xs text-muted-foreground">
-                  Base funding: {'\u00A3'}
-                  {baseFunding.toLocaleString('en-GB')}/startup
-                </p>
-              )}
+            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-blue-600" />
+                Deployed £{totals.deployed.toLocaleString('en-GB')}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
+                Available £{totals.available.toLocaleString('en-GB')}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+                Potential £{totals.potential.toLocaleString('en-GB')}
+              </span>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {Math.round(Math.max(0, potentialPct))}% of total cohort budget is allocated.
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Aggregate cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Total Unlocked</p>
-            <p className="text-2xl font-bold mt-1">
-              {'\u00A3'}
-              {totals.unlocked.toLocaleString('en-GB')}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              of {'\u00A3'}
-              {totals.potential.toLocaleString('en-GB')} potential
+            <p className="text-sm font-medium text-muted-foreground">Unlocked</p>
+            <p className="mt-1 text-2xl font-bold">£{totals.unlocked.toLocaleString('en-GB')}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Across {startupCount} startups · avg £{avgUnlocked.toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Total Deployed</p>
-            <p className="text-2xl font-bold text-blue-600 mt-1">
-              {'\u00A3'}
-              {totals.deployed.toLocaleString('en-GB')}
+            <p className="text-sm font-medium text-muted-foreground">Deployed</p>
+            <p className="mt-1 text-2xl font-bold text-blue-600">
+              £{totals.deployed.toLocaleString('en-GB')}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Across {startupCount} startups · avg £{avgDeployed.toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Total Available</p>
-            <p className="text-2xl font-bold text-green-600 mt-1">
-              {'\u00A3'}
-              {totals.available.toLocaleString('en-GB')}
+            <p className="text-sm font-medium text-muted-foreground">Available</p>
+            <p className="mt-1 text-2xl font-bold text-green-600">
+              £{totals.available.toLocaleString('en-GB')}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Across {startupCount} startups · avg £{avgAvailable.toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Progress bar */}
-      {totals.unlocked > 0 && (
-        <div className="h-3 rounded-full bg-muted overflow-hidden flex">
-          <div
-            className="h-full bg-blue-600 transition-all"
-            style={{ width: `${(totals.deployed / totals.unlocked) * 100}%` }}
-          />
-          <div
-            className="h-full bg-green-500 transition-all"
-            style={{ width: `${(totals.available / totals.unlocked) * 100}%` }}
-          />
-        </div>
+      {(baseFunding != null || budget != null) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Base vs Top-Up Overview</CardTitle>
+            <CardDescription>
+              Base funding is £{(baseFunding ?? 0).toLocaleString('en-GB')} per startup. Top-up is
+              anything above that.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2 rounded-lg border p-4">
+              <p className="text-sm font-medium">Base Funding Layer</p>
+              <p className="text-xs text-muted-foreground">
+                Commitment: £{(baseCommitmentTotal ?? 0).toLocaleString('en-GB')} ({startupCount} x
+                £{(baseFunding ?? 0).toLocaleString('en-GB')})
+              </p>
+              <p className="text-sm">
+                Unlocked: £{(baseUnlockedTotal ?? 0).toLocaleString('en-GB')}
+              </p>
+              <p className="text-sm text-blue-600">
+                Deployed: £{(baseDeployedTotal ?? 0).toLocaleString('en-GB')}
+              </p>
+              <p className="text-sm text-green-600">
+                Available: £{(baseAvailableTotal ?? 0).toLocaleString('en-GB')}
+              </p>
+            </div>
+            <div className="space-y-2 rounded-lg border p-4">
+              <p className="text-sm font-medium">Top-Up Layer</p>
+              {topUpBudgetTotal != null && (
+                <p className="text-xs text-muted-foreground">
+                  Pool: £{topUpBudgetTotal.toLocaleString('en-GB')} · Remaining £
+                  {(topUpBudgetRemaining ?? 0).toLocaleString('en-GB')}
+                </p>
+              )}
+              <p className="text-sm">
+                Allocated above base: £{(topUpPotentialAllocated ?? 0).toLocaleString('en-GB')}
+              </p>
+              <p className="text-sm">
+                Unlocked: £{(topUpUnlockedTotal ?? 0).toLocaleString('en-GB')}
+              </p>
+              <p className="text-sm text-blue-600">
+                Deployed: £{(topUpDeployedTotal ?? 0).toLocaleString('en-GB')}
+              </p>
+              <p className="text-sm text-green-600">
+                Available: £{(topUpAvailableTotal ?? 0).toLocaleString('en-GB')}
+              </p>
+            </div>
+            {budgetRemaining != null && (
+              <div className="md:col-span-2 text-sm">
+                <span className="text-muted-foreground">Total budget remaining:</span>{' '}
+                <span
+                  className={
+                    budgetRemaining < 0 ? 'font-medium text-red-600' : 'font-medium text-green-600'
+                  }
+                >
+                  £{budgetRemaining.toLocaleString('en-GB')}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Startups table */}
@@ -212,6 +290,12 @@ export default function AdminFundingPage() {
                   <TableHead>Startup</TableHead>
                   {baseFunding != null && <TableHead className="text-right">Base</TableHead>}
                   <TableHead className="text-right">Unlocked</TableHead>
+                  {baseFunding != null && (
+                    <TableHead className="text-right">Base Unlocked</TableHead>
+                  )}
+                  {baseFunding != null && (
+                    <TableHead className="text-right">Top-Up Unlocked</TableHead>
+                  )}
                   <TableHead className="text-right">Deployed</TableHead>
                   <TableHead className="text-right">Available</TableHead>
                   <TableHead className="text-right">Milestones</TableHead>
@@ -219,6 +303,8 @@ export default function AdminFundingPage() {
               </TableHeader>
               <TableBody>
                 {startups.map((startup) => (
+                  // Split each startup's unlocked value into base and top-up layers for quick review.
+                  // Base is capped at the configured per-startup amount.
                   <TableRow
                     key={startup._id}
                     className="cursor-pointer transition-colors hover:bg-muted/50"
@@ -237,6 +323,18 @@ export default function AdminFundingPage() {
                       {'\u00A3'}
                       {startup.unlocked.toLocaleString('en-GB')}
                     </TableCell>
+                    {baseFunding != null && (
+                      <TableCell className="text-right text-muted-foreground">
+                        {'\u00A3'}
+                        {Math.min(startup.unlocked, baseFunding).toLocaleString('en-GB')}
+                      </TableCell>
+                    )}
+                    {baseFunding != null && (
+                      <TableCell className="text-right text-muted-foreground">
+                        {'\u00A3'}
+                        {Math.max(0, startup.unlocked - baseFunding).toLocaleString('en-GB')}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right text-blue-600">
                       {'\u00A3'}
                       {startup.deployed.toLocaleString('en-GB')}

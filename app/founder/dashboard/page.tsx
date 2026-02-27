@@ -278,10 +278,20 @@ export default function FounderDashboard() {
               </>
             ) : (
               <>
-                <p className="text-sm text-muted-foreground flex-1">
-                  <Check className="inline h-4 w-4 text-green-600 mr-1" />
-                  All caught up!
-                </p>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50/50 px-3 py-2.5">
+                    <div className="flex-shrink-0">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">All caught up</p>
+                      <p className="text-xs text-muted-foreground">
+                        No milestones need action right now.
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-medium text-green-600">On track</span>
+                  </div>
+                </div>
                 <Link href="/founder/funding" className="mt-auto pt-3 inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">
                     View funding details →

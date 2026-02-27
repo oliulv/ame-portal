@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,9 +18,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Check, Clock, Send, Building2 } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Check, Clock, Search, Send, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
+
+type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved'
 
 export default function FounderFundingPage() {
   const milestones = useQuery(api.milestones.listForFounder)
@@ -34,12 +43,37 @@ export default function FounderFundingPage() {
   const [planFile, setPlanFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [withdrawingId, setWithdrawingId] = useState<Id<'milestones'> | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<MilestoneFilter>('all')
+
+  const milestoneList = useMemo(() => milestones ?? [], [milestones])
+  const potential = milestoneList.reduce((sum, m) => sum + m.amount, 0)
+  const unlocked = milestoneList
+    .filter((m) => m.status === 'approved')
+    .reduce((sum, m) => sum + m.amount, 0)
+  const deployed = fundingSummary?.deployed ?? 0
+  const available = Math.max(0, unlocked - deployed)
+  const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
+  const unlockedPct = potential > 0 ? (unlocked / potential) * 100 : 0
+  const deployedPct = potential > 0 ? (cappedDeployed / potential) * 100 : 0
+
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const filteredMilestones = useMemo(() => {
+    return milestoneList.filter((milestone) => {
+      const matchesStatus = statusFilter === 'all' || milestone.status === statusFilter
+      const matchesSearch =
+        normalizedQuery.length === 0 ||
+        milestone.title.toLowerCase().includes(normalizedQuery) ||
+        milestone.description.toLowerCase().includes(normalizedQuery)
+      return matchesStatus && matchesSearch
+    })
+  }, [milestoneList, normalizedQuery, statusFilter])
 
   if (milestones === undefined) {
     return (
       <div className="space-y-6">
         <div>
-          <Skeleton className="h-9 w-48 mb-2" />
+          <Skeleton className="mb-2 h-9 w-48" />
           <Skeleton className="h-5 w-64" />
         </div>
         <Skeleton className="h-16 w-full" />
@@ -67,13 +101,6 @@ export default function FounderFundingPage() {
       </div>
     )
   }
-
-  const potential = milestones.reduce((sum, m) => sum + m.amount, 0)
-  const unlocked = milestones
-    .filter((m) => m.status === 'approved')
-    .reduce((sum, m) => sum + m.amount, 0)
-  const deployed = fundingSummary?.deployed ?? 0
-  const available = Math.max(0, unlocked - deployed)
 
   function openSubmitDialog(id: Id<'milestones'>) {
     setSubmitDialogId(id)
@@ -142,120 +169,181 @@ export default function FounderFundingPage() {
         <p className="text-muted-foreground">Track your milestone-based funding</p>
       </div>
 
-      {/* Funding summary */}
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">Funding utilization</p>
+            <p className="text-xs text-muted-foreground">
+              Deployed £{deployed.toLocaleString('en-GB')} of £{unlocked.toLocaleString('en-GB')}{' '}
+              unlocked
+            </p>
+          </div>
+          <div className="relative h-3 overflow-hidden rounded-full bg-muted">
+            <div
+              className="absolute inset-y-0 left-0 bg-emerald-500/25"
+              style={{ width: `${unlockedPct}%` }}
+            />
+            <div
+              className="absolute inset-y-0 left-0 bg-blue-600"
+              style={{ width: `${deployedPct}%` }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-blue-600" />
+              Deployed £{deployed.toLocaleString('en-GB')}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
+              Available £{available.toLocaleString('en-GB')}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+              Potential £{potential.toLocaleString('en-GB')}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Unlocked</p>
-            <p className="text-2xl font-bold mt-1">
-              {'\u00A3'}
-              {unlocked.toLocaleString('en-GB')}
-            </p>
+            <p className="mt-1 text-2xl font-bold">£{unlocked.toLocaleString('en-GB')}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Deployed</p>
-            <p className="text-2xl font-bold text-blue-600 mt-1">
-              {'\u00A3'}
-              {deployed.toLocaleString('en-GB')}
+            <p className="mt-1 text-2xl font-bold text-blue-600">
+              £{deployed.toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Available</p>
-            <p className="text-2xl font-bold text-green-600 mt-1">
-              {'\u00A3'}
-              {available.toLocaleString('en-GB')}
+            <p className="mt-1 text-2xl font-bold text-green-600">
+              £{available.toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Progress bar */}
-      {unlocked > 0 && (
-        <div className="h-3 rounded-full bg-muted overflow-hidden flex">
-          <div
-            className="h-full bg-blue-600 transition-all"
-            style={{ width: `${(deployed / unlocked) * 100}%` }}
-          />
-          <div
-            className="h-full bg-green-500 transition-all"
-            style={{ width: `${(available / unlocked) * 100}%` }}
-          />
-        </div>
-      )}
-
-      {/* Milestones */}
-      <div className="space-y-3">
-        {milestones.map((milestone) => (
-          <Card key={milestone._id}>
-            <CardContent className="flex items-center justify-between py-4">
-              <div className="flex items-center gap-4">
-                <div>
-                  {milestone.status === 'approved' ? (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                      <Check className="h-5 w-5 text-green-600" />
+      <Card>
+        <CardHeader className="space-y-4">
+          <div>
+            <CardTitle>Milestones</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Submit milestone evidence to unlock and deploy more funding.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search milestones"
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as MilestoneFilter)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by state" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All states</SelectItem>
+                <SelectItem value="waiting">Waiting</SelectItem>
+                <SelectItem value="submitted">Submitted</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {filteredMilestones.length > 0 ? (
+            filteredMilestones.map((milestone) => (
+              <Card key={milestone._id}>
+                <CardContent className="flex items-center justify-between py-4">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      {milestone.status === 'approved' ? (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                          <Check className="h-5 w-5 text-green-600" />
+                        </div>
+                      ) : milestone.status === 'submitted' ? (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+                          <Clock className="h-5 w-5 text-amber-600" />
+                        </div>
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+                          <Send className="h-5 w-5 text-blue-600" />
+                        </div>
+                      )}
                     </div>
-                  ) : milestone.status === 'submitted' ? (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-                      <Clock className="h-5 w-5 text-amber-600" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{milestone.title}</span>
+                        {milestone.status === 'approved' && (
+                          <Badge variant="success">Approved</Badge>
+                        )}
+                        {milestone.status === 'submitted' && (
+                          <Badge variant="warning">Pending Review</Badge>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-sm text-muted-foreground">
+                        {milestone.description}
+                      </p>
+                      {milestone.dueDate && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Due: {new Date(milestone.dueDate).toLocaleDateString('en-GB')}
+                        </p>
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-                      <Send className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-sm font-medium">
+                        £{milestone.amount.toLocaleString('en-GB')}
+                      </div>
+                      {milestone.status === 'approved' && (
+                        <div className="text-xs text-green-600">Unlocked</div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{milestone.title}</span>
-                    {milestone.status === 'approved' && <Badge variant="success">Approved</Badge>}
+                    {milestone.status === 'waiting' && (
+                      <Button size="sm" onClick={() => openSubmitDialog(milestone._id)}>
+                        Submit
+                      </Button>
+                    )}
                     {milestone.status === 'submitted' && (
-                      <Badge variant="warning">Pending Review</Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleWithdraw(milestone._id)}
+                        disabled={withdrawingId === milestone._id}
+                      >
+                        {withdrawingId === milestone._id ? 'Withdrawing...' : 'Withdraw'}
+                      </Button>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{milestone.description}</p>
-                  {milestone.dueDate && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Due: {new Date(milestone.dueDate).toLocaleDateString('en-GB')}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <div className="text-sm font-medium">
-                    {'\u00A3'}
-                    {milestone.amount.toLocaleString('en-GB')}
-                  </div>
-                  {milestone.status === 'approved' && (
-                    <div className="text-xs text-green-600">Unlocked</div>
-                  )}
-                </div>
-                {milestone.status === 'waiting' && (
-                  <Button size="sm" onClick={() => openSubmitDialog(milestone._id)}>
-                    Submit
-                  </Button>
-                )}
-                {milestone.status === 'submitted' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleWithdraw(milestone._id)}
-                    disabled={withdrawingId === milestone._id}
-                  >
-                    {withdrawingId === milestone._id ? 'Withdrawing...' : 'Withdraw'}
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <EmptyState
+              noCard
+              icon={<Search className="h-6 w-6" />}
+              title="No milestones match your filters"
+              description="Try changing the search term or selected state."
+            />
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Submit Milestone Dialog */}
       <Dialog open={!!submitDialogId} onOpenChange={(open) => !open && setSubmitDialogId(null)}>
         <DialogContent>
           <DialogHeader>
