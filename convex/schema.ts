@@ -133,7 +133,8 @@ export default defineSchema({
     role: v.literal('founder'),
     expiresAt: v.string(),
     acceptedAt: v.optional(v.string()),
-    createdByAdminId: v.id('users'),
+    createdByAdminId: v.optional(v.id('users')),
+    createdByUserId: v.optional(v.id('users')),
   })
     .index('by_token', ['token'])
     .index('by_startupId', ['startupId'])
