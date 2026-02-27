@@ -165,107 +165,111 @@ export default function FounderDashboard() {
 
       {/* Upcoming Milestones + Next Event */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Upcoming Milestones</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-1 flex-col">
             {upcomingMilestones.length > 0 ? (
-              <div className="space-y-3">
-                {upcomingMilestones.map((m) => (
-                  <div key={m._id} className="flex items-center gap-3">
-                    <div className="flex-shrink-0">
-                      {m.status === 'submitted' ? (
-                        <Clock className="h-4 w-4 text-amber-600" />
-                      ) : (
-                        <Send className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{m.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {m.dueDate && (
-                          <>
-                            Due{' '}
-                            {new Date(m.dueDate).toLocaleDateString('en-GB', {
-                              day: 'numeric',
-                              month: 'short',
-                            })}
-                            {' · '}
-                          </>
+              <>
+                <div className="flex-1 divide-y">
+                  {upcomingMilestones.map((m) => (
+                    <div key={m._id} className="flex items-center gap-3 py-2.5 first:pt-0">
+                      <div className="flex-shrink-0">
+                        {m.status === 'submitted' ? (
+                          <Clock className="h-4 w-4 text-amber-600" />
+                        ) : (
+                          <Send className="h-4 w-4 text-muted-foreground" />
                         )}
-                        {'\u00A3'}
-                        {m.amount.toLocaleString('en-GB')}
-                      </p>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{m.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {m.dueDate && (
+                            <>
+                              Due{' '}
+                              {new Date(m.dueDate).toLocaleDateString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                              })}
+                              {' · '}
+                            </>
+                          )}
+                          {'\u00A3'}
+                          {m.amount.toLocaleString('en-GB')}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                <Link href="/founder/funding" className="inline-block">
+                  ))}
+                </div>
+                <Link href="/founder/funding" className="mt-auto pt-3 inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">
                     View all →
                   </Button>
                 </Link>
-              </div>
+              </>
             ) : (
-              <div>
-                <p className="text-sm text-muted-foreground">
+              <>
+                <p className="text-sm text-muted-foreground flex-1">
                   <Check className="inline h-4 w-4 text-green-600 mr-1" />
                   All caught up!
                 </p>
-                <Link href="/founder/funding" className="mt-3 inline-block">
+                <Link href="/founder/funding" className="mt-auto pt-3 inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">
                     View funding details →
                   </Button>
                 </Link>
-              </div>
+              </>
             )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Next Event</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-1 flex-col">
             {nextEvent ? (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium">{nextEvent.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(nextEvent.date).toLocaleDateString('en-GB', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </p>
+              <>
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">{nextEvent.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(nextEvent.date).toLocaleDateString('en-GB', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  <a
+                    href={nextEvent.lumaEmbedUrl}
+                    className="luma-checkout--button inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    data-luma-action="checkout"
+                    data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
+                  >
+                    Register
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
                 </div>
-                <a
-                  href={nextEvent.lumaEmbedUrl}
-                  className="luma-checkout--button inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                  data-luma-action="checkout"
-                  data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
-                >
-                  Register
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-                <Link href="/founder/calendar" className="inline-block">
+                <Link href="/founder/calendar" className="mt-auto pt-3 inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">
                     View calendar →
                   </Button>
                 </Link>
-              </div>
+              </>
             ) : (
-              <div>
-                <p className="text-sm text-muted-foreground">No upcoming events</p>
-                <Link href="/founder/calendar" className="mt-3 inline-block">
+              <>
+                <p className="flex-1 text-sm text-muted-foreground">No upcoming events</p>
+                <Link href="/founder/calendar" className="mt-auto pt-3 inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">
                     View calendar →
                   </Button>
                 </Link>
-              </div>
+              </>
             )}
           </CardContent>
         </Card>

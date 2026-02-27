@@ -227,17 +227,19 @@ export default function AdminEventsPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="event-embed">Luma Event URL</Label>
+            <Label htmlFor="event-embed">Luma Checkout Button Code</Label>
             <Textarea
               id="event-embed"
               className="font-mono text-xs bg-muted"
               value={formEmbedCode}
               onChange={(e) => setFormEmbedCode(e.target.value)}
-              placeholder="https://lu.ma/event/evt-... or paste the checkout button HTML"
-              rows={3}
+              placeholder={
+                '<a href="https://lu.ma/event/evt-..." class="luma-checkout--button" ...>'
+              }
+              rows={4}
             />
             <p className="text-xs text-muted-foreground">
-              Paste the Luma event URL or the checkout button code snippet.
+              Paste the Luma checkout button snippet from your event page. A plain URL also works.
             </p>
           </div>
           <div className="flex items-center gap-2">
