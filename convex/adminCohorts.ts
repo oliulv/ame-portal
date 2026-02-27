@@ -1,6 +1,7 @@
 import { query, mutation } from './_generated/server'
 import { v } from 'convex/values'
 import { requireSuperAdmin } from './auth'
+import { evaluateUserCleanup } from './lib/userCleanup'
 
 /**
  * Assign an admin to a cohort.
@@ -42,7 +43,8 @@ export const assign = mutation({
 })
 
 /**
- * Remove an admin from a cohort.
+ * Remove an admin from a cohort. Evaluates whether the user should be
+ * fully cleaned up (Convex + Clerk) if they have no remaining associations.
  */
 export const remove = mutation({
   args: {
@@ -62,6 +64,9 @@ export const remove = mutation({
     if (!assignment) throw new Error('Assignment not found')
 
     await ctx.db.delete(assignment._id)
+
+    // Evaluate full cleanup now that this assignment is removed
+    await evaluateUserCleanup(ctx, args.userId)
   },
 })
 

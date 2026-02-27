@@ -246,9 +246,9 @@ export default defineSchema({
     .index('by_websiteId', ['websiteId'])
     .index('by_websiteId_eventName', ['websiteId', 'eventName']),
 
-  // ── Perks ───────────────────────────────────────────────────────
+  // ── Perks (global, not per-cohort) ──────────────────────────────
   perks: defineTable({
-    cohortId: v.optional(v.id('cohorts')),
+    cohortId: v.optional(v.id('cohorts')), // Legacy field, not used
     title: v.string(),
     description: v.string(),
     details: v.optional(v.string()),

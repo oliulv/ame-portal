@@ -37,7 +37,6 @@ import type { Id } from '@/convex/_generated/dataModel'
 type PerkWithCount = {
   _id: Id<'perks'>
   _creationTime: number
-  cohortId?: Id<'cohorts'>
   title: string
   description: string
   details?: string
@@ -54,7 +53,6 @@ export default function AdminPerksPage() {
   const params = useParams()
   const cohortSlug = params.cohortSlug as string
 
-  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const perks = useQuery(api.perks.list) as PerkWithCount[] | undefined
 
   const createPerk = useMutation(api.perks.create)
@@ -75,7 +73,7 @@ export default function AdminPerksPage() {
   const [formIsActive, setFormIsActive] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
-  const isLoading = cohort === undefined || perks === undefined
+  const isLoading = perks === undefined
 
   if (isLoading) {
     return (
@@ -87,16 +85,6 @@ export default function AdminPerksPage() {
           </CardContent>
         </Card>
       </div>
-    )
-  }
-
-  if (!cohort) {
-    return (
-      <EmptyState
-        icon={<Gift className="h-6 w-6" />}
-        title="Cohort not found"
-        description="The selected cohort could not be found."
-      />
     )
   }
 
@@ -301,7 +289,7 @@ export default function AdminPerksPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Perks</h1>
-          <p className="text-muted-foreground">Partner deals and perks for {cohort.label}</p>
+          <p className="text-muted-foreground">Partner deals and perks for founders</p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
@@ -313,7 +301,7 @@ export default function AdminPerksPage() {
       <Card>
         <CardHeader>
           <CardTitle>Perks</CardTitle>
-          <CardDescription>Manage perks available to founders in this cohort.</CardDescription>
+          <CardDescription>Manage perks available to all founders.</CardDescription>
         </CardHeader>
         <CardContent>
           {perks && perks.length > 0 ? (

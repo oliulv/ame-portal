@@ -11,7 +11,6 @@ export const list = query({
     await requireAdmin(ctx)
 
     const perks = await ctx.db.query('perks').collect()
-
     const sorted = perks.sort((a, b) => a.sortOrder - b.sortOrder)
 
     const perksWithCounts = await Promise.all(
@@ -61,7 +60,7 @@ export const getById = query({
 })
 
 /**
- * List all active perks with claim status for the current founder.
+ * List active perks for the current founder with claim status.
  */
 export const listForFounder = query({
   args: {},
@@ -95,7 +94,6 @@ export const listForFounder = query({
  */
 export const create = mutation({
   args: {
-    cohortId: v.optional(v.id('cohorts')),
     title: v.string(),
     description: v.string(),
     details: v.optional(v.string()),
@@ -109,11 +107,9 @@ export const create = mutation({
     await requireAdmin(ctx)
 
     const existing = await ctx.db.query('perks').collect()
-
     const sortOrder = existing.length
 
     return await ctx.db.insert('perks', {
-      cohortId: args.cohortId,
       title: args.title,
       description: args.description,
       details: args.details,
