@@ -5,7 +5,7 @@ import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plug, TrendingUp, Eye } from 'lucide-react'
+import { Plug, TrendingUp, Eye, Clock } from 'lucide-react'
 import Link from 'next/link'
 
 export default function FounderAnalyticsPage() {
@@ -16,6 +16,7 @@ export default function FounderAnalyticsPage() {
 
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
+  const trackerHasEvents = trackerWebsites?.some((w) => w.lastEventAt) ?? false
   const hasAnyIntegration = hasStripe || hasTracker
 
   if (isLoading) {
@@ -90,9 +91,28 @@ export default function FounderAnalyticsPage() {
           </h2>
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">
-                Tracker is configured. Traffic metrics will appear here once events are recorded.
-              </p>
+              {trackerHasEvents ? (
+                <p className="text-sm text-muted-foreground">
+                  Tracker is configured. Traffic metrics will appear here once data is synced.
+                </p>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Waiting for first event</p>
+                    <p className="text-sm text-muted-foreground">
+                      Your tracker is set up but hasn&apos;t received any events yet. Make sure
+                      you&apos;ve added the script to your website.{' '}
+                      <Link
+                        href="/founder/integrations?tab=tracker"
+                        className="underline font-medium text-primary hover:text-primary/80"
+                      >
+                        View setup
+                      </Link>
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

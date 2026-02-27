@@ -31,6 +31,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Clock,
+  AlertCircle,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
@@ -166,12 +167,12 @@ function IntegrationsPageInner() {
     }
   }
 
+  const trackerBaseUrl =
+    process.env.NEXT_PUBLIC_TRACKER_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || ''
+
   const getTrackerSnippet = (websiteId: string) => {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_TRACKER_BASE_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (typeof window !== 'undefined' ? window.location.origin : '')
-    return `<script defer src="${baseUrl}/tracker.js" data-website-id="${websiteId}"></script>`
+    const src = trackerBaseUrl ? `${trackerBaseUrl}/tracker.js` : 'https://YOUR_DOMAIN/tracker.js'
+    return `<script defer src="${src}" data-website-id="${websiteId}"></script>`
   }
 
   const copyToClipboard = (text: string, id: string) => {
@@ -367,6 +368,17 @@ function IntegrationsPageInner() {
                             )}
                           </Button>
                         </div>
+                        {!trackerBaseUrl && (
+                          <div className="mt-2 flex items-center gap-2 text-amber-600 text-xs">
+                            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span>
+                              Replace <code className="font-mono">YOUR_DOMAIN</code> with your
+                              production URL, or set{' '}
+                              <code className="font-mono">NEXT_PUBLIC_APP_URL</code> in your
+                              environment variables.
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

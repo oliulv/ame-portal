@@ -14,6 +14,7 @@ import {
   Check,
   Calendar,
   ExternalLink,
+  Eye,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,7 @@ export default function FounderDashboard() {
 
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
+  const trackerHasEvents = trackerWebsites?.some((w) => w.lastEventAt) ?? false
   const hasAnyIntegration = hasStripe || hasTracker
   const integrationsLoaded = integrationStatus !== undefined && trackerWebsites !== undefined
 
@@ -284,7 +286,7 @@ export default function FounderDashboard() {
         </Card>
       </div>
 
-      {/* Integration setup prompt */}
+      {/* Integration setup / waiting prompt */}
       {integrationsLoaded && !hasAnyIntegration && (
         <Card className="border-dashed">
           <CardContent className="pt-6">
@@ -305,6 +307,32 @@ export default function FounderDashboard() {
                   <Link href="/founder/analytics">
                     <Button variant="outline" size="sm">
                       View Analytics
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {integrationsLoaded && hasTracker && !trackerHasEvents && (
+        <Card className="border-dashed">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <div className="rounded-full bg-amber-100 p-3">
+                <Eye className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold">Waiting for tracker events</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your tracker is set up but hasn&apos;t received any events yet. Make sure
+                  you&apos;ve added the tracking script to your website and published the changes.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Link href="/founder/integrations?tab=tracker">
+                    <Button variant="outline" size="sm">
+                      View Tracker Setup
                     </Button>
                   </Link>
                 </div>
