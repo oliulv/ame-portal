@@ -74,6 +74,16 @@ export const create = mutation({
       isActive: args.isActive,
     })
 
+    // Create default "Submit Plan" milestone template
+    await ctx.db.insert('milestoneTemplates', {
+      cohortId,
+      title: 'Submit Plan',
+      description: 'Submit your startup plan to unlock initial funding.',
+      amount: 750,
+      sortOrder: 0,
+      isActive: true,
+    })
+
     return cohortId
   },
 })

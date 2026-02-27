@@ -87,16 +87,6 @@ export const create = mutation({
       startupId,
     })
 
-    // Create default "Submit Plan" milestone (£750, auto-approved)
-    await ctx.db.insert('milestones', {
-      startupId,
-      title: 'Submit Plan',
-      description: 'Submit your startup plan to unlock initial funding.',
-      amount: 750,
-      status: 'approved',
-      sortOrder: 0,
-    })
-
     // Create milestones from active milestone templates for this cohort
     const templates = await ctx.db
       .query('milestoneTemplates')
@@ -117,7 +107,7 @@ export const create = mutation({
         amount: template.amount,
         status: 'waiting',
         dueDate: template.dueDate,
-        sortOrder: i + 1, // +1 because "Submit Plan" is at 0
+        sortOrder: i,
       })
     }
 
