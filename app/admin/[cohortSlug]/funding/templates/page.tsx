@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -228,7 +229,7 @@ export default function MilestoneTemplatesPage() {
       }
       resetForm()
     } catch (error) {
-      console.error('Failed to save template:', error)
+      logClientError('Failed to save template:', error)
       toast.error('Failed to save template')
     } finally {
       setIsSaving(false)
@@ -241,7 +242,7 @@ export default function MilestoneTemplatesPage() {
       await removeTemplate({ id })
       toast.success('Template deleted')
     } catch (error) {
-      console.error('Failed to delete template:', error)
+      logClientError('Failed to delete template:', error)
       toast.error('Failed to delete template')
     }
   }
@@ -259,7 +260,7 @@ export default function MilestoneTemplatesPage() {
       await reorderTemplates({ templateIds: newOrder.map((t) => t._id) })
       toast.success('Templates reordered')
     } catch (error) {
-      console.error('Failed to reorder:', error)
+      logClientError('Failed to reorder:', error)
       toast.error('Failed to reorder templates')
     }
   }

@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { MetricChart } from '@/components/analytics/metric-chart'
 import { ArrowLeft, RefreshCw, TrendingUp, Eye, Plug } from 'lucide-react'
+import { logClientError } from '@/lib/logging'
 
 interface AnalyticsData {
   stripe: {
@@ -49,7 +50,7 @@ export default function AdminStartupAnalyticsPage() {
         setData(analyticsData)
       }
     } catch (error) {
-      console.error('Failed to fetch analytics:', error)
+      logClientError('Failed to fetch analytics:', error)
     } finally {
       setIsLoading(false)
       setIsRefreshing(false)

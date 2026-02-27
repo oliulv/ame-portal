@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { logServerError, logServerWarn } from '@/lib/logging'
 
 // Initialize Resend with API key (or dummy key for build time)
 const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_for_build')
@@ -162,7 +163,7 @@ export async function sendInvitationEmail({
 
   // Check if API key is properly configured
   if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_dummy_key_for_build') {
-    console.warn('RESEND_API_KEY is not configured. Email not sent.')
+    logServerWarn('RESEND_API_KEY is not configured. Email not sent.')
     throw new Error('Email service not configured. Please set RESEND_API_KEY environment variable.')
   }
 
@@ -180,13 +181,13 @@ export async function sendInvitationEmail({
     })
 
     if (error) {
-      console.error('Failed to send invitation email:', error)
+      logServerError('Failed to send invitation email:', error)
       throw error
     }
 
     return data
   } catch (error) {
-    console.error('Error sending invitation email:', error)
+    logServerError('Error sending invitation email:', error)
     throw error
   }
 }
@@ -203,7 +204,7 @@ export async function sendAdminInvitationEmail({
   const inviteUrl = `${APP_URL}/admin-invite/${encodeURIComponent(inviteToken)}`
 
   if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_dummy_key_for_build') {
-    console.warn('RESEND_API_KEY is not configured. Email not sent.')
+    logServerWarn('RESEND_API_KEY is not configured. Email not sent.')
     throw new Error('Email service not configured. Please set RESEND_API_KEY environment variable.')
   }
 
@@ -220,13 +221,13 @@ export async function sendAdminInvitationEmail({
     })
 
     if (error) {
-      console.error('Failed to send admin invitation email:', error)
+      logServerError('Failed to send admin invitation email:', error)
       throw error
     }
 
     return data
   } catch (error) {
-    console.error('Error sending admin invitation email:', error)
+    logServerError('Error sending admin invitation email:', error)
     throw error
   }
 }

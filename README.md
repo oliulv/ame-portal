@@ -39,6 +39,15 @@ Quick start:
 - `bun run format` - Format code with Prettier
 - `bun run format:check` - Check code formatting
 
+## Logging
+
+- Use structured logging helpers in `lib/logging.ts` for Next.js/client code.
+  - Client errors: `logClientError(...)`
+  - Server logs: `logServerInfo(...)`, `logServerWarn(...)`, `logServerError(...)`
+- Convex functions use wrappers in `convex/functions.ts` built with `convex-helpers` (`customQuery`, `customMutation`, `customAction`).
+  - Import Convex builders from `./functions` (or `../functions`), not `./_generated/server`.
+  - Wrapper logs function success and slow executions in `convex/lib/logging.ts`.
+
 ## Phase 1 Features
 
 - ✅ Admin: Create cohorts, startups, and founders

@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import Script from 'next/script'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Target,
@@ -15,6 +16,7 @@ import {
   Check,
   Calendar,
   ExternalLink,
+  Eye,
   CheckCircle,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -62,7 +64,7 @@ export default function FounderDashboard() {
       await withdrawMilestone({ id })
       toast.success('Submission withdrawn — you can now re-submit')
     } catch (error) {
-      console.error('Failed to withdraw milestone:', error)
+      logClientError('Failed to withdraw milestone:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to withdraw milestone')
     } finally {
       setWithdrawingId(null)
@@ -73,6 +75,7 @@ export default function FounderDashboard() {
 
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
+  const trackerHasEvents = trackerWebsites?.some((w) => w.lastEventAt) ?? false
   const hasAnyIntegration = hasStripe || hasTracker
   const integrationsLoaded = integrationStatus !== undefined && trackerWebsites !== undefined
 
@@ -278,10 +281,20 @@ export default function FounderDashboard() {
               </>
             ) : (
               <>
-                <p className="text-sm text-muted-foreground flex-1">
-                  <Check className="inline h-4 w-4 text-green-600 mr-1" />
-                  All caught up!
-                </p>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50/50 px-3 py-2.5">
+                    <div className="flex-shrink-0">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">All caught up</p>
+                      <p className="text-xs text-muted-foreground">
+                        No milestones need action right now.
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-medium text-green-600">On track</span>
+                  </div>
+                </div>
                 <Link href="/founder/funding" className="mt-auto pt-3 inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">
                     View funding details →
@@ -372,7 +385,7 @@ export default function FounderDashboard() {
         </Card>
       </div>
 
-      {/* Integration setup prompt */}
+      {/* Integration setup / waiting prompt */}
       {integrationsLoaded && !hasAnyIntegration && (
         <Card className="border-dashed">
           <CardContent className="pt-6">
@@ -387,12 +400,38 @@ export default function FounderDashboard() {
                   monitor website traffic. Your analytics dashboard will populate once connected.
                 </p>
                 <div className="mt-3 flex gap-2">
-                  <Link href="/founder/settings?tab=integrations">
+                  <Link href="/founder/integrations">
                     <Button size="sm">Connect Integrations</Button>
                   </Link>
                   <Link href="/founder/analytics">
                     <Button variant="outline" size="sm">
                       View Analytics
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {integrationsLoaded && hasTracker && !trackerHasEvents && (
+        <Card className="border-dashed">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <div className="rounded-full bg-amber-100 p-3">
+                <Eye className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold">Waiting for tracker events</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your tracker is set up but hasn&apos;t received any events yet. Make sure
+                  you&apos;ve added the tracking script to your website and published the changes.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Link href="/founder/integrations?tab=tracker">
+                    <Button variant="outline" size="sm">
+                      View Tracker Setup
                     </Button>
                   </Link>
                 </div>

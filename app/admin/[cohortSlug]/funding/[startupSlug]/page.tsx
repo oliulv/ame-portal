@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -63,11 +64,13 @@ import {
   Target,
   ExternalLink,
   FileText,
+  Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id, Doc } from '@/convex/_generated/dataModel'
 
 type Milestone = Doc<'milestones'>
+type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved'
 
 function PlanFileLink({ storageId, fileName }: { storageId: Id<'_storage'>; fileName?: string }) {
   const fileUrl = useQuery(api.milestones.getFileUrl, { storageId })
@@ -184,6 +187,84 @@ function SortableRow({
   )
 }
 
+function StaticRow({
+  milestone,
+  onEdit,
+  onDelete,
+  onApprove,
+}: {
+  milestone: Milestone
+  onEdit: (m: Milestone) => void
+  onDelete: (id: Id<'milestones'>) => void
+  onApprove: (id: Id<'milestones'>) => void
+}) {
+  return (
+    <TableRow>
+      <TableCell className="w-12" />
+      <TableCell className="font-medium">{milestone.title}</TableCell>
+      <TableCell className="max-w-[250px] text-sm text-muted-foreground">
+        <div className="truncate">{milestone.description}</div>
+        {(milestone.status === 'submitted' || milestone.status === 'approved') &&
+          (milestone.planLink || milestone.planStorageId) && (
+            <div className="mt-1 flex items-center gap-3">
+              {milestone.planLink && (
+                <a
+                  href={milestone.planLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Plan Link
+                </a>
+              )}
+              {milestone.planStorageId && (
+                <PlanFileLink
+                  storageId={milestone.planStorageId}
+                  fileName={milestone.planFileName}
+                />
+              )}
+            </div>
+          )}
+      </TableCell>
+      <TableCell className="text-right">£{milestone.amount.toLocaleString('en-GB')}</TableCell>
+      <TableCell>
+        <Badge
+          variant={
+            milestone.status === 'approved'
+              ? 'success'
+              : milestone.status === 'submitted'
+                ? 'warning'
+                : 'secondary'
+          }
+        >
+          {milestone.status}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-1">
+          {milestone.status === 'submitted' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onApprove(milestone._id)}
+              title="Approve"
+            >
+              <Check className="h-4 w-4 text-green-600" />
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => onEdit(milestone)}>
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onDelete(milestone._id)}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  )
+}
+
 export default function StartupFundingPage() {
   const params = useParams()
   const cohortSlug = params.cohortSlug as string
@@ -213,6 +294,8 @@ export default function StartupFundingPage() {
   const [formStatus, setFormStatus] = useState<'waiting' | 'submitted' | 'approved'>('waiting')
   const [formDueDate, setFormDueDate] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<MilestoneFilter>('all')
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -220,6 +303,30 @@ export default function StartupFundingPage() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   )
+
+  const milestoneList = useMemo(() => milestones ?? [], [milestones])
+  const potential = milestoneList.reduce((sum, m) => sum + m.amount, 0)
+  const unlocked = milestoneList
+    .filter((m) => m.status === 'approved')
+    .reduce((sum, m) => sum + m.amount, 0)
+  const deployed = startup?.fundingDeployed ?? 0
+  const available = Math.max(0, unlocked - deployed)
+  const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
+  const unlockedPct = potential > 0 ? (unlocked / potential) * 100 : 0
+  const deployedPct = potential > 0 ? (cappedDeployed / potential) * 100 : 0
+
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const filteredMilestones = useMemo(() => {
+    return milestoneList.filter((milestone) => {
+      const matchesStatus = statusFilter === 'all' || milestone.status === statusFilter
+      const matchesSearch =
+        normalizedQuery.length === 0 ||
+        milestone.title.toLowerCase().includes(normalizedQuery) ||
+        milestone.description.toLowerCase().includes(normalizedQuery)
+      return matchesStatus && matchesSearch
+    })
+  }, [milestoneList, normalizedQuery, statusFilter])
+  const filtersActive = statusFilter !== 'all' || normalizedQuery.length > 0
 
   const isLoading = startup === undefined || milestones === undefined
 
@@ -249,11 +356,6 @@ export default function StartupFundingPage() {
       />
     )
   }
-
-  const potential = milestones?.reduce((sum, m) => sum + m.amount, 0) ?? 0
-  const unlocked =
-    milestones?.filter((m) => m.status === 'approved').reduce((sum, m) => sum + m.amount, 0) ?? 0
-  const deployed = startup.fundingDeployed ?? 0
 
   function resetForm() {
     setFormTitle('')
@@ -311,7 +413,7 @@ export default function StartupFundingPage() {
       }
       resetForm()
     } catch (error) {
-      console.error('Failed to save milestone:', error)
+      logClientError('Failed to save milestone:', error)
       toast.error('Failed to save milestone')
     } finally {
       setIsSaving(false)
@@ -324,7 +426,7 @@ export default function StartupFundingPage() {
       await removeMilestone({ id })
       toast.success('Milestone deleted')
     } catch (error) {
-      console.error('Failed to delete milestone:', error)
+      logClientError('Failed to delete milestone:', error)
       toast.error('Failed to delete milestone')
     }
   }
@@ -334,7 +436,7 @@ export default function StartupFundingPage() {
       await approveMilestone({ id })
       toast.success('Milestone approved')
     } catch (error) {
-      console.error('Failed to approve milestone:', error)
+      logClientError('Failed to approve milestone:', error)
       toast.error('Failed to approve milestone')
     }
   }
@@ -352,7 +454,7 @@ export default function StartupFundingPage() {
       await reorderMilestones({ milestoneIds: newOrder.map((m) => m._id) })
       toast.success('Milestones reordered')
     } catch (error) {
-      console.error('Failed to reorder:', error)
+      logClientError('Failed to reorder:', error)
       toast.error('Failed to reorder milestones')
     }
   }
@@ -369,7 +471,7 @@ export default function StartupFundingPage() {
       toast.success('Deployed amount updated')
       setDeployedInput(null)
     } catch (error) {
-      console.error('Failed to update deployed:', error)
+      logClientError('Failed to update deployed:', error)
       toast.error('Failed to update deployed amount')
     }
   }
@@ -495,20 +597,51 @@ export default function StartupFundingPage() {
         </div>
       </div>
 
-      {/* Funding summary */}
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">Funding utilization</p>
+            <p className="text-xs text-muted-foreground">
+              Deployed £{deployed.toLocaleString('en-GB')} of £{unlocked.toLocaleString('en-GB')}{' '}
+              unlocked
+            </p>
+          </div>
+          <div className="relative h-3 overflow-hidden rounded-full bg-muted">
+            <div
+              className="absolute inset-y-0 left-0 bg-emerald-500/25"
+              style={{ width: `${unlockedPct}%` }}
+            />
+            <div
+              className="absolute inset-y-0 left-0 bg-blue-600"
+              style={{ width: `${deployedPct}%` }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-blue-600" />
+              Deployed £{deployed.toLocaleString('en-GB')}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
+              Available £{available.toLocaleString('en-GB')}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+              Potential £{potential.toLocaleString('en-GB')}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Unlocked</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {'\u00A3'}
-              {unlocked.toLocaleString('en-GB')}
-            </div>
+            <div className="text-2xl font-bold">£{unlocked.toLocaleString('en-GB')}</div>
             <p className="text-xs text-muted-foreground">
-              of {'\u00A3'}
-              {potential.toLocaleString('en-GB')} potential
+              of £{potential.toLocaleString('en-GB')} potential
             </p>
           </CardContent>
         </Card>
@@ -526,6 +659,7 @@ export default function StartupFundingPage() {
                   onChange={(e) => setDeployedInput(e.target.value)}
                   className="h-8 w-32"
                   autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleDeployedSave()
                     if (e.key === 'Escape') setDeployedInput(null)
@@ -537,12 +671,11 @@ export default function StartupFundingPage() {
               </div>
             ) : (
               <div
-                className="text-2xl font-bold text-blue-600 cursor-pointer hover:underline"
+                className="cursor-pointer text-2xl font-bold text-blue-600 hover:underline"
                 onClick={() => setDeployedInput(String(deployed))}
                 title="Click to edit"
               >
-                {'\u00A3'}
-                {deployed.toLocaleString('en-GB')}
+                £{deployed.toLocaleString('en-GB')}
               </div>
             )}
           </CardContent>
@@ -554,58 +687,68 @@ export default function StartupFundingPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {'\u00A3'}
-              {Math.max(0, unlocked - deployed).toLocaleString('en-GB')}
+              £{available.toLocaleString('en-GB')}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Progress bar */}
-      {unlocked > 0 && (
-        <div className="h-3 rounded-full bg-muted overflow-hidden flex">
-          <div
-            className="h-full bg-blue-600 transition-all"
-            style={{ width: `${(deployed / unlocked) * 100}%` }}
-          />
-          <div
-            className="h-full bg-green-500 transition-all"
-            style={{ width: `${(Math.max(0, unlocked - deployed) / unlocked) * 100}%` }}
-          />
-        </div>
-      )}
-
       {/* Milestones table */}
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-4">
           <CardTitle>Milestones</CardTitle>
-          <CardDescription>Drag to reorder. Click approve to unlock funding.</CardDescription>
+          <CardDescription>
+            {filtersActive
+              ? 'Filtered view. Clear filters to drag and reorder milestones.'
+              : 'Drag to reorder. Click approve to unlock funding.'}
+          </CardDescription>
+          <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search milestones"
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as MilestoneFilter)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by state" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All states</SelectItem>
+                <SelectItem value="waiting">Waiting</SelectItem>
+                <SelectItem value="submitted">Submitted</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
-          {milestones && milestones.length > 0 ? (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12"></TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <SortableContext
-                    items={milestones.map((m) => m._id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {milestones.map((milestone) => (
-                      <SortableRow
+          {filteredMilestones.length > 0 ? (
+            <>
+              <div className="mb-3 text-sm text-muted-foreground">
+                Showing {filteredMilestones.length} of {milestones?.length ?? 0} milestones
+              </div>
+              {filtersActive ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12"></TableHead>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredMilestones.map((milestone) => (
+                      <StaticRow
                         key={milestone._id}
                         milestone={milestone}
                         onEdit={openEdit}
@@ -613,21 +756,62 @@ export default function StartupFundingPage() {
                         onApprove={handleApprove}
                       />
                     ))}
-                  </SortableContext>
-                </TableBody>
-              </Table>
-            </DndContext>
+                  </TableBody>
+                </Table>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12"></TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <SortableContext
+                        items={filteredMilestones.map((m) => m._id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {filteredMilestones.map((milestone) => (
+                          <SortableRow
+                            key={milestone._id}
+                            milestone={milestone}
+                            onEdit={openEdit}
+                            onDelete={handleDelete}
+                            onApprove={handleApprove}
+                          />
+                        ))}
+                      </SortableContext>
+                    </TableBody>
+                  </Table>
+                </DndContext>
+              )}
+            </>
           ) : (
             <EmptyState
               noCard
-              icon={<Target className="h-6 w-6" />}
-              title="No milestones"
-              description="Add milestones to track funding for this startup."
+              icon={filtersActive ? <Search className="h-6 w-6" /> : <Target className="h-6 w-6" />}
+              title={filtersActive ? 'No milestones match your filters' : 'No milestones'}
+              description={
+                filtersActive
+                  ? 'Try adjusting the search term or selected state.'
+                  : 'Add milestones to track funding for this startup.'
+              }
               action={
-                <Button onClick={openCreate}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Milestone
-                </Button>
+                !filtersActive ? (
+                  <Button onClick={openCreate}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Milestone
+                  </Button>
+                ) : undefined
               }
             />
           )}

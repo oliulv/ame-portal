@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Gift } from 'lucide-react'
@@ -86,7 +87,7 @@ export default function FounderPerksPage() {
         await claimPerk({ perkId })
         toast.success('Perk claimed!')
       } catch (error) {
-        console.error('Failed to claim perk:', error)
+        logClientError('Failed to claim perk:', error)
         toast.error(error instanceof Error ? error.message : 'Failed to claim perk')
       } finally {
         setIsProcessing(false)
@@ -102,7 +103,7 @@ export default function FounderPerksPage() {
         await unclaimPerk({ perkId })
         toast.success('Perk unclaimed')
       } catch (error) {
-        console.error('Failed to unclaim perk:', error)
+        logClientError('Failed to unclaim perk:', error)
         toast.error(error instanceof Error ? error.message : 'Failed to unclaim perk')
       } finally {
         setIsProcessing(false)
