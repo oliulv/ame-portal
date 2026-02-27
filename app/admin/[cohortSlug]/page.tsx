@@ -5,7 +5,7 @@ import { api } from '@/convex/_generated/api'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Users, Building2, FileText, ArrowRight, Plus } from 'lucide-react'
+import { Users, Building2, FileText, ArrowRight, Plus, Target } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -125,7 +125,7 @@ export default function AdminDashboard() {
           <Link href={`/admin/${cohortSlug}/funding`}>
             <Button variant="outline" className="w-full justify-between">
               <span className="flex items-center">
-                <Plus className="mr-2 h-4 w-4" />
+                <Target className="mr-2 h-4 w-4" />
                 Manage Funding
               </span>
               <ArrowRight className="h-4 w-4" />

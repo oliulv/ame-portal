@@ -499,25 +499,17 @@ export default function StartupFundingPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Potential</CardTitle>
+            <CardTitle className="text-sm font-medium">Unlocked</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {'\u00A3'}
-              {potential.toLocaleString('en-GB')}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Unlocked</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {'\u00A3'}
               {unlocked.toLocaleString('en-GB')}
             </div>
+            <p className="text-xs text-muted-foreground">
+              of {'\u00A3'}
+              {potential.toLocaleString('en-GB')} potential
+            </p>
           </CardContent>
         </Card>
 
@@ -555,7 +547,33 @@ export default function StartupFundingPage() {
             )}
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Available</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {'\u00A3'}
+              {Math.max(0, unlocked - deployed).toLocaleString('en-GB')}
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Progress bar */}
+      {unlocked > 0 && (
+        <div className="h-3 rounded-full bg-muted overflow-hidden flex">
+          <div
+            className="h-full bg-blue-600 transition-all"
+            style={{ width: `${(deployed / unlocked) * 100}%` }}
+          />
+          <div
+            className="h-full bg-green-500 transition-all"
+            style={{ width: `${(Math.max(0, unlocked - deployed) / unlocked) * 100}%` }}
+          />
+        </div>
+      )}
 
       {/* Milestones table */}
       <Card>

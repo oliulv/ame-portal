@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Script from 'next/script'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -15,6 +15,7 @@ import {
   Check,
   Calendar,
   ExternalLink,
+  CheckCircle,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Badge } from '@/components/ui/badge'
@@ -36,7 +37,21 @@ export default function FounderDashboard() {
   const integrationStatus = useQuery(api.integrations.status)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
   const withdrawMilestone = useMutation(api.milestones.withdraw)
+  const registerEvent = useMutation(api.cohortEvents.register)
   const [withdrawingId, setWithdrawingId] = useState<Id<'milestones'> | null>(null)
+  const [isRegistering, setIsRegistering] = useState(false)
+
+  const handleRegister = useCallback(async (eventId: Id<'cohortEvents'>) => {
+    setIsRegistering(true)
+    try {
+      await registerEvent({ eventId })
+      toast.success('Registered for event')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to register')
+    } finally {
+      setIsRegistering(false)
+    }
+  }, [registerEvent])
 
   async function handleWithdraw(id: Id<'milestones'>) {
     setWithdrawingId(id)
@@ -283,9 +298,15 @@ export default function FounderDashboard() {
             {nextEvent ? (
               <>
                 <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                  <div
+                    className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${nextEvent.isRegistered ? 'border-green-200 bg-green-50/50' : ''}`}
+                  >
                     <div className="flex-shrink-0">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      {nextEvent.isRegistered ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{nextEvent.title}</p>
@@ -297,17 +318,28 @@ export default function FounderDashboard() {
                         })}
                       </p>
                     </div>
-                    <a
-                      href={nextEvent.lumaEmbedUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="luma-checkout--button inline-flex shrink-0 items-center gap-1 rounded bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                      data-luma-action="checkout"
-                      data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
-                    >
-                      Register
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                    {nextEvent.isRegistered ? (
+                      <a
+                        href={nextEvent.lumaEmbedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="luma-checkout--button inline-flex shrink-0 items-center gap-1 rounded bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                        data-luma-action="checkout"
+                        data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
+                      >
+                        View Event
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="h-6 text-[11px] px-2"
+                        onClick={() => handleRegister(nextEvent._id)}
+                        disabled={isRegistering}
+                      >
+                        {isRegistering ? '...' : "I'm Registered"}
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <Link href="/founder/calendar" className="mt-auto pt-3 inline-block">

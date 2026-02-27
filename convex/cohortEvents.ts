@@ -96,7 +96,7 @@ export const remove = mutation({
 })
 
 /**
- * List active events for the current founder's cohort.
+ * List active events for the current founder's cohort (with registration status).
  */
 export const listForFounder = query({
   args: {},
@@ -114,12 +114,29 @@ export const listForFounder = query({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
       .collect()
 
-    return events.filter((e) => e.isActive).sort((a, b) => a.date.localeCompare(b.date))
+    const activeEvents = events.filter((e) => e.isActive).sort((a, b) => a.date.localeCompare(b.date))
+
+    // Check registration status for each event
+    return await Promise.all(
+      activeEvents.map(async (event) => {
+        const registration = await ctx.db
+          .query('eventRegistrations')
+          .withIndex('by_eventId_userId', (q) =>
+            q.eq('eventId', event._id).eq('userId', user._id)
+          )
+          .unique()
+
+        return {
+          ...event,
+          isRegistered: !!registration,
+        }
+      })
+    )
   },
 })
 
 /**
- * Get the next upcoming event for the current founder.
+ * Get the next upcoming event for the current founder (with registration status).
  */
 export const nextForFounder = query({
   args: {},
@@ -143,6 +160,66 @@ export const nextForFounder = query({
       .filter((e) => e.isActive && e.date >= now)
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    return upcoming[0] ?? null
+    const next = upcoming[0]
+    if (!next) return null
+
+    const registration = await ctx.db
+      .query('eventRegistrations')
+      .withIndex('by_eventId_userId', (q) =>
+        q.eq('eventId', next._id).eq('userId', user._id)
+      )
+      .unique()
+
+    return { ...next, isRegistered: !!registration }
+  },
+})
+
+/**
+ * Register for an event (founder).
+ */
+export const register = mutation({
+  args: { eventId: v.id('cohortEvents') },
+  handler: async (ctx, args) => {
+    const user = await requireFounder(ctx)
+
+    const event = await ctx.db.get(args.eventId)
+    if (!event) throw new Error('Event not found')
+
+    // Check if already registered
+    const existing = await ctx.db
+      .query('eventRegistrations')
+      .withIndex('by_eventId_userId', (q) =>
+        q.eq('eventId', args.eventId).eq('userId', user._id)
+      )
+      .unique()
+
+    if (existing) return existing._id
+
+    return await ctx.db.insert('eventRegistrations', {
+      eventId: args.eventId,
+      userId: user._id,
+      registeredAt: new Date().toISOString(),
+    })
+  },
+})
+
+/**
+ * Unregister from an event (founder).
+ */
+export const unregister = mutation({
+  args: { eventId: v.id('cohortEvents') },
+  handler: async (ctx, args) => {
+    const user = await requireFounder(ctx)
+
+    const existing = await ctx.db
+      .query('eventRegistrations')
+      .withIndex('by_eventId_userId', (q) =>
+        q.eq('eventId', args.eventId).eq('userId', user._id)
+      )
+      .unique()
+
+    if (existing) {
+      await ctx.db.delete(existing._id)
+    }
   },
 })

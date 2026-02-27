@@ -71,7 +71,9 @@ export default function FounderFundingPage() {
   const unlocked = milestones
     .filter((m) => m.status === 'approved')
     .reduce((sum, m) => sum + m.amount, 0)
-  const unlockedPct = potential > 0 ? (unlocked / potential) * 100 : 0
+  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
+  const deployed = fundingSummary?.deployed ?? 0
+  const available = Math.max(0, unlocked - deployed)
 
   function openSubmitDialog(id: Id<'milestones'>) {
     setSubmitDialogId(id)
@@ -140,26 +142,50 @@ export default function FounderFundingPage() {
         <p className="text-muted-foreground">Track your milestone-based funding</p>
       </div>
 
-      {/* Funding bar */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Funding Progress</span>
-            <span className="text-sm text-muted-foreground">
+      {/* Funding summary */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground">Unlocked</p>
+            <p className="text-2xl font-bold mt-1">
               {'\u00A3'}
-              {unlocked.toLocaleString('en-GB')} / {'\u00A3'}
-              {potential.toLocaleString('en-GB')}
-            </span>
-          </div>
-          <div className="h-4 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full rounded-full bg-green-500 transition-all"
-              style={{ width: `${unlockedPct}%` }}
-            />
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">{Math.round(unlockedPct)}% unlocked</p>
-        </CardContent>
-      </Card>
+              {unlocked.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground">Deployed</p>
+            <p className="text-2xl font-bold text-blue-600 mt-1">
+              {'\u00A3'}
+              {deployed.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground">Available</p>
+            <p className="text-2xl font-bold text-green-600 mt-1">
+              {'\u00A3'}
+              {available.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Progress bar */}
+      {unlocked > 0 && (
+        <div className="h-3 rounded-full bg-muted overflow-hidden flex">
+          <div
+            className="h-full bg-blue-600 transition-all"
+            style={{ width: `${(deployed / unlocked) * 100}%` }}
+          />
+          <div
+            className="h-full bg-green-500 transition-all"
+            style={{ width: `${(available / unlocked) * 100}%` }}
+          />
+        </div>
+      )}
 
       {/* Milestones */}
       <div className="space-y-3">

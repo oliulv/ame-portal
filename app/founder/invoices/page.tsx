@@ -4,11 +4,13 @@ import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { AlertTriangle } from 'lucide-react'
 
 export default function FounderInvoicesPage() {
   const invoicesData = useQuery(api.invoices.listForFounder)
+  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
 
-  if (invoicesData === undefined) {
+  if (invoicesData === undefined || fundingSummary === undefined) {
     return (
       <div>
         <div className="flex justify-between items-center mb-6">
@@ -22,15 +24,37 @@ export default function FounderInvoicesPage() {
   }
 
   const invoices = invoicesData.invoices ?? []
+  const canUpload = fundingSummary.available > 0
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Invoices</h1>
-        <Link href="/founder/invoices/new">
-          <Button>Upload Invoice</Button>
-        </Link>
+        {canUpload ? (
+          <Link href="/founder/invoices/new">
+            <Button>Upload Invoice</Button>
+          </Link>
+        ) : (
+          <Button disabled>Upload Invoice</Button>
+        )}
       </div>
+
+      {!canUpload && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 mb-6">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-900">No available balance</p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              {fundingSummary.hasMilestones
+                ? 'All unlocked funds have been deployed. Complete more milestones to unlock additional funding.'
+                : 'No milestones have been set up yet. Contact your program admin for more information.'}
+            </p>
+            <Link href="/founder/funding" className="text-sm font-medium text-amber-900 hover:underline mt-1 inline-block">
+              View funding details →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {invoices.length > 0 ? (
         <div className="bg-card rounded-lg border overflow-hidden">
