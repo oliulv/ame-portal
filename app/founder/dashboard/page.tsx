@@ -3,7 +3,7 @@
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, FileText, Building2, Plug } from 'lucide-react'
+import { Target, FileText, Building2, Plug, Clock, Send, Check, Calendar } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 export default function FounderDashboard() {
   const milestones = useQuery(api.milestones.listForFounder)
   const invoicesData = useQuery(api.invoices.listForFounder)
+  const nextEvent = useQuery(api.cohortEvents.nextForFounder)
   const integrationStatus = useQuery(api.integrations.status)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
 
@@ -28,6 +29,11 @@ export default function FounderDashboard() {
   const unlockedPct = potential > 0 ? Math.round((unlocked / potential) * 100) : 0
   const pendingInvoices = invoicesData?.pendingCount ?? 0
   const hasStartups = (milestones?.length ?? 0) > 0
+
+  const upcomingMilestones = (milestones ?? [])
+    .filter((m) => (m.status === 'waiting' || m.status === 'submitted') && m.dueDate)
+    .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
+    .slice(0, 3)
 
   if (isLoading) {
     return (
@@ -127,6 +133,108 @@ export default function FounderDashboard() {
                 View invoices →
               </Button>
             </Link>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Upcoming Milestones + Next Event */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Upcoming Milestones</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {upcomingMilestones.length > 0 ? (
+              <div className="space-y-3">
+                {upcomingMilestones.map((m) => (
+                  <div key={m._id} className="flex items-center gap-3">
+                    <div className="flex-shrink-0">
+                      {m.status === 'submitted' ? (
+                        <Clock className="h-4 w-4 text-amber-600" />
+                      ) : (
+                        <Send className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{m.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Due{' '}
+                        {new Date(m.dueDate!).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                        {' · '}
+                        {'\u00A3'}
+                        {m.amount.toLocaleString('en-GB')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <Link href="/founder/funding" className="inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    View all →
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  <Check className="inline h-4 w-4 text-green-600 mr-1" />
+                  All caught up!
+                </p>
+                <Link href="/founder/funding" className="mt-3 inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    View funding details →
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Next Event</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {nextEvent ? (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium">{nextEvent.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(nextEvent.date).toLocaleDateString('en-GB', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </p>
+                </div>
+                <iframe
+                  src={nextEvent.lumaEmbedUrl}
+                  className="w-full rounded-lg border"
+                  style={{ height: 300 }}
+                  allowFullScreen
+                  aria-hidden="false"
+                />
+                <Link href="/founder/calendar" className="inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    View calendar →
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-muted-foreground">No upcoming events</p>
+                <Link href="/founder/calendar" className="mt-3 inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    View calendar →
+                  </Button>
+                </Link>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
