@@ -40,11 +40,15 @@ export const PerkCard = memo(function PerkCard({ perk, onSelect }: PerkCardProps
         {visibleCategories.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1">
             {visibleCategories.map((cat) => (
-              <Badge key={cat} variant="secondary">
+              <Badge key={cat} variant="secondary" className="border-border">
                 {cat}
               </Badge>
             ))}
-            {overflowCount > 0 && <Badge variant="secondary">+{overflowCount} more</Badge>}
+            {overflowCount > 0 && (
+              <Badge variant="secondary" className="border-border">
+                +{overflowCount} more
+              </Badge>
+            )}
           </div>
         )}
       </CardContent>
