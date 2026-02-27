@@ -1,0 +1,150 @@
+import { query, mutation } from './_generated/server'
+import { v } from 'convex/values'
+import { requireAdmin, requireFounder, getFounderStartupIds } from './auth'
+
+/**
+ * List all events for a cohort (admin).
+ */
+export const list = query({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const events = await ctx.db
+      .query('cohortEvents')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    return events.sort((a, b) => a.date.localeCompare(b.date))
+  },
+})
+
+/**
+ * Create an event (admin).
+ */
+export const create = mutation({
+  args: {
+    cohortId: v.id('cohorts'),
+    title: v.string(),
+    description: v.optional(v.string()),
+    date: v.string(),
+    lumaEmbedUrl: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const existing = await ctx.db
+      .query('cohortEvents')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    return await ctx.db.insert('cohortEvents', {
+      cohortId: args.cohortId,
+      title: args.title,
+      description: args.description,
+      date: args.date,
+      lumaEmbedUrl: args.lumaEmbedUrl,
+      sortOrder: existing.length,
+      isActive: true,
+    })
+  },
+})
+
+/**
+ * Update an event (admin).
+ */
+export const update = mutation({
+  args: {
+    id: v.id('cohortEvents'),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    date: v.optional(v.string()),
+    lumaEmbedUrl: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const { id, ...updates } = args
+    const event = await ctx.db.get(id)
+    if (!event) throw new Error('Event not found')
+
+    const patch: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        patch[key] = value
+      }
+    }
+
+    await ctx.db.patch(id, patch)
+  },
+})
+
+/**
+ * Delete an event (admin).
+ */
+export const remove = mutation({
+  args: { id: v.id('cohortEvents') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const event = await ctx.db.get(args.id)
+    if (!event) throw new Error('Event not found')
+
+    await ctx.db.delete(args.id)
+  },
+})
+
+/**
+ * List active events for the current founder's cohort.
+ */
+export const listForFounder = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+
+    if (startupIds.length === 0) return []
+
+    const startup = await ctx.db.get(startupIds[0])
+    if (!startup) return []
+
+    const events = await ctx.db
+      .query('cohortEvents')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
+      .collect()
+
+    return events
+      .filter((e) => e.isActive)
+      .sort((a, b) => a.date.localeCompare(b.date))
+  },
+})
+
+/**
+ * Get the next upcoming event for the current founder.
+ */
+export const nextForFounder = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+
+    if (startupIds.length === 0) return null
+
+    const startup = await ctx.db.get(startupIds[0])
+    if (!startup) return null
+
+    const now = new Date().toISOString()
+
+    const events = await ctx.db
+      .query('cohortEvents')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
+      .collect()
+
+    const upcoming = events
+      .filter((e) => e.isActive && e.date >= now)
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    return upcoming[0] ?? null
+  },
+})
