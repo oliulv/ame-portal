@@ -199,8 +199,9 @@ export default function FounderPerksPage() {
             />
             <text
               x="18"
-              y="19.5"
+              y="18"
               textAnchor="middle"
+              dominantBaseline="central"
               className="fill-foreground text-[8px] font-semibold"
             >
               {claimedCount}/{perks.length}

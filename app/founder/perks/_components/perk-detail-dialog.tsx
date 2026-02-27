@@ -32,16 +32,16 @@ export function PerkDetailDialog({
         <DialogHeader className="text-left">
           <DialogTitle>{perk?.title}</DialogTitle>
           {perk?.providerName && <DialogDescription>by {perk.providerName}</DialogDescription>}
-          {perk?.category && (
-            <div className="flex flex-wrap gap-1 pt-1">
-              {perk.category.split(',').map((cat) => (
-                <Badge key={cat.trim()} variant="secondary">
-                  {cat.trim()}
-                </Badge>
-              ))}
-            </div>
-          )}
         </DialogHeader>
+        {perk?.category && (
+          <div className="flex flex-wrap gap-1">
+            {perk.category.split(',').map((cat) => (
+              <Badge key={cat.trim()} variant="secondary">
+                {cat.trim()}
+              </Badge>
+            ))}
+          </div>
+        )}
         <div className="space-y-3">
           <p className="text-sm">{perk?.description}</p>
           {perk?.details && <p className="text-sm text-muted-foreground">{perk.details}</p>}
@@ -59,11 +59,11 @@ export function PerkDetailDialog({
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {perk?.url && (
-              <Button variant="outline" size="sm" asChild>
+              <Button variant="outline" size="sm" className="whitespace-nowrap" asChild>
                 <a href={perk.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" />
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                   Visit
                 </a>
               </Button>
@@ -72,13 +72,19 @@ export function PerkDetailDialog({
               <Button
                 variant="outline"
                 size="sm"
+                className="whitespace-nowrap"
                 onClick={() => perk && onUnclaim(perk._id)}
                 disabled={isProcessing}
               >
                 {isProcessing ? 'Processing...' : 'Unclaim'}
               </Button>
             ) : (
-              <Button size="sm" onClick={() => perk && onClaim(perk._id)} disabled={isProcessing}>
+              <Button
+                size="sm"
+                className="whitespace-nowrap"
+                onClick={() => perk && onClaim(perk._id)}
+                disabled={isProcessing}
+              >
                 {isProcessing ? 'Processing...' : 'Claim Perk'}
               </Button>
             )}
