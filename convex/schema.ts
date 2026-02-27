@@ -247,6 +247,17 @@ export default defineSchema({
     .index('by_websiteId', ['websiteId'])
     .index('by_websiteId_eventName', ['websiteId', 'eventName']),
 
+  // ── Cohort Events ─────────────────────────────────────────────
+  cohortEvents: defineTable({
+    cohortId: v.id('cohorts'),
+    title: v.string(),
+    description: v.optional(v.string()),
+    date: v.string(),
+    lumaEmbedUrl: v.string(),
+    sortOrder: v.number(),
+    isActive: v.boolean(),
+  }).index('by_cohortId', ['cohortId']),
+
   // ── Perks (global, not per-cohort) ──────────────────────────────
   perks: defineTable({
     cohortId: v.optional(v.id('cohorts')), // Legacy field, not used
