@@ -239,6 +239,34 @@ export const submit = mutation({
 })
 
 /**
+ * Withdraw a submitted milestone (founder). Changes submitted → waiting.
+ * Clears the attached evidence so the founder can re-submit with updated files.
+ */
+export const withdraw = mutation({
+  args: { id: v.id('milestones') },
+  handler: async (ctx, args) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+
+    const milestone = await ctx.db.get(args.id)
+    if (!milestone) throw new Error('Milestone not found')
+    if (!startupIds.includes(milestone.startupId)) {
+      throw new Error('Not authorized')
+    }
+    if (milestone.status !== 'submitted') {
+      throw new Error('Only submitted milestones can be withdrawn')
+    }
+
+    await ctx.db.patch(args.id, {
+      status: 'waiting',
+      planLink: undefined,
+      planStorageId: undefined,
+      planFileName: undefined,
+    })
+  },
+})
+
+/**
  * Reorder milestones (admin).
  */
 export const reorder = mutation({
