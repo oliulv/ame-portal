@@ -51,8 +51,8 @@ import { Users, UserPlus, RotateCw, X, Trash2 } from 'lucide-react'
 const adminInvitationSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   invitedName: z.string().min(1, 'Name is required'),
-  expiresInDays: z.number().min(1).max(30).default(14),
-  role: z.enum(['admin', 'super_admin']).default('admin'),
+  expiresInDays: z.number().int().min(1).max(30),
+  role: z.enum(['admin', 'super_admin']),
 })
 
 type AdminInvitationFormData = z.infer<typeof adminInvitationSchema>
@@ -96,12 +96,11 @@ export default function AdminsPage() {
   const revokeInvitation = useMutation(api.adminInvitations.revoke)
   const removeAdminFromCohort = useMutation(api.adminCohorts.remove)
 
-  const form = useForm({
+  const form = useForm<AdminInvitationFormData>({
     resolver: zodResolver(adminInvitationSchema),
     defaultValues: {
       email: '',
       invitedName: '',
-      expiresInDays: 14,
       role: 'admin' as const,
     },
     mode: 'onChange',
@@ -393,8 +392,14 @@ export default function AdminsPage() {
                           type="number"
                           min={1}
                           max={30}
+                          placeholder="14"
                           {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 14)}
+                          value={field.value ?? ''}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            field.onChange(value === '' ? undefined : Number.parseInt(value, 10))
+                          }}
                         />
                       </FormControl>
                       <FormDescription>
