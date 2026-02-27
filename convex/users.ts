@@ -1,4 +1,4 @@
-import { query, mutation, internalMutation } from './_generated/server'
+import { query, mutation, internalMutation } from './functions'
 import { v } from 'convex/values'
 import { getCurrentUser, requireAuth } from './auth'
 

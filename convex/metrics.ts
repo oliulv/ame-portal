@@ -1,13 +1,8 @@
-import {
-  query,
-  mutation,
-  internalAction,
-  internalMutation,
-  internalQuery,
-} from './_generated/server'
+import { query, mutation, internalAction, internalMutation, internalQuery } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAuth } from './auth'
+import { logConvexError } from './lib/logging'
 
 /**
  * Store metric snapshots.
@@ -307,7 +302,7 @@ export const syncAllMetrics = internalAction({
           lastSyncedAt: new Date().toISOString(),
         })
       } catch (error) {
-        console.error(`Error syncing Stripe for startup ${connection.startupId}:`, error)
+        logConvexError(`Error syncing Stripe for startup ${connection.startupId}:`, error)
         await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
           connectionId: connection._id,
           status: 'error',
@@ -326,7 +321,7 @@ export const syncAllMetrics = internalAction({
           startupId,
         })
       } catch (error) {
-        console.error(`Error syncing tracker metrics for startup ${startupId}:`, error)
+        logConvexError(`Error syncing tracker metrics for startup ${startupId}:`, error)
       }
     }
   },

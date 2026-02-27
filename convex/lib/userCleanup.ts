@@ -1,8 +1,9 @@
-import { MutationCtx } from '../_generated/server'
-import { internalAction } from '../_generated/server'
+import { MutationCtx } from '../functions'
+import { internalAction } from '../functions'
 import { internal } from '../_generated/api'
 import { v } from 'convex/values'
 import { Id } from '../_generated/dataModel'
+import { logConvexError, logConvexInfo } from './logging'
 
 /**
  * Evaluate whether a user should be fully cleaned up after a role removal.
@@ -62,7 +63,7 @@ export const deleteClerkUser = internalAction({
   handler: async (_ctx, args) => {
     const secretKey = process.env.CLERK_SECRET_KEY
     if (!secretKey) {
-      console.error('CLERK_SECRET_KEY not configured — skipping Clerk user deletion')
+      logConvexError('CLERK_SECRET_KEY not configured — skipping Clerk user deletion')
       return
     }
 
@@ -75,15 +76,15 @@ export const deleteClerkUser = internalAction({
       })
 
       if (response.ok) {
-        console.log(`Deleted Clerk user ${args.clerkId}`)
+        logConvexInfo(`Deleted Clerk user ${args.clerkId}`)
       } else if (response.status === 404) {
-        console.log(`Clerk user ${args.clerkId} already deleted`)
+        logConvexInfo(`Clerk user ${args.clerkId} already deleted`)
       } else {
         const body = await response.text()
-        console.error(`Failed to delete Clerk user ${args.clerkId}: ${response.status} ${body}`)
+        logConvexError(`Failed to delete Clerk user ${args.clerkId}: ${response.status} ${body}`)
       }
     } catch (error) {
-      console.error(`Error deleting Clerk user ${args.clerkId}:`, error)
+      logConvexError(`Error deleting Clerk user ${args.clerkId}:`, error)
     }
   },
 })

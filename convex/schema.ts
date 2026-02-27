@@ -222,6 +222,7 @@ export default defineSchema({
     startupId: v.id('startups'),
     name: v.string(),
     domain: v.optional(v.string()),
+    lastEventAt: v.optional(v.string()),
   }).index('by_startupId', ['startupId']),
 
   // ── Tracker Events ─────────────────────────────────────────────────

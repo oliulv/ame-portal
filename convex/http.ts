@@ -1,6 +1,7 @@
 import { httpRouter } from 'convex/server'
-import { httpAction } from './_generated/server'
+import { httpAction } from './functions'
 import { internal } from './_generated/api'
+import { logConvexError } from './lib/logging'
 
 const http = httpRouter()
 
@@ -55,7 +56,7 @@ http.route({
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     } catch (error) {
-      console.error('Tracker collect error:', error)
+      logConvexError('Tracker collect error:', error)
       return new Response(JSON.stringify({ error: 'Internal server error' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -86,7 +87,7 @@ http.route({
 
       return new Response('', { status: 200 })
     } catch (error) {
-      console.error('Clerk webhook error:', error)
+      logConvexError('Clerk webhook error:', error)
       return new Response('Internal server error', { status: 500 })
     }
   }),
@@ -95,7 +96,7 @@ http.route({
 export default http
 
 // ── Internal mutations used by HTTP actions ───────────────────────────
-import { internalMutation } from './_generated/server'
+import { internalMutation } from './functions'
 import { v } from 'convex/values'
 
 export const insertTrackerEvent = internalMutation({
@@ -139,6 +140,8 @@ export const insertTrackerEvent = internalMutation({
       hostname: args.hostname,
       data: args.data,
     })
+
+    await ctx.db.patch(normalizedId, { lastEventAt: new Date().toISOString() })
   },
 })
 
