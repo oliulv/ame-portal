@@ -15,6 +15,7 @@ import type * as auth from "../auth.js";
 import type * as bankDetails from "../bankDetails.js";
 import type * as cohorts from "../cohorts.js";
 import type * as crons from "../crons.js";
+import type * as founderInvitations from "../founderInvitations.js";
 import type * as founderOnboarding from "../founderOnboarding.js";
 import type * as founderProfile from "../founderProfile.js";
 import type * as founderStartup from "../founderStartup.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   bankDetails: typeof bankDetails;
   cohorts: typeof cohorts;
   crons: typeof crons;
+  founderInvitations: typeof founderInvitations;
   founderOnboarding: typeof founderOnboarding;
   founderProfile: typeof founderProfile;
   founderStartup: typeof founderStartup;
