@@ -56,7 +56,7 @@ export default function FounderAnalyticsPage() {
                 Connect Stripe to track revenue and customers automatically, or add the Accelerate
                 ME Tracker to monitor website traffic and user activity.
               </p>
-              <Link href="/founder/settings?tab=integrations">
+              <Link href="/founder/integrations">
                 <Button>Set Up Integrations</Button>
               </Link>
             </div>
@@ -110,7 +110,7 @@ export default function FounderAnalyticsPage() {
                   Connect Stripe to automatically track revenue, MRR, and customer metrics.
                 </p>
               </div>
-              <Link href="/founder/settings?tab=integrations">
+              <Link href="/founder/integrations?tab=stripe">
                 <Button variant="outline" size="sm">
                   Connect Stripe
                 </Button>
@@ -131,7 +131,7 @@ export default function FounderAnalyticsPage() {
                   Add the Accelerate ME Tracker to monitor pageviews, sessions, and user activity.
                 </p>
               </div>
-              <Link href="/founder/settings?tab=integrations">
+              <Link href="/founder/integrations?tab=tracker">
                 <Button variant="outline" size="sm">
                   Set Up Tracker
                 </Button>

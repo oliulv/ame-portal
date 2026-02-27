@@ -299,7 +299,7 @@ export default function FounderDashboard() {
                   monitor website traffic. Your analytics dashboard will populate once connected.
                 </p>
                 <div className="mt-3 flex gap-2">
-                  <Link href="/founder/settings?tab=integrations">
+                  <Link href="/founder/integrations">
                     <Button size="sm">Connect Integrations</Button>
                   </Link>
                   <Link href="/founder/analytics">

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -45,9 +45,44 @@ import { TeamTab } from './_components/team-tab'
 
 type SettingsTab = 'personal' | 'startup' | 'bank' | 'team' | 'integrations'
 
+const validSettingsTabs: SettingsTab[] = ['personal', 'startup', 'bank', 'team', 'integrations']
+
 export default function SettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <div>
+            <Skeleton className="h-9 w-48 mb-2" />
+            <Skeleton className="h-5 w-64" />
+          </div>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-4 w-48" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <SettingsPageInner />
+    </Suspense>
+  )
+}
+
+function SettingsPageInner() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<SettingsTab>('personal')
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const initialTab = validSettingsTabs.includes(tabParam as SettingsTab)
+    ? (tabParam as SettingsTab)
+    : 'personal'
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
   const [isSavingPersonal, setIsSavingPersonal] = useState(false)
   const [isSavingStartup, setIsSavingStartup] = useState(false)
   const [isSavingBank, setIsSavingBank] = useState(false)

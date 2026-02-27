@@ -139,6 +139,8 @@ export const insertTrackerEvent = internalMutation({
       hostname: args.hostname,
       data: args.data,
     })
+
+    await ctx.db.patch(normalizedId, { lastEventAt: new Date().toISOString() })
   },
 })
 

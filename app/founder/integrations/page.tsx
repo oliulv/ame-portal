@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -21,7 +21,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { z } from 'zod'
 import {
-  ArrowLeft,
   CreditCard,
   Code,
   Copy,
@@ -30,7 +29,10 @@ import {
   Plus,
   BookOpen,
   ChevronRight,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
 
 const stripeConnectSchema = z.object({
@@ -46,13 +48,62 @@ const trackerWebsiteSchema = z.object({
 type StripeConnectFormData = z.infer<typeof stripeConnectSchema>
 type TrackerWebsiteFormData = z.infer<typeof trackerWebsiteSchema>
 
+type IntegrationTab = 'stripe' | 'tracker'
+const validIntegrationTabs: IntegrationTab[] = ['stripe', 'tracker']
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 export default function IntegrationsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <div>
+            <Skeleton className="h-9 w-48 mb-2" />
+            <Skeleton className="h-5 w-64" />
+          </div>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-4 w-48" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <IntegrationsPageInner />
+    </Suspense>
+  )
+}
+
+function IntegrationsPageInner() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'stripe' | 'tracker'>('stripe')
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const initialTab = validIntegrationTabs.includes(tabParam as IntegrationTab)
+    ? (tabParam as IntegrationTab)
+    : 'stripe'
+  const [activeTab, setActiveTab] = useState<IntegrationTab>(initialTab)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [isConnectingStripe, setIsConnectingStripe] = useState(false)
   const [isCreatingTracker, setIsCreatingTracker] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [newTrackerId, setNewTrackerId] = useState<string | null>(null)
+  const newTrackerRef = useRef<HTMLDivElement>(null)
 
   // Convex queries
   const trackerWebsites = useQuery(api.trackerWebsites.list)
@@ -61,6 +112,14 @@ export default function IntegrationsPage() {
   const createTrackerWebsite = useMutation(api.trackerWebsites.create)
   const removeTrackerWebsite = useMutation(api.trackerWebsites.remove)
   const connectStripe = useAction(api.integrations.connectStripe)
+
+  // Auto-scroll to newly created tracker
+  useEffect(() => {
+    if (newTrackerId && trackerWebsites?.some((w) => w._id === newTrackerId)) {
+      newTrackerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setNewTrackerId(null)
+    }
+  }, [newTrackerId, trackerWebsites])
 
   const stripeForm = useForm<StripeConnectFormData>({
     resolver: zodResolver(stripeConnectSchema),
@@ -81,10 +140,11 @@ export default function IntegrationsPage() {
   const handleCreateTracker = async (data: TrackerWebsiteFormData) => {
     setIsCreatingTracker(true)
     try {
-      await createTrackerWebsite({
+      const id = await createTrackerWebsite({
         name: data.name,
         domain: data.domain || undefined,
       })
+      setNewTrackerId(id)
       trackerForm.reset()
       toast.success('Tracker website created successfully')
     } catch (err) {
@@ -108,11 +168,9 @@ export default function IntegrationsPage() {
 
   const getTrackerSnippet = (websiteId: string) => {
     const baseUrl =
-      typeof window !== 'undefined' && process.env.NEXT_PUBLIC_TRACKER_BASE_URL
-        ? process.env.NEXT_PUBLIC_TRACKER_BASE_URL
-        : typeof window !== 'undefined'
-          ? window.location.origin
-          : ''
+      process.env.NEXT_PUBLIC_TRACKER_BASE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : '')
     return `<script defer src="${baseUrl}/tracker.js" data-website-id="${websiteId}"></script>`
   }
 
@@ -129,7 +187,7 @@ export default function IntegrationsPage() {
         apiKey: data.api_key,
       })
       toast.success('Stripe connected successfully')
-      router.push('/founder/settings?tab=integrations')
+      router.push('/founder/integrations?tab=stripe')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to connect Stripe')
     } finally {
@@ -140,21 +198,11 @@ export default function IntegrationsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="space-y-4">
-        <div>
-          <Link href="/founder/settings?tab=integrations">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Settings
-            </Button>
-          </Link>
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Connect Integration</h1>
-          <p className="text-muted-foreground">
-            Connect your external services to track metrics automatically
-          </p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
+        <p className="text-muted-foreground">
+          Connect your external services to track metrics automatically
+        </p>
       </div>
 
       {/* Tabs */}
@@ -251,9 +299,139 @@ export default function IntegrationsPage() {
         </Card>
       )}
 
-      {/* Tracker Form */}
+      {/* Tracker Tab */}
       {activeTab === 'tracker' && (
         <div className="space-y-6">
+          {/* Existing Tracker Websites (shown first) */}
+          {trackerWebsites && trackerWebsites.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Your Tracker Websites</h2>
+              {trackerWebsites.map((website) => {
+                const snippet = getTrackerSnippet(website._id)
+                const isNew = website._id === newTrackerId
+                return (
+                  <Card
+                    key={website._id}
+                    id={`tracker-${website._id}`}
+                    ref={isNew ? newTrackerRef : undefined}
+                  >
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <CardTitle>{website.name}</CardTitle>
+                            {website.domain && <CardDescription>{website.domain}</CardDescription>}
+                          </div>
+                          {website.lastEventAt ? (
+                            <div className="flex items-center gap-1.5 text-green-600">
+                              <CheckCircle2 className="h-4 w-4" />
+                              <span className="text-xs font-medium">
+                                Last event {formatRelativeTime(website.lastEventAt)}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-amber-600">
+                              <Clock className="h-4 w-4" />
+                              <span className="text-xs font-medium">
+                                Waiting for first event...
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteTracker(website._id)}
+                          disabled={deletingId === website._id}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Tracking Script</label>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm break-all">
+                            {snippet}
+                          </code>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => copyToClipboard(snippet, website._id)}
+                          >
+                            {copiedId === website._id ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Create Tracker Website */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Create Tracker Website</CardTitle>
+              <CardDescription>
+                Create a new tracker website to get a tracking script you can add to your site
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Form {...trackerForm}>
+                <form
+                  onSubmit={trackerForm.handleSubmit(handleCreateTracker)}
+                  className="space-y-6"
+                >
+                  <FormField
+                    control={trackerForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Website Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="My Marketing Site" {...field} />
+                        </FormControl>
+                        <FormDescription>A friendly name to identify this website</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={trackerForm.control}
+                    name="domain"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Domain (Optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="example.com" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          The domain where you&apos;ll install the tracker (optional)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={isCreatingTracker}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      {isCreatingTracker ? 'Creating...' : 'Create Tracker Website'}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+
           {/* Installation Guide */}
           <Card>
             <CardHeader>
@@ -274,7 +452,7 @@ export default function IntegrationsPage() {
                   <div className="flex-1 pt-0.5">
                     <p className="font-medium">Create a Tracker Website</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Fill out the form below to create a new tracker website. Give it a name and
+                      Fill out the form above to create a new tracker website. Give it a name and
                       optionally specify the domain.
                     </p>
                   </div>
@@ -287,8 +465,8 @@ export default function IntegrationsPage() {
                   <div className="flex-1 pt-0.5">
                     <p className="font-medium">Copy Your Tracking Script</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      After creating a tracker website, you'll see a tracking script. Click the copy
-                      button to copy it to your clipboard.
+                      After creating a tracker website, you&apos;ll see a tracking script. Click the
+                      copy button to copy it to your clipboard.
                     </p>
                   </div>
                 </div>
@@ -357,139 +535,6 @@ export default function IntegrationsPage() {
               </div>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Create Tracker Website</CardTitle>
-              <CardDescription>
-                Create a new tracker website to get a tracking script you can add to your site
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...trackerForm}>
-                <form
-                  onSubmit={trackerForm.handleSubmit(handleCreateTracker)}
-                  className="space-y-6"
-                >
-                  <FormField
-                    control={trackerForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Website Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="My Marketing Site" {...field} />
-                        </FormControl>
-                        <FormDescription>A friendly name to identify this website</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={trackerForm.control}
-                    name="domain"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Domain (Optional)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="example.com" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          The domain where you'll install the tracker (optional)
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="flex justify-end">
-                    <Button type="submit" disabled={isCreatingTracker}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      {isCreatingTracker ? 'Creating...' : 'Create Tracker Website'}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-
-          {/* Existing Tracker Websites */}
-          {trackerWebsites && trackerWebsites.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold">Your Tracker Websites</h2>
-              {trackerWebsites.map((website) => {
-                const snippet = getTrackerSnippet(website._id)
-                return (
-                  <Card key={website._id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle>{website.name}</CardTitle>
-                          {website.domain && <CardDescription>{website.domain}</CardDescription>}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteTracker(website._id)}
-                          disabled={deletingId === website._id}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Tracking Script</label>
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm break-all">
-                            {snippet}
-                          </code>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => copyToClipboard(snippet, website._id)}
-                          >
-                            {copiedId === website._id ? (
-                              <Check className="h-4 w-4" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                        <div className="mt-3 space-y-2">
-                          <p className="text-sm font-medium">Installation Instructions:</p>
-                          <ol className="text-sm text-muted-foreground space-y-1 ml-4 list-decimal">
-                            <li>Copy the script above</li>
-                            <li>Open your website's HTML file or content management system</li>
-                            <li>
-                              Paste the script in the{' '}
-                              <code className="px-1 py-0.5 bg-muted rounded text-xs">
-                                &lt;head&gt;
-                              </code>{' '}
-                              section, or before the closing{' '}
-                              <code className="px-1 py-0.5 bg-muted rounded text-xs">
-                                &lt;/body&gt;
-                              </code>{' '}
-                              tag
-                            </li>
-                            <li>Save and publish your website</li>
-                            <li>
-                              Visit your{' '}
-                              <Link href="/founder/analytics" className="underline">
-                                Analytics page
-                              </Link>{' '}
-                              to see metrics appear
-                            </li>
-                          </ol>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
         </div>
       )}
     </div>
