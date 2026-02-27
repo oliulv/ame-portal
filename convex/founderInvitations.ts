@@ -1,4 +1,4 @@
-import { query, mutation } from './_generated/server'
+import { query, mutation } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireFounder, getFounderStartupIds } from './auth'

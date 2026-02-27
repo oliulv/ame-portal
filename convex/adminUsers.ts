@@ -1,4 +1,4 @@
-import { query, QueryCtx } from './_generated/server'
+import { query, QueryCtx } from './functions'
 import { v } from 'convex/values'
 import { requireSuperAdmin } from './auth'
 

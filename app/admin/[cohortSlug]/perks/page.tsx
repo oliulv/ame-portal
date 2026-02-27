@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -154,7 +155,7 @@ export default function AdminPerksPage() {
       }
       resetForm()
     } catch (error) {
-      console.error('Failed to save perk:', error)
+      logClientError('Failed to save perk:', error)
       toast.error('Failed to save perk')
     } finally {
       setIsSaving(false)
@@ -168,7 +169,7 @@ export default function AdminPerksPage() {
       await removePerk({ id })
       toast.success('Perk deleted')
     } catch (error) {
-      console.error('Failed to delete perk:', error)
+      logClientError('Failed to delete perk:', error)
       toast.error('Failed to delete perk')
     }
   }

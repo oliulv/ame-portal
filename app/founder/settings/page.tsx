@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -266,7 +267,7 @@ function SettingsPageInner() {
       await disconnectStripe()
       toast.success('Stripe disconnected successfully')
     } catch (err) {
-      console.error('Failed to disconnect Stripe:', err)
+      logClientError('Failed to disconnect Stripe:', err)
       toast.error('Failed to disconnect Stripe')
     }
   }

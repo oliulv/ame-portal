@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { ConvexHttpClient } from 'convex/browser'
 import { api } from '@/convex/_generated/api'
 import Stripe from 'stripe'
+import { logServerError } from '@/lib/logging'
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
 
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
       `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?success=stripe_connected`
     )
   } catch (error) {
-    console.error('Error handling Stripe callback:', error)
+    logServerError('Error handling Stripe callback:', error)
     return NextResponse.redirect(
       `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?error=stripe_connection_error`
     )

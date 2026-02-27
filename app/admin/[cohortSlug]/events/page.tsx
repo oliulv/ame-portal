@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -159,7 +160,7 @@ export default function AdminEventsPage() {
       }
       resetForm()
     } catch (error) {
-      console.error('Failed to save event:', error)
+      logClientError('Failed to save event:', error)
       toast.error('Failed to save event')
     } finally {
       setIsSaving(false)
@@ -172,7 +173,7 @@ export default function AdminEventsPage() {
       await removeEvent({ id })
       toast.success('Event deleted')
     } catch (error) {
-      console.error('Failed to delete event:', error)
+      logClientError('Failed to delete event:', error)
       toast.error('Failed to delete event')
     }
   }

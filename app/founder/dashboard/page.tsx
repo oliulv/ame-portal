@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import Script from 'next/script'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Target,
@@ -63,7 +64,7 @@ export default function FounderDashboard() {
       await withdrawMilestone({ id })
       toast.success('Submission withdrawn — you can now re-submit')
     } catch (error) {
-      console.error('Failed to withdraw milestone:', error)
+      logClientError('Failed to withdraw milestone:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to withdraw milestone')
     } finally {
       setWithdrawingId(null)

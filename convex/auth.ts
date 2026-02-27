@@ -1,4 +1,4 @@
-import { QueryCtx, MutationCtx } from './_generated/server'
+import { QueryCtx, MutationCtx } from './functions'
 import { Doc } from './_generated/dataModel'
 
 export type UserRole = 'super_admin' | 'admin' | 'founder'

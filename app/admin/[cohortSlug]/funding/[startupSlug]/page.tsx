@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -412,7 +413,7 @@ export default function StartupFundingPage() {
       }
       resetForm()
     } catch (error) {
-      console.error('Failed to save milestone:', error)
+      logClientError('Failed to save milestone:', error)
       toast.error('Failed to save milestone')
     } finally {
       setIsSaving(false)
@@ -425,7 +426,7 @@ export default function StartupFundingPage() {
       await removeMilestone({ id })
       toast.success('Milestone deleted')
     } catch (error) {
-      console.error('Failed to delete milestone:', error)
+      logClientError('Failed to delete milestone:', error)
       toast.error('Failed to delete milestone')
     }
   }
@@ -435,7 +436,7 @@ export default function StartupFundingPage() {
       await approveMilestone({ id })
       toast.success('Milestone approved')
     } catch (error) {
-      console.error('Failed to approve milestone:', error)
+      logClientError('Failed to approve milestone:', error)
       toast.error('Failed to approve milestone')
     }
   }
@@ -453,7 +454,7 @@ export default function StartupFundingPage() {
       await reorderMilestones({ milestoneIds: newOrder.map((m) => m._id) })
       toast.success('Milestones reordered')
     } catch (error) {
-      console.error('Failed to reorder:', error)
+      logClientError('Failed to reorder:', error)
       toast.error('Failed to reorder milestones')
     }
   }
@@ -470,7 +471,7 @@ export default function StartupFundingPage() {
       toast.success('Deployed amount updated')
       setDeployedInput(null)
     } catch (error) {
-      console.error('Failed to update deployed:', error)
+      logClientError('Failed to update deployed:', error)
       toast.error('Failed to update deployed amount')
     }
   }

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -114,7 +115,7 @@ export default function FounderFundingPage() {
       await withdrawMilestone({ id })
       toast.success('Submission withdrawn — you can now re-submit')
     } catch (error) {
-      console.error('Failed to withdraw milestone:', error)
+      logClientError('Failed to withdraw milestone:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to withdraw milestone')
     } finally {
       setWithdrawingId(null)
@@ -155,7 +156,7 @@ export default function FounderFundingPage() {
       toast.success('Milestone submitted for review')
       setSubmitDialogId(null)
     } catch (error) {
-      console.error('Failed to submit milestone:', error)
+      logClientError('Failed to submit milestone:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to submit milestone')
     } finally {
       setIsSubmitting(false)
