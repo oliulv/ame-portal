@@ -39,9 +39,11 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Users,
 } from 'lucide-react'
+import { TeamTab } from './_components/team-tab'
 
-type SettingsTab = 'personal' | 'startup' | 'bank' | 'integrations'
+type SettingsTab = 'personal' | 'startup' | 'bank' | 'team' | 'integrations'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -238,6 +240,7 @@ export default function SettingsPage() {
     { key: 'personal', title: 'Personal Information', icon: User },
     { key: 'startup', title: 'Startup Details', icon: Building2 },
     { key: 'bank', title: 'Bank Details', icon: CreditCard },
+    { key: 'team', title: 'Team', icon: Users },
     { key: 'integrations', title: 'Integrations', icon: Plug },
   ]
 
@@ -299,7 +302,7 @@ export default function SettingsPage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+                className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors cursor-pointer ${
                   activeTab === tab.key
                     ? 'border-primary text-primary font-medium'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -756,6 +759,9 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Team Tab */}
+      {activeTab === 'team' && <TeamTab />}
 
       {/* Integrations Tab */}
       {activeTab === 'integrations' && (

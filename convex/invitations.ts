@@ -68,6 +68,7 @@ export const create = mutation({
       role: 'founder',
       expiresAt,
       createdByAdminId: admin._id,
+      createdByUserId: admin._id,
     })
 
     // Schedule email sending action

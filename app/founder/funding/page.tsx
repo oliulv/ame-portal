@@ -25,12 +25,14 @@ import type { Id } from '@/convex/_generated/dataModel'
 export default function FounderFundingPage() {
   const milestones = useQuery(api.milestones.listForFounder)
   const submitMilestone = useMutation(api.milestones.submit)
+  const withdrawMilestone = useMutation(api.milestones.withdraw)
   const generateUploadUrl = useMutation(api.milestones.generateUploadUrl)
 
   const [submitDialogId, setSubmitDialogId] = useState<Id<'milestones'> | null>(null)
   const [planLink, setPlanLink] = useState('')
   const [planFile, setPlanFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [withdrawingId, setWithdrawingId] = useState<Id<'milestones'> | null>(null)
 
   if (milestones === undefined) {
     return (
@@ -75,6 +77,19 @@ export default function FounderFundingPage() {
     setSubmitDialogId(id)
     setPlanLink('')
     setPlanFile(null)
+  }
+
+  async function handleWithdraw(id: Id<'milestones'>) {
+    setWithdrawingId(id)
+    try {
+      await withdrawMilestone({ id })
+      toast.success('Submission withdrawn — you can now re-submit')
+    } catch (error) {
+      console.error('Failed to withdraw milestone:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to withdraw milestone')
+    } finally {
+      setWithdrawingId(null)
+    }
   }
 
   async function handleSubmit() {
@@ -196,6 +211,16 @@ export default function FounderFundingPage() {
                 {milestone.status === 'waiting' && (
                   <Button size="sm" onClick={() => openSubmitDialog(milestone._id)}>
                     Submit
+                  </Button>
+                )}
+                {milestone.status === 'submitted' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleWithdraw(milestone._id)}
+                    disabled={withdrawingId === milestone._id}
+                  >
+                    {withdrawingId === milestone._id ? 'Withdrawing...' : 'Withdraw'}
                   </Button>
                 )}
               </div>

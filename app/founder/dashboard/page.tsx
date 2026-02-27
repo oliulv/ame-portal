@@ -1,17 +1,34 @@
 'use client'
 
+import Script from 'next/script'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Target, FileText, Building2, Plug } from 'lucide-react'
+import {
+  Target,
+  FileText,
+  Building2,
+  Plug,
+  Clock,
+  Send,
+  Check,
+  Calendar,
+  ExternalLink,
+} from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 
+function extractLumaEventId(url: string): string | null {
+  const match = url.match(/(evt-[a-zA-Z0-9]+)/)
+  return match?.[1] ?? null
+}
+
 export default function FounderDashboard() {
   const milestones = useQuery(api.milestones.listForFounder)
   const invoicesData = useQuery(api.invoices.listForFounder)
+  const nextEvent = useQuery(api.cohortEvents.nextForFounder)
   const integrationStatus = useQuery(api.integrations.status)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
 
@@ -28,6 +45,16 @@ export default function FounderDashboard() {
   const unlockedPct = potential > 0 ? Math.round((unlocked / potential) * 100) : 0
   const pendingInvoices = invoicesData?.pendingCount ?? 0
   const hasStartups = (milestones?.length ?? 0) > 0
+
+  const upcomingMilestones = (milestones ?? [])
+    .filter((m) => m.status === 'waiting' || m.status === 'submitted')
+    .sort((a, b) => {
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+      if (a.dueDate) return -1
+      if (b.dueDate) return 1
+      return a.sortOrder - b.sortOrder
+    })
+    .slice(0, 3)
 
   if (isLoading) {
     return (
@@ -77,6 +104,11 @@ export default function FounderDashboard() {
 
   return (
     <div className="space-y-8">
+      <Script
+        id="luma-checkout"
+        src="https://embed.lu.ma/checkout-button.js"
+        strategy="afterInteractive"
+      />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Welcome back! Here's your startup progress</p>
@@ -127,6 +159,127 @@ export default function FounderDashboard() {
                 View invoices →
               </Button>
             </Link>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Upcoming Milestones + Next Event */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Upcoming Milestones</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col">
+            {upcomingMilestones.length > 0 ? (
+              <>
+                <div className="flex-1 space-y-2">
+                  {upcomingMilestones.map((m) => (
+                    <div
+                      key={m._id}
+                      className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
+                    >
+                      <div className="flex-shrink-0">
+                        {m.status === 'submitted' ? (
+                          <Clock className="h-4 w-4 text-amber-600" />
+                        ) : (
+                          <Send className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{m.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {m.dueDate && (
+                            <>
+                              Due{' '}
+                              {new Date(m.dueDate).toLocaleDateString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                              })}
+                              {' · '}
+                            </>
+                          )}
+                          {'\u00A3'}
+                          {m.amount.toLocaleString('en-GB')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/founder/funding" className="mt-auto pt-3 inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    View all →
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground flex-1">
+                  <Check className="inline h-4 w-4 text-green-600 mr-1" />
+                  All caught up!
+                </p>
+                <Link href="/founder/funding" className="mt-auto pt-3 inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    View funding details →
+                  </Button>
+                </Link>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Next Event</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col">
+            {nextEvent ? (
+              <>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                    <div className="flex-shrink-0">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{nextEvent.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(nextEvent.date).toLocaleDateString('en-GB', {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </p>
+                    </div>
+                    <a
+                      href={nextEvent.lumaEmbedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="luma-checkout--button inline-flex shrink-0 items-center gap-1 rounded bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                      data-luma-action="checkout"
+                      data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
+                    >
+                      Register
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                </div>
+                <Link href="/founder/calendar" className="mt-auto pt-3 inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    View calendar →
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="flex-1 text-sm text-muted-foreground">No upcoming events</p>
+                <Link href="/founder/calendar" className="mt-auto pt-3 inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    View calendar →
+                  </Button>
+                </Link>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -162,7 +162,7 @@ export default function IntegrationsPage() {
         <nav className="flex gap-4">
           <button
             onClick={() => setActiveTab('stripe')}
-            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors cursor-pointer ${
               activeTab === 'stripe'
                 ? 'border-primary text-primary font-medium'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -173,7 +173,7 @@ export default function IntegrationsPage() {
           </button>
           <button
             onClick={() => setActiveTab('tracker')}
-            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors cursor-pointer ${
               activeTab === 'tracker'
                 ? 'border-primary text-primary font-medium'
                 : 'border-transparent text-muted-foreground hover:text-foreground'

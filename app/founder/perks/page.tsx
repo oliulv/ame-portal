@@ -3,7 +3,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Gift } from 'lucide-react'
@@ -131,11 +130,16 @@ export default function FounderPerksPage() {
   if (perks === undefined) {
     return (
       <div className="space-y-6">
-        <div>
-          <Skeleton className="h-9 w-48 mb-2" />
-          <Skeleton className="h-5 w-64" />
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-9 w-48 mb-2" />
+            <Skeleton className="h-5 w-64" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-12 w-12 rounded-full" />
+            <Skeleton className="h-4 w-14" />
+          </div>
         </div>
-        <Skeleton className="h-16 w-full" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-40 w-full" />
@@ -165,30 +169,47 @@ export default function FounderPerksPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Perks</h1>
-        <p className="text-muted-foreground">Partner deals and discounts</p>
-      </div>
-
-      {/* Summary */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Perks Claimed</span>
-            <span className="text-sm text-muted-foreground">
-              {claimedCount} of {perks.length} perks claimed
-            </span>
-          </div>
-          <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full rounded-full bg-green-500 transition-all"
-              style={{
-                width: `${perks.length > 0 ? (claimedCount / perks.length) * 100 : 0}%`,
-              }}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Perks</h1>
+          <p className="text-muted-foreground">Partner deals and discounts</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <svg className="h-12 w-12" viewBox="0 0 36 36">
+            <circle
+              cx="18"
+              cy="18"
+              r="15.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              className="text-muted"
             />
-          </div>
-        </CardContent>
-      </Card>
+            <circle
+              cx="18"
+              cy="18"
+              r="15.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              className="text-emerald-500"
+              strokeDasharray={`${perks.length > 0 ? (claimedCount / perks.length) * 97.4 : 0} 97.4`}
+              transform="rotate(-90 18 18)"
+            />
+            <text
+              x="18"
+              y="18"
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="fill-foreground text-[8px] font-semibold"
+            >
+              {claimedCount}/{perks.length}
+            </text>
+          </svg>
+          <span className="text-xs text-muted-foreground">claimed</span>
+        </div>
+      </div>
 
       {/* Toolbar */}
       <PerksToolbar

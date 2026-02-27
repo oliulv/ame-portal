@@ -133,7 +133,8 @@ export default defineSchema({
     role: v.literal('founder'),
     expiresAt: v.string(),
     acceptedAt: v.optional(v.string()),
-    createdByAdminId: v.id('users'),
+    createdByAdminId: v.optional(v.id('users')),
+    createdByUserId: v.optional(v.id('users')),
   })
     .index('by_token', ['token'])
     .index('by_startupId', ['startupId'])
@@ -245,6 +246,17 @@ export default defineSchema({
   })
     .index('by_websiteId', ['websiteId'])
     .index('by_websiteId_eventName', ['websiteId', 'eventName']),
+
+  // ── Cohort Events ─────────────────────────────────────────────
+  cohortEvents: defineTable({
+    cohortId: v.id('cohorts'),
+    title: v.string(),
+    description: v.optional(v.string()),
+    date: v.string(),
+    lumaEmbedUrl: v.string(),
+    sortOrder: v.number(),
+    isActive: v.boolean(),
+  }).index('by_cohortId', ['cohortId']),
 
   // ── Perks (global, not per-cohort) ──────────────────────────────
   perks: defineTable({
