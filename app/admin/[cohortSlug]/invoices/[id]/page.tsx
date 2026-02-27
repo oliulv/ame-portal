@@ -19,21 +19,11 @@ import {
   User,
 } from 'lucide-react'
 import { InvoiceActions } from './InvoiceActions'
-
-function getInvoiceStatusVariant(
-  status: string
-): 'success' | 'warning' | 'destructive' | 'info' | 'secondary' {
-  switch (status) {
-    case 'approved':
-      return 'success'
-    case 'rejected':
-      return 'destructive'
-    case 'paid':
-      return 'info'
-    default:
-      return 'warning'
-  }
-}
+import {
+  getInvoiceStatusLabel,
+  getInvoiceStatusVariant,
+  type InvoiceStatus,
+} from '@/lib/invoice-status'
 
 export default function InvoiceDetailPage() {
   const params = useParams<{ cohortSlug: string; id: string }>()
@@ -125,8 +115,11 @@ export default function InvoiceDetailPage() {
               Review invoice details and approve or reject reimbursement
             </p>
           </div>
-          <Badge variant={getInvoiceStatusVariant(invoice.status)} className="text-sm">
-            {invoice.status.replace('_', ' ')}
+          <Badge
+            variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}
+            className="text-sm"
+          >
+            {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
           </Badge>
         </div>
       </div>

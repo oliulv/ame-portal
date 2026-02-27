@@ -40,12 +40,50 @@ export const listForFounder = query({
 })
 
 /**
+ * Funding summary for the current founder's startup.
+ * Returns unlocked, deployed, and available balance.
+ */
+export const fundingSummaryForFounder = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+
+    if (startupIds.length === 0) {
+      return { unlocked: 0, deployed: 0, available: 0, hasMilestones: false }
+    }
+
+    const startupId = startupIds[0]
+    const startup = await ctx.db.get(startupId)
+    const milestones = await ctx.db
+      .query('milestones')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
+      .collect()
+
+    const unlocked = milestones
+      .filter((m) => m.status === 'approved')
+      .reduce((sum, m) => sum + m.amount, 0)
+    const deployed = startup?.fundingDeployed ?? 0
+    const available = Math.max(0, unlocked - deployed)
+
+    return {
+      unlocked,
+      deployed,
+      available,
+      hasMilestones: milestones.length > 0,
+    }
+  },
+})
+
+/**
  * Funding overview for all startups in a cohort (admin).
  */
 export const fundingOverview = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
+
+    const cohort = await ctx.db.get(args.cohortId)
 
     const startups = await ctx.db
       .query('startups')
@@ -68,6 +106,7 @@ export const fundingOverview = query({
           .filter((m) => m.status === 'approved')
           .reduce((sum, m) => sum + m.amount, 0)
         const deployed = startup.fundingDeployed ?? 0
+        const available = Math.max(0, unlocked - deployed)
 
         totalPotential += potential
         totalUnlocked += unlocked
@@ -80,6 +119,7 @@ export const fundingOverview = query({
           potential,
           unlocked,
           deployed,
+          available,
           milestoneCount: milestones.length,
         }
       })
@@ -91,6 +131,12 @@ export const fundingOverview = query({
         potential: totalPotential,
         unlocked: totalUnlocked,
         deployed: totalDeployed,
+        available: Math.max(0, totalUnlocked - totalDeployed),
+      },
+      cohort: {
+        fundingBudget: cohort?.fundingBudget ?? null,
+        baseFunding: cohort?.baseFunding ?? null,
+        startupCount: startups.length,
       },
     }
   },

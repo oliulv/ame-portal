@@ -89,6 +89,8 @@ export const update = mutation({
     yearStart: v.number(),
     yearEnd: v.number(),
     isActive: v.boolean(),
+    fundingBudget: v.optional(v.number()),
+    baseFunding: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx)
@@ -111,6 +113,8 @@ export const update = mutation({
       yearStart: args.yearStart,
       yearEnd: args.yearEnd,
       isActive: args.isActive,
+      fundingBudget: args.fundingBudget,
+      baseFunding: args.baseFunding,
     })
 
     return { slug }

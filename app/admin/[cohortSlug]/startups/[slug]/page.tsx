@@ -61,12 +61,18 @@ export default function StartupDetailPage() {
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [inviteFullName, setInviteFullName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteExpiresInDays, setInviteExpiresInDays] = useState('')
   const [isInviting, setIsInviting] = useState(false)
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
 
   async function handleInvite() {
     if (!inviteFullName.trim() || !inviteEmail.trim() || !startup) return
+    const expiresInDays = Number.parseInt(inviteExpiresInDays, 10)
+    if (Number.isNaN(expiresInDays) || expiresInDays < 1 || expiresInDays > 30) {
+      toast.error('Expires In must be between 1 and 30 days')
+      return
+    }
 
     setIsInviting(true)
     try {
@@ -74,11 +80,13 @@ export default function StartupDetailPage() {
         startupId: startup._id,
         email: inviteEmail.trim(),
         fullName: inviteFullName.trim(),
+        expiresInDays,
       })
       toast.success('Invitation sent successfully')
       setShowInviteDialog(false)
       setInviteFullName('')
       setInviteEmail('')
+      setInviteExpiresInDays('')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to send invitation')
     } finally {
@@ -478,6 +486,20 @@ export default function StartupDetailPage() {
                 placeholder="jane@example.com"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-expires">Expires In (Days)</Label>
+              <Input
+                id="invite-expires"
+                type="number"
+                min={1}
+                max={30}
+                placeholder="14"
+                value={inviteExpiresInDays}
+                onFocus={(e) => e.currentTarget.select()}
+                onChange={(e) => setInviteExpiresInDays(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">1-30 days, default: 14</p>
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -486,6 +508,7 @@ export default function StartupDetailPage() {
                 setShowInviteDialog(false)
                 setInviteFullName('')
                 setInviteEmail('')
+                setInviteExpiresInDays('')
               }}
             >
               Cancel

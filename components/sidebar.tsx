@@ -237,7 +237,7 @@ function SidebarContent({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Brand */}
       <div className="flex items-center h-12 px-4 border-b border-sidebar-border">
         <div>
@@ -249,9 +249,7 @@ function SidebarContent({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 pt-3 overflow-y-auto">
-        {navItems.map(renderNavItem)}
-      </nav>
+      <nav className="flex-1 space-y-1 px-3 pt-3">{navItems.map(renderNavItem)}</nav>
 
       {/* Bottom section */}
       <div className="mt-auto">
@@ -343,7 +341,7 @@ export function Sidebar({
       </div>
 
       {/* Desktop sidebar */}
-      <aside className="hidden fixed left-0 top-0 z-30 h-screen w-56 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
+      <aside className="fixed left-0 top-0 z-30 hidden h-[100dvh] w-56 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar lg:flex">
         <SidebarContent
           title={title}
           subtitle={subtitle}

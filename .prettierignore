@@ -3,10 +3,11 @@ node_modules
 out
 build
 dist
+.claude
+convex/_generated
 *.lock
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
 .env*
 !.env.example
-

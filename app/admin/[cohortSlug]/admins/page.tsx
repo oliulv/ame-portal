@@ -37,14 +37,22 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Users, Mail, UserPlus, RotateCw, X, Trash2 } from 'lucide-react'
+import { Users, UserPlus, RotateCw, X, Trash2 } from 'lucide-react'
 
 const adminInvitationSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   invitedName: z.string().min(1, 'Name is required'),
-  expiresInDays: z.number().min(1).max(30).default(14),
+  expiresInDays: z.number().int().min(1).max(30),
+  role: z.enum(['admin', 'super_admin']),
 })
 
 type AdminInvitationFormData = z.infer<typeof adminInvitationSchema>
@@ -67,6 +75,9 @@ export default function AdminsPage() {
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [isRemoving, setIsRemoving] = useState(false)
 
+  // Fetch current user to determine role
+  const currentUser = useQuery(api.users.current)
+
   // Fetch cohort details to get cohort _id
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
 
@@ -85,12 +96,12 @@ export default function AdminsPage() {
   const revokeInvitation = useMutation(api.adminInvitations.revoke)
   const removeAdminFromCohort = useMutation(api.adminCohorts.remove)
 
-  const form = useForm({
+  const form = useForm<AdminInvitationFormData>({
     resolver: zodResolver(adminInvitationSchema),
     defaultValues: {
       email: '',
       invitedName: '',
-      expiresInDays: 14,
+      role: 'admin' as const,
     },
     mode: 'onChange',
   })
@@ -125,6 +136,7 @@ export default function AdminsPage() {
         invitedName: data.invitedName,
         cohortId: cohort._id,
         expiresInDays: data.expiresInDays,
+        role: data.role,
       })
       toast.success('Admin invitation created and email sent successfully')
       form.reset()
@@ -308,88 +320,113 @@ export default function AdminsPage() {
         <CardContent className="space-y-4">
           {/* Create Invitation Form */}
           {showCreateForm && (
-            <div className="space-y-4 p-4 border rounded-md bg-muted/50">
-              <div>
-                <h3 className="text-lg font-semibold">Create Admin Invitation</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  This invitation will be for <strong>{cohort.label}</strong>
-                </p>
-              </div>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email Address</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="admin@example.com" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        The email address of the person you want to invite as an admin.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="invitedName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Doe" {...field} />
+                      </FormControl>
+                      <FormDescription>Name to include in the invitation email.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {currentUser?.role === 'super_admin' && (
                   <FormField
                     control={form.control}
-                    name="email"
+                    name="role"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email Address</FormLabel>
-                        <FormControl>
-                          <Input type="email" placeholder="admin@example.com" {...field} />
-                        </FormControl>
+                        <FormLabel>Role</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="super_admin">Super Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormDescription>
-                          The email address of the person you want to invite as an admin.
+                          Super admins can manage other admins and appear in all cohorts.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                )}
 
-                  <FormField
-                    control={form.control}
-                    name="invitedName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="John Doe" {...field} />
-                        </FormControl>
-                        <FormDescription>Name to include in the invitation email.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <FormField
+                  control={form.control}
+                  name="expiresInDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Expires In (Days)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={30}
+                          placeholder="14"
+                          {...field}
+                          value={field.value ?? ''}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            field.onChange(value === '' ? undefined : Number.parseInt(value, 10))
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Number of days until the invitation expires (1-30 days, default: 14).
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                  <FormField
-                    control={form.control}
-                    name="expiresInDays"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Expires In (Days)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={30}
-                            {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value) || 14)}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Number of days until the invitation expires (1-30 days, default: 14).
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={isCreating}>
-                      {isCreating ? 'Creating...' : 'Create Invitation'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        form.reset()
-                        setShowCreateForm(false)
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </div>
+                <div className="flex gap-2">
+                  <Button type="submit" disabled={isCreating}>
+                    {isCreating ? 'Creating...' : 'Create Invitation'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      form.reset()
+                      setShowCreateForm(false)
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </Form>
           )}
 
           {/* Invitations Table */}
@@ -405,6 +442,7 @@ export default function AdminsPage() {
                   <TableRow>
                     <TableHead>Email</TableHead>
                     <TableHead>Name</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Expires</TableHead>
                     <TableHead>Created</TableHead>
@@ -420,6 +458,13 @@ export default function AdminsPage() {
                       <TableRow key={invitation._id}>
                         <TableCell className="font-medium">{invitation.email}</TableCell>
                         <TableCell>{invitation.invitedName || '-'}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={invitation.role === 'super_admin' ? 'destructive' : 'default'}
+                          >
+                            {invitation.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge
                             variant={
@@ -476,17 +521,7 @@ export default function AdminsPage() {
               </Table>
             </div>
           ) : (
-            <EmptyState
-              icon={<Mail className="h-6 w-6" />}
-              title="No admin invitations"
-              description="Create an invitation to invite a new admin to this cohort."
-              action={
-                <Button onClick={() => setShowCreateForm(true)}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Create First Invitation
-                </Button>
-              }
-            />
+            <p className="text-sm text-muted-foreground">No pending invitations.</p>
           )}
         </CardContent>
       </Card>
