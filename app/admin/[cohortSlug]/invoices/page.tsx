@@ -9,6 +9,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -17,28 +25,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { FileText, AlertCircle, ExternalLink, Users, Plus } from 'lucide-react'
-import { useMemo } from 'react'
-
-function getInvoiceStatusVariant(
-  status: string
-): 'success' | 'warning' | 'destructive' | 'info' | 'secondary' {
-  switch (status) {
-    case 'approved':
-      return 'success'
-    case 'rejected':
-      return 'destructive'
-    case 'paid':
-      return 'info'
-    default:
-      return 'warning'
-  }
-}
+import { FileText, AlertCircle, ExternalLink, Users, Plus, Search } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import {
+  getInvoiceStatusLabel,
+  getInvoiceStatusVariant,
+  matchesInvoiceStatusFilter,
+  type InvoiceStatus,
+  type InvoiceStatusFilter,
+} from '@/lib/invoice-status'
 
 export default function AdminInvoicesPage() {
   const params = useParams()
   const router = useRouter()
   const cohortSlug = params.cohortSlug as string
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all')
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
@@ -56,10 +58,27 @@ export default function AdminInvoicesPage() {
   }, [startups])
 
   // Filter invoices to only those belonging to startups in this cohort
-  const invoices = useMemo(() => {
+  const cohortInvoices = useMemo(() => {
     if (!allInvoices || !startups) return undefined
     return allInvoices.filter((invoice) => startupIdSet.has(invoice.startupId)).slice(0, 50)
   }, [allInvoices, startups, startupIdSet])
+
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+
+  const invoices = useMemo(() => {
+    if (!cohortInvoices) return undefined
+    return cohortInvoices.filter((invoice) => {
+      const status = invoice.status as InvoiceStatus
+      const startupName = startupNameMap.get(invoice.startupId) ?? ''
+      const matchesSearch =
+        normalizedQuery.length === 0 ||
+        invoice.vendorName.toLowerCase().includes(normalizedQuery) ||
+        (invoice.fileName || '').toLowerCase().includes(normalizedQuery) ||
+        startupName.toLowerCase().includes(normalizedQuery)
+      const matchesStatus = matchesInvoiceStatusFilter(status, statusFilter)
+      return matchesSearch && matchesStatus
+    })
+  }, [cohortInvoices, normalizedQuery, startupNameMap, statusFilter])
 
   const isLoading = cohort === undefined || startups === undefined || allInvoices === undefined
 
@@ -112,7 +131,8 @@ export default function AdminInvoicesPage() {
   }
 
   const pendingCount =
-    invoices?.filter((i) => i.status === 'submitted' || i.status === 'under_review').length || 0
+    cohortInvoices?.filter((i) => i.status === 'submitted' || i.status === 'under_review').length ||
+    0
 
   return (
     <div className="space-y-6">
@@ -139,9 +159,42 @@ export default function AdminInvoicesPage() {
         </Card>
       )}
 
+      {/* Search + Filter */}
+      <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search startup, vendor, or file"
+            className="pl-9"
+          />
+        </div>
+        <Select
+          value={statusFilter}
+          onValueChange={(value) => setStatusFilter(value as InvoiceStatusFilter)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All states</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="submitted">Submitted</SelectItem>
+            <SelectItem value="under_review">Under review</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Table */}
       {invoices && invoices.length > 0 ? (
         <Card>
+          <div className="px-4 pt-4 text-sm text-muted-foreground">
+            Showing {invoices.length} of {cohortInvoices?.length ?? 0} invoices
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -175,8 +228,8 @@ export default function AdminInvoicesPage() {
                     £{Number(invoice.amountGbp).toFixed(2)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getInvoiceStatusVariant(invoice.status)}>
-                      {invoice.status.replace('_', ' ')}
+                    <Badge variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}>
+                      {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -200,8 +253,14 @@ export default function AdminInvoicesPage() {
       ) : (
         <EmptyState
           icon={<FileText className="h-6 w-6" />}
-          title="No invoices yet"
-          description="Invoices submitted by startups in this cohort will appear here for review."
+          title={
+            (cohortInvoices?.length ?? 0) > 0 ? 'No invoices match your filters' : 'No invoices yet'
+          }
+          description={
+            (cohortInvoices?.length ?? 0) > 0
+              ? 'Try adjusting the search term or selected state.'
+              : 'Invoices submitted by startups in this cohort will appear here for review.'
+          }
         />
       )}
     </div>

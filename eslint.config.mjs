@@ -18,6 +18,7 @@ const eslintConfig = defineConfig([
     'node_modules/**',
     'public/**',
     'convex/_generated/**',
+    '.claude/**',
   ]),
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
