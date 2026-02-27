@@ -13,6 +13,7 @@ import type * as adminInvitations from "../adminInvitations.js";
 import type * as adminUsers from "../adminUsers.js";
 import type * as auth from "../auth.js";
 import type * as bankDetails from "../bankDetails.js";
+import type * as cohortEvents from "../cohortEvents.js";
 import type * as cohorts from "../cohorts.js";
 import type * as crons from "../crons.js";
 import type * as founderInvitations from "../founderInvitations.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   adminUsers: typeof adminUsers;
   auth: typeof auth;
   bankDetails: typeof bankDetails;
+  cohortEvents: typeof cohortEvents;
   cohorts: typeof cohorts;
   crons: typeof crons;
   founderInvitations: typeof founderInvitations;

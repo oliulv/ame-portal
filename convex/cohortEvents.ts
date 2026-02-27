@@ -114,9 +114,7 @@ export const listForFounder = query({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
       .collect()
 
-    return events
-      .filter((e) => e.isActive)
-      .sort((a, b) => a.date.localeCompare(b.date))
+    return events.filter((e) => e.isActive).sort((a, b) => a.date.localeCompare(b.date))
   },
 })
 
