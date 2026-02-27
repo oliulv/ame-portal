@@ -167,8 +167,11 @@ function IntegrationsPageInner() {
     }
   }
 
-  const trackerBaseUrl =
-    process.env.NEXT_PUBLIC_TRACKER_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || ''
+  const trackerBaseUrl = (
+    process.env.NEXT_PUBLIC_TRACKER_BASE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    ''
+  ).replace(/\/+$/, '')
 
   const getTrackerSnippet = (websiteId: string) => {
     const src = trackerBaseUrl ? `${trackerBaseUrl}/tracker.js` : 'https://YOUR_DOMAIN/tracker.js'
