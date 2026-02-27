@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -25,6 +26,7 @@ import { Send, RefreshCw, UserCircle } from 'lucide-react'
 const inviteSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   fullName: z.string().min(1, 'Full name is required'),
+  expiresInDays: z.number().min(1).max(30),
 })
 
 type InviteFormData = z.infer<typeof inviteSchema>
@@ -40,13 +42,17 @@ export function TeamTab() {
 
   const form = useForm<InviteFormData>({
     resolver: zodResolver(inviteSchema),
-    defaultValues: { email: '', fullName: '' },
+    defaultValues: { email: '', fullName: '', expiresInDays: 14 },
   })
 
   const handleInvite = async (data: InviteFormData) => {
     setIsSending(true)
     try {
-      await createInvitation({ email: data.email, fullName: data.fullName })
+      await createInvitation({
+        email: data.email,
+        fullName: data.fullName,
+        expiresInDays: data.expiresInDays,
+      })
       toast.success('Invitation sent successfully')
       form.reset()
     } catch (err) {
@@ -152,6 +158,26 @@ export function TeamTab() {
                   )}
                 />
               </div>
+              <FormField
+                control={form.control}
+                name="expiresInDays"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Expires In (Days)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={30}
+                        {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 14)}
+                      />
+                    </FormControl>
+                    <FormDescription>1-30 days, default: 14</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <div className="flex justify-end">
                 <Button type="submit" disabled={isSending}>
                   <Send className="mr-2 h-4 w-4" />

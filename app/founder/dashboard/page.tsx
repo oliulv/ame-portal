@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import Script from 'next/script'
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -16,9 +17,12 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from 'sonner'
+import type { Id } from '@/convex/_generated/dataModel'
 
 function extractLumaEventId(url: string): string | null {
   const match = url.match(/(evt-[a-zA-Z0-9]+)/)
@@ -31,6 +35,21 @@ export default function FounderDashboard() {
   const nextEvent = useQuery(api.cohortEvents.nextForFounder)
   const integrationStatus = useQuery(api.integrations.status)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
+  const withdrawMilestone = useMutation(api.milestones.withdraw)
+  const [withdrawingId, setWithdrawingId] = useState<Id<'milestones'> | null>(null)
+
+  async function handleWithdraw(id: Id<'milestones'>) {
+    setWithdrawingId(id)
+    try {
+      await withdrawMilestone({ id })
+      toast.success('Submission withdrawn — you can now re-submit')
+    } catch (error) {
+      console.error('Failed to withdraw milestone:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to withdraw milestone')
+    } finally {
+      setWithdrawingId(null)
+    }
+  }
 
   const isLoading = milestones === undefined || invoicesData === undefined
 
@@ -187,7 +206,14 @@ export default function FounderDashboard() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{m.title}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium truncate">{m.title}</p>
+                          {m.status === 'submitted' && (
+                            <Badge variant="warning" className="shrink-0 text-[10px] px-1.5 py-0">
+                              Pending Review
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {m.dueDate && (
                             <>
@@ -202,6 +228,26 @@ export default function FounderDashboard() {
                           {'\u00A3'}
                           {m.amount.toLocaleString('en-GB')}
                         </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {m.status === 'waiting' && (
+                          <Link href="/founder/funding">
+                            <Button size="sm" variant="outline" className="h-7 text-xs">
+                              Submit
+                            </Button>
+                          </Link>
+                        )}
+                        {m.status === 'submitted' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => handleWithdraw(m._id)}
+                            disabled={withdrawingId === m._id}
+                          >
+                            {withdrawingId === m._id ? 'Withdrawing...' : 'Withdraw'}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}

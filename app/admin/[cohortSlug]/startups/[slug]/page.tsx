@@ -61,6 +61,7 @@ export default function StartupDetailPage() {
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [inviteFullName, setInviteFullName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteExpiresInDays, setInviteExpiresInDays] = useState(14)
   const [isInviting, setIsInviting] = useState(false)
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
@@ -74,11 +75,13 @@ export default function StartupDetailPage() {
         startupId: startup._id,
         email: inviteEmail.trim(),
         fullName: inviteFullName.trim(),
+        expiresInDays: inviteExpiresInDays,
       })
       toast.success('Invitation sent successfully')
       setShowInviteDialog(false)
       setInviteFullName('')
       setInviteEmail('')
+      setInviteExpiresInDays(14)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to send invitation')
     } finally {
@@ -478,6 +481,18 @@ export default function StartupDetailPage() {
                 placeholder="jane@example.com"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="invite-expires">Expires In (Days)</Label>
+              <Input
+                id="invite-expires"
+                type="number"
+                min={1}
+                max={30}
+                value={inviteExpiresInDays}
+                onChange={(e) => setInviteExpiresInDays(parseInt(e.target.value) || 14)}
+              />
+              <p className="text-xs text-muted-foreground">1-30 days, default: 14</p>
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -486,6 +501,7 @@ export default function StartupDetailPage() {
                 setShowInviteDialog(false)
                 setInviteFullName('')
                 setInviteEmail('')
+                setInviteExpiresInDays(14)
               }}
             >
               Cancel

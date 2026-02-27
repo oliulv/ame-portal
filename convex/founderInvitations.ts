@@ -62,6 +62,7 @@ export const create = mutation({
   args: {
     email: v.string(),
     fullName: v.string(),
+    expiresInDays: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
@@ -87,8 +88,10 @@ export const create = mutation({
       throw new Error('A pending invitation already exists for this email')
     }
 
+    const expiresInDays = Math.min(args.expiresInDays ?? 14, 30)
+
     const token = generateToken()
-    const expiresAt = getExpiration(14)
+    const expiresAt = getExpiration(expiresInDays)
 
     const invitationId = await ctx.db.insert('invitations', {
       startupId,
@@ -106,6 +109,7 @@ export const create = mutation({
       founderName: args.fullName,
       startupName: startup?.name ?? 'Unknown Startup',
       inviteToken: token,
+      expirationDays: expiresInDays,
     })
 
     return invitationId

@@ -144,7 +144,7 @@ export default defineSchema({
   adminInvitations: defineTable({
     email: v.string(),
     token: v.string(),
-    role: v.literal('admin'),
+    role: v.union(v.literal('admin'), v.literal('super_admin')),
     invitedName: v.optional(v.string()),
     expiresAt: v.string(),
     acceptedAt: v.optional(v.string()),
