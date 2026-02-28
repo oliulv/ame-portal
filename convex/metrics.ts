@@ -118,12 +118,17 @@ export const timeSeries = query({
       metrics = metrics.filter((m) => m.timestamp <= args.endDate!)
     }
 
-    metrics.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    // Dedup: keep latest value per day (handles pre-existing duplicates)
+    const byDay = new Map<string, { timestamp: string; value: number }>()
+    for (const m of metrics) {
+      const day = m.timestamp.slice(0, 10)
+      const existing = byDay.get(day)
+      if (!existing || m.timestamp > existing.timestamp) {
+        byDay.set(day, { timestamp: m.timestamp, value: m.value })
+      }
+    }
 
-    return metrics.map((m) => ({
-      timestamp: m.timestamp,
-      value: m.value,
-    }))
+    return Array.from(byDay.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp))
   },
 })
 
