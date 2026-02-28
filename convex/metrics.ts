@@ -12,7 +12,7 @@ import { requireAuth } from './auth'
 import { logConvexError } from './lib/logging'
 
 /**
- * Store metric snapshots.
+ * Store metric snapshots (upserts by day to avoid duplicates).
  */
 export const store = mutation({
   args: {
@@ -30,7 +30,24 @@ export const store = mutation({
   },
   handler: async (ctx, args) => {
     for (const snapshot of args.snapshots) {
-      await ctx.db.insert('metricsData', snapshot)
+      const dayTs = snapshot.timestamp.slice(0, 10) + 'T00:00:00.000Z'
+
+      const existing = await ctx.db
+        .query('metricsData')
+        .withIndex('by_startupId_provider_metricKey', (q) =>
+          q
+            .eq('startupId', snapshot.startupId)
+            .eq('provider', snapshot.provider)
+            .eq('metricKey', snapshot.metricKey)
+        )
+        .filter((q) => q.eq(q.field('timestamp'), dayTs))
+        .first()
+
+      if (existing) {
+        await ctx.db.patch(existing._id, { value: snapshot.value, meta: snapshot.meta })
+      } else {
+        await ctx.db.insert('metricsData', { ...snapshot, timestamp: dayTs })
+      }
     }
   },
 })
@@ -272,6 +289,7 @@ export const getStripeConnection = internalQuery({
 
 /**
  * Internal mutation to store metrics (used by actions).
+ * Upserts by day to avoid duplicates.
  */
 export const storeInternal = internalMutation({
   args: {
@@ -288,7 +306,24 @@ export const storeInternal = internalMutation({
   },
   handler: async (ctx, args) => {
     for (const snapshot of args.snapshots) {
-      await ctx.db.insert('metricsData', snapshot)
+      const dayTs = snapshot.timestamp.slice(0, 10) + 'T00:00:00.000Z'
+
+      const existing = await ctx.db
+        .query('metricsData')
+        .withIndex('by_startupId_provider_metricKey', (q) =>
+          q
+            .eq('startupId', snapshot.startupId)
+            .eq('provider', snapshot.provider)
+            .eq('metricKey', snapshot.metricKey)
+        )
+        .filter((q) => q.eq(q.field('timestamp'), dayTs))
+        .first()
+
+      if (existing) {
+        await ctx.db.patch(existing._id, { value: snapshot.value })
+      } else {
+        await ctx.db.insert('metricsData', { ...snapshot, timestamp: dayTs })
+      }
     }
   },
 })
