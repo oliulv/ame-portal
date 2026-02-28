@@ -1,6 +1,6 @@
 import { query, mutation, action } from './functions'
 import { v } from 'convex/values'
-import { requireFounder, getFounderStartupIds } from './auth'
+import { requireFounder, requireAdmin, getFounderStartupIds } from './auth'
 import { api } from './_generated/api'
 
 /**
@@ -152,5 +152,39 @@ export const getFounderStartupId = query({
     const user = await requireFounder(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
     return startupIds[0] ?? null
+  },
+})
+
+/**
+ * Get integration connection status for a startup (admin-only).
+ */
+export const statusForAdmin = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const connections = await ctx.db
+      .query('integrationConnections')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+
+    const stripeConn = connections.find((c) => c.provider === 'stripe' && c.isActive)
+
+    const trackerWebsites = await ctx.db
+      .query('trackerWebsites')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+
+    return {
+      stripe: stripeConn
+        ? {
+            status: stripeConn.status,
+            accountName: stripeConn.accountName,
+            lastSyncedAt: stripeConn.lastSyncedAt,
+            syncError: stripeConn.syncError,
+          }
+        : null,
+      tracker: trackerWebsites.length > 0 ? { websiteCount: trackerWebsites.length } : null,
+    }
   },
 })

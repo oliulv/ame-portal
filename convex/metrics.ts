@@ -1,5 +1,12 @@
-import { query, mutation, internalAction, internalMutation, internalQuery } from './functions'
-import { internal } from './_generated/api'
+import {
+  query,
+  mutation,
+  action,
+  internalAction,
+  internalMutation,
+  internalQuery,
+} from './functions'
+import { api, internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAuth } from './auth'
 import { logConvexError } from './lib/logging'
@@ -100,6 +107,42 @@ export const timeSeries = query({
       timestamp: m.timestamp,
       value: m.value,
     }))
+  },
+})
+
+/**
+ * Manually sync metrics for a startup (admin-only).
+ * Triggers both Stripe and tracker metric fetches.
+ */
+export const syncMetricsForStartup = action({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(api.users.current)
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
+      throw new Error('Admin access required')
+    }
+
+    const errors: string[] = []
+
+    try {
+      await ctx.runAction(internal.metrics.fetchStripeMetrics, {
+        startupId: args.startupId,
+      })
+    } catch (error) {
+      errors.push(`Stripe: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+
+    try {
+      await ctx.runAction(internal.metrics.fetchTrackerMetrics_cron, {
+        startupId: args.startupId,
+      })
+    } catch (error) {
+      errors.push(`Tracker: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`Sync completed with errors: ${errors.join('; ')}`)
+    }
   },
 })
 
