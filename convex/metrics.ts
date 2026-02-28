@@ -147,6 +147,30 @@ export const syncMetricsForStartup = action({
 })
 
 /**
+ * Auto-paginate a Stripe list endpoint, following `has_more` cursors.
+ */
+async function paginateStripe<T extends { id: string }>(
+  listFn: (params: {
+    limit: number
+    starting_after?: string
+  }) => Promise<{ data: T[]; has_more: boolean }>
+): Promise<T[]> {
+  const all: T[] = []
+  let startingAfter: string | undefined
+  let hasMore = true
+  while (hasMore) {
+    const page = await listFn({
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    })
+    all.push(...page.data)
+    hasMore = page.has_more
+    if (page.data.length > 0) startingAfter = page.data[page.data.length - 1].id
+  }
+  return all
+}
+
+/**
  * Fetch and store Stripe metrics for a startup (action).
  */
 export const fetchStripeMetrics = internalAction({
@@ -165,35 +189,34 @@ export const fetchStripeMetrics = internalAction({
     })
 
     const now = new Date()
-    const thirtyDaysAgo = Math.floor((now.getTime() - 30 * 24 * 60 * 60 * 1000) / 1000)
 
-    const charges = await stripe.charges.list({
-      created: { gte: thirtyDaysAgo },
-      limit: 100,
-    })
-
+    // Revenue: all-time charges, net of refunds
+    const allCharges = await paginateStripe((p) => stripe.charges.list(p))
+    const succeededCharges = allCharges.filter((c) => c.status === 'succeeded')
     const totalRevenue =
-      charges.data
-        .filter((c) => c.status === 'succeeded')
-        .reduce((sum, c) => sum + (c.amount || 0), 0) / 100
+      succeededCharges.reduce((sum, c) => sum + ((c.amount || 0) - (c.amount_refunded || 0)), 0) /
+      100
 
+    // Active customers: unique customers from last 90 days
+    const ninetyDaysAgo = Math.floor((now.getTime() - 90 * 24 * 60 * 60 * 1000) / 1000)
+    const recentCharges = succeededCharges.filter((c) => c.created >= ninetyDaysAgo)
     const uniqueCustomers = new Set(
-      charges.data.map((c) => c.customer).filter((c): c is string => Boolean(c))
+      recentCharges.map((c) => c.customer).filter((c): c is string => Boolean(c))
     ).size
 
+    // MRR: all active subscriptions, all line items, multiply by quantity
+    const allSubs = await paginateStripe((p) =>
+      stripe.subscriptions.list({ ...p, status: 'active' })
+    )
     let mrr = 0
-    const subscriptions = await stripe.subscriptions.list({
-      limit: 100,
-      status: 'active',
-    })
-
-    for (const sub of subscriptions.data) {
-      if (sub.items.data.length > 0) {
-        const price = sub.items.data[0].price
+    for (const sub of allSubs) {
+      for (const item of sub.items.data) {
+        const price = item.price
+        const quantity = item.quantity ?? 1
         if (price?.recurring?.interval === 'month') {
-          mrr += (price.unit_amount || 0) / 100
+          mrr += ((price.unit_amount || 0) * quantity) / 100
         } else if (price?.recurring?.interval === 'year') {
-          mrr += (price.unit_amount || 0) / 100 / 12
+          mrr += ((price.unit_amount || 0) * quantity) / 100 / 12
         }
       }
     }
