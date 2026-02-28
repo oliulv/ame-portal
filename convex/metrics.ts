@@ -561,3 +561,68 @@ export const getTrackerEventsForWebsites = internalQuery({
     return allEvents
   },
 })
+
+// ── One-time cleanup ─────────────────────────────────────────────────
+
+/**
+ * Get all metricsData rows (internal, for cleanup).
+ */
+export const getAllMetricsData = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query('metricsData').collect()
+  },
+})
+
+/**
+ * Delete specific metricsData rows by ID (internal, for cleanup).
+ */
+export const deleteMetricsRows = internalMutation({
+  args: { ids: v.array(v.id('metricsData')) },
+  handler: async (ctx, args) => {
+    for (const id of args.ids) {
+      await ctx.db.delete(id)
+    }
+  },
+})
+
+/**
+ * One-time cleanup: remove duplicate metric snapshots.
+ * Groups by (startupId, provider, metricKey, day), keeps latest per group.
+ * Run from the Convex dashboard after deploy.
+ */
+export const cleanupDuplicateSnapshots = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const allRows: any[] = await ctx.runQuery(internal.metrics.getAllMetricsData)
+
+    // Group by (startupId, provider, metricKey, day)
+    const groups = new Map<string, Array<{ _id: any; timestamp: string }>>()
+    for (const row of allRows) {
+      const day = row.timestamp.slice(0, 10)
+      const key = `${row.startupId}|${row.provider}|${row.metricKey}|${day}`
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push({ _id: row._id, timestamp: row.timestamp })
+    }
+
+    // Find IDs to delete (all but latest per group)
+    const toDelete: any[] = []
+    for (const rows of groups.values()) {
+      if (rows.length <= 1) continue
+      rows.sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+      // Keep first (latest), delete rest
+      for (let i = 1; i < rows.length; i++) {
+        toDelete.push(rows[i]._id)
+      }
+    }
+
+    if (toDelete.length === 0) return
+
+    // Delete in batches (Convex mutations have limits)
+    const batchSize = 500
+    for (let i = 0; i < toDelete.length; i += batchSize) {
+      const batch = toDelete.slice(i, i + batchSize)
+      await ctx.runMutation(internal.metrics.deleteMetricsRows, { ids: batch })
+    }
+  },
+})
