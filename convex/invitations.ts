@@ -230,13 +230,17 @@ export const sendEmail = internalAction({
     expirationDays: v.optional(v.number()),
   },
   handler: async (_ctx, args) => {
+    const fromEmail = process.env.FROM_EMAIL
+    const appUrl = process.env.APP_URL
+    if (!fromEmail) throw new Error('FROM_EMAIL environment variable is not set')
+    if (!appUrl) throw new Error('APP_URL environment variable is not set')
+
     const { Resend } = await import('resend')
     const resend = new Resend(process.env.RESEND_API_KEY)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const inviteUrl = `${appUrl}/invite/${encodeURIComponent(args.inviteToken)}`
 
-    await resend.emails.send({
-      from: 'Accelerate ME <onboarding@resend.dev>',
+    const { error } = await resend.emails.send({
+      from: fromEmail,
       to: args.to,
       subject: `You're invited to join ${args.startupName} on Accelerate ME`,
       html: generateInvitationHtml({
@@ -246,6 +250,10 @@ export const sendEmail = internalAction({
         expirationDays: args.expirationDays ?? 14,
       }),
     })
+
+    if (error) {
+      throw new Error(`Failed to send invitation email to ${args.to}: ${error.message}`)
+    }
   },
 })
 

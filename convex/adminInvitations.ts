@@ -199,15 +199,19 @@ export const sendEmail = internalAction({
     expirationDays: v.number(),
   },
   handler: async (_ctx, args) => {
+    const fromEmail = process.env.FROM_EMAIL
+    const appUrl = process.env.APP_URL
+    if (!fromEmail) throw new Error('FROM_EMAIL environment variable is not set')
+    if (!appUrl) throw new Error('APP_URL environment variable is not set')
+
     const { Resend } = await import('resend')
     const resend = new Resend(process.env.RESEND_API_KEY)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const inviteUrl = `${appUrl}/admin-invite/${encodeURIComponent(args.inviteToken)}`
 
     const name = args.invitedName || 'there'
 
-    await resend.emails.send({
-      from: 'Accelerate ME <onboarding@resend.dev>',
+    const { error } = await resend.emails.send({
+      from: fromEmail,
       to: args.to,
       subject: 'You have been invited as an admin on Accelerate ME',
       html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
@@ -225,5 +229,9 @@ export const sendEmail = internalAction({
 <p style="margin:0;color:#92400e;font-size:14px"><strong>This invitation expires in ${args.expirationDays} days.</strong></p></div>
 </div></body></html>`,
     })
+
+    if (error) {
+      throw new Error(`Failed to send admin invitation email to ${args.to}: ${error.message}`)
+    }
   },
 })
