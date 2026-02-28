@@ -213,7 +213,7 @@ export default function AdminStartupAnalyticsPage() {
 
           <MetricChart
             title="Total Revenue"
-            description="Cumulative revenue over time"
+            description="All-time revenue (net of refunds)"
             data={revenue ?? []}
             formatValue={(v) =>
               `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
