@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useAuth } from '@clerk/nextjs'
+import { useAuth, useUser, useClerk } from '@clerk/nextjs'
 import { SignUp } from '@clerk/nextjs'
-import { useMutation } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -13,7 +13,8 @@ export default function AdminInvitePage() {
   const params = useParams<{ token: string }>()
   const router = useRouter()
   const { userId, isLoaded } = useAuth()
-  const acceptAdminInvite = useMutation(api.adminInvitations.accept)
+  const { user: clerkUser } = useUser()
+  const { signOut } = useClerk()
 
   const rawToken = params.token ?? ''
   let token = rawToken.trim()
@@ -23,20 +24,34 @@ export default function AdminInvitePage() {
     // If decoding fails, use trimmed token
   }
 
+  const invitation = useQuery(api.adminInvitations.getByToken, { token })
+  const acceptAdminInvite = useMutation(api.adminInvitations.accept)
+
   const [status, setStatus] = useState<'idle' | 'accepting' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [emailMismatch, setEmailMismatch] = useState(false)
 
-  // Auto-accept when user is authenticated
+  // Auto-accept when user is authenticated and invitation is valid
   useEffect(() => {
     if (!isLoaded || !userId) return
+    if (invitation === undefined) return // still loading
+    if (!invitation) return // invalid
+    if (invitation.acceptedAt) return // already accepted
+    if (new Date(invitation.expiresAt) < new Date()) return // expired
     if (status !== 'idle') return
+
+    // Check if logged-in user's email matches the invitation email
+    const currentEmail = clerkUser?.primaryEmailAddress?.emailAddress
+    if (currentEmail && invitation.email && currentEmail.toLowerCase() !== invitation.email.toLowerCase()) {
+      setEmailMismatch(true)
+      return
+    }
 
     const doAccept = async () => {
       setStatus('accepting')
       try {
         await acceptAdminInvite({ token, clerkId: userId })
         setStatus('success')
-        // Redirect to admin dashboard
         router.push('/admin')
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to accept invitation'
@@ -45,40 +60,125 @@ export default function AdminInvitePage() {
       }
     }
     doAccept()
-  }, [isLoaded, userId, token, acceptAdminInvite, status, router])
+  }, [isLoaded, userId, clerkUser, invitation, token, acceptAdminInvite, status, router])
 
-  // Show accepting state when authenticated
+  // Loading state
+  if (invitation === undefined) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-sm text-muted-foreground">Loading invitation...</div>
+      </div>
+    )
+  }
+
+  // Invalid invitation
+  if (!invitation) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle>Invalid Admin Invitation</CardTitle>
+            <CardDescription>
+              This admin invitation link is invalid or has expired. Please contact a system
+              administrator if you believe this is a mistake.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/login" className="text-sm text-primary hover:underline">
+              Go to login
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Already accepted
+  if (invitation.acceptedAt) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle>Admin Invitation Already Accepted</CardTitle>
+            <CardDescription>
+              This admin invitation has already been accepted. You can sign in with your account to
+              access the admin portal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/login" className="text-sm text-primary hover:underline">
+              Go to login
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Expired
+  if (new Date(invitation.expiresAt) < new Date()) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle>Admin Invitation Expired</CardTitle>
+            <CardDescription>
+              This admin invitation link has expired. Please ask a super admin to send you a new
+              invitation.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/login" className="text-sm text-primary hover:underline">
+              Go to login
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Email mismatch - logged-in user is not the invited admin
+  if (userId && emailMismatch && invitation) {
+    const currentEmail = clerkUser?.primaryEmailAddress?.emailAddress
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle>Wrong Account</CardTitle>
+            <CardDescription>
+              This invitation was sent to{' '}
+              <strong className="text-foreground">{invitation.email}</strong>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              You are currently signed in as{' '}
+              <strong className="text-foreground">{currentEmail}</strong>. Please sign out and create
+              a new account with the invited email address.
+            </p>
+            <button
+              onClick={() => signOut({ redirectUrl: `/admin-invite/${encodeURIComponent(token)}` })}
+              className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium shadow hover:bg-primary/90"
+            >
+              Sign Out
+            </button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Show accepting/error state when authenticated
   if (isLoaded && userId) {
     if (status === 'error') {
-      // Map common error messages to user-friendly displays
-      let title = 'Error Accepting Invitation'
-      let description = errorMessage || 'An unexpected error occurred.'
-
-      if (errorMessage?.includes('not found') || errorMessage?.includes('Invitation not found')) {
-        title = 'Invalid Admin Invitation'
-        description =
-          'This admin invitation link is invalid or has expired. Please contact a system administrator if you believe this is a mistake.'
-      } else if (errorMessage?.includes('Already accepted')) {
-        title = 'Admin Invitation Already Accepted'
-        description =
-          'This admin invitation has already been accepted. You can sign in with your account to access the admin portal.'
-      } else if (
-        errorMessage?.includes('expired') ||
-        errorMessage?.includes('Invitation expired')
-      ) {
-        title = 'Admin Invitation Expired'
-        description =
-          'This admin invitation link has expired. Please ask a super admin to send you a new invitation.'
-      }
-
       return (
         <div className="flex min-h-screen items-center justify-center bg-background px-4">
           <Card className="max-w-md w-full">
             <CardHeader>
-              <CardTitle>{title}</CardTitle>
-              <CardDescription>{description}</CardDescription>
+              <CardTitle>Error Accepting Invitation</CardTitle>
+              <CardDescription>{errorMessage || 'An unexpected error occurred.'}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               <Link href="/login" className="text-sm text-primary hover:underline">
                 Go to login
               </Link>
@@ -96,26 +196,77 @@ export default function AdminInvitePage() {
   }
 
   // Show sign-up form for unauthenticated users
+  const invitedName = invitation.invitedName || ''
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Accept Admin Invitation</CardTitle>
-            <CardDescription>
-              You have been invited to join the Accelerate ME internal tool as an admin.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Create an account or sign in with Clerk to accept this invitation. After you sign up,
-              you will be redirected back here to complete the process.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="w-full max-w-md">
         <SignUp
+          routing="hash"
           afterSignUpUrl={`/admin-invite/${encodeURIComponent(token)}`}
           forceRedirectUrl={`/admin-invite/${encodeURIComponent(token)}`}
+          initialValues={{
+            emailAddress: invitation.email,
+            firstName: invitedName.split(' ')[0] || '',
+            lastName: invitedName.split(' ').slice(1).join(' ') || '',
+          }}
+          appearance={{
+            elements: {
+              rootBox: 'mx-auto w-full',
+              card: 'bg-card text-card-foreground rounded-lg border border-border shadow-sm p-0',
+              cardBox: 'bg-card text-card-foreground rounded-lg border border-border shadow-sm',
+              headerTitle: 'text-foreground font-semibold leading-none tracking-tight text-xl',
+              headerSubtitle: 'text-muted-foreground text-sm',
+              headerTitleContainer: 'mb-4',
+              formFieldInput:
+                'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+              formFieldLabel: 'text-foreground text-sm font-medium leading-none',
+              formFieldInputShowPasswordButton: 'text-muted-foreground hover:text-foreground',
+              formFieldInputGroup: 'space-y-2',
+              formButtonPrimary:
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full',
+              formButtonReset:
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+              socialButtonsBlockButton:
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full border border-input',
+              socialButtonsBlockButtonText: 'text-sm font-medium',
+              socialButtonsBlockButtonArrow: 'hidden',
+              dividerLine: 'bg-border',
+              dividerText: 'text-muted-foreground text-sm',
+              footerActionLink: 'hidden',
+              footerAction: 'hidden',
+              footer: 'hidden',
+              footerPages: 'hidden',
+              identityPreviewText: 'text-foreground text-sm',
+              identityPreviewEditButton:
+                'text-primary hover:text-primary/80 text-sm underline-offset-4 hover:underline',
+              otpCodeFieldInput:
+                'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+              formResendCodeLink:
+                'text-primary hover:text-primary/80 text-sm underline-offset-4 hover:underline',
+              alertText: 'text-foreground text-sm',
+              formFieldErrorText: 'text-destructive text-sm',
+              formFieldSuccessText: 'text-muted-foreground text-sm',
+              formFieldWarningText: 'text-muted-foreground text-sm',
+              form: 'space-y-4',
+              formField: 'space-y-2',
+              logoImage: 'hidden',
+              logoBox: 'hidden',
+            },
+            variables: {
+              colorPrimary: 'hsl(221.2 83.2% 53.3%)',
+              colorBackground: 'hsl(0 0% 100%)',
+              colorInputBackground: 'transparent',
+              colorInputText: 'hsl(222.2 84% 4.9%)',
+              colorText: 'hsl(222.2 84% 4.9%)',
+              colorTextSecondary: 'hsl(215.4 16.3% 46.9%)',
+              colorDanger: 'hsl(0 84.2% 60.2%)',
+              colorSuccess: 'hsl(160 84.1% 39.4%)',
+              borderRadius: '0.5rem',
+              fontFamily: 'inherit',
+              fontSize: '0.875rem',
+            },
+          }}
         />
       </div>
     </div>
