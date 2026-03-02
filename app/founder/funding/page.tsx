@@ -291,6 +291,9 @@ export default function FounderFundingPage() {
                         {milestone.status === 'submitted' && (
                           <Badge variant="warning">Pending Review</Badge>
                         )}
+                        {milestone.status === 'waiting' && (
+                          <Badge variant="secondary">Waiting</Badge>
+                        )}
                       </div>
                       <p className="mt-0.5 text-sm text-muted-foreground">
                         {milestone.description}

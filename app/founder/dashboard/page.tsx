@@ -245,6 +245,11 @@ export default function FounderDashboard() {
                               Pending Review
                             </Badge>
                           )}
+                          {m.status === 'waiting' && (
+                            <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0">
+                              Waiting
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {m.dueDate && (
