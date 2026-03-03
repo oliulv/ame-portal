@@ -22,6 +22,7 @@
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-border: hsl(var(--border));
+  --color-border-strong: hsl(var(--border-strong));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
 
@@ -39,8 +40,10 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-muted: hsl(var(--sidebar-muted));
 
+  --font-sans:
+    var(--font-work-sans, 'Work Sans'), system-ui, -apple-system, sans-serif;
   --font-display:
-    var(--font-instrument-serif, 'Instrument Serif'), Georgia, 'Times New Roman', serif;
+    var(--font-source-serif, 'Source Serif 4'), Georgia, 'Times New Roman', serif;
   --radius-lg: 0px;
   --radius-md: 0px;
   --radius-sm: 0px;
@@ -64,19 +67,20 @@
   --accent-foreground: 153 30% 12%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 98%;
-  --border: 140 10% 87%;
-  --input: 140 10% 84%;
-  --ring: 153 35% 25%;
+  --border: 152 18% 80%;
+  --border-strong: 152 35% 15%;
+  --input: 152 16% 75%;
+  --ring: 152 25% 30%;
   --radius: 0px;
 
   /* Sidebar — deep dark forest green */
   --sidebar-bg: 152 40% 7%;
-  --sidebar-fg: 150 10% 60%;
+  --sidebar-fg: 150 12% 72%;
   --sidebar-active-bg: 152 35% 13%;
   --sidebar-active-fg: 140 20% 95%;
   --sidebar-hover-bg: 152 30% 11%;
-  --sidebar-border: 152 25% 15%;
-  --sidebar-muted: 150 10% 42%;
+  --sidebar-border: 152 20% 22%;
+  --sidebar-muted: 150 10% 55%;
 
   /* Chart colors — green-anchored palette */
   --chart-1: 153 50% 35%;
@@ -104,6 +108,7 @@
   --destructive: 0 63% 31%;
   --destructive-foreground: 0 0% 98%;
   --border: 152 18% 16%;
+  --border-strong: 152 25% 30%;
   --input: 152 18% 16%;
   --ring: 150 30% 40%;
   --chart-1: 153 45% 45%;
@@ -111,6 +116,13 @@
   --chart-3: 83 50% 55%;
   --chart-4: 340 60% 55%;
   --chart-5: 43 75% 58%;
+}
+
+/* Default border color — prevents TW `border` from using currentColor (black) */
+*,
+::before,
+::after {
+  border-color: hsl(var(--border));
 }
 
 html,
@@ -121,6 +133,7 @@ body {
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  font-family: var(--font-sans);
   font-feature-settings:
     'rlig' 1,
     'calt' 1;
@@ -192,4 +205,24 @@ body {
 /* Keep avatar circular */
 .cl-avatarBox {
   border-radius: 9999px !important;
+}
+
+/* Sidebar cohort selector — override Radix/TW defaults */
+[data-sidebar-select]:focus,
+[data-sidebar-select][data-state='open'] {
+  outline: none !important;
+  box-shadow: none !important;
+  ring: none !important;
+  border-color: hsl(152, 20%, 30%) !important;
+}
+
+[data-sidebar-select-item] {
+  color: hsl(150, 12%, 72%) !important;
+}
+
+[data-sidebar-select-item]:focus,
+[data-sidebar-select-item]:hover,
+[data-sidebar-select-item][data-highlighted] {
+  background-color: hsl(152, 25%, 16%) !important;
+  color: hsl(140, 20%, 95%) !important;
 }

@@ -267,17 +267,33 @@ function SidebarContent({
               <div className="h-9 bg-sidebar-active animate-pulse" />
             ) : (
               <Select value={currentCohortSlug || ''} onValueChange={handleCohortChange}>
-                <SelectTrigger className="w-full border-sidebar-border bg-sidebar-active text-sidebar-active-foreground text-sm h-9 focus:ring-0 focus:ring-offset-0">
+                <SelectTrigger
+                  data-sidebar-select
+                  className="w-full text-sm h-9"
+                  style={{
+                    borderColor: 'hsl(152, 20%, 22%)',
+                    backgroundColor: 'hsl(152, 35%, 13%)',
+                    color: 'hsl(140, 20%, 95%)',
+                    outline: 'none',
+                    boxShadow: 'none',
+                  }}
+                >
                   <SelectValue placeholder="Select cohort">
                     {selectedCohort ? selectedCohort.label : 'Select cohort'}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent className="border-sidebar-border bg-[hsl(152,30%,11%)]">
+                <SelectContent
+                  data-sidebar-select
+                  style={{
+                    backgroundColor: 'hsl(152, 30%, 11%)',
+                    borderColor: 'hsl(152, 20%, 22%)',
+                  }}
+                >
                   {cohorts.map((cohort) => (
                     <SelectItem
                       key={cohort._id}
                       value={cohort.slug}
-                      className="text-[hsl(140,15%,90%)] focus:bg-[hsl(152,25%,16%)] focus:text-white"
+                      data-sidebar-select-item
                     >
                       {cohort.label} ({cohort.yearStart} - {cohort.yearEnd})
                     </SelectItem>

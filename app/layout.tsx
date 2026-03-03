@@ -1,13 +1,14 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google'
+import { Geist_Mono, Source_Serif_4, Work_Sans } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { ConvexClientProvider } from '@/components/providers/ConvexClientProvider'
 import { AnalyticsProvider } from '@/components/providers/AnalyticsProvider'
 import './globals.css'
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const workSans = Work_Sans({
+  variable: '--font-work-sans',
   subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
 })
 
 const geistMono = Geist_Mono({
@@ -15,10 +16,10 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 })
 
-const instrumentSerif = Instrument_Serif({
-  variable: '--font-instrument-serif',
+const sourceSerif = Source_Serif_4({
+  variable: '--font-source-serif',
   subsets: ['latin'],
-  weight: '400',
+  weight: ['400', '600', '700'],
   style: ['normal', 'italic'],
 })
 
@@ -37,7 +38,7 @@ export default function RootLayout({
       <ConvexClientProvider>
         <html lang="en">
           <body
-            className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} antialiased`}
+            className={`${workSans.variable} ${geistMono.variable} ${sourceSerif.variable} antialiased`}
           >
             {children}
             <AnalyticsProvider />

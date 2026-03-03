@@ -492,8 +492,8 @@ export default function AdminsPage() {
                               status === 'accepted'
                                 ? 'success'
                                 : status === 'expired'
-                                  ? 'secondary'
-                                  : 'default'
+                                  ? 'warning'
+                                  : 'info'
                             }
                           >
                             {status === 'accepted'
