@@ -193,15 +193,6 @@ export default function AdminsPage() {
     }
   }
 
-  function getInvitationStatus(invitation: {
-    acceptedAt?: string
-    expiresAt: string
-  }): 'pending' | 'accepted' | 'expired' {
-    if (invitation.acceptedAt) return 'accepted'
-    if (new Date(invitation.expiresAt) < new Date()) return 'expired'
-    return 'pending'
-  }
-
   // Convex useQuery returns undefined while loading, null if not found
   if (cohort === undefined) {
     return (
@@ -450,13 +441,13 @@ export default function AdminsPage() {
             </Form>
           )}
 
-          {/* Invitations Table */}
+          {/* Invitations Table (only pending/expired, not accepted) */}
           {invitations === undefined ? (
             <div className="space-y-2">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : invitations && invitations.length > 0 ? (
+          ) : invitations && invitations.filter((inv) => !inv.acceptedAt).length > 0 ? (
             <div className="border ">
               <Table>
                 <TableHeader>
@@ -464,89 +455,75 @@ export default function AdminsPage() {
                     <TableHead>Email</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead>Expires</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invitations.map((invitation) => {
-                    const status = getInvitationStatus(invitation)
-                    const isPending = status === 'pending'
+                  {invitations
+                    .filter((inv) => !inv.acceptedAt)
+                    .map((invitation) => {
+                      const isExpired = new Date(invitation.expiresAt) < new Date()
+                      const isPending = !isExpired
 
-                    return (
-                      <TableRow key={invitation._id}>
-                        <TableCell className="font-medium">{invitation.email}</TableCell>
-                        <TableCell>{invitation.invitedName || '-'}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={invitation.role === 'super_admin' ? 'destructive' : 'default'}
-                          >
-                            {invitation.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              status === 'accepted'
-                                ? 'success'
-                                : status === 'expired'
-                                  ? 'warning'
-                                  : 'info'
-                            }
-                          >
-                            {status === 'accepted'
-                              ? 'Accepted'
-                              : status === 'expired'
-                                ? 'Expired'
-                                : 'Pending'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(invitation.expiresAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(invitation._creationTime).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {isPending && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleResend(invitation._id)}
-                                  disabled={resendingId === invitation._id}
-                                >
-                                  <RotateCw className="mr-1 h-3 w-3" />
-                                  Resend
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleRevoke(invitation._id)}
-                                  disabled={revokingId === invitation._id}
-                                >
-                                  <X className="mr-1 h-3 w-3" />
-                                  Revoke
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setInvitationToDelete(invitation)}
-                              disabled={isDeletingInvitation}
+                      return (
+                        <TableRow key={invitation._id}>
+                          <TableCell className="font-medium">{invitation.email}</TableCell>
+                          <TableCell>{invitation.invitedName || '-'}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                invitation.role === 'super_admin' ? 'destructive' : 'default'
+                              }
                             >
-                              <Trash2 className="mr-1 h-3 w-3" />
-                              Delete
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
+                              {invitation.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(invitation.expiresAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(invitation._creationTime).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              {isPending && (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleResend(invitation._id)}
+                                    disabled={resendingId === invitation._id}
+                                  >
+                                    <RotateCw className="mr-1 h-3 w-3" />
+                                    Resend
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleRevoke(invitation._id)}
+                                    disabled={revokingId === invitation._id}
+                                  >
+                                    <X className="mr-1 h-3 w-3" />
+                                    Revoke
+                                  </Button>
+                                </>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setInvitationToDelete(invitation)}
+                                disabled={isDeletingInvitation}
+                              >
+                                <Trash2 className="mr-1 h-3 w-3" />
+                                Delete
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                 </TableBody>
               </Table>
             </div>
