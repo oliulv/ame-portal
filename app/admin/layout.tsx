@@ -25,7 +25,10 @@ function AdminHeader({ userRole }: { userRole: string }) {
   const adminsHref = cohortSlug ? `/admin/${cohortSlug}/admins` : '#'
 
   return (
-    <header className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b border-border-strong bg-background px-6 lg:flex">
+    <header
+      className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b bg-background px-6 lg:flex"
+      style={{ borderBottomColor: 'hsl(var(--border-strong))' }}
+    >
       {userRole === 'super_admin' && (
         <Link
           href={adminsHref}

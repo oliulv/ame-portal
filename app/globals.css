@@ -41,7 +41,7 @@
   --color-sidebar-muted: hsl(var(--sidebar-muted));
 
   --font-sans:
-    var(--font-work-sans, 'Work Sans'), system-ui, -apple-system, sans-serif;
+    var(--font-geist-sans, 'Geist'), system-ui, -apple-system, sans-serif;
   --font-display:
     var(--font-source-serif, 'Source Serif 4'), Georgia, 'Times New Roman', serif;
   --radius-lg: 0px;

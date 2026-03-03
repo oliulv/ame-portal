@@ -13,7 +13,10 @@ function FounderHeader() {
   const pathname = usePathname()
 
   return (
-    <header className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b border-border-strong bg-background px-6 lg:flex">
+    <header
+      className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b bg-background px-6 lg:flex"
+      style={{ borderBottomColor: 'hsl(var(--border-strong))' }}
+    >
       <Link
         href="/founder/settings"
         className={cn(
