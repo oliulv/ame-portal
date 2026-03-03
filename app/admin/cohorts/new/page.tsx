@@ -79,9 +79,7 @@ export default function NewCohortPage() {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
+            <div className="mb-4  bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
           )}
 
           <Form {...form}>
@@ -160,7 +158,7 @@ export default function NewCohortPage() {
                 control={form.control}
                 name="is_active"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <FormItem className="flex flex-row items-center justify-between  border p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Active Status</FormLabel>
                       <FormDescription>Active cohorts are displayed in the system</FormDescription>

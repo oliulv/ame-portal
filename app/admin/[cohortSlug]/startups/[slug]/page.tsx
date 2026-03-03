@@ -161,7 +161,7 @@ export default function StartupDetailPage() {
   if (startup === null || cohort === null) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <h1 className="text-2xl font-bold">Startup not found</h1>
+        <h1 className="text-2xl font-bold font-display">Startup not found</h1>
         <p className="mt-2 text-muted-foreground">
           The startup you are looking for does not exist or does not belong to this cohort.
         </p>
@@ -193,7 +193,7 @@ export default function StartupDetailPage() {
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{startup.name}</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-display">{startup.name}</h1>
             <p className="text-muted-foreground">{cohort?.label || 'No cohort'}</p>
           </div>
           <div className="flex gap-2">
@@ -225,7 +225,7 @@ export default function StartupDetailPage() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold font-display">
               {'\u00A3'}
               {potential.toLocaleString('en-GB')}
             </div>
@@ -238,7 +238,7 @@ export default function StartupDetailPage() {
             <Target className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold font-display text-green-600">
               {'\u00A3'}
               {unlocked.toLocaleString('en-GB')}
             </div>
@@ -251,7 +251,7 @@ export default function StartupDetailPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold font-display">
               {invitations?.filter((i) => i.acceptedAt).length || 0}
             </div>
           </CardContent>
@@ -263,7 +263,7 @@ export default function StartupDetailPage() {
             <Mail className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{invitations?.length || 0}</div>
+            <div className="text-2xl font-bold font-display">{invitations?.length || 0}</div>
           </CardContent>
         </Card>
       </div>
@@ -414,10 +414,7 @@ export default function StartupDetailPage() {
             <>
               <div className="space-y-2">
                 {[...milestones].reverse().map((milestone) => (
-                  <div
-                    key={milestone._id}
-                    className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
-                  >
+                  <div key={milestone._id} className="flex items-center gap-3  border px-3 py-2.5">
                     <div className="flex-shrink-0">
                       {milestone.status === 'approved' ? (
                         <CheckCircle className="h-4 w-4 text-green-600" />
@@ -460,15 +457,13 @@ export default function StartupDetailPage() {
           ) : (
             <>
               <div className="space-y-2">
-                <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                <div className="flex items-center gap-3  border px-3 py-2.5">
                   <div className="flex-shrink-0">
                     <CheckCircle className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">No milestones</p>
-                    <p className="text-xs text-muted-foreground">
-                      No milestones assigned yet.
-                    </p>
+                    <p className="text-xs text-muted-foreground">No milestones assigned yet.</p>
                   </div>
                 </div>
               </div>

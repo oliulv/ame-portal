@@ -224,7 +224,7 @@ export default function AdminFundingPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Funding</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Funding</h1>
           <p className="text-muted-foreground">Aggregate funding overview for {cohort.label}</p>
         </div>
         <Link href={`/admin/${cohortSlug}/funding/templates`}>
@@ -274,7 +274,7 @@ export default function AdminFundingPage() {
             </div>
             <div className="space-y-2">
               <Label>Startup count</Label>
-              <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm font-medium">
+              <div className="flex h-9 items-center  border bg-muted/40 px-3 text-sm font-medium">
                 {startupCount}
               </div>
             </div>
@@ -344,13 +344,17 @@ export default function AdminFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Total allocation</p>
-            <p className="mt-1 text-2xl font-bold">{formatCurrency(totalAllocation)}</p>
+            <p className="mt-1 text-2xl font-bold font-display">
+              {formatCurrency(totalAllocation)}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Baseline required</p>
-            <p className="mt-1 text-2xl font-bold">{formatCurrency(totalBaselineRequired)}</p>
+            <p className="mt-1 text-2xl font-bold font-display">
+              {formatCurrency(totalBaselineRequired)}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {startupCount} startups x {formatCurrency(baselinePerStartup)}
             </p>
@@ -359,7 +363,7 @@ export default function AdminFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Total unlocked</p>
-            <p className="mt-1 text-2xl font-bold">{formatCurrency(totalUnlocked)}</p>
+            <p className="mt-1 text-2xl font-bold font-display">{formatCurrency(totalUnlocked)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {Math.round(unlockedOfAllocationPct)}% of total allocation
             </p>
@@ -368,7 +372,9 @@ export default function AdminFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Top-up pool</p>
-            <p className={`mt-1 text-2xl font-bold ${topUpPool < 0 ? 'text-red-600' : ''}`}>
+            <p
+              className={`mt-1 text-2xl font-bold font-display ${topUpPool < 0 ? 'text-red-600' : ''}`}
+            >
               {formatCurrency(topUpPool)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">

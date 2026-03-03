@@ -366,7 +366,7 @@ export default function MilestoneTemplatesPage() {
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Milestone Templates</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-display">Milestone Templates</h1>
             <p className="text-muted-foreground">Default milestones for {cohort.label}</p>
           </div>
           <Button onClick={openCreate}>

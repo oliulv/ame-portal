@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Geist, Geist_Mono, Source_Serif_4 } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { ConvexClientProvider } from '@/components/providers/ConvexClientProvider'
 import { AnalyticsProvider } from '@/components/providers/AnalyticsProvider'
@@ -13,6 +13,13 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
+})
+
+const sourceSerif = Source_Serif_4({
+  variable: '--font-source-serif',
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  style: ['normal', 'italic'],
 })
 
 export const metadata: Metadata = {
@@ -29,7 +36,9 @@ export default function RootLayout({
     <ClerkProvider signInUrl="/login">
       <ConvexClientProvider>
         <html lang="en">
-          <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+          <body
+            className={`${geistSans.variable} ${geistMono.variable} ${sourceSerif.variable} antialiased`}
+          >
             {children}
             <AnalyticsProvider />
           </body>

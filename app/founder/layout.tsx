@@ -13,11 +13,14 @@ function FounderHeader() {
   const pathname = usePathname()
 
   return (
-    <header className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b bg-background px-6 lg:flex">
+    <header
+      className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b bg-background px-6 lg:flex"
+      style={{ borderBottomColor: 'hsl(var(--border-strong))' }}
+    >
       <Link
         href="/founder/settings"
         className={cn(
-          'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+          'flex items-center gap-1.5  px-2.5 py-1.5 text-xs font-medium transition-colors',
           pathname.startsWith('/founder/settings')
             ? 'text-foreground'
             : 'text-muted-foreground hover:text-foreground'
@@ -88,7 +91,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
       {/* Main content */}
       <div className="flex min-h-0 flex-1 flex-col lg:ml-56">
         <FounderHeader />
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none p-4 pt-16 lg:p-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none p-4 pt-16 lg:px-10 lg:py-8">
           {children}
         </main>
       </div>

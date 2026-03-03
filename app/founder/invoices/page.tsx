@@ -64,7 +64,7 @@ export default function FounderInvoicesPage() {
     return (
       <div>
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Invoices</h1>
+          <h1 className="text-2xl font-bold font-display">Invoices</h1>
         </div>
         <Card>
           <CardContent className="p-6 text-center">
@@ -79,7 +79,7 @@ export default function FounderInvoicesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Invoices</h1>
+          <h1 className="text-2xl font-bold font-display">Invoices</h1>
           <p className="text-sm text-muted-foreground">
             Upload expenses and track each invoice through review and payment.
           </p>
@@ -94,7 +94,7 @@ export default function FounderInvoicesPage() {
       </div>
 
       {!canUpload && (
-        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <div className="mb-6 flex items-start gap-3  border border-amber-200 bg-amber-50 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div>
             <p className="text-sm font-medium text-amber-900">No available balance</p>

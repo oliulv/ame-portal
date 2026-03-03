@@ -15,7 +15,7 @@ export const PerkCard = memo(function PerkCard({ perk, onSelect }: PerkCardProps
 
   return (
     <Card
-      className={`cursor-pointer transition-all hover:shadow-md hover:border-foreground/20 ${
+      className={`cursor-pointer transition-all hover:border-foreground/20 ${
         perk.isClaimed ? 'bg-emerald-50/50' : ''
       }`}
       onClick={() => onSelect(perk)}

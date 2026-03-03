@@ -106,7 +106,7 @@ export default function AdminInvoicesPage() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Invoice Review</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Invoice Review</h1>
           <p className="text-muted-foreground">
             Review and approve startup expense reimbursements for {cohort.label}
           </p>
@@ -138,7 +138,7 @@ export default function AdminInvoicesPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Invoice Review</h1>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Invoice Review</h1>
         <p className="text-muted-foreground">
           Review and approve startup expense reimbursements for {cohort.label}
         </p>

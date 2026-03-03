@@ -53,7 +53,7 @@ export default function FounderCalendarPage() {
         </div>
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-lg" />
+            <Skeleton key={i} className="h-20 w-full " />
           ))}
         </div>
       </div>
@@ -63,7 +63,7 @@ export default function FounderCalendarPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Events</h1>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Events</h1>
         <p className="text-muted-foreground">Upcoming events for your cohort</p>
       </div>
 
@@ -125,7 +125,7 @@ export default function FounderCalendarPage() {
                       href={event.lumaEmbedUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-secondary px-3 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
+                      className="inline-flex h-9 items-center gap-1.5  border bg-secondary px-3 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
                     >
                       {event.isRegistered ? 'View Event' : 'Register'}
                       <ExternalLink className="h-3 w-3" />

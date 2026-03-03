@@ -91,7 +91,7 @@ export default function FounderFundingPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Funding</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Funding</h1>
           <p className="text-muted-foreground">Track your milestone-based funding</p>
         </div>
         <EmptyState
@@ -166,7 +166,7 @@ export default function FounderFundingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Funding</h1>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Funding</h1>
         <p className="text-muted-foreground">Track your milestone-based funding</p>
       </div>
 
@@ -206,13 +206,15 @@ export default function FounderFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Unlocked</p>
-            <p className="mt-1 text-2xl font-bold">£{unlocked.toLocaleString('en-GB')}</p>
+            <p className="mt-1 text-2xl font-bold font-display">
+              £{unlocked.toLocaleString('en-GB')}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Deployed</p>
-            <p className="mt-1 text-2xl font-bold text-blue-600">
+            <p className="mt-1 text-2xl font-bold font-display text-blue-600">
               £{deployed.toLocaleString('en-GB')}
             </p>
           </CardContent>
@@ -220,7 +222,7 @@ export default function FounderFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Available</p>
-            <p className="mt-1 text-2xl font-bold text-green-600">
+            <p className="mt-1 text-2xl font-bold font-display text-green-600">
               £{available.toLocaleString('en-GB')}
             </p>
           </CardContent>

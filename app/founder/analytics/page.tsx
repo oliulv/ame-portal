@@ -42,7 +42,7 @@ export default function FounderAnalyticsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Analytics</h1>
         <p className="text-muted-foreground">Track your startup&apos;s performance metrics</p>
       </div>
 

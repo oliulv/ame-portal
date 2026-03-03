@@ -25,12 +25,15 @@ function AdminHeader({ userRole }: { userRole: string }) {
   const adminsHref = cohortSlug ? `/admin/${cohortSlug}/admins` : '#'
 
   return (
-    <header className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b bg-background px-6 lg:flex">
+    <header
+      className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b bg-background px-6 lg:flex"
+      style={{ borderBottomColor: 'hsl(var(--border-strong))' }}
+    >
       {userRole === 'super_admin' && (
         <Link
           href={adminsHref}
           className={cn(
-            'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+            'flex items-center gap-1.5  px-2.5 py-1.5 text-xs font-medium transition-colors',
             pathname.includes('/admins')
               ? 'text-foreground'
               : 'text-muted-foreground hover:text-foreground'
@@ -43,7 +46,7 @@ function AdminHeader({ userRole }: { userRole: string }) {
       <Link
         href="/admin/settings"
         className={cn(
-          'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+          'flex items-center gap-1.5  px-2.5 py-1.5 text-xs font-medium transition-colors',
           pathname.startsWith('/admin/settings')
             ? 'text-foreground'
             : 'text-muted-foreground hover:text-foreground'
@@ -114,7 +117,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Main content */}
       <div className="flex min-h-0 flex-1 flex-col lg:ml-56">
         <AdminHeader userRole={user.role} />
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none p-4 pt-16 lg:p-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none p-4 pt-16 lg:px-10 lg:py-8">
           {children}
         </main>
       </div>

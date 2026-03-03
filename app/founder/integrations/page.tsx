@@ -203,7 +203,7 @@ function IntegrationsPageInner() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Integrations</h1>
         <p className="text-muted-foreground">
           Connect your external services to track metrics automatically
         </p>
@@ -356,7 +356,7 @@ function IntegrationsPageInner() {
                       <div>
                         <label className="text-sm font-medium mb-2 block">Tracking Script</label>
                         <div className="flex items-center gap-2">
-                          <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm break-all">
+                          <code className="flex-1 px-3 py-2 bg-muted  text-sm break-all">
                             {snippet}
                           </code>
                           <Button

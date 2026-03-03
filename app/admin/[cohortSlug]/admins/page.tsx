@@ -74,6 +74,12 @@ export default function AdminsPage() {
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [isRemoving, setIsRemoving] = useState(false)
+  const [invitationToDelete, setInvitationToDelete] = useState<{
+    _id: string
+    email: string
+    invitedName?: string
+  } | null>(null)
+  const [isDeletingInvitation, setIsDeletingInvitation] = useState(false)
 
   // Fetch current user to determine role
   const currentUser = useQuery(api.users.current)
@@ -95,6 +101,7 @@ export default function AdminsPage() {
   const resendInvitation = useMutation(api.adminInvitations.resend)
   const revokeInvitation = useMutation(api.adminInvitations.revoke)
   const removeAdminFromCohort = useMutation(api.adminCohorts.remove)
+  const deleteInvitation = useMutation(api.adminInvitations.remove)
 
   const form = useForm<AdminInvitationFormData>({
     resolver: zodResolver(adminInvitationSchema),
@@ -160,6 +167,20 @@ export default function AdminsPage() {
     }
   }
 
+  async function handleConfirmDeleteInvitation() {
+    if (!invitationToDelete) return
+    setIsDeletingInvitation(true)
+    try {
+      await deleteInvitation({ id: invitationToDelete._id as any })
+      toast.success('Invitation deleted successfully')
+      setInvitationToDelete(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete invitation')
+    } finally {
+      setIsDeletingInvitation(false)
+    }
+  }
+
   async function handleRevoke(invitationId: string) {
     setRevokingId(invitationId)
     try {
@@ -198,7 +219,7 @@ export default function AdminsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Cohort Not Found</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Cohort Not Found</h1>
           <p className="text-muted-foreground">The requested cohort could not be found.</p>
         </div>
       </div>
@@ -209,7 +230,7 @@ export default function AdminsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Administrators</h1>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Administrators</h1>
         <p className="text-muted-foreground">
           Manage admins for <strong>{cohort.label}</strong>. Super admins appear in all cohorts.
         </p>
@@ -231,7 +252,7 @@ export default function AdminsPage() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : adminUsers && adminUsers.length > 0 ? (
-            <div className="border rounded-md">
+            <div className="border ">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -436,7 +457,7 @@ export default function AdminsPage() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : invitations && invitations.length > 0 ? (
-            <div className="border rounded-md">
+            <div className="border ">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -471,8 +492,8 @@ export default function AdminsPage() {
                               status === 'accepted'
                                 ? 'success'
                                 : status === 'expired'
-                                  ? 'secondary'
-                                  : 'default'
+                                  ? 'warning'
+                                  : 'info'
                             }
                           >
                             {status === 'accepted'
@@ -512,6 +533,15 @@ export default function AdminsPage() {
                                 </Button>
                               </>
                             )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setInvitationToDelete(invitation)}
+                              disabled={isDeletingInvitation}
+                            >
+                              <Trash2 className="mr-1 h-3 w-3" />
+                              Delete
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -526,7 +556,7 @@ export default function AdminsPage() {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Remove Admin Confirmation Dialog */}
       <Dialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
         <DialogContent>
           <DialogHeader>
@@ -544,6 +574,41 @@ export default function AdminsPage() {
             </Button>
             <Button variant="destructive" onClick={handleConfirmDelete} disabled={isRemoving}>
               {isRemoving ? 'Removing...' : 'Remove Admin'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Invitation Confirmation Dialog */}
+      <Dialog
+        open={!!invitationToDelete}
+        onOpenChange={(open) => !open && setInvitationToDelete(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Invitation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the invitation for{' '}
+              <strong>
+                {invitationToDelete?.invitedName || invitationToDelete?.email || 'this admin'}
+              </strong>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setInvitationToDelete(null)}
+              disabled={isDeletingInvitation}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDeleteInvitation}
+              disabled={isDeletingInvitation}
+            >
+              {isDeletingInvitation ? 'Deleting...' : 'Delete Invitation'}
             </Button>
           </DialogFooter>
         </DialogContent>

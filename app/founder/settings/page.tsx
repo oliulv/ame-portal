@@ -306,7 +306,7 @@ function SettingsPageInner() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Settings</h1>
           <p className="text-muted-foreground">Manage your personal and business information</p>
         </div>
         <Card>
@@ -325,7 +325,7 @@ function SettingsPageInner() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Settings</h1>
         <p className="text-muted-foreground">Manage your personal and business information</p>
       </div>
 
@@ -811,7 +811,7 @@ function SettingsPageInner() {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Stripe Integration */}
-              <div className="border rounded-lg p-4">
+              <div className="border  p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -856,7 +856,7 @@ function SettingsPageInner() {
               </div>
 
               {/* Accelerate ME Tracker Integration */}
-              <div className="border rounded-lg p-4">
+              <div className="border  p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">

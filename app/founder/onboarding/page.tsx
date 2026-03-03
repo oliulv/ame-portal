@@ -228,7 +228,7 @@ export default function OnboardingPage() {
     <div className="py-6">
       <div>
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Welcome to Accelerate ME!</h1>
+          <h1 className="text-3xl font-bold font-display mb-2">Welcome to Accelerate ME!</h1>
           <p className="text-muted-foreground">
             Let's get you set up. This should only take a few minutes.
           </p>
@@ -260,11 +260,11 @@ export default function OnboardingPage() {
                 <div key={step.key} className="relative z-10 flex flex-col items-center flex-1">
                   {/* Step Circle */}
                   <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${
+                    className={`flex h-10 w-10 items-center justify-center border-2 transition-all ${
                       isCompleted
-                        ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                        ? 'border-primary bg-primary text-primary-foreground'
                         : isCurrent
-                          ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                          ? 'border-primary bg-primary/10 text-primary'
                           : 'border-muted-foreground/30 bg-muted/30 text-muted-foreground/50'
                     }`}
                   >
@@ -305,9 +305,7 @@ export default function OnboardingPage() {
         </div>
 
         {error && (
-          <div className="mb-6 rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-            {error}
-          </div>
+          <div className="mb-6 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>
         )}
 
         {/* Step 1: Personal Information */}
@@ -652,7 +650,7 @@ export default function OnboardingPage() {
             </CardHeader>
             <CardContent>
               {hasBankDetails === false && (
-                <div className="mb-6 rounded-md bg-amber-50 border border-amber-200 p-4">
+                <div className="mb-6 bg-amber-50 border border-amber-200 p-4">
                   <div className="flex items-start">
                     <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
                     <div className="text-sm text-amber-900">
@@ -748,7 +746,7 @@ export default function OnboardingPage() {
                     )}
                   />
 
-                  <div className="rounded-md bg-blue-50 p-4 text-sm text-blue-900">
+                  <div className="bg-blue-50 p-4 text-sm text-blue-900">
                     <p className="font-medium mb-1">Your data is secure</p>
                     <p className="text-blue-800">
                       Your bank details are encrypted and stored securely. They will only be used

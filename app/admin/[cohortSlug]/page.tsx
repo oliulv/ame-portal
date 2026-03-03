@@ -50,7 +50,7 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Dashboard</h1>
         <p className="text-muted-foreground">
           {cohort ? `Overview for ${cohort.label}` : 'Overview of your accelerator program'}
         </p>
@@ -63,7 +63,7 @@ export default function AdminDashboard() {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{startupsCount}</div>
+            <div className="text-2xl font-bold font-display">{startupsCount}</div>
             <p className="text-xs text-muted-foreground">Startups in this cohort</p>
           </CardContent>
         </Card>
@@ -74,7 +74,7 @@ export default function AdminDashboard() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{invoicesCount}</div>
+            <div className="text-2xl font-bold font-display">{invoicesCount}</div>
             <p className="text-xs text-muted-foreground">Invoices from this cohort</p>
           </CardContent>
         </Card>
@@ -85,7 +85,7 @@ export default function AdminDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{cohortsCount}</div>
+            <div className="text-2xl font-bold font-display">{cohortsCount}</div>
             <p className="text-xs text-muted-foreground">All cohorts in system</p>
           </CardContent>
         </Card>
