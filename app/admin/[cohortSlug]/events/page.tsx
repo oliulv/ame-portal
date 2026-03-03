@@ -272,7 +272,7 @@ export default function AdminEventsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Events</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Events</h1>
           <p className="text-muted-foreground">Manage events and calendar for this cohort</p>
         </div>
         <Button onClick={openCreate}>

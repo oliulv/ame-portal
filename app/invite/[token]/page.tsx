@@ -86,7 +86,9 @@ export default function InvitePage() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="bg-card text-card-foreground p-8  border border-border max-w-md mx-4">
-            <h1 className="text-2xl font-bold mb-4 text-foreground">Invalid Invitation</h1>
+            <h1 className="text-2xl font-bold font-display mb-4 text-foreground">
+              Invalid Invitation
+            </h1>
             <p className="text-muted-foreground mb-4">
               This invitation link is invalid or has expired.
             </p>
@@ -105,7 +107,9 @@ export default function InvitePage() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="bg-card text-card-foreground p-8  border border-border max-w-md mx-4">
-            <h1 className="text-2xl font-bold mb-4 text-foreground">Invitation Already Accepted</h1>
+            <h1 className="text-2xl font-bold font-display mb-4 text-foreground">
+              Invitation Already Accepted
+            </h1>
             <p className="text-muted-foreground mb-4">This invitation has already been accepted.</p>
             <Link href="/login" className="text-primary hover:text-primary/80 underline">
               Go to Login
@@ -122,7 +126,9 @@ export default function InvitePage() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="bg-card text-card-foreground p-8  border border-border max-w-md mx-4">
-            <h1 className="text-2xl font-bold mb-4 text-foreground">Invitation Expired</h1>
+            <h1 className="text-2xl font-bold font-display mb-4 text-foreground">
+              Invitation Expired
+            </h1>
             <p className="text-muted-foreground mb-4">This invitation link has expired.</p>
             <Link href="/login" className="text-primary hover:text-primary/80 underline">
               Go to Login
@@ -140,7 +146,7 @@ export default function InvitePage() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="bg-card text-card-foreground p-8  border border-border max-w-md mx-4">
-            <h1 className="text-2xl font-bold mb-4 text-foreground">Wrong Account</h1>
+            <h1 className="text-2xl font-bold font-display mb-4 text-foreground">Wrong Account</h1>
             <p className="text-muted-foreground mb-2">
               This invitation was sent to{' '}
               <strong className="text-foreground">{invitation.email}</strong>.
@@ -169,7 +175,7 @@ export default function InvitePage() {
         <div className="flex min-h-screen items-center justify-center bg-background">
           <div className="text-center">
             <div className="bg-card text-card-foreground p-8  border border-border max-w-md mx-4">
-              <h1 className="text-2xl font-bold mb-4 text-foreground">Error</h1>
+              <h1 className="text-2xl font-bold font-display mb-4 text-foreground">Error</h1>
               <p className="text-muted-foreground mb-4">{acceptError}</p>
               <Link href="/login" className="text-primary hover:text-primary/80 underline">
                 Go to Login

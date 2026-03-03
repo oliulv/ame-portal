@@ -110,7 +110,7 @@ export default function EditStartupPage() {
   if (startup === null) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <h1 className="text-2xl font-bold">Startup not found</h1>
+        <h1 className="text-2xl font-bold font-display">Startup not found</h1>
         <p className="mt-2 text-muted-foreground">
           The startup you are looking for does not exist.
         </p>

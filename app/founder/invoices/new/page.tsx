@@ -95,7 +95,7 @@ export default function NewInvoicePage() {
           </Link>
         </div>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Upload Invoice</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Upload Invoice</h1>
           <p className="text-muted-foreground">Submit a new invoice for review and reimbursement</p>
         </div>
       </div>

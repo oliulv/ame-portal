@@ -64,7 +64,7 @@ export default function FounderInvoicesPage() {
     return (
       <div>
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Invoices</h1>
+          <h1 className="text-2xl font-bold font-display">Invoices</h1>
         </div>
         <Card>
           <CardContent className="p-6 text-center">
@@ -79,7 +79,7 @@ export default function FounderInvoicesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Invoices</h1>
+          <h1 className="text-2xl font-bold font-display">Invoices</h1>
           <p className="text-sm text-muted-foreground">
             Upload expenses and track each invoice through review and payment.
           </p>

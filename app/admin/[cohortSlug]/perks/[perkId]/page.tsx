@@ -59,7 +59,7 @@ export default function AdminPerkClaimsPage() {
           </Link>
         </div>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{perkData.title}</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">{perkData.title}</h1>
           {perkData.providerName && (
             <p className="text-muted-foreground">by {perkData.providerName}</p>
           )}

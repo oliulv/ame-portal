@@ -203,7 +203,7 @@ function IntegrationsPageInner() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Integrations</h1>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Integrations</h1>
         <p className="text-muted-foreground">
           Connect your external services to track metrics automatically
         </p>

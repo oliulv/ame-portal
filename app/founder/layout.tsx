@@ -88,7 +88,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
       {/* Main content */}
       <div className="flex min-h-0 flex-1 flex-col lg:ml-56">
         <FounderHeader />
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none p-4 pt-16 lg:p-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none p-4 pt-16 lg:px-10 lg:py-8">
           {children}
         </main>
       </div>

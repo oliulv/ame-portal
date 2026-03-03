@@ -154,7 +154,7 @@ export default function FounderPerksPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Perks</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Perks</h1>
           <p className="text-muted-foreground">Partner deals and discounts</p>
         </div>
         <EmptyState
@@ -172,7 +172,7 @@ export default function FounderPerksPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Perks</h1>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Perks</h1>
           <p className="text-muted-foreground">Partner deals and discounts</p>
         </div>
         <div className="flex items-center gap-2">

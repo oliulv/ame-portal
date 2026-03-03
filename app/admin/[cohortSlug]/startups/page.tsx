@@ -33,7 +33,7 @@ export default function StartupsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Startups</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-display">Startups</h1>
             <p className="text-muted-foreground">Loading...</p>
           </div>
         </div>
@@ -46,7 +46,7 @@ export default function StartupsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Startups</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-display">Startups</h1>
             <p className="text-muted-foreground">Cohort not found</p>
           </div>
         </div>
@@ -60,7 +60,7 @@ export default function StartupsPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">{cohort.label}</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-display">{cohort.label}</h1>
             <Badge variant={cohort.isActive ? 'success' : 'secondary'}>
               {cohort.isActive ? 'Active' : 'Inactive'}
             </Badge>
@@ -90,7 +90,7 @@ export default function StartupsPage() {
             <CardTitle className="text-sm font-medium">Program Years</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold font-display">
               {cohort.yearStart} - {cohort.yearEnd}
             </div>
           </CardContent>
@@ -102,7 +102,7 @@ export default function StartupsPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{startups?.length || 0}</div>
+            <div className="text-2xl font-bold font-display">{startups?.length || 0}</div>
           </CardContent>
         </Card>
       </div>

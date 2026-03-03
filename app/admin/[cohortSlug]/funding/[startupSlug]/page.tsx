@@ -588,7 +588,7 @@ export default function StartupFundingPage() {
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{startup.name}</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-display">{startup.name}</h1>
             <p className="text-muted-foreground">Milestone-based funding</p>
           </div>
           <Button onClick={openCreate}>
@@ -634,7 +634,9 @@ export default function StartupFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Unlocked</p>
-            <p className="mt-1 text-2xl font-bold">£{unlocked.toLocaleString('en-GB')}</p>
+            <p className="mt-1 text-2xl font-bold font-display">
+              £{unlocked.toLocaleString('en-GB')}
+            </p>
           </CardContent>
         </Card>
 
@@ -661,7 +663,7 @@ export default function StartupFundingPage() {
               </div>
             ) : (
               <div
-                className="mt-1 cursor-pointer text-2xl font-bold text-blue-600 hover:underline"
+                className="mt-1 cursor-pointer text-2xl font-bold font-display text-blue-600 hover:underline"
                 onClick={() => setDeployedInput(String(deployed))}
                 title="Click to edit"
               >
@@ -677,7 +679,7 @@ export default function StartupFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Available</p>
-            <p className="mt-1 text-2xl font-bold text-green-600">
+            <p className="mt-1 text-2xl font-bold font-display text-green-600">
               £{available.toLocaleString('en-GB')}
             </p>
           </CardContent>
@@ -686,7 +688,9 @@ export default function StartupFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground">Potential (Admin)</p>
-            <p className="mt-1 text-2xl font-bold">£{potential.toLocaleString('en-GB')}</p>
+            <p className="mt-1 text-2xl font-bold font-display">
+              £{potential.toLocaleString('en-GB')}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {approvedCount} of {milestoneList.length} milestones approved
             </p>

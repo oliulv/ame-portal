@@ -147,7 +147,7 @@ export default function AdminStartupAnalyticsPage() {
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-display">Analytics</h1>
             <p className="text-muted-foreground">
               {startup?.name
                 ? `${startup.name} performance metrics`

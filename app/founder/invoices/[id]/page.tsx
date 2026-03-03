@@ -70,7 +70,7 @@ export default function FounderInvoiceDetailPage() {
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{invoice.vendorName}</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-display">{invoice.vendorName}</h1>
             <p className="text-muted-foreground">Invoice details and review status</p>
           </div>
           <Badge variant={getInvoiceStatusVariant(status)}>{getInvoiceStatusLabel(status)}</Badge>
