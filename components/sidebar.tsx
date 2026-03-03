@@ -239,7 +239,7 @@ function SidebarContent({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Brand */}
-      <div className="flex items-center h-12 px-4 border-b border-sidebar-border">
+      <div className="flex items-center h-12 px-4">
         <div>
           <h1 className="text-sm font-semibold tracking-tight text-sidebar-active-foreground">
             {title}

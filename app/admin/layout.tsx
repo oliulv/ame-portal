@@ -26,37 +26,39 @@ function AdminHeader({ userRole }: { userRole: string }) {
 
   return (
     <header
-      className="hidden h-12 shrink-0 items-center justify-end gap-1 border-b bg-background px-6 lg:flex"
+      className="hidden h-12 shrink-0 border-b bg-background lg:block"
       style={{ borderBottomColor: 'hsl(var(--border-strong))' }}
     >
-      {userRole === 'super_admin' && (
+      <div className="flex h-full items-center justify-end gap-1 px-6 lg:ml-56">
+        {userRole === 'super_admin' && (
+          <Link
+            href={adminsHref}
+            className={cn(
+              'flex items-center gap-1.5  px-2.5 py-1.5 text-xs font-medium transition-colors',
+              pathname.includes('/admins')
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Users className="h-3.5 w-3.5" />
+            Admins
+          </Link>
+        )}
         <Link
-          href={adminsHref}
+          href="/admin/settings"
           className={cn(
             'flex items-center gap-1.5  px-2.5 py-1.5 text-xs font-medium transition-colors',
-            pathname.includes('/admins')
+            pathname.startsWith('/admin/settings')
               ? 'text-foreground'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
-          <Users className="h-3.5 w-3.5" />
-          Admins
+          <Settings className="h-3.5 w-3.5" />
+          Settings
         </Link>
-      )}
-      <Link
-        href="/admin/settings"
-        className={cn(
-          'flex items-center gap-1.5  px-2.5 py-1.5 text-xs font-medium transition-colors',
-          pathname.startsWith('/admin/settings')
-            ? 'text-foreground'
-            : 'text-muted-foreground hover:text-foreground'
-        )}
-      >
-        <Settings className="h-3.5 w-3.5" />
-        Settings
-      </Link>
-      <div className="ml-2 flex items-center">
-        <UserButton />
+        <div className="ml-2 flex items-center">
+          <UserButton />
+        </div>
       </div>
     </header>
   )
@@ -105,7 +107,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   ]
 
   return (
-    <div className="fixed inset-0 flex overflow-hidden bg-background">
+    <div className="fixed inset-0 overflow-hidden bg-background">
       <Sidebar
         title="Accelerate ME"
         subtitle="Admin Portal"
@@ -115,9 +117,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       />
 
       {/* Main content */}
-      <div className="flex min-h-0 flex-1 flex-col lg:ml-56">
+      <div className="flex h-full flex-col">
         <AdminHeader userRole={user.role} />
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none p-4 pt-16 lg:px-10 lg:py-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none p-4 pt-16 lg:ml-56 lg:px-10 lg:py-8">
           {children}
         </main>
       </div>
