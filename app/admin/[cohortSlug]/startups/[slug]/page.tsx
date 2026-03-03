@@ -55,11 +55,15 @@ export default function StartupDetailPage() {
     api.milestones.listByStartup,
     startup ? { startupId: startup._id } : 'skip'
   )
-  const invitations = useQuery(api.invitations.list, startup ? { startupId: startup._id } : 'skip')
+  const teamData = useQuery(
+    api.invitations.listTeamAndPending,
+    startup ? { startupId: startup._id } : 'skip'
+  )
 
   const createInvitation = useMutation(api.invitations.create)
   const resendInvitation = useMutation(api.invitations.resend)
   const removeFounder = useMutation(api.invitations.removeFounder)
+  const removeTeamMember = useMutation(api.invitations.removeTeamMember)
 
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [inviteFullName, setInviteFullName] = useState('')
@@ -109,14 +113,27 @@ export default function StartupDetailPage() {
     }
   }
 
-  async function handleRemove(invitationId: string, name: string) {
+  async function handleRemoveTeamMember(profileId: string, name: string) {
     if (!confirm(`Remove ${name}? This deletes their founder profile and invitation.`)) return
-    setRemovingId(invitationId)
+    setRemovingId(profileId)
     try {
-      await removeFounder({ id: invitationId as any })
+      await removeTeamMember({ id: profileId as any })
       toast.success(`${name} removed`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to remove founder')
+    } finally {
+      setRemovingId(null)
+    }
+  }
+
+  async function handleCancelInvitation(invitationId: string, name: string) {
+    if (!confirm(`Cancel invitation for ${name}?`)) return
+    setRemovingId(invitationId)
+    try {
+      await removeFounder({ id: invitationId as any })
+      toast.success(`Invitation for ${name} cancelled`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to cancel invitation')
     } finally {
       setRemovingId(null)
     }
@@ -252,18 +269,20 @@ export default function StartupDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-display">
-              {invitations?.filter((i) => i.acceptedAt).length || 0}
+              {teamData?.teamMembers.length || 0}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Invitations</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending Invitations</CardTitle>
             <Mail className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-display">{invitations?.length || 0}</div>
+            <div className="text-2xl font-bold font-display">
+              {teamData?.pendingInvitations.length || 0}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -319,46 +338,64 @@ export default function StartupDetailPage() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          {invitations && invitations.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Sent</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invitations.map((invitation) => {
-                  const isAccepted = !!invitation.acceptedAt
-                  const isExpired =
-                    !isAccepted && invitation.expiresAt
-                      ? new Date(invitation.expiresAt) < new Date()
-                      : false
-                  const status = isAccepted ? 'accepted' : isExpired ? 'expired' : 'pending'
+        <CardContent className="space-y-6">
+          {/* Team Members */}
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Team Members</h3>
+            {teamData?.teamMembers && teamData.teamMembers.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {teamData.teamMembers.map((member) => (
+                    <TableRow key={member._id}>
+                      <TableCell className="font-medium">{member.fullName}</TableCell>
+                      <TableCell>{member.email}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveTeamMember(member._id, member.fullName)}
+                          disabled={removingId === member._id}
+                          title="Remove founder"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="py-4 text-center text-sm text-muted-foreground">No team members yet</p>
+            )}
+          </div>
 
-                  return (
+          {/* Pending Invitations */}
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Pending Invitations</h3>
+            {teamData?.pendingInvitations && teamData.pendingInvitations.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {teamData.pendingInvitations.map((invitation) => (
                     <TableRow key={invitation._id}>
                       <TableCell className="font-medium">{invitation.fullName}</TableCell>
                       <TableCell>{invitation.email}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            status === 'accepted'
-                              ? 'success'
-                              : status === 'expired'
-                                ? 'destructive'
-                                : 'info'
-                          }
-                        >
-                          {status}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {new Date(invitation._creationTime).toLocaleDateString('en-GB', {
+                        {new Date(invitation.expiresAt).toLocaleDateString('en-GB', {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric',
@@ -366,40 +403,40 @@ export default function StartupDetailPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {status === 'pending' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleResend(invitation._id)}
-                              disabled={resendingId === invitation._id}
-                            >
-                              <RotateCw
-                                className={`h-4 w-4 mr-1 ${resendingId === invitation._id ? 'animate-spin' : ''}`}
-                              />
-                              Resend
-                            </Button>
-                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleRemove(invitation._id, invitation.fullName)}
+                            onClick={() => handleResend(invitation._id)}
+                            disabled={resendingId === invitation._id}
+                          >
+                            <RotateCw
+                              className={`h-4 w-4 mr-1 ${resendingId === invitation._id ? 'animate-spin' : ''}`}
+                            />
+                            Resend
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              handleCancelInvitation(invitation._id, invitation.fullName)
+                            }
                             disabled={removingId === invitation._id}
-                            title="Remove founder"
+                            title="Cancel invitation"
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No founders invited yet
-            </p>
-          )}
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No pending invitations
+              </p>
+            )}
+          </div>
         </CardContent>
       </Card>
 

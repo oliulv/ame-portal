@@ -98,6 +98,7 @@ export default http
 // ── Internal mutations used by HTTP actions ───────────────────────────
 import { internalMutation } from './functions'
 import { v } from 'convex/values'
+import { cascadeDeleteUserData } from './lib/userCleanup'
 
 export const insertTrackerEvent = internalMutation({
   args: {
@@ -155,38 +156,8 @@ export const deleteUserByClerkId = internalMutation({
 
     if (!user) return
 
-    // Cascade-delete all founder profiles
-    const founderProfiles = await ctx.db
-      .query('founderProfiles')
-      .withIndex('by_userId', (q) => q.eq('userId', user._id))
-      .collect()
-
-    for (const profile of founderProfiles) {
-      await ctx.db.delete(profile._id)
-    }
-
-    // Cascade-delete all admin cohort assignments
-    const adminCohorts = await ctx.db
-      .query('adminCohorts')
-      .withIndex('by_userId', (q) => q.eq('userId', user._id))
-      .collect()
-
-    for (const assignment of adminCohorts) {
-      await ctx.db.delete(assignment._id)
-    }
-
-    // Cascade-delete all perk claims
-    const perkClaims = await ctx.db
-      .query('perkClaims')
-      .withIndex('by_userId', (q) => q.eq('userId', user._id))
-      .collect()
-
-    for (const claim of perkClaims) {
-      await ctx.db.delete(claim._id)
-    }
-
-    // Delete the user record (no Clerk API call needed — Clerk triggered this webhook)
-    await ctx.db.delete(user._id)
+    // Cascade-delete all associated data (no Clerk API call needed — Clerk triggered this webhook)
+    await cascadeDeleteUserData(ctx, user._id)
   },
 })
 

@@ -6,6 +6,70 @@ import { Id } from '../_generated/dataModel'
 import { logConvexError, logConvexInfo } from './logging'
 
 /**
+ * Cascade-delete all data associated with a user.
+ * Cleans up: founderProfiles (+ matching invitations), adminCohorts,
+ * perkClaims, eventRegistrations, and the user record itself.
+ *
+ * Skips audit/financial references (invoices, integrationConnections,
+ * adminInvitations.createdByUserId, invitations.createdByAdminId).
+ */
+export async function cascadeDeleteUserData(ctx: MutationCtx, userId: Id<'users'>) {
+  // Delete founderProfiles and their matching invitations
+  const founderProfiles = await ctx.db
+    .query('founderProfiles')
+    .withIndex('by_userId', (q) => q.eq('userId', userId))
+    .collect()
+
+  for (const profile of founderProfiles) {
+    // Find and delete the matching invitation (by startupId + email)
+    const invitations = await ctx.db
+      .query('invitations')
+      .withIndex('by_startupId', (q) => q.eq('startupId', profile.startupId))
+      .filter((q) => q.eq(q.field('email'), profile.personalEmail))
+      .collect()
+
+    for (const invitation of invitations) {
+      await ctx.db.delete(invitation._id)
+    }
+
+    await ctx.db.delete(profile._id)
+  }
+
+  // Delete admin cohort assignments
+  const adminCohorts = await ctx.db
+    .query('adminCohorts')
+    .withIndex('by_userId', (q) => q.eq('userId', userId))
+    .collect()
+
+  for (const assignment of adminCohorts) {
+    await ctx.db.delete(assignment._id)
+  }
+
+  // Delete perk claims
+  const perkClaims = await ctx.db
+    .query('perkClaims')
+    .withIndex('by_userId', (q) => q.eq('userId', userId))
+    .collect()
+
+  for (const claim of perkClaims) {
+    await ctx.db.delete(claim._id)
+  }
+
+  // Delete event registrations
+  const eventRegistrations = await ctx.db
+    .query('eventRegistrations')
+    .withIndex('by_userId', (q) => q.eq('userId', userId))
+    .collect()
+
+  for (const registration of eventRegistrations) {
+    await ctx.db.delete(registration._id)
+  }
+
+  // Delete the user record
+  await ctx.db.delete(userId)
+}
+
+/**
  * Evaluate whether a user should be fully cleaned up after a role removal.
  * Only deletes the user + Clerk account when they have NO remaining associations
  * (no founderProfiles, no adminCohorts, and not a super_admin).
@@ -33,22 +97,10 @@ export async function evaluateUserCleanup(ctx: MutationCtx, userId: Id<'users'>)
 
   if (remainingAdminCohorts) return
 
-  // No associations remain — clean up perk claims, user record, and Clerk account
-  const perkClaims = await ctx.db
-    .query('perkClaims')
-    .withIndex('by_userId', (q) => q.eq('userId', userId))
-    .collect()
-
-  for (const claim of perkClaims) {
-    await ctx.db.delete(claim._id)
-  }
-
-  // Delete the Convex user record first (prevents webhook loop:
-  // Clerk deletion triggers webhook → finds no user → no-op)
+  // No associations remain — cascade-delete everything and schedule Clerk cleanup
   const clerkId = user.clerkId
-  await ctx.db.delete(userId)
+  await cascadeDeleteUserData(ctx, userId)
 
-  // Schedule Clerk account deletion
   await ctx.scheduler.runAfter(0, internal.lib.userCleanup.deleteClerkUser, {
     clerkId,
   })

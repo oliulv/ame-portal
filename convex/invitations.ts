@@ -21,6 +21,55 @@ export const list = query({
 })
 
 /**
+ * List team members (from founderProfiles) and pending invitations for a startup.
+ * Used by the admin startup detail page to show accurate team state.
+ */
+export const listTeamAndPending = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    // Team members from founderProfiles
+    const profiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+
+    const teamMembers = await Promise.all(
+      profiles.map(async (profile) => {
+        const user = await ctx.db.get(profile.userId)
+        return {
+          _id: profile._id,
+          fullName: profile.fullName,
+          email: profile.personalEmail,
+          userId: profile.userId,
+          userExists: !!user,
+        }
+      })
+    )
+
+    // Pending invitations (not accepted and not expired)
+    const now = new Date().toISOString()
+    const allInvitations = await ctx.db
+      .query('invitations')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+
+    const pendingInvitations = allInvitations
+      .filter((inv) => !inv.acceptedAt && inv.expiresAt > now)
+      .map((inv) => ({
+        _id: inv._id,
+        fullName: inv.fullName,
+        email: inv.email,
+        expiresAt: inv.expiresAt,
+        _creationTime: inv._creationTime,
+      }))
+
+    return { teamMembers, pendingInvitations }
+  },
+})
+
+/**
  * Get an invitation by token (public, used in accept flow).
  */
 export const getByToken = query({
@@ -192,6 +241,39 @@ export const removeFounder = mutation({
     if (userId) {
       await evaluateUserCleanup(ctx, userId)
     }
+  },
+})
+
+/**
+ * Remove a team member by their founderProfile ID (admin).
+ * Deletes the founderProfile, matching invitation, then evaluates full cleanup.
+ */
+export const removeTeamMember = mutation({
+  args: { id: v.id('founderProfiles') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const profile = await ctx.db.get(args.id)
+    if (!profile) throw new Error('Founder profile not found')
+
+    const userId = profile.userId
+
+    // Delete the matching invitation (by startupId + email)
+    const invitations = await ctx.db
+      .query('invitations')
+      .withIndex('by_startupId', (q) => q.eq('startupId', profile.startupId))
+      .filter((q) => q.eq(q.field('email'), profile.personalEmail))
+      .collect()
+
+    for (const invitation of invitations) {
+      await ctx.db.delete(invitation._id)
+    }
+
+    // Delete the founderProfile
+    await ctx.db.delete(profile._id)
+
+    // Evaluate whether the user should be fully cleaned up
+    await evaluateUserCleanup(ctx, userId)
   },
 })
 

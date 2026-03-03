@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "check": "bun run lint && bun run format:check && bun run typecheck"
+    "check": "bun run lint && bun run format:check && bun run typecheck", 
+    "deploy:prod": "npx convex deploy --env-file .env.production.local"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.1",
