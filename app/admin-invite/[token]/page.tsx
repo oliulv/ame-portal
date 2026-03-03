@@ -207,7 +207,6 @@ export default function AdminInvitePage() {
       <div className="w-full max-w-md">
         <SignUp
           routing="hash"
-          afterSignUpUrl={`/admin-invite/${encodeURIComponent(token)}`}
           forceRedirectUrl={`/admin-invite/${encodeURIComponent(token)}`}
           initialValues={{
             emailAddress: invitation.email,

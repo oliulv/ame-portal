@@ -201,7 +201,6 @@ export default function InvitePage() {
       <div className="w-full max-w-md px-4">
         <SignUp
           routing="hash"
-          afterSignUpUrl={`/invite/${encodeURIComponent(token)}`}
           forceRedirectUrl={`/invite/${encodeURIComponent(token)}`}
           initialValues={{
             emailAddress: invitation.email,
