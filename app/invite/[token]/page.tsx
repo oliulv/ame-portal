@@ -36,9 +36,14 @@ export default function InvitePage() {
     if (!isLoaded || !userId) return
     if (invitation === undefined) return // still loading
     if (!invitation) return // invalid
-    if (invitation.acceptedAt) return // already accepted
     if (new Date(invitation.expiresAt) < new Date()) return // expired
     if (isAccepting || hasAccepted) return
+
+    // Already accepted (e.g. by ensureUser fallback) — redirect to onboarding
+    if (invitation.acceptedAt) {
+      router.push('/founder/onboarding')
+      return
+    }
 
     // Check if logged-in user's email matches the invitation email
     const currentEmail = clerkUser?.primaryEmailAddress?.emailAddress
@@ -54,7 +59,14 @@ export default function InvitePage() {
         setHasAccepted(true)
         router.push('/founder/onboarding')
       } catch (err) {
-        setAcceptError(err instanceof Error ? err.message : 'Failed to accept invitation')
+        const message = err instanceof Error ? err.message : 'Failed to accept invitation'
+        // If ensureUser already accepted it, just redirect
+        if (message.includes('already accepted')) {
+          setHasAccepted(true)
+          router.push('/founder/onboarding')
+          return
+        }
+        setAcceptError(message)
         setIsAccepting(false)
       }
     }
@@ -101,8 +113,15 @@ export default function InvitePage() {
     )
   }
 
-  // Already accepted
+  // Already accepted — the useEffect handles redirect for authenticated users
   if (invitation.acceptedAt) {
+    if (userId) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="text-sm text-muted-foreground">Redirecting...</div>
+        </div>
+      )
+    }
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">

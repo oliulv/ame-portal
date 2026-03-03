@@ -20,7 +20,8 @@ export default function Home() {
 
     if (user) {
       if (user.role === 'founder') {
-        window.location.href = '/founder/dashboard'
+        // Route through onboarding — it auto-redirects to dashboard if completed
+        window.location.href = '/founder/onboarding'
       } else {
         window.location.href = '/admin'
       }
