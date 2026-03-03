@@ -290,11 +290,7 @@ function SidebarContent({
                   }}
                 >
                   {cohorts.map((cohort) => (
-                    <SelectItem
-                      key={cohort._id}
-                      value={cohort.slug}
-                      data-sidebar-select-item
-                    >
+                    <SelectItem key={cohort._id} value={cohort.slug} data-sidebar-select-item>
                       {cohort.label} ({cohort.yearStart} - {cohort.yearEnd})
                     </SelectItem>
                   ))}
