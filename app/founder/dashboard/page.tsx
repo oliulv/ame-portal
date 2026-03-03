@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import Script from 'next/script'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { logClientError } from '@/lib/logging'
@@ -27,13 +26,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
-function extractLumaEventId(url: string): string | null {
-  const match = url.match(/(evt-[a-zA-Z0-9]+)/)
-  return match?.[1] ?? null
-}
-
 export default function FounderDashboard() {
   const milestones = useQuery(api.milestones.listForFounder)
+  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
   const invoicesData = useQuery(api.invoices.listForFounder)
   const nextEvent = useQuery(api.cohortEvents.nextForFounder)
   const integrationStatus = useQuery(api.integrations.status)
@@ -71,7 +66,8 @@ export default function FounderDashboard() {
     }
   }
 
-  const isLoading = milestones === undefined || invoicesData === undefined
+  const isLoading =
+    milestones === undefined || fundingSummary === undefined || invoicesData === undefined
 
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
@@ -80,9 +76,13 @@ export default function FounderDashboard() {
   const integrationsLoaded = integrationStatus !== undefined && trackerWebsites !== undefined
 
   const potential = milestones?.reduce((sum, m) => sum + m.amount, 0) ?? 0
-  const unlocked =
-    milestones?.filter((m) => m.status === 'approved').reduce((sum, m) => sum + m.amount, 0) ?? 0
-  const unlockedPct = potential > 0 ? Math.round((unlocked / potential) * 100) : 0
+  const unlocked = fundingSummary?.unlocked ?? 0
+  const deployed = fundingSummary?.deployed ?? 0
+  const available = fundingSummary?.available ?? 0
+  const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
+  const unlockedPct = potential > 0 ? (unlocked / potential) * 100 : 0
+  const deployedPct = potential > 0 ? (cappedDeployed / potential) * 100 : 0
+  const unlockedPctRounded = Math.round(unlockedPct)
   const pendingInvoices = invoicesData?.pendingCount ?? 0
   const hasStartups = (milestones?.length ?? 0) > 0
 
@@ -144,11 +144,6 @@ export default function FounderDashboard() {
 
   return (
     <div className="space-y-8">
-      <Script
-        id="luma-checkout"
-        src="https://embed.lu.ma/checkout-button.js"
-        strategy="afterInteractive"
-      />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Welcome back! Here's your startup progress</p>
@@ -160,23 +155,39 @@ export default function FounderDashboard() {
             <CardTitle className="text-sm font-medium">Funding</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {'\u00A3'}
-              {unlocked.toLocaleString('en-GB')} / {'\u00A3'}
-              {potential.toLocaleString('en-GB')}
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Deployed £{deployed.toLocaleString('en-GB')} of £{unlocked.toLocaleString('en-GB')}{' '}
+                unlocked
+              </p>
+              <span className="text-xs text-muted-foreground">{unlockedPctRounded}% unlocked</span>
             </div>
-            <div className="mt-2 flex items-center gap-2">
-              <div className="h-2 flex-1 rounded-full bg-muted">
-                <div
-                  className="h-2 rounded-full bg-green-500 transition-all"
-                  style={{ width: `${unlockedPct}%` }}
-                />
+            <div className="relative h-2.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="absolute inset-y-0 left-0 bg-emerald-500/30 transition-all"
+                style={{ width: `${unlockedPct}%` }}
+              />
+              <div
+                className="absolute inset-y-0 left-0 bg-blue-600 transition-all"
+                style={{ width: `${deployedPct}%` }}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="rounded-md border bg-muted/40 px-2 py-1.5">
+                <p className="text-muted-foreground">Unlocked</p>
+                <p className="font-medium">£{unlocked.toLocaleString('en-GB')}</p>
               </div>
-              <span className="text-xs text-muted-foreground">{unlockedPct}%</span>
+              <div className="rounded-md border bg-muted/40 px-2 py-1.5">
+                <p className="text-muted-foreground">Deployed</p>
+                <p className="font-medium text-blue-600">£{deployed.toLocaleString('en-GB')}</p>
+              </div>
+              <div className="rounded-md border bg-muted/40 px-2 py-1.5">
+                <p className="text-muted-foreground">Available</p>
+                <p className="font-medium text-green-600">£{available.toLocaleString('en-GB')}</p>
+              </div>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">{unlockedPct}% unlocked</p>
-            <Link href="/founder/funding" className="mt-3 inline-block">
+            <Link href="/founder/funding" className="inline-block">
               <Button variant="link" size="sm" className="h-auto p-0">
                 View funding details →
               </Button>
@@ -232,6 +243,11 @@ export default function FounderDashboard() {
                           {m.status === 'submitted' && (
                             <Badge variant="warning" className="shrink-0 text-[10px] px-1.5 py-0">
                               Pending Review
+                            </Badge>
+                          )}
+                          {m.status === 'waiting' && (
+                            <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0">
+                              Waiting
                             </Badge>
                           )}
                         </div>
@@ -355,9 +371,7 @@ export default function FounderDashboard() {
                         href={nextEvent.lumaEmbedUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="luma-checkout--button inline-flex shrink-0 items-center gap-1 rounded bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                        data-luma-action="checkout"
-                        data-luma-event-id={extractLumaEventId(nextEvent.lumaEmbedUrl)}
+                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border bg-secondary px-2.5 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
                       >
                         {nextEvent.isRegistered ? 'View Event' : 'Register'}
                         <ExternalLink className="h-3 w-3" />

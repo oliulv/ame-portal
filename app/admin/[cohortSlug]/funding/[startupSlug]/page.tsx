@@ -314,6 +314,7 @@ export default function StartupFundingPage() {
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const unlockedPct = potential > 0 ? (unlocked / potential) * 100 : 0
   const deployedPct = potential > 0 ? (cappedDeployed / potential) * 100 : 0
+  const approvedCount = milestoneList.filter((m) => m.status === 'approved').length
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const filteredMilestones = useMemo(() => {
@@ -625,34 +626,23 @@ export default function StartupFundingPage() {
               <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
               Available £{available.toLocaleString('en-GB')}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
-              Potential £{potential.toLocaleString('en-GB')}
-            </span>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Unlocked</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">£{unlocked.toLocaleString('en-GB')}</div>
-            <p className="text-xs text-muted-foreground">
-              of £{potential.toLocaleString('en-GB')} potential
-            </p>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground">Unlocked</p>
+            <p className="mt-1 text-2xl font-bold">£{unlocked.toLocaleString('en-GB')}</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Deployed</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground">Deployed</p>
             {deployedInput !== null ? (
-              <div className="flex items-center gap-2">
+              <div className="mt-1 flex items-center gap-2">
                 <Input
                   type="number"
                   value={deployedInput}
@@ -671,24 +661,35 @@ export default function StartupFundingPage() {
               </div>
             ) : (
               <div
-                className="cursor-pointer text-2xl font-bold text-blue-600 hover:underline"
+                className="mt-1 cursor-pointer text-2xl font-bold text-blue-600 hover:underline"
                 onClick={() => setDeployedInput(String(deployed))}
                 title="Click to edit"
               >
                 £{deployed.toLocaleString('en-GB')}
               </div>
             )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Click amount to edit deployed funds
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Available</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground">Available</p>
+            <p className="mt-1 text-2xl font-bold text-green-600">
               £{available.toLocaleString('en-GB')}
-            </div>
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground">Potential (Admin)</p>
+            <p className="mt-1 text-2xl font-bold">£{potential.toLocaleString('en-GB')}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {approvedCount} of {milestoneList.length} milestones approved
+            </p>
           </CardContent>
         </Card>
       </div>

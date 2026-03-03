@@ -198,10 +198,6 @@ export default function FounderFundingPage() {
               <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
               Available £{available.toLocaleString('en-GB')}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
-              Potential £{potential.toLocaleString('en-GB')}
-            </span>
           </div>
         </CardContent>
       </Card>
@@ -294,6 +290,9 @@ export default function FounderFundingPage() {
                         )}
                         {milestone.status === 'submitted' && (
                           <Badge variant="warning">Pending Review</Badge>
+                        )}
+                        {milestone.status === 'waiting' && (
+                          <Badge variant="secondary">Waiting</Badge>
                         )}
                       </div>
                       <p className="mt-0.5 text-sm text-muted-foreground">

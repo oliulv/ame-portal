@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Script from 'next/script'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,11 +11,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Calendar, ExternalLink, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
-
-function extractLumaEventId(url: string): string | null {
-  const match = url.match(/(evt-[a-zA-Z0-9]+)/)
-  return match?.[1] ?? null
-}
 
 export default function FounderCalendarPage() {
   const events = useQuery(api.cohortEvents.listForFounder)
@@ -68,12 +62,6 @@ export default function FounderCalendarPage() {
 
   return (
     <div className="space-y-6">
-      <Script
-        id="luma-checkout"
-        src="https://embed.lu.ma/checkout-button.js"
-        strategy="afterInteractive"
-      />
-
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Events</h1>
         <p className="text-muted-foreground">Upcoming events for your cohort</p>
@@ -82,7 +70,6 @@ export default function FounderCalendarPage() {
       {events.length > 0 ? (
         <div className="space-y-3">
           {events.map((event) => {
-            const eventId = extractLumaEventId(event.lumaEmbedUrl)
             const isToggling = togglingId === event._id
 
             return (
@@ -138,9 +125,7 @@ export default function FounderCalendarPage() {
                       href={event.lumaEmbedUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="luma-checkout--button inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                      data-luma-action="checkout"
-                      data-luma-event-id={eventId}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-secondary px-3 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
                     >
                       {event.isRegistered ? 'View Event' : 'Register'}
                       <ExternalLink className="h-3 w-3" />

@@ -132,6 +132,36 @@ export const update = mutation({
 })
 
 /**
+ * Update funding settings for a cohort (admin).
+ */
+export const updateFundingConfig = mutation({
+  args: {
+    cohortId: v.id('cohorts'),
+    fundingBudget: v.optional(v.number()),
+    baseFunding: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const cohort = await ctx.db.get(args.cohortId)
+    if (!cohort) throw new Error('Cohort not found')
+
+    if (args.fundingBudget !== undefined && args.fundingBudget < 0) {
+      throw new Error('Funding budget must be non-negative')
+    }
+
+    if (args.baseFunding !== undefined && args.baseFunding < 0) {
+      throw new Error('Base funding must be non-negative')
+    }
+
+    await ctx.db.patch(args.cohortId, {
+      fundingBudget: args.fundingBudget,
+      baseFunding: args.baseFunding,
+    })
+  },
+})
+
+/**
  * Delete a cohort (super admin only).
  */
 export const remove = mutation({

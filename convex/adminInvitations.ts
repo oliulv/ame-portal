@@ -5,6 +5,19 @@ import { requireAdmin } from './auth'
 import { generateToken, getExpiration } from './lib/tokens'
 
 /**
+ * Get an admin invitation by token (public, used in accept flow).
+ */
+export const getByToken = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('adminInvitations')
+      .withIndex('by_token', (q) => q.eq('token', args.token))
+      .unique()
+  },
+})
+
+/**
  * List admin invitations, optionally filtered by cohort.
  */
 export const list = query({

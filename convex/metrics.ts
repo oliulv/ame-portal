@@ -1,11 +1,18 @@
-import { query, mutation, internalAction, internalMutation, internalQuery } from './functions'
-import { internal } from './_generated/api'
+import {
+  query,
+  mutation,
+  action,
+  internalAction,
+  internalMutation,
+  internalQuery,
+} from './functions'
+import { api, internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAuth } from './auth'
 import { logConvexError } from './lib/logging'
 
 /**
- * Store metric snapshots.
+ * Store metric snapshots (upserts by day to avoid duplicates).
  */
 export const store = mutation({
   args: {
@@ -23,7 +30,24 @@ export const store = mutation({
   },
   handler: async (ctx, args) => {
     for (const snapshot of args.snapshots) {
-      await ctx.db.insert('metricsData', snapshot)
+      const dayTs = snapshot.timestamp.slice(0, 10) + 'T00:00:00.000Z'
+
+      const existing = await ctx.db
+        .query('metricsData')
+        .withIndex('by_startupId_provider_metricKey', (q) =>
+          q
+            .eq('startupId', snapshot.startupId)
+            .eq('provider', snapshot.provider)
+            .eq('metricKey', snapshot.metricKey)
+        )
+        .filter((q) => q.eq(q.field('timestamp'), dayTs))
+        .first()
+
+      if (existing) {
+        await ctx.db.patch(existing._id, { value: snapshot.value, meta: snapshot.meta })
+      } else {
+        await ctx.db.insert('metricsData', { ...snapshot, timestamp: dayTs })
+      }
     }
   },
 })
@@ -94,14 +118,79 @@ export const timeSeries = query({
       metrics = metrics.filter((m) => m.timestamp <= args.endDate!)
     }
 
-    metrics.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    // Dedup: keep latest value per day (handles pre-existing duplicates)
+    const byDay = new Map<string, { timestamp: string; value: number }>()
+    for (const m of metrics) {
+      const day = m.timestamp.slice(0, 10)
+      const existing = byDay.get(day)
+      if (!existing || m.timestamp > existing.timestamp) {
+        byDay.set(day, { timestamp: m.timestamp, value: m.value })
+      }
+    }
 
-    return metrics.map((m) => ({
-      timestamp: m.timestamp,
-      value: m.value,
-    }))
+    return Array.from(byDay.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp))
   },
 })
+
+/**
+ * Manually sync metrics for a startup (admin-only).
+ * Triggers both Stripe and tracker metric fetches.
+ */
+export const syncMetricsForStartup = action({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    const user = await ctx.runQuery(api.users.current)
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
+      throw new Error('Admin access required')
+    }
+
+    const errors: string[] = []
+
+    try {
+      await ctx.runAction(internal.metrics.fetchStripeMetrics, {
+        startupId: args.startupId,
+      })
+    } catch (error) {
+      errors.push(`Stripe: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+
+    try {
+      await ctx.runAction(internal.metrics.fetchTrackerMetrics_cron, {
+        startupId: args.startupId,
+      })
+    } catch (error) {
+      errors.push(`Tracker: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`Sync completed with errors: ${errors.join('; ')}`)
+    }
+  },
+})
+
+/**
+ * Auto-paginate a Stripe list endpoint, following `has_more` cursors.
+ */
+async function paginateStripe<T extends { id: string }>(
+  listFn: (params: {
+    limit: number
+    starting_after?: string
+  }) => Promise<{ data: T[]; has_more: boolean }>
+): Promise<T[]> {
+  const all: T[] = []
+  let startingAfter: string | undefined
+  let hasMore = true
+  while (hasMore) {
+    const page = await listFn({
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    })
+    all.push(...page.data)
+    hasMore = page.has_more
+    if (page.data.length > 0) startingAfter = page.data[page.data.length - 1].id
+  }
+  return all
+}
 
 /**
  * Fetch and store Stripe metrics for a startup (action).
@@ -122,35 +211,34 @@ export const fetchStripeMetrics = internalAction({
     })
 
     const now = new Date()
-    const thirtyDaysAgo = Math.floor((now.getTime() - 30 * 24 * 60 * 60 * 1000) / 1000)
 
-    const charges = await stripe.charges.list({
-      created: { gte: thirtyDaysAgo },
-      limit: 100,
-    })
-
+    // Revenue: all-time charges, net of refunds
+    const allCharges = await paginateStripe((p) => stripe.charges.list(p))
+    const succeededCharges = allCharges.filter((c) => c.status === 'succeeded')
     const totalRevenue =
-      charges.data
-        .filter((c) => c.status === 'succeeded')
-        .reduce((sum, c) => sum + (c.amount || 0), 0) / 100
+      succeededCharges.reduce((sum, c) => sum + ((c.amount || 0) - (c.amount_refunded || 0)), 0) /
+      100
 
+    // Active customers: unique customers from last 90 days
+    const ninetyDaysAgo = Math.floor((now.getTime() - 90 * 24 * 60 * 60 * 1000) / 1000)
+    const recentCharges = succeededCharges.filter((c) => c.created >= ninetyDaysAgo)
     const uniqueCustomers = new Set(
-      charges.data.map((c) => c.customer).filter((c): c is string => Boolean(c))
+      recentCharges.map((c) => c.customer).filter((c): c is string => Boolean(c))
     ).size
 
+    // MRR: all active subscriptions, all line items, multiply by quantity
+    const allSubs = await paginateStripe((p) =>
+      stripe.subscriptions.list({ ...p, status: 'active' })
+    )
     let mrr = 0
-    const subscriptions = await stripe.subscriptions.list({
-      limit: 100,
-      status: 'active',
-    })
-
-    for (const sub of subscriptions.data) {
-      if (sub.items.data.length > 0) {
-        const price = sub.items.data[0].price
+    for (const sub of allSubs) {
+      for (const item of sub.items.data) {
+        const price = item.price
+        const quantity = item.quantity ?? 1
         if (price?.recurring?.interval === 'month') {
-          mrr += (price.unit_amount || 0) / 100
+          mrr += ((price.unit_amount || 0) * quantity) / 100
         } else if (price?.recurring?.interval === 'year') {
-          mrr += (price.unit_amount || 0) / 100 / 12
+          mrr += ((price.unit_amount || 0) * quantity) / 100 / 12
         }
       }
     }
@@ -206,6 +294,7 @@ export const getStripeConnection = internalQuery({
 
 /**
  * Internal mutation to store metrics (used by actions).
+ * Upserts by day to avoid duplicates.
  */
 export const storeInternal = internalMutation({
   args: {
@@ -222,7 +311,24 @@ export const storeInternal = internalMutation({
   },
   handler: async (ctx, args) => {
     for (const snapshot of args.snapshots) {
-      await ctx.db.insert('metricsData', snapshot)
+      const dayTs = snapshot.timestamp.slice(0, 10) + 'T00:00:00.000Z'
+
+      const existing = await ctx.db
+        .query('metricsData')
+        .withIndex('by_startupId_provider_metricKey', (q) =>
+          q
+            .eq('startupId', snapshot.startupId)
+            .eq('provider', snapshot.provider)
+            .eq('metricKey', snapshot.metricKey)
+        )
+        .filter((q) => q.eq(q.field('timestamp'), dayTs))
+        .first()
+
+      if (existing) {
+        await ctx.db.patch(existing._id, { value: snapshot.value })
+      } else {
+        await ctx.db.insert('metricsData', { ...snapshot, timestamp: dayTs })
+      }
     }
   },
 })
@@ -453,5 +559,70 @@ export const getTrackerEventsForWebsites = internalQuery({
     }
 
     return allEvents
+  },
+})
+
+// ── One-time cleanup ─────────────────────────────────────────────────
+
+/**
+ * Get all metricsData rows (internal, for cleanup).
+ */
+export const getAllMetricsData = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query('metricsData').collect()
+  },
+})
+
+/**
+ * Delete specific metricsData rows by ID (internal, for cleanup).
+ */
+export const deleteMetricsRows = internalMutation({
+  args: { ids: v.array(v.id('metricsData')) },
+  handler: async (ctx, args) => {
+    for (const id of args.ids) {
+      await ctx.db.delete(id)
+    }
+  },
+})
+
+/**
+ * One-time cleanup: remove duplicate metric snapshots.
+ * Groups by (startupId, provider, metricKey, day), keeps latest per group.
+ * Run from the Convex dashboard after deploy.
+ */
+export const cleanupDuplicateSnapshots = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const allRows: any[] = await ctx.runQuery(internal.metrics.getAllMetricsData)
+
+    // Group by (startupId, provider, metricKey, day)
+    const groups = new Map<string, Array<{ _id: any; timestamp: string }>>()
+    for (const row of allRows) {
+      const day = row.timestamp.slice(0, 10)
+      const key = `${row.startupId}|${row.provider}|${row.metricKey}|${day}`
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push({ _id: row._id, timestamp: row.timestamp })
+    }
+
+    // Find IDs to delete (all but latest per group)
+    const toDelete: any[] = []
+    for (const rows of groups.values()) {
+      if (rows.length <= 1) continue
+      rows.sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+      // Keep first (latest), delete rest
+      for (let i = 1; i < rows.length; i++) {
+        toDelete.push(rows[i]._id)
+      }
+    }
+
+    if (toDelete.length === 0) return
+
+    // Delete in batches (Convex mutations have limits)
+    const batchSize = 500
+    for (let i = 0; i < toDelete.length; i += batchSize) {
+      const batch = toDelete.slice(i, i + batchSize)
+      await ctx.runMutation(internal.metrics.deleteMetricsRows, { ids: batch })
+    }
   },
 })

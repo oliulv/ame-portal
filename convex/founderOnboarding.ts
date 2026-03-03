@@ -62,11 +62,15 @@ export const complete = mutation({
       onboardingStatus: 'completed',
     })
 
-    // Sync name/email to users table
-    await ctx.db.patch(user._id, {
-      email: founderProfile.personalEmail,
-      fullName: founderProfile.fullName,
-    })
+    // Sync name/email to users table for founder-only users.
+    // Admin/super_admin users get their email synced from Clerk via ensureUser(),
+    // so we should not overwrite it with the founder invitation email.
+    if (user.role === 'founder') {
+      await ctx.db.patch(user._id, {
+        email: founderProfile.personalEmail,
+        fullName: founderProfile.fullName,
+      })
+    }
 
     // Upsert startup profile
     const existingProfile = await ctx.db
