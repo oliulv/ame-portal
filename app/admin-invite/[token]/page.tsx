@@ -42,7 +42,11 @@ export default function AdminInvitePage() {
 
     // Check if logged-in user's email matches the invitation email
     const currentEmail = clerkUser?.primaryEmailAddress?.emailAddress
-    if (currentEmail && invitation.email && currentEmail.toLowerCase() !== invitation.email.toLowerCase()) {
+    if (
+      currentEmail &&
+      invitation.email &&
+      currentEmail.toLowerCase() !== invitation.email.toLowerCase()
+    ) {
       setEmailMismatch(true)
       return
     }
@@ -153,8 +157,8 @@ export default function AdminInvitePage() {
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
               You are currently signed in as{' '}
-              <strong className="text-foreground">{currentEmail}</strong>. Please sign out and create
-              a new account with the invited email address.
+              <strong className="text-foreground">{currentEmail}</strong>. Please sign out and
+              create a new account with the invited email address.
             </p>
             <button
               onClick={() => signOut({ redirectUrl: `/admin-invite/${encodeURIComponent(token)}` })}

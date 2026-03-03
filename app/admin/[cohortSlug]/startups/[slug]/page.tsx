@@ -466,9 +466,7 @@ export default function StartupDetailPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">No milestones</p>
-                    <p className="text-xs text-muted-foreground">
-                      No milestones assigned yet.
-                    </p>
+                    <p className="text-xs text-muted-foreground">No milestones assigned yet.</p>
                   </div>
                 </div>
               </div>

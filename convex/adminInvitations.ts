@@ -124,6 +124,21 @@ export const resend = mutation({
 })
 
 /**
+ * Delete an admin invitation record.
+ */
+export const remove = mutation({
+  args: { id: v.id('adminInvitations') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const invitation = await ctx.db.get(args.id)
+    if (!invitation) throw new Error('Invitation not found')
+
+    await ctx.db.delete(args.id)
+  },
+})
+
+/**
  * Revoke an admin invitation (set expiry to now).
  */
 export const revoke = mutation({
