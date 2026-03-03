@@ -30,7 +30,7 @@ function AdminHeader({ userRole }: { userRole: string }) {
         <Link
           href={adminsHref}
           className={cn(
-            'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+            'flex items-center gap-1.5  px-2.5 py-1.5 text-xs font-medium transition-colors',
             pathname.includes('/admins')
               ? 'text-foreground'
               : 'text-muted-foreground hover:text-foreground'
@@ -43,7 +43,7 @@ function AdminHeader({ userRole }: { userRole: string }) {
       <Link
         href="/admin/settings"
         className={cn(
-          'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+          'flex items-center gap-1.5  px-2.5 py-1.5 text-xs font-medium transition-colors',
           pathname.startsWith('/admin/settings')
             ? 'text-foreground'
             : 'text-muted-foreground hover:text-foreground'

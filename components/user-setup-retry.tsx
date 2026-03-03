@@ -55,7 +55,7 @@ export function UserSetupRetry({ isInternalServerError = false }: UserSetupRetry
           have failed.
         </p>
         {isInternalServerError && (
-          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 ">
             <p className="text-sm text-yellow-700 dark:text-yellow-400 font-semibold mb-1">
               Stale Session Detected
             </p>
@@ -66,7 +66,7 @@ export function UserSetupRetry({ isInternalServerError = false }: UserSetupRetry
           </div>
         )}
         {error && (
-          <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+          <div className="p-3 bg-destructive/10 border border-destructive/20 ">
             <p className="text-sm text-destructive font-mono break-all">{error}</p>
           </div>
         )}

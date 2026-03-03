@@ -94,7 +94,7 @@ export default function FounderInvoicesPage() {
       </div>
 
       {!canUpload && (
-        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <div className="mb-6 flex items-start gap-3  border border-amber-200 bg-amber-50 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div>
             <p className="text-sm font-medium text-amber-900">No available balance</p>

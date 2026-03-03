@@ -142,9 +142,7 @@ export default function EditStartupPage() {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
+            <div className="mb-4  bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
           )}
 
           <Form {...form}>

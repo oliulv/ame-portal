@@ -414,10 +414,7 @@ export default function StartupDetailPage() {
             <>
               <div className="space-y-2">
                 {[...milestones].reverse().map((milestone) => (
-                  <div
-                    key={milestone._id}
-                    className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
-                  >
+                  <div key={milestone._id} className="flex items-center gap-3  border px-3 py-2.5">
                     <div className="flex-shrink-0">
                       {milestone.status === 'approved' ? (
                         <CheckCircle className="h-4 w-4 text-green-600" />
@@ -460,7 +457,7 @@ export default function StartupDetailPage() {
           ) : (
             <>
               <div className="space-y-2">
-                <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                <div className="flex items-center gap-3  border px-3 py-2.5">
                   <div className="flex-shrink-0">
                     <CheckCircle className="h-4 w-4 text-muted-foreground" />
                   </div>

@@ -1,70 +1,70 @@
 @import 'tailwindcss';
 
 :root {
-  /* Warm cream palette inspired by Revnu.app */
-  --background: 38 40% 96%;
-  --foreground: 24 10% 6%;
+  /* Green palette — Metrik-inspired color profile with Sardar Capital structure */
+  --background: 140 20% 96%;
+  --foreground: 155 15% 8%;
   --card: 0 0% 100%;
-  --card-foreground: 24 10% 6%;
+  --card-foreground: 155 15% 8%;
   --popover: 0 0% 100%;
-  --popover-foreground: 24 10% 6%;
-  --primary: 24 10% 10%;
-  --primary-foreground: 40 33% 97%;
-  --secondary: 36 15% 93%;
-  --secondary-foreground: 24 10% 12%;
-  --muted: 36 12% 93.5%;
-  --muted-foreground: 24 5% 45%;
-  --accent: 36 18% 92%;
-  --accent-foreground: 24 10% 8%;
+  --popover-foreground: 155 15% 8%;
+  --primary: 153 43% 18%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 140 14% 92%;
+  --secondary-foreground: 153 30% 15%;
+  --muted: 140 12% 92%;
+  --muted-foreground: 150 8% 44%;
+  --accent: 140 16% 90%;
+  --accent-foreground: 153 30% 12%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 98%;
-  --border: 36 12% 89%;
-  --input: 36 12% 86%;
-  --ring: 24 10% 25%;
-  --radius: 0.625rem;
+  --border: 140 10% 87%;
+  --input: 140 10% 84%;
+  --ring: 153 35% 25%;
+  --radius: 0px;
 
-  /* Sidebar - dark theme (xAI Console inspired) */
-  --sidebar-bg: 0 0% 7%;
-  --sidebar-fg: 0 0% 65%;
-  --sidebar-active-bg: 0 0% 13%;
-  --sidebar-active-fg: 0 0% 96%;
-  --sidebar-hover-bg: 0 0% 11%;
-  --sidebar-border: 0 0% 15%;
-  --sidebar-muted: 0 0% 42%;
+  /* Sidebar — deep dark forest green */
+  --sidebar-bg: 152 40% 7%;
+  --sidebar-fg: 150 10% 60%;
+  --sidebar-active-bg: 152 35% 13%;
+  --sidebar-active-fg: 140 20% 95%;
+  --sidebar-hover-bg: 152 30% 11%;
+  --sidebar-border: 152 25% 15%;
+  --sidebar-muted: 150 10% 42%;
 
-  /* Chart colors - warm palette */
-  --chart-1: 20 85% 52%;
-  --chart-2: 152 55% 42%;
-  --chart-3: 43 90% 55%;
+  /* Chart colors — green-anchored palette */
+  --chart-1: 153 50% 35%;
+  --chart-2: 172 50% 40%;
+  --chart-3: 83 55% 48%;
   --chart-4: 340 65% 52%;
-  --chart-5: 270 55% 55%;
+  --chart-5: 43 80% 55%;
 }
 
 .dark {
-  --background: 0 0% 5%;
-  --foreground: 0 0% 96%;
-  --card: 0 0% 8%;
-  --card-foreground: 0 0% 96%;
-  --popover: 0 0% 8%;
-  --popover-foreground: 0 0% 96%;
-  --primary: 0 0% 96%;
-  --primary-foreground: 0 0% 5%;
-  --secondary: 0 0% 13%;
-  --secondary-foreground: 0 0% 96%;
-  --muted: 0 0% 13%;
-  --muted-foreground: 0 0% 55%;
-  --accent: 0 0% 15%;
-  --accent-foreground: 0 0% 96%;
-  --destructive: 0 62.8% 30.6%;
+  --background: 152 30% 5%;
+  --foreground: 140 15% 95%;
+  --card: 152 25% 8%;
+  --card-foreground: 140 15% 95%;
+  --popover: 152 25% 8%;
+  --popover-foreground: 140 15% 95%;
+  --primary: 150 45% 55%;
+  --primary-foreground: 152 40% 5%;
+  --secondary: 152 20% 13%;
+  --secondary-foreground: 140 15% 95%;
+  --muted: 152 18% 13%;
+  --muted-foreground: 150 10% 55%;
+  --accent: 152 20% 15%;
+  --accent-foreground: 140 15% 95%;
+  --destructive: 0 63% 31%;
   --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 16%;
-  --input: 0 0% 16%;
-  --ring: 0 0% 40%;
-  --chart-1: 20 80% 55%;
-  --chart-2: 152 50% 48%;
-  --chart-3: 43 85% 60%;
+  --border: 152 18% 16%;
+  --input: 152 18% 16%;
+  --ring: 150 30% 40%;
+  --chart-1: 153 45% 45%;
+  --chart-2: 172 45% 48%;
+  --chart-3: 83 50% 55%;
   --chart-4: 340 60% 55%;
-  --chart-5: 270 50% 58%;
+  --chart-5: 43 75% 58%;
 }
 
 html,
@@ -89,14 +89,14 @@ body {
   background-color: hsl(var(--card)) !important;
   color: hsl(var(--card-foreground)) !important;
   border: 1px solid hsl(var(--border)) !important;
-  border-radius: var(--radius) !important;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 .cl-formButtonPrimary {
   background-color: hsl(var(--primary)) !important;
   color: hsl(var(--primary-foreground)) !important;
-  border-radius: var(--radius) !important;
+  border-radius: 0 !important;
   box-shadow: none !important;
 }
 
@@ -107,7 +107,7 @@ body {
 .cl-formFieldInput {
   background-color: transparent !important;
   border: 1px solid hsl(var(--input)) !important;
-  border-radius: var(--radius) !important;
+  border-radius: 0 !important;
   height: 2.25rem !important;
   padding: 0.25rem 0.75rem !important;
   font-size: 0.875rem !important;
@@ -122,10 +122,19 @@ body {
   background-color: hsl(var(--secondary)) !important;
   color: hsl(var(--secondary-foreground)) !important;
   border: 1px solid hsl(var(--input)) !important;
-  border-radius: var(--radius) !important;
+  border-radius: 0 !important;
   box-shadow: none !important;
 }
 
 .cl-socialButtonsBlockButton:hover {
   background-color: hsl(var(--secondary) / 0.8) !important;
+}
+
+/* Clerk internal elements — force square corners everywhere */
+.cl-internal-b3fm6y,
+.cl-internal-2wz7on,
+.cl-avatarBox,
+.cl-userButtonPopoverCard,
+.cl-userButtonPopoverActionButton {
+  border-radius: 0 !important;
 }

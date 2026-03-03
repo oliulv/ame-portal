@@ -811,7 +811,7 @@ function SettingsPageInner() {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Stripe Integration */}
-              <div className="border rounded-lg p-4">
+              <div className="border  p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -856,7 +856,7 @@ function SettingsPageInner() {
               </div>
 
               {/* Accelerate ME Tracker Integration */}
-              <div className="border rounded-lg p-4">
+              <div className="border  p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">

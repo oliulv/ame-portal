@@ -356,7 +356,7 @@ function IntegrationsPageInner() {
                       <div>
                         <label className="text-sm font-medium mb-2 block">Tracking Script</label>
                         <div className="flex items-center gap-2">
-                          <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm break-all">
+                          <code className="flex-1 px-3 py-2 bg-muted  text-sm break-all">
                             {snippet}
                           </code>
                           <Button

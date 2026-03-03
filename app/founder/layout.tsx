@@ -17,7 +17,7 @@ function FounderHeader() {
       <Link
         href="/founder/settings"
         className={cn(
-          'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+          'flex items-center gap-1.5  px-2.5 py-1.5 text-xs font-medium transition-colors',
           pathname.startsWith('/founder/settings')
             ? 'text-foreground'
             : 'text-muted-foreground hover:text-foreground'

@@ -162,7 +162,7 @@ export default function AdminInvitePage() {
             </p>
             <button
               onClick={() => signOut({ redirectUrl: `/admin-invite/${encodeURIComponent(token)}` })}
-              className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium shadow hover:bg-primary/90"
+              className="inline-flex items-center justify-center bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90"
             >
               Sign Out
             </button>
@@ -217,22 +217,22 @@ export default function AdminInvitePage() {
           appearance={{
             elements: {
               rootBox: 'mx-auto w-full',
-              card: 'bg-card text-card-foreground rounded-lg border border-border shadow-sm p-0',
-              cardBox: 'bg-card text-card-foreground rounded-lg border border-border shadow-sm',
+              card: 'bg-card text-card-foreground border border-border p-0',
+              cardBox: 'bg-card text-card-foreground border border-border',
               headerTitle: 'text-foreground font-semibold leading-none tracking-tight text-xl',
               headerSubtitle: 'text-muted-foreground text-sm',
               headerTitleContainer: 'mb-4',
               formFieldInput:
-                'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+                'flex h-9 w-full border border-input bg-transparent px-3 py-1 text-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
               formFieldLabel: 'text-foreground text-sm font-medium leading-none',
               formFieldInputShowPasswordButton: 'text-muted-foreground hover:text-foreground',
               formFieldInputGroup: 'space-y-2',
               formButtonPrimary:
-                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground shadow hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full',
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full',
               formButtonReset:
-                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
               socialButtonsBlockButton:
-                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full border border-input',
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors bg-secondary text-secondary-foreground hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 w-full border border-input',
               socialButtonsBlockButtonText: 'text-sm font-medium',
               socialButtonsBlockButtonArrow: 'hidden',
               dividerLine: 'bg-border',
@@ -245,7 +245,7 @@ export default function AdminInvitePage() {
               identityPreviewEditButton:
                 'text-primary hover:text-primary/80 text-sm underline-offset-4 hover:underline',
               otpCodeFieldInput:
-                'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                'flex h-9 w-full border border-input bg-transparent px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
               formResendCodeLink:
                 'text-primary hover:text-primary/80 text-sm underline-offset-4 hover:underline',
               alertText: 'text-foreground text-sm',
@@ -258,15 +258,15 @@ export default function AdminInvitePage() {
               logoBox: 'hidden',
             },
             variables: {
-              colorPrimary: 'hsl(221.2 83.2% 53.3%)',
+              colorPrimary: 'hsl(153 43% 18%)',
               colorBackground: 'hsl(0 0% 100%)',
               colorInputBackground: 'transparent',
-              colorInputText: 'hsl(222.2 84% 4.9%)',
-              colorText: 'hsl(222.2 84% 4.9%)',
-              colorTextSecondary: 'hsl(215.4 16.3% 46.9%)',
+              colorInputText: 'hsl(155 15% 8%)',
+              colorText: 'hsl(155 15% 8%)',
+              colorTextSecondary: 'hsl(150 8% 44%)',
               colorDanger: 'hsl(0 84.2% 60.2%)',
-              colorSuccess: 'hsl(160 84.1% 39.4%)',
-              borderRadius: '0.5rem',
+              colorSuccess: 'hsl(153 43% 35%)',
+              borderRadius: '0',
               fontFamily: 'inherit',
               fontSize: '0.875rem',
             },

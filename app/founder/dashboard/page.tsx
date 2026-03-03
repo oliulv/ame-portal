@@ -174,15 +174,15 @@ export default function FounderDashboard() {
               />
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="rounded-md border bg-muted/40 px-2 py-1.5">
+              <div className=" border bg-muted/40 px-2 py-1.5">
                 <p className="text-muted-foreground">Unlocked</p>
                 <p className="font-medium">£{unlocked.toLocaleString('en-GB')}</p>
               </div>
-              <div className="rounded-md border bg-muted/40 px-2 py-1.5">
+              <div className=" border bg-muted/40 px-2 py-1.5">
                 <p className="text-muted-foreground">Deployed</p>
                 <p className="font-medium text-blue-600">£{deployed.toLocaleString('en-GB')}</p>
               </div>
-              <div className="rounded-md border bg-muted/40 px-2 py-1.5">
+              <div className=" border bg-muted/40 px-2 py-1.5">
                 <p className="text-muted-foreground">Available</p>
                 <p className="font-medium text-green-600">£{available.toLocaleString('en-GB')}</p>
               </div>
@@ -226,10 +226,7 @@ export default function FounderDashboard() {
               <>
                 <div className="flex-1 space-y-2">
                   {upcomingMilestones.map((m) => (
-                    <div
-                      key={m._id}
-                      className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
-                    >
+                    <div key={m._id} className="flex items-center gap-3  border px-3 py-2.5">
                       <div className="flex-shrink-0">
                         {m.status === 'submitted' ? (
                           <Clock className="h-4 w-4 text-amber-600" />
@@ -298,7 +295,7 @@ export default function FounderDashboard() {
             ) : (
               <>
                 <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50/50 px-3 py-2.5">
+                  <div className="flex items-center gap-3  border border-green-200 bg-green-50/50 px-3 py-2.5">
                     <div className="flex-shrink-0">
                       <CheckCircle className="h-4 w-4 text-green-600" />
                     </div>
@@ -331,7 +328,7 @@ export default function FounderDashboard() {
               <>
                 <div className="flex-1 space-y-2">
                   <div
-                    className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${nextEvent.isRegistered ? 'border-green-200 bg-green-50/50' : ''}`}
+                    className={`flex items-center gap-3  border px-3 py-2.5 ${nextEvent.isRegistered ? 'border-green-200 bg-green-50/50' : ''}`}
                   >
                     <div className="flex-shrink-0">
                       {nextEvent.isRegistered ? (
@@ -371,7 +368,7 @@ export default function FounderDashboard() {
                         href={nextEvent.lumaEmbedUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border bg-secondary px-2.5 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
+                        className="inline-flex h-7 shrink-0 items-center gap-1  border bg-secondary px-2.5 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
                       >
                         {nextEvent.isRegistered ? 'View Event' : 'Register'}
                         <ExternalLink className="h-3 w-3" />

@@ -252,7 +252,7 @@ export default function AdminsPage() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : adminUsers && adminUsers.length > 0 ? (
-            <div className="border rounded-md">
+            <div className="border ">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -457,7 +457,7 @@ export default function AdminsPage() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : invitations && invitations.length > 0 ? (
-            <div className="border rounded-md">
+            <div className="border ">
               <Table>
                 <TableHeader>
                   <TableRow>

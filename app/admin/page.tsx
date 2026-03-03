@@ -57,7 +57,7 @@ export default function AdminDashboardEntry() {
                   <span className="text-sm font-semibold">
                     {cohort.name || cohort.slug}
                     {cohort.isActive && (
-                      <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                      <span className="ml-2 bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
                         Active
                       </span>
                     )}

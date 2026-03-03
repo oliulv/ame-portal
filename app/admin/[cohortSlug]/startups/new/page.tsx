@@ -117,13 +117,11 @@ export default function NewStartupPage() {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
+            <div className="mb-4  bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
           )}
 
           {cohort === null ? (
-            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="mb-4  bg-destructive/10 p-3 text-sm text-destructive">
               Cohort not found. Please select a valid cohort from the sidebar.
             </div>
           ) : null}
@@ -131,7 +129,7 @@ export default function NewStartupPage() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               {cohort && (
-                <div className="rounded-lg border p-4 bg-muted/50">
+                <div className=" border p-4 bg-muted/50">
                   <p className="text-sm font-medium">Cohort</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     {cohort.label} ({cohort.yearStart} - {cohort.yearEnd})

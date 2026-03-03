@@ -274,7 +274,7 @@ export default function AdminFundingPage() {
             </div>
             <div className="space-y-2">
               <Label>Startup count</Label>
-              <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm font-medium">
+              <div className="flex h-9 items-center  border bg-muted/40 px-3 text-sm font-medium">
                 {startupCount}
               </div>
             </div>

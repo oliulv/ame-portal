@@ -222,7 +222,7 @@ function SidebarContent({
           onLinkClick?.()
         }}
         className={cn(
-          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
+          'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-all duration-150',
           isActive
             ? 'bg-sidebar-active text-sidebar-active-foreground'
             : 'text-sidebar-foreground hover:bg-sidebar-hover hover:text-sidebar-active-foreground',
@@ -264,20 +264,20 @@ function SidebarContent({
               Cohorts
             </Link>
             {!mounted || isLoadingCohorts ? (
-              <div className="h-9 rounded-lg bg-sidebar-active animate-pulse" />
+              <div className="h-9 bg-sidebar-active animate-pulse" />
             ) : (
               <Select value={currentCohortSlug || ''} onValueChange={handleCohortChange}>
-                <SelectTrigger className="w-full rounded-lg border-sidebar-border bg-sidebar-active text-sidebar-active-foreground text-sm h-9 focus:ring-0 focus:ring-offset-0">
+                <SelectTrigger className="w-full border-sidebar-border bg-sidebar-active text-sidebar-active-foreground text-sm h-9 focus:ring-0 focus:ring-offset-0">
                   <SelectValue placeholder="Select cohort">
                     {selectedCohort ? selectedCohort.label : 'Select cohort'}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent className="rounded-lg border-sidebar-border bg-[hsl(0,0%,11%)]">
+                <SelectContent className="border-sidebar-border bg-[hsl(152,30%,11%)]">
                   {cohorts.map((cohort) => (
                     <SelectItem
                       key={cohort._id}
                       value={cohort.slug}
-                      className="text-[hsl(0,0%,90%)] focus:bg-[hsl(0,0%,16%)] focus:text-white rounded-md"
+                      className="text-[hsl(140,15%,90%)] focus:bg-[hsl(152,25%,16%)] focus:text-white"
                     >
                       {cohort.label} ({cohort.yearStart} - {cohort.yearEnd})
                     </SelectItem>
@@ -287,7 +287,7 @@ function SidebarContent({
             )}
             {userRole === 'super_admin' && (
               <Link href="/admin/cohorts/new" onClick={onLinkClick} className="mt-2 block">
-                <button className="flex w-full items-center justify-center gap-2 rounded-lg border border-sidebar-border px-3 py-1.5 text-xs font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-sidebar-active-foreground">
+                <button className="flex w-full items-center justify-center gap-2 border border-sidebar-border px-3 py-1.5 text-xs font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-sidebar-active-foreground">
                   <Plus className="h-3.5 w-3.5" />
                   New Cohort
                 </button>

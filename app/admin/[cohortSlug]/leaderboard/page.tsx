@@ -84,7 +84,7 @@ export default function LeaderboardPage() {
         </p>
       </div>
 
-      <div className="bg-card rounded-lg border overflow-hidden">
+      <div className="bg-card  border overflow-hidden">
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-muted">
             <tr>
@@ -166,7 +166,7 @@ export default function LeaderboardPage() {
         </table>
       </div>
 
-      <div className="mt-6 bg-muted p-4 rounded-lg">
+      <div className="mt-6 bg-muted p-4 ">
         <p className="text-sm text-muted-foreground mb-2">
           <strong className="text-foreground">Scoring Formula:</strong> Leaderboard score combines
           multiple factors:
