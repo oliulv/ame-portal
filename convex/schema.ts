@@ -296,5 +296,6 @@ export default defineSchema({
   })
     .index('by_perkId', ['perkId'])
     .index('by_userId', ['userId'])
-    .index('by_perkId_userId', ['perkId', 'userId']),
+    .index('by_perkId_userId', ['perkId', 'userId'])
+    .index('by_startupId', ['startupId']),
 })

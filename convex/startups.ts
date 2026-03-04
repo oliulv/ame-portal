@@ -295,10 +295,12 @@ export const remove = mutation({
       await ctx.db.delete(milestone._id)
     }
 
-    // 7. Delete perk claims (no by_startupId index, must filter)
-    const allPerkClaims = await ctx.db.query('perkClaims').collect()
-    const startupPerkClaims = allPerkClaims.filter((c) => c.startupId === args.id)
-    for (const claim of startupPerkClaims) {
+    // 7. Delete perk claims
+    const perkClaims = await ctx.db
+      .query('perkClaims')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const claim of perkClaims) {
       await ctx.db.delete(claim._id)
     }
 
@@ -311,13 +313,28 @@ export const remove = mutation({
       await ctx.db.delete(detail._id)
     }
 
-    // 9. Delete founder profiles
+    // 9. Delete founder profiles + clean up orphaned founder users
     const founderProfiles = await ctx.db
       .query('founderProfiles')
       .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
       .collect()
     for (const profile of founderProfiles) {
+      // Check if this founder has profiles under other startups
+      const otherProfiles = await ctx.db
+        .query('founderProfiles')
+        .withIndex('by_userId', (q) => q.eq('userId', profile.userId))
+        .collect()
+      const hasOtherStartups = otherProfiles.some((p) => p.startupId !== args.id)
+
       await ctx.db.delete(profile._id)
+
+      // Delete the user record if they only belonged to this startup
+      if (!hasOtherStartups) {
+        const user = await ctx.db.get(profile.userId)
+        if (user && user.role === 'founder') {
+          await ctx.db.delete(user._id)
+        }
+      }
     }
 
     // 10. Delete invitations
