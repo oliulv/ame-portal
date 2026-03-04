@@ -132,7 +132,7 @@ export const update = mutation({
 })
 
 /**
- * Update funding settings for a cohort (admin).
+ * Update funding settings for a cohort (super admin only).
  */
 export const updateFundingConfig = mutation({
   args: {
@@ -141,7 +141,7 @@ export const updateFundingConfig = mutation({
     baseFunding: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireSuperAdmin(ctx)
 
     const cohort = await ctx.db.get(args.cohortId)
     if (!cohort) throw new Error('Cohort not found')

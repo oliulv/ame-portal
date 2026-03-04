@@ -56,6 +56,9 @@ export default function AdminFundingPage() {
   const router = useRouter()
   const cohortSlug = params.cohortSlug as string
 
+  const currentUser = useQuery(api.users.current)
+  const isSuperAdmin = currentUser?.role === 'super_admin'
+
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const overview = useQuery(
     api.milestones.fundingOverview,
@@ -235,75 +238,77 @@ export default function AdminFundingPage() {
         </Link>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-4 w-4" />
-            Cohort Funding Controls
-          </CardTitle>
-          <CardDescription>
-            Adjust total allocation and baseline funding per startup. All rollups update immediately
-            after save.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="total-allocation">Total allocation (GBP)</Label>
-              <Input
-                id="total-allocation"
-                type="number"
-                min={0}
-                step="0.01"
-                value={allocationInput}
-                onChange={(e) => setAllocationInput(e.target.value)}
-                placeholder="70000"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="baseline-startup">Baseline per startup (GBP)</Label>
-              <Input
-                id="baseline-startup"
-                type="number"
-                min={0}
-                step="0.01"
-                value={baselineInput}
-                onChange={(e) => setBaselineInput(e.target.value)}
-                placeholder="5000"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Startup count</Label>
-              <div className="flex h-9 items-center  border bg-muted/40 px-3 text-sm font-medium">
-                {startupCount}
+      {isSuperAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wallet className="h-4 w-4" />
+              Cohort Funding Controls
+            </CardTitle>
+            <CardDescription>
+              Adjust total allocation and baseline funding per startup. All rollups update
+              immediately after save.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="total-allocation">Total allocation (GBP)</Label>
+                <Input
+                  id="total-allocation"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={allocationInput}
+                  onChange={(e) => setAllocationInput(e.target.value)}
+                  placeholder="70000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="baseline-startup">Baseline per startup (GBP)</Label>
+                <Input
+                  id="baseline-startup"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={baselineInput}
+                  onChange={(e) => setBaselineInput(e.target.value)}
+                  placeholder="5000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Startup count</Label>
+                <div className="flex h-9 items-center  border bg-muted/40 px-3 text-sm font-medium">
+                  {startupCount}
+                </div>
               </div>
             </div>
-          </div>
 
-          {!configIsValid && (
-            <p className="text-sm text-red-600">
-              Please use valid non-negative numbers for funding settings.
-            </p>
-          )}
+            {!configIsValid && (
+              <p className="text-sm text-red-600">
+                Please use valid non-negative numbers for funding settings.
+              </p>
+            )}
 
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={resetFundingInputs}
-              disabled={!hasFundingConfigChanges || isSavingFundingConfig}
-            >
-              Reset
-            </Button>
-            <Button
-              onClick={handleSaveFundingConfig}
-              disabled={!hasFundingConfigChanges || !configIsValid || isSavingFundingConfig}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              {isSavingFundingConfig ? 'Saving...' : 'Save funding settings'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={resetFundingInputs}
+                disabled={!hasFundingConfigChanges || isSavingFundingConfig}
+              >
+                Reset
+              </Button>
+              <Button
+                onClick={handleSaveFundingConfig}
+                disabled={!hasFundingConfigChanges || !configIsValid || isSavingFundingConfig}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {isSavingFundingConfig ? 'Saving...' : 'Save funding settings'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="space-y-3 pt-6">
