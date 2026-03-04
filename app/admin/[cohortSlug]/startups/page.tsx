@@ -147,14 +147,14 @@ export default function StartupsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant="outline"
-                          className={`capitalize ${
+                          variant={
                             startup.onboardingStatus === 'completed'
-                              ? 'border-green-600/30 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+                              ? 'success'
                               : startup.onboardingStatus === 'in_progress'
-                                ? 'border-blue-600/30 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400'
-                                : 'border-muted-foreground/30 text-muted-foreground'
-                          }`}
+                                ? 'warning'
+                                : 'secondary'
+                          }
+                          className="capitalize"
                         >
                           {startup.onboardingStatus.replace('_', ' ')}
                         </Badge>
