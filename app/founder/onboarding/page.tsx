@@ -147,6 +147,8 @@ export default function OnboardingPage() {
   const getStepState = (index: number) => {
     if (index < currentStepIndex) return 'completed'
     if (index === currentStepIndex) return 'current'
+    // Bank step is pre-completed if startup already has bank details
+    if (steps[index].key === 'bank' && hasBankDetails === true) return 'completed'
     return 'upcoming'
   }
 
@@ -238,14 +240,14 @@ export default function OnboardingPage() {
         <div className="mb-12">
           <div className="relative flex items-start justify-between">
             {/* Connecting Lines Background */}
-            <div className="absolute top-5 left-0 right-0 h-0.5 bg-muted-foreground/20" />
+            <div className="absolute top-5 left-[16.67%] right-[16.67%] h-0.5 bg-muted-foreground/20" />
 
             {/* Completed Progress Line */}
             {currentStepIndex > 0 && (
               <div
-                className="absolute top-5 left-0 h-0.5 bg-primary transition-all duration-300"
+                className="absolute top-5 left-[16.67%] h-0.5 bg-primary transition-all duration-300"
                 style={{
-                  width: `${(currentStepIndex / (steps.length - 1)) * 100}%`,
+                  width: `${(currentStepIndex / (steps.length - 1)) * 66.66}%`,
                 }}
               />
             )}
@@ -259,15 +261,16 @@ export default function OnboardingPage() {
               return (
                 <div key={step.key} className="relative z-10 flex flex-col items-center flex-1">
                   {/* Step Circle */}
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center border-2 transition-all ${
-                      isCompleted
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : isCurrent
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-muted-foreground/30 bg-muted/30 text-muted-foreground/50'
-                    }`}
-                  >
+                  <div className="bg-background p-1">
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center border-2 transition-all ${
+                        isCompleted
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : isCurrent
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-muted-foreground/30 bg-muted/30 text-muted-foreground/50'
+                      }`}
+                    >
                     {isCompleted ? (
                       <Check className="h-5 w-5" />
                     ) : (
@@ -277,6 +280,7 @@ export default function OnboardingPage() {
                         {index + 1}
                       </span>
                     )}
+                    </div>
                   </div>
 
                   {/* Step Label */}
