@@ -8,6 +8,7 @@ export default defineSchema({
     role: v.union(v.literal('super_admin'), v.literal('admin'), v.literal('founder')),
     email: v.optional(v.string()),
     fullName: v.optional(v.string()),
+    imageUrl: v.optional(v.string()),
   }).index('by_clerkId', ['clerkId']),
 
   // ── Cohorts ────────────────────────────────────────────────────────
@@ -32,7 +33,7 @@ export default defineSchema({
     .index('by_userId_cohortId', ['userId', 'cohortId']),
 
   // ── Startups ───────────────────────────────────────────────────────
-  startups: defineTable({
+  startups: defineTable({ 
     cohortId: v.id('cohorts'),
     name: v.string(),
     slug: v.optional(v.string()),

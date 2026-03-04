@@ -94,14 +94,17 @@ export const ensureUser = mutation({
       .unique()
 
     if (existing) {
-      // Sync email and name from Clerk on every login so Convex
+      // Sync email, name, and profile picture from Clerk on every login so Convex
       // always reflects the canonical Clerk profile data.
-      const updates: Partial<{ email: string; fullName: string }> = {}
+      const updates: Partial<{ email: string; fullName: string; imageUrl: string }> = {}
       if (identity.email && identity.email !== existing.email) {
         updates.email = identity.email
       }
       if (identity.name && identity.name !== existing.fullName) {
         updates.fullName = identity.name
+      }
+      if (identity.pictureUrl && identity.pictureUrl !== existing.imageUrl) {
+        updates.imageUrl = identity.pictureUrl
       }
       if (Object.keys(updates).length > 0) {
         await ctx.db.patch(existing._id, updates)

@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -354,7 +355,29 @@ export default function StartupDetailPage() {
                 <TableBody>
                   {teamData.teamMembers.map((member) => (
                     <TableRow key={member._id}>
-                      <TableCell className="font-medium">{member.fullName}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {member.imageUrl ? (
+                            <Image
+                              src={member.imageUrl}
+                              alt={member.fullName}
+                              width={28}
+                              height={28}
+                              className="h-7 w-7 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                              {member.fullName
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </div>
+                          )}
+                          {member.fullName}
+                        </div>
+                      </TableCell>
                       <TableCell>{member.email}</TableCell>
                       <TableCell className="text-right">
                         <Button

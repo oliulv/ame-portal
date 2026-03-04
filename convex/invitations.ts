@@ -44,6 +44,7 @@ export const listTeamAndPending = query({
           email: profile.personalEmail,
           userId: profile.userId,
           userExists: !!user,
+          imageUrl: user?.imageUrl,
         }
       })
     )

@@ -271,15 +271,15 @@ export default function OnboardingPage() {
                             : 'border-muted-foreground/30 bg-muted/30 text-muted-foreground/50'
                       }`}
                     >
-                    {isCompleted ? (
-                      <Check className="h-5 w-5" />
-                    ) : (
-                      <span
-                        className={`text-sm font-semibold ${isCurrent ? 'text-primary' : 'text-muted-foreground/50'}`}
-                      >
-                        {index + 1}
-                      </span>
-                    )}
+                      {isCompleted ? (
+                        <Check className="h-5 w-5" />
+                      ) : (
+                        <span
+                          className={`text-sm font-semibold ${isCurrent ? 'text-primary' : 'text-muted-foreground/50'}`}
+                        >
+                          {index + 1}
+                        </span>
+                      )}
                     </div>
                   </div>
 

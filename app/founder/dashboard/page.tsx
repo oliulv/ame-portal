@@ -150,12 +150,12 @@ export default function FounderDashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Funding</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="flex flex-1 flex-col space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">
                 Deployed £{deployed.toLocaleString('en-GB')} of £{unlocked.toLocaleString('en-GB')}{' '}
@@ -187,7 +187,7 @@ export default function FounderDashboard() {
                 <p className="font-medium text-green-600">£{available.toLocaleString('en-GB')}</p>
               </div>
             </div>
-            <Link href="/founder/funding" className="inline-block">
+            <Link href="/founder/funding" className="mt-auto pt-3 inline-block">
               <Button variant="link" size="sm" className="h-auto p-0">
                 View funding details →
               </Button>
@@ -195,17 +195,17 @@ export default function FounderDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Invoices</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-1 flex-col">
             <div className="text-2xl font-bold font-display">{pendingInvoices}</div>
             <p className="text-xs text-muted-foreground mt-2">
               {pendingInvoices === 0 ? 'All caught up!' : `${pendingInvoices} awaiting review`}
             </p>
-            <Link href="/founder/invoices" className="mt-3 inline-block">
+            <Link href="/founder/invoices" className="mt-auto pt-3 inline-block">
               <Button variant="link" size="sm" className="h-auto p-0">
                 View invoices →
               </Button>

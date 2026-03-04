@@ -19,12 +19,18 @@ export const listTeamMembers = query({
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
 
-    return profiles.map((p) => ({
-      _id: p._id,
-      fullName: p.fullName,
-      personalEmail: p.personalEmail,
-      isCurrentUser: p.userId === user._id,
-    }))
+    return await Promise.all(
+      profiles.map(async (p) => {
+        const memberUser = await ctx.db.get(p.userId)
+        return {
+          _id: p._id,
+          fullName: p.fullName,
+          personalEmail: p.personalEmail,
+          isCurrentUser: p.userId === user._id,
+          imageUrl: memberUser?.imageUrl,
+        }
+      })
+    )
   },
 })
 

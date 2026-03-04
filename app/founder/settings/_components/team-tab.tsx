@@ -21,7 +21,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Send, RefreshCw, UserCircle } from 'lucide-react'
+import { Send, RefreshCw } from 'lucide-react'
+import Image from 'next/image'
 
 const inviteSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -105,7 +106,24 @@ export function TeamTab() {
           <div className="divide-y">
             {teamMembers?.map((member) => (
               <div key={member._id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                <UserCircle className="h-8 w-8 text-muted-foreground" />
+                {member.imageUrl ? (
+                  <Image
+                    src={member.imageUrl}
+                    alt={member.fullName}
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                    {member.fullName
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{member.fullName}</p>
                   <p className="text-xs text-muted-foreground truncate">{member.personalEmail}</p>
