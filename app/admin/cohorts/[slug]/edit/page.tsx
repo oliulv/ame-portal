@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Form,
   FormControl,
@@ -82,14 +82,12 @@ export default function CohortEditPage() {
 
   if (cohort === undefined) {
     return (
-      <div className="container max-w-2xl py-8">
-        <Skeleton className="mb-6 h-10 w-32" />
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-32" />
+        <Skeleton className="h-9 w-48" />
+        <Skeleton className="h-5 w-64" />
         <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-64" />
-          </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-6">
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-20 w-full" />
@@ -100,8 +98,8 @@ export default function CohortEditPage() {
   }
 
   return (
-    <div className="container max-w-2xl py-8">
-      <div className="mb-6">
+    <div className="space-y-6">
+      <div>
         <Link href="/admin/cohorts">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -110,12 +108,13 @@ export default function CohortEditPage() {
         </Link>
       </div>
 
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Edit Cohort</h1>
+        <p className="text-muted-foreground">Update cohort information</p>
+      </div>
+
       <Card>
-        <CardHeader>
-          <CardTitle>Edit Cohort</CardTitle>
-          <CardDescription>Update cohort information</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {error && (
             <div className="mb-4  bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
           )}
