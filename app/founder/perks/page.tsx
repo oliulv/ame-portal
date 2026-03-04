@@ -24,6 +24,7 @@ export type FounderPerk = {
   providerLogoUrl?: string
   url?: string
   isActive: boolean
+  isPartnership?: boolean
   sortOrder: number
   isClaimed: boolean
   claimedAt?: string
@@ -228,13 +229,45 @@ export default function FounderPerksPage() {
         </p>
       )}
 
-      {/* Perks grid */}
+      {/* Perks grouped by partnership */}
       {filteredPerks.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredPerks.map((perk) => (
-            <PerkCard key={perk._id} perk={perk} onSelect={handleSelectPerk} />
-          ))}
-        </div>
+        <>
+          {filteredPerks.some((p) => p.isPartnership) && (
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Accelerate ME Partnerships</h2>
+                <p className="text-sm text-muted-foreground">
+                  Exclusive deals negotiated for Accelerate ME startups
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredPerks
+                  .filter((p) => p.isPartnership)
+                  .map((perk) => (
+                    <PerkCard key={perk._id} perk={perk} onSelect={handleSelectPerk} />
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {filteredPerks.some((p) => !p.isPartnership) && (
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Startup Programs</h2>
+                <p className="text-sm text-muted-foreground">
+                  Open programs you can apply to independently
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredPerks
+                  .filter((p) => !p.isPartnership)
+                  .map((perk) => (
+                    <PerkCard key={perk._id} perk={perk} onSelect={handleSelectPerk} />
+                  ))}
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <EmptyState
           icon={<Gift className="h-6 w-6" />}

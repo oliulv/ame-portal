@@ -30,6 +30,7 @@ import type * as lib_slugify from "../lib/slugify.js";
 import type * as lib_tokens from "../lib/tokens.js";
 import type * as lib_userCleanup from "../lib/userCleanup.js";
 import type * as metrics from "../metrics.js";
+import type * as migrations_backfillIsPartnership from "../migrations/backfillIsPartnership.js";
 import type * as milestoneTemplates from "../milestoneTemplates.js";
 import type * as milestones from "../milestones.js";
 import type * as perks from "../perks.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "lib/tokens": typeof lib_tokens;
   "lib/userCleanup": typeof lib_userCleanup;
   metrics: typeof metrics;
+  "migrations/backfillIsPartnership": typeof migrations_backfillIsPartnership;
   milestoneTemplates: typeof milestoneTemplates;
   milestones: typeof milestones;
   perks: typeof perks;

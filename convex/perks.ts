@@ -102,6 +102,7 @@ export const create = mutation({
     providerLogoUrl: v.optional(v.string()),
     url: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
+    isPartnership: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
@@ -118,6 +119,7 @@ export const create = mutation({
       providerLogoUrl: args.providerLogoUrl,
       url: args.url,
       isActive: args.isActive ?? true,
+      isPartnership: args.isPartnership ?? false,
       sortOrder,
     })
   },
@@ -137,6 +139,7 @@ export const update = mutation({
     providerLogoUrl: v.optional(v.string()),
     url: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
+    isPartnership: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)

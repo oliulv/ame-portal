@@ -46,6 +46,7 @@ type PerkWithCount = {
   providerLogoUrl?: string
   url?: string
   isActive: boolean
+  isPartnership?: boolean
   sortOrder: number
   claimCount: number
 }
@@ -72,6 +73,7 @@ export default function AdminPerksPage() {
   const [formProviderLogoUrl, setFormProviderLogoUrl] = useState('')
   const [formUrl, setFormUrl] = useState('')
   const [formIsActive, setFormIsActive] = useState(true)
+  const [formIsPartnership, setFormIsPartnership] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
   const isLoading = perks === undefined
@@ -98,6 +100,7 @@ export default function AdminPerksPage() {
     setFormProviderLogoUrl('')
     setFormUrl('')
     setFormIsActive(true)
+    setFormIsPartnership(false)
   }
 
   function openCreate() {
@@ -114,6 +117,7 @@ export default function AdminPerksPage() {
     setFormProviderLogoUrl(perk.providerLogoUrl ?? '')
     setFormUrl(perk.url ?? '')
     setFormIsActive(perk.isActive)
+    setFormIsPartnership(perk.isPartnership ?? false)
     setEditingPerk(perk)
   }
 
@@ -136,6 +140,7 @@ export default function AdminPerksPage() {
           providerLogoUrl: formProviderLogoUrl || undefined,
           url: formUrl || undefined,
           isActive: formIsActive,
+          isPartnership: formIsPartnership,
         })
         toast.success('Perk updated')
         setEditingPerk(null)
@@ -149,6 +154,7 @@ export default function AdminPerksPage() {
           providerLogoUrl: formProviderLogoUrl || undefined,
           url: formUrl || undefined,
           isActive: formIsActive,
+          isPartnership: formIsPartnership,
         })
         toast.success('Perk created')
         setIsCreateOpen(false)
@@ -264,6 +270,14 @@ export default function AdminPerksPage() {
             <Switch id="perk-active" checked={formIsActive} onCheckedChange={setFormIsActive} />
             <Label htmlFor="perk-active">Active (visible to founders)</Label>
           </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="perk-partnership"
+              checked={formIsPartnership}
+              onCheckedChange={setFormIsPartnership}
+            />
+            <Label htmlFor="perk-partnership">AME Partnership (exclusive deal)</Label>
+          </div>
         </div>
         <DialogFooter>
           <Button
@@ -312,6 +326,7 @@ export default function AdminPerksPage() {
                   <TableHead>Title</TableHead>
                   <TableHead>Provider</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Claims</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -336,6 +351,11 @@ export default function AdminPerksPage() {
                       ) : (
                         '—'
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={perk.isPartnership ? 'default' : 'outline'}>
+                        {perk.isPartnership ? 'Partnership' : 'Program'}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant={perk.isActive ? 'success' : 'secondary'}>

@@ -33,7 +33,7 @@ export default defineSchema({
     .index('by_userId_cohortId', ['userId', 'cohortId']),
 
   // ── Startups ───────────────────────────────────────────────────────
-  startups: defineTable({ 
+  startups: defineTable({
     cohortId: v.id('cohorts'),
     name: v.string(),
     slug: v.optional(v.string()),
@@ -273,6 +273,7 @@ export default defineSchema({
     providerLogoUrl: v.optional(v.string()),
     url: v.optional(v.string()),
     isActive: v.boolean(),
+    isPartnership: v.optional(v.boolean()),
     sortOrder: v.number(),
   }),
 
