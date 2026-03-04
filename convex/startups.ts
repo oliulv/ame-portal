@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin } from './auth'
+import { requireAdmin, requireSuperAdmin } from './auth'
 import { slugify, generateUniqueSlug } from './lib/slugify'
 
 /**
@@ -211,5 +211,134 @@ export const dashboardStats = query({
       startupsCount: startups.length,
       invoicesCount: invoiceCount,
     }
+  },
+})
+
+/**
+ * Permanently delete a startup and all associated data.
+ * Requires super_admin role and name confirmation.
+ */
+export const remove = mutation({
+  args: {
+    id: v.id('startups'),
+    confirmName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireSuperAdmin(ctx)
+
+    const startup = await ctx.db.get(args.id)
+    if (!startup) throw new Error('Startup not found')
+
+    if (args.confirmName !== startup.name) {
+      throw new Error('Confirmation name does not match startup name')
+    }
+
+    // 1. Delete tracker events (via tracker websites)
+    const trackerWebsites = await ctx.db
+      .query('trackerWebsites')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const website of trackerWebsites) {
+      const events = await ctx.db
+        .query('trackerEvents')
+        .withIndex('by_websiteId', (q) => q.eq('websiteId', website._id))
+        .collect()
+      for (const event of events) {
+        await ctx.db.delete(event._id)
+      }
+    }
+
+    // 2. Delete tracker websites
+    for (const website of trackerWebsites) {
+      await ctx.db.delete(website._id)
+    }
+
+    // 3. Delete metrics data
+    const metricsData = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const metric of metricsData) {
+      await ctx.db.delete(metric._id)
+    }
+
+    // 4. Delete integration connections
+    const integrations = await ctx.db
+      .query('integrationConnections')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const integration of integrations) {
+      await ctx.db.delete(integration._id)
+    }
+
+    // 5. Delete invoices + stored files
+    const invoices = await ctx.db
+      .query('invoices')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const invoice of invoices) {
+      if (invoice.storageId) {
+        await ctx.storage.delete(invoice.storageId)
+      }
+      await ctx.db.delete(invoice._id)
+    }
+
+    // 6. Delete milestones + plan files
+    const milestones = await ctx.db
+      .query('milestones')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const milestone of milestones) {
+      if (milestone.planStorageId) {
+        await ctx.storage.delete(milestone.planStorageId)
+      }
+      await ctx.db.delete(milestone._id)
+    }
+
+    // 7. Delete perk claims (no by_startupId index, must filter)
+    const allPerkClaims = await ctx.db.query('perkClaims').collect()
+    const startupPerkClaims = allPerkClaims.filter((c) => c.startupId === args.id)
+    for (const claim of startupPerkClaims) {
+      await ctx.db.delete(claim._id)
+    }
+
+    // 8. Delete bank details
+    const bankDetails = await ctx.db
+      .query('bankDetails')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const detail of bankDetails) {
+      await ctx.db.delete(detail._id)
+    }
+
+    // 9. Delete founder profiles
+    const founderProfiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const profile of founderProfiles) {
+      await ctx.db.delete(profile._id)
+    }
+
+    // 10. Delete invitations
+    const invitations = await ctx.db
+      .query('invitations')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const invitation of invitations) {
+      await ctx.db.delete(invitation._id)
+    }
+
+    // 11. Delete startup profiles
+    const startupProfiles = await ctx.db
+      .query('startupProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
+      .collect()
+    for (const profile of startupProfiles) {
+      await ctx.db.delete(profile._id)
+    }
+
+    // 12. Finally delete the startup itself
+    await ctx.db.delete(args.id)
   },
 })

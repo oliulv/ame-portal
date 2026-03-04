@@ -9,6 +9,14 @@ import { api } from '@/convex/_generated/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Form,
   FormControl,
   FormDescription,
@@ -21,7 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { startupSchema, type StartupFormData } from '@/lib/schemas'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -32,10 +40,17 @@ export default function EditStartupPage() {
   const slug = params.slug as string
 
   const startup = useQuery(api.startups.getBySlug, { slug })
+  const currentUser = useQuery(api.users.current)
   const updateStartup = useMutation(api.startups.update)
+  const deleteStartup = useMutation(api.startups.remove)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteConfirmName, setDeleteConfirmName] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const isSuperAdmin = currentUser?.role === 'super_admin'
 
   const form = useForm<StartupFormData>({
     resolver: zodResolver(startupSchema),
@@ -255,6 +270,80 @@ export default function EditStartupPage() {
           </Form>
         </CardContent>
       </Card>
+
+      {isSuperAdmin && (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive">Danger Zone</CardTitle>
+            <CardDescription>
+              Permanently delete this startup and all associated data
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Startup
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open)
+          if (!open) {
+            setDeleteConfirmName('')
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {startup.name}?</DialogTitle>
+            <DialogDescription>
+              This action is permanent and cannot be undone. This will delete the startup, all
+              founder profiles, invoices, milestones, metrics, integrations, and all other
+              associated data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <p className="text-sm text-muted-foreground">
+              Type <span className="font-semibold text-foreground">{startup.name}</span> to confirm
+            </p>
+            <Input
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+              placeholder={startup.name}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteConfirmName !== startup.name || isDeleting}
+              onClick={async () => {
+                setIsDeleting(true)
+                try {
+                  await deleteStartup({ id: startup._id, confirmName: deleteConfirmName })
+                  toast.success(`"${startup.name}" has been permanently deleted`)
+                  router.push(`/admin/${cohortSlug}/startups`)
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Failed to delete startup')
+                  setIsDeleting(false)
+                }
+              }}
+            >
+              {isDeleting ? 'Deleting...' : 'I understand, delete this startup'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
