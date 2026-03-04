@@ -57,36 +57,51 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Startups</CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-1 flex-col">
             <div className="text-2xl font-bold font-display">{startupsCount}</div>
             <p className="text-xs text-muted-foreground">Startups in this cohort</p>
+            <Link href={`/admin/${cohortSlug}/startups`} className="mt-auto pt-3 inline-block">
+              <Button variant="link" size="sm" className="h-auto p-0">
+                View startups →
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Invoices</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-1 flex-col">
             <div className="text-2xl font-bold font-display">{invoicesCount}</div>
             <p className="text-xs text-muted-foreground">Invoices from this cohort</p>
+            <Link href={`/admin/${cohortSlug}/invoices`} className="mt-auto pt-3 inline-block">
+              <Button variant="link" size="sm" className="h-auto p-0">
+                View invoices →
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Cohorts</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-1 flex-col">
             <div className="text-2xl font-bold font-display">{cohortsCount}</div>
             <p className="text-xs text-muted-foreground">All cohorts in system</p>
+            <Link href="/admin/cohorts" className="mt-auto pt-3 inline-block">
+              <Button variant="link" size="sm" className="h-auto p-0">
+                View cohorts →
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
