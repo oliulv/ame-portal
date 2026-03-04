@@ -2,7 +2,9 @@
 
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useQuery } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { Sidebar } from '@/components/sidebar'
 import { useWaitForUser } from '@/hooks/useWaitForUser'
 import { Settings } from 'lucide-react'
@@ -39,12 +41,18 @@ function FounderHeader() {
 }
 
 export default function FounderLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const router = useRouter()
   const { user, isLoading, timedOut } = useWaitForUser()
 
   // Allow founder role, or admin/super_admin (who may also have a founderProfile).
   // Backend queries (requireFounder) handle the real access control.
   const hasFounderAccess =
     user?.role === 'founder' || user?.role === 'admin' || user?.role === 'super_admin'
+
+  const profileData = useQuery(api.founderProfile.get, hasFounderAccess ? undefined : 'skip')
+  const onboardingIncomplete =
+    profileData !== undefined && profileData?.founderProfile?.onboardingStatus !== 'completed'
 
   useEffect(() => {
     if (isLoading) return
@@ -58,6 +66,13 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
       window.location.href = '/login'
     }
   }, [user, isLoading, timedOut, hasFounderAccess])
+
+  // Redirect non-onboarded founders to onboarding page
+  useEffect(() => {
+    if (!onboardingIncomplete) return
+    if (pathname.startsWith('/founder/onboarding')) return
+    router.replace('/founder/onboarding')
+  }, [onboardingIncomplete, pathname, router])
 
   if (isLoading) {
     return (
@@ -88,6 +103,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
         subtitle="Founder Portal"
         navItems={navItems}
         showCohortSelector={false}
+        navigationDisabled={onboardingIncomplete}
       />
 
       {/* Main content */}

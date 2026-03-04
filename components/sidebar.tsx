@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import {
   LayoutDashboard,
   Users,
@@ -44,6 +45,7 @@ interface SidebarProps {
   navItems: NavItem[]
   showCohortSelector?: boolean
   userRole?: 'super_admin' | 'admin' | 'founder'
+  navigationDisabled?: boolean
 }
 
 const iconMap: Record<string, LucideIcon> = {
@@ -95,6 +97,7 @@ function SidebarContent({
   navItems,
   showCohortSelector = false,
   userRole,
+  navigationDisabled,
   onLinkClick,
 }: SidebarProps & { onLinkClick?: () => void }) {
   const pathname = usePathname()
@@ -215,6 +218,11 @@ function SidebarContent({
         key={item.href}
         href={isDisabled ? '#' : href}
         onClick={(e) => {
+          if (navigationDisabled) {
+            e.preventDefault()
+            toast.info('Complete onboarding first')
+            return
+          }
           if (isDisabled || href === '#') {
             e.preventDefault()
             return
@@ -318,6 +326,7 @@ export function Sidebar({
   navItems,
   showCohortSelector = false,
   userRole,
+  navigationDisabled,
 }: SidebarProps) {
   const [open, setOpen] = useState(false)
 
@@ -346,6 +355,7 @@ export function Sidebar({
               navItems={navItems}
               showCohortSelector={showCohortSelector}
               userRole={userRole}
+              navigationDisabled={navigationDisabled}
               onLinkClick={() => setOpen(false)}
             />
           </SheetContent>
@@ -353,13 +363,14 @@ export function Sidebar({
       </div>
 
       {/* Desktop sidebar */}
-      <aside className="fixed left-0 top-0 z-30 hidden h-[100dvh] w-56 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar lg:flex">
+      <aside className="fixed left-0 top-0 z-30 hidden h-[100dvh] w-56 flex-col overflow-hidden bg-sidebar lg:flex">
         <SidebarContent
           title={title}
           subtitle={subtitle}
           navItems={navItems}
           showCohortSelector={showCohortSelector}
           userRole={userRole}
+          navigationDisabled={navigationDisabled}
         />
       </aside>
     </>

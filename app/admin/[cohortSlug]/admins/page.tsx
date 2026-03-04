@@ -46,7 +46,7 @@ import {
 } from '@/components/ui/select'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Users, UserPlus, RotateCw, X, Trash2 } from 'lucide-react'
+import { Users, UserPlus, RotateCw, Trash2 } from 'lucide-react'
 
 const adminInvitationSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -72,7 +72,6 @@ export default function AdminsPage() {
   // Mutation pending states
   const [isCreating, setIsCreating] = useState(false)
   const [resendingId, setResendingId] = useState<string | null>(null)
-  const [revokingId, setRevokingId] = useState<string | null>(null)
   const [isRemoving, setIsRemoving] = useState(false)
   const [invitationToDelete, setInvitationToDelete] = useState<{
     _id: string
@@ -99,7 +98,6 @@ export default function AdminsPage() {
   // Mutations
   const createInvitation = useMutation(api.adminInvitations.create)
   const resendInvitation = useMutation(api.adminInvitations.resend)
-  const revokeInvitation = useMutation(api.adminInvitations.revoke)
   const removeAdminFromCohort = useMutation(api.adminCohorts.remove)
   const deleteInvitation = useMutation(api.adminInvitations.remove)
 
@@ -178,18 +176,6 @@ export default function AdminsPage() {
       toast.error(err instanceof Error ? err.message : 'Failed to delete invitation')
     } finally {
       setIsDeletingInvitation(false)
-    }
-  }
-
-  async function handleRevoke(invitationId: string) {
-    setRevokingId(invitationId)
-    try {
-      await revokeInvitation({ id: invitationId as any })
-      toast.success('Invitation revoked successfully')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to revoke invitation')
-    } finally {
-      setRevokingId(null)
     }
   }
 
@@ -489,26 +475,15 @@ export default function AdminsPage() {
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               {isPending && (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleResend(invitation._id)}
-                                    disabled={resendingId === invitation._id}
-                                  >
-                                    <RotateCw className="mr-1 h-3 w-3" />
-                                    Resend
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleRevoke(invitation._id)}
-                                    disabled={revokingId === invitation._id}
-                                  >
-                                    <X className="mr-1 h-3 w-3" />
-                                    Revoke
-                                  </Button>
-                                </>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleResend(invitation._id)}
+                                  disabled={resendingId === invitation._id}
+                                >
+                                  <RotateCw className="mr-1 h-3 w-3" />
+                                  Resend
+                                </Button>
                               )}
                               <Button
                                 variant="outline"
