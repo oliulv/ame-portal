@@ -324,8 +324,7 @@ export default function StartupFundingPage() {
     .reduce((sum, i) => sum + i.amountGbp, 0)
   const available = Math.max(0, unlocked - deployed)
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
-  const unlockedPct = potential > 0 ? (unlocked / potential) * 100 : 0
-  const deployedPct = potential > 0 ? (cappedDeployed / potential) * 100 : 0
+  const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
   const approvedCount = milestoneList.filter((m) => m.status === 'approved').length
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -651,15 +650,15 @@ export default function StartupFundingPage() {
               unlocked
             </p>
           </div>
-          <div className="relative h-3 overflow-hidden rounded-full bg-muted">
-            <div
-              className="absolute inset-y-0 left-0 bg-emerald-500/25"
-              style={{ width: `${unlockedPct}%` }}
-            />
-            <div
-              className="absolute inset-y-0 left-0 bg-blue-600"
-              style={{ width: `${deployedPct}%` }}
-            />
+          <div
+            className={`relative h-3 overflow-hidden rounded-full ${unlocked > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
+          >
+            {unlocked > 0 && (
+              <div
+                className="absolute inset-y-0 left-0 bg-blue-600"
+                style={{ width: `${deployedPct}%` }}
+              />
+            )}
           </div>
           <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
