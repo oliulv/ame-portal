@@ -25,6 +25,7 @@ export const getFileUrl = query({
 
 /**
  * Create an invoice record (founder uploads file, then creates record).
+ * Validates: PDF only, naming convention, amount within available balance.
  */
 export const create = mutation({
   args: {
@@ -34,6 +35,8 @@ export const create = mutation({
     invoiceDate: v.string(),
     amountGbp: v.number(),
     description: v.optional(v.string()),
+    receiptStorageId: v.optional(v.id('_storage')),
+    receiptFileName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
@@ -43,8 +46,80 @@ export const create = mutation({
       throw new Error('No startup associated with your account')
     }
 
+    const startupId = startupIds[0]
+    const startup = await ctx.db.get(startupId)
+    if (!startup) throw new Error('Startup not found')
+
+    // Validate PDF extension
+    if (!args.fileName.toLowerCase().endsWith('.pdf')) {
+      throw new Error('Invoice must be a PDF file')
+    }
+    if (args.receiptFileName && !args.receiptFileName.toLowerCase().endsWith('.pdf')) {
+      throw new Error('Receipt must be a PDF file')
+    }
+
+    // Validate naming convention: "{StartupName} Invoice {N}.pdf"
+    const namePattern = new RegExp(
+      `^${startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Invoice \\d+\\.pdf$`,
+      'i'
+    )
+    if (!namePattern.test(args.fileName)) {
+      throw new Error(
+        `Invoice must be named "${startup.name} Invoice {number}.pdf" (e.g. "${startup.name} Invoice 1.pdf")`
+      )
+    }
+
+    // Check for duplicate filename
+    const existingInvoices = await ctx.db
+      .query('invoices')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
+      .collect()
+    const duplicate = existingInvoices.find(
+      (inv) => inv.fileName.toLowerCase() === args.fileName.toLowerCase()
+    )
+    if (duplicate) {
+      throw new Error(
+        `An invoice named "${args.fileName}" already exists. Each invoice must have a unique number.`
+      )
+    }
+
+    // Validate receipt naming if present
+    if (args.receiptFileName) {
+      const receiptPattern = new RegExp(
+        `^${startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`,
+        'i'
+      )
+      if (!receiptPattern.test(args.receiptFileName)) {
+        throw new Error(
+          `Receipt must be named "${startup.name} Receipt {number}.pdf" (e.g. "${startup.name} Receipt 1.pdf")`
+        )
+      }
+    }
+
+    // Validate amount against available balance
+    const milestones = await ctx.db
+      .query('milestones')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
+      .collect()
+    const unlocked = milestones
+      .filter((m) => m.status === 'approved')
+      .reduce((sum, m) => sum + m.amount, 0)
+    const deployed = startup.fundingDeployed ?? 0
+    const available = Math.max(0, unlocked - deployed)
+
+    if (available <= 0) {
+      throw new Error(
+        'No available funding. Complete milestones to unlock funding before submitting invoices.'
+      )
+    }
+    if (args.amountGbp > available) {
+      throw new Error(
+        `Amount exceeds available balance. You have £${available.toFixed(2)} available.`
+      )
+    }
+
     return await ctx.db.insert('invoices', {
-      startupId: startupIds[0],
+      startupId,
       uploadedByUserId: user._id,
       vendorName: args.vendorName,
       invoiceDate: args.invoiceDate,
@@ -52,8 +127,24 @@ export const create = mutation({
       description: args.description,
       storageId: args.storageId,
       fileName: args.fileName,
+      receiptStorageId: args.receiptStorageId,
+      receiptFileName: args.receiptFileName,
       status: 'submitted',
     })
+  },
+})
+
+/**
+ * Get the founder's startup name (for invoice naming validation).
+ */
+export const getFounderStartupName = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+    if (startupIds.length === 0) return null
+    const startup = await ctx.db.get(startupIds[0])
+    return startup?.name ?? null
   },
 })
 
