@@ -109,6 +109,40 @@ export const ensureUser = mutation({
       if (Object.keys(updates).length > 0) {
         await ctx.db.patch(existing._id, updates)
       }
+
+      // If founder-role user has no founderProfile (stale state after startup deletion),
+      // check for pending invitations and auto-accept to restore their association.
+      if (existing.role === 'founder' && identity.email) {
+        const hasProfile = await ctx.db
+          .query('founderProfiles')
+          .withIndex('by_userId', (q) => q.eq('userId', existing._id))
+          .first()
+
+        if (!hasProfile) {
+          const now = new Date()
+          const allInvitations = await ctx.db.query('invitations').collect()
+          const pendingInvite = allInvitations.find(
+            (inv) =>
+              inv.email.toLowerCase() === identity.email!.toLowerCase() &&
+              !inv.acceptedAt &&
+              new Date(inv.expiresAt) > now
+          )
+
+          if (pendingInvite) {
+            await ctx.db.insert('founderProfiles', {
+              userId: existing._id,
+              startupId: pendingInvite.startupId,
+              fullName: pendingInvite.fullName,
+              personalEmail: pendingInvite.email,
+              onboardingStatus: 'pending',
+            })
+            await ctx.db.patch(pendingInvite._id, {
+              acceptedAt: new Date().toISOString(),
+            })
+          }
+        }
+      }
+
       return existing._id
     }
 
