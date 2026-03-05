@@ -52,6 +52,9 @@ export default function NewInvoicePage() {
     ? new RegExp(`^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`, 'i')
     : null
 
+  // Extract invoice number from filename for receipt matching
+  const invoiceNumber = invoiceFile?.name.match(/Invoice (\d+)\.pdf$/i)?.[1] ?? null
+
   const invoiceNameError =
     invoiceFile && invoiceNamePattern && !invoiceNamePattern.test(invoiceFile.name)
       ? `Must be named "${startupName} Invoice {number}.pdf"`
@@ -59,12 +62,19 @@ export default function NewInvoicePage() {
         ? 'Must be a PDF file'
         : null
 
-  const receiptNameError =
-    receiptFile && receiptNamePattern && !receiptNamePattern.test(receiptFile.name)
-      ? `Must be named "${startupName} Receipt {number}.pdf"`
-      : receiptFile && !receiptFile.name.toLowerCase().endsWith('.pdf')
-        ? 'Must be a PDF file'
-        : null
+  const receiptNameError = (() => {
+    if (!receiptFile) return null
+    if (!receiptFile.name.toLowerCase().endsWith('.pdf')) return 'Must be a PDF file'
+    if (receiptNamePattern && !receiptNamePattern.test(receiptFile.name))
+      return `Must be named "${startupName} Receipt {number}.pdf"`
+    // Enforce matching number between invoice and receipt
+    if (invoiceNumber) {
+      const receiptNumber = receiptFile.name.match(/Receipt (\d+)\.pdf$/i)?.[1] ?? null
+      if (receiptNumber && receiptNumber !== invoiceNumber)
+        return `Receipt number must match invoice number (${invoiceNumber})`
+    }
+    return null
+  })()
 
   const amountValue = form.watch('amount_gbp')
   const amountExceedsBalance = typeof amountValue === 'number' && amountValue > available

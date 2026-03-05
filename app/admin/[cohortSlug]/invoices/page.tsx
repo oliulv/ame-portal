@@ -4,7 +4,7 @@ import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -162,8 +162,8 @@ export default function AdminInvoicesPage() {
           <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
             StartupName Receipt N.pdf
           </code>
-          . Duplicates or incorrectly named files are blocked. This ensures clean integration with
-          Xero.
+          . The invoice number and receipt number must match. Founders cannot submit incorrectly
+          named or duplicate files — this is enforced before submission to keep Xero clean.
         </p>
         <p>
           Founders cannot submit invoices exceeding their available balance (unlocked minus
@@ -219,63 +219,67 @@ export default function AdminInvoicesPage() {
       {/* Table */}
       {invoices && invoices.length > 0 ? (
         <Card>
-          <div className="px-4 pt-4 text-sm text-muted-foreground">
-            Showing {invoices.length} of {cohortInvoices?.length ?? 0} invoices
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Startup</TableHead>
-                <TableHead>Vendor</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invoices.map((invoice) => (
-                <TableRow
-                  key={invoice._id}
-                  className="cursor-pointer transition-colors hover:bg-muted/50"
-                  onClick={() => router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)}
-                >
-                  <TableCell className="font-medium">
-                    {startupNameMap.get(invoice.startupId) || 'Unknown'}
-                  </TableCell>
-                  <TableCell>{invoice.vendorName}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    £{Number(invoice.amountGbp).toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}>
-                      {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)
-                      }}
-                    >
-                      Review
-                      <ExternalLink className="ml-2 h-3 w-3" />
-                    </Button>
-                  </TableCell>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Showing {invoices.length} of {cohortInvoices?.length ?? 0} invoices
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Startup</TableHead>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-12"></TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {invoices.map((invoice) => (
+                  <TableRow
+                    key={invoice._id}
+                    className="cursor-pointer transition-colors hover:bg-muted/50"
+                    onClick={() => router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)}
+                  >
+                    <TableCell className="font-medium">
+                      {startupNameMap.get(invoice.startupId) || 'Unknown'}
+                    </TableCell>
+                    <TableCell>{invoice.vendorName}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      £{Number(invoice.amountGbp).toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}>
+                        {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)
+                        }}
+                      >
+                        Review
+                        <ExternalLink className="ml-2 h-3 w-3" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
         </Card>
       ) : (
         <EmptyState

@@ -94,6 +94,13 @@ export const create = mutation({
           `Receipt must be named "${startup.name} Receipt {number}.pdf" (e.g. "${startup.name} Receipt 1.pdf")`
         )
       }
+
+      // Enforce matching number between invoice and receipt
+      const invoiceNum = args.fileName.match(/Invoice (\d+)\.pdf$/i)?.[1]
+      const receiptNum = args.receiptFileName.match(/Receipt (\d+)\.pdf$/i)?.[1]
+      if (invoiceNum && receiptNum && invoiceNum !== receiptNum) {
+        throw new Error(`Receipt number (${receiptNum}) must match invoice number (${invoiceNum})`)
+      }
     }
 
     // Validate amount against available balance
@@ -285,6 +292,14 @@ export const updateStatus = mutation({
 
     if (args.status === 'paid') {
       patch.paidAt = new Date().toISOString()
+      // Auto-update deployed amount on the startup
+      const startup = await ctx.db.get(invoice.startupId)
+      if (startup) {
+        const currentDeployed = startup.fundingDeployed ?? 0
+        await ctx.db.patch(invoice.startupId, {
+          fundingDeployed: currentDeployed + invoice.amountGbp,
+        })
+      }
     }
 
     await ctx.db.patch(args.id, patch)

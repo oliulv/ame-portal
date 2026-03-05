@@ -137,8 +137,8 @@ export default function FounderInvoicesPage() {
           possible. Only PDF files are accepted — Word documents will be rejected.
         </p>
         <p>
-          Wrongly named files or duplicate invoice numbers will be rejected automatically. This is
-          critical for our accounting workflow.
+          You will not be able to submit an invoice with an incorrect filename or a duplicate
+          invoice number. This is enforced to keep our accounting workflow clean.
         </p>
       </HowItWorks>
 
