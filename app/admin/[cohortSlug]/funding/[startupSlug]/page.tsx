@@ -278,17 +278,18 @@ export default function StartupFundingPage() {
     api.milestones.listByStartup,
     startup ? { startupId: startup._id } : 'skip'
   )
+  const invoicesData = useQuery(
+    api.invoices.listForAdmin,
+    startup ? { startupId: startup._id } : 'skip'
+  )
 
   const createMilestone = useMutation(api.milestones.create)
   const updateMilestone = useMutation(api.milestones.update)
   const removeMilestone = useMutation(api.milestones.remove)
   const approveMilestone = useMutation(api.milestones.approve)
   const reorderMilestones = useMutation(api.milestones.reorder)
-  const updateFundingDeployed = useMutation(api.milestones.updateFundingDeployed)
-
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null)
-  const [deployedInput, setDeployedInput] = useState<string | null>(null)
 
   // Form state
   const [formTitle, setFormTitle] = useState('')
@@ -314,7 +315,9 @@ export default function StartupFundingPage() {
   const unlocked = milestoneList
     .filter((m) => m.status === 'approved')
     .reduce((sum, m) => sum + m.amount, 0)
-  const deployed = startup?.fundingDeployed ?? 0
+  const deployed = (invoicesData ?? [])
+    .filter((i) => i.status === 'paid')
+    .reduce((sum, i) => sum + i.amountGbp, 0)
   const available = Math.max(0, unlocked - deployed)
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const unlockedPct = potential > 0 ? (unlocked / potential) * 100 : 0
@@ -470,23 +473,6 @@ export default function StartupFundingPage() {
     } catch (error) {
       logClientError('Failed to reorder:', error)
       toast.error('Failed to reorder milestones')
-    }
-  }
-
-  async function handleDeployedSave() {
-    if (deployedInput === null) return
-    const amount = parseFloat(deployedInput)
-    if (isNaN(amount)) {
-      toast.error('Invalid amount')
-      return
-    }
-    try {
-      await updateFundingDeployed({ startupId: startup!._id, amount })
-      toast.success('Deployed amount updated')
-      setDeployedInput(null)
-    } catch (error) {
-      logClientError('Failed to update deployed:', error)
-      toast.error('Failed to update deployed amount')
     }
   }
 
@@ -696,37 +682,10 @@ export default function StartupFundingPage() {
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
               Deployed
-              <InfoTooltip text="Amount already claimed via approved/paid invoices. Click the amount to manually adjust." />
+              <InfoTooltip text="Sum of all paid invoices for this startup. Updates automatically when invoices are marked as paid." />
             </p>
-            {deployedInput !== null ? (
-              <div className="mt-1 flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={deployedInput}
-                  onChange={(e) => setDeployedInput(e.target.value)}
-                  className="h-8 w-32"
-                  autoFocus
-                  onFocus={(e) => e.currentTarget.select()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleDeployedSave()
-                    if (e.key === 'Escape') setDeployedInput(null)
-                  }}
-                />
-                <Button size="sm" variant="ghost" onClick={handleDeployedSave}>
-                  <Check className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div
-                className="mt-1 cursor-pointer text-2xl font-bold font-display text-blue-600 hover:underline"
-                onClick={() => setDeployedInput(String(deployed))}
-                title="Click to edit"
-              >
-                £{deployed.toLocaleString('en-GB')}
-              </div>
-            )}
-            <p className="mt-1 text-xs text-muted-foreground">
-              Click amount to edit deployed funds
+            <p className="mt-1 text-2xl font-bold font-display text-blue-600">
+              £{deployed.toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>

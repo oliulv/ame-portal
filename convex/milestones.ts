@@ -40,8 +40,26 @@ export const listForFounder = query({
 })
 
 /**
+ * Get a single milestone by ID for the current founder.
+ */
+export const getForFounder = query({
+  args: { id: v.id('milestones') },
+  handler: async (ctx, args) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+
+    const milestone = await ctx.db.get(args.id)
+    if (!milestone) return null
+    if (!startupIds.includes(milestone.startupId)) return null
+
+    return milestone
+  },
+})
+
+/**
  * Funding summary for the current founder's startup.
  * Returns unlocked, deployed, and available balance.
+ * Deployed is computed from the sum of all paid invoices.
  */
 export const fundingSummaryForFounder = query({
   args: {},
@@ -54,7 +72,6 @@ export const fundingSummaryForFounder = query({
     }
 
     const startupId = startupIds[0]
-    const startup = await ctx.db.get(startupId)
     const milestones = await ctx.db
       .query('milestones')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
@@ -63,7 +80,15 @@ export const fundingSummaryForFounder = query({
     const unlocked = milestones
       .filter((m) => m.status === 'approved')
       .reduce((sum, m) => sum + m.amount, 0)
-    const deployed = startup?.fundingDeployed ?? 0
+
+    const paidInvoices = await ctx.db
+      .query('invoices')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
+      .collect()
+    const deployed = paidInvoices
+      .filter((i) => i.status === 'paid')
+      .reduce((sum, i) => sum + i.amountGbp, 0)
+
     const available = Math.max(0, unlocked - deployed)
 
     return {
@@ -105,7 +130,15 @@ export const fundingOverview = query({
         const unlocked = milestones
           .filter((m) => m.status === 'approved')
           .reduce((sum, m) => sum + m.amount, 0)
-        const deployed = startup.fundingDeployed ?? 0
+
+        const paidInvoices = await ctx.db
+          .query('invoices')
+          .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+          .collect()
+        const deployed = paidInvoices
+          .filter((i) => i.status === 'paid')
+          .reduce((sum, i) => sum + i.amountGbp, 0)
+
         const available = Math.max(0, unlocked - deployed)
         const excluded = startup.excludeFromMetrics === true
 

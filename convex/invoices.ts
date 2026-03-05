@@ -69,17 +69,25 @@ export const create = mutation({
       )
     }
 
-    // Check for duplicate filename
+    // Enforce sequential invoice numbering
     const existingInvoices = await ctx.db
       .query('invoices')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
-    const duplicate = existingInvoices.find(
-      (inv) => inv.fileName.toLowerCase() === args.fileName.toLowerCase()
-    )
-    if (duplicate) {
+
+    const existingNumbers = existingInvoices
+      .map((inv) => {
+        const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
+        return match ? parseInt(match[1], 10) : 0
+      })
+      .filter((n) => n > 0)
+    const maxExisting = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
+    const expectedNext = maxExisting + 1
+
+    const invoiceNum = args.fileName.match(/Invoice (\d+)\.pdf$/i)?.[1]
+    if (!invoiceNum || parseInt(invoiceNum, 10) !== expectedNext) {
       throw new Error(
-        `An invoice named "${args.fileName}" already exists. Each invoice must have a unique number.`
+        `Invoice number must be ${expectedNext}. Please name your file "${startup.name} Invoice ${expectedNext}.pdf".`
       )
     }
 
@@ -91,15 +99,16 @@ export const create = mutation({
       )
       if (!receiptPattern.test(args.receiptFileName)) {
         throw new Error(
-          `Receipt must be named "${startup.name} Receipt {number}.pdf" (e.g. "${startup.name} Receipt 1.pdf")`
+          `Receipt must be named "${startup.name} Receipt {number}.pdf" (e.g. "${startup.name} Receipt ${expectedNext}.pdf")`
         )
       }
 
       // Enforce matching number between invoice and receipt
-      const invoiceNum = args.fileName.match(/Invoice (\d+)\.pdf$/i)?.[1]
       const receiptNum = args.receiptFileName.match(/Receipt (\d+)\.pdf$/i)?.[1]
-      if (invoiceNum && receiptNum && invoiceNum !== receiptNum) {
-        throw new Error(`Receipt number (${receiptNum}) must match invoice number (${invoiceNum})`)
+      if (receiptNum && parseInt(receiptNum, 10) !== expectedNext) {
+        throw new Error(
+          `Receipt number must be ${expectedNext} to match the invoice. Please name your file "${startup.name} Receipt ${expectedNext}.pdf".`
+        )
       }
     }
 
@@ -111,7 +120,9 @@ export const create = mutation({
     const unlocked = milestones
       .filter((m) => m.status === 'approved')
       .reduce((sum, m) => sum + m.amount, 0)
-    const deployed = startup.fundingDeployed ?? 0
+    const deployed = existingInvoices
+      .filter((i) => i.status === 'paid')
+      .reduce((sum, i) => sum + i.amountGbp, 0)
     const available = Math.max(0, unlocked - deployed)
 
     if (available <= 0) {
@@ -142,7 +153,40 @@ export const create = mutation({
 })
 
 /**
+ * Get the founder's startup name and the expected next invoice number.
+ */
+export const getFounderInvoiceInfo = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+    if (startupIds.length === 0) return null
+    const startup = await ctx.db.get(startupIds[0])
+    if (!startup) return null
+
+    const invoices = await ctx.db
+      .query('invoices')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
+      .collect()
+
+    const existingNumbers = invoices
+      .map((inv) => {
+        const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
+        return match ? parseInt(match[1], 10) : 0
+      })
+      .filter((n) => n > 0)
+    const maxExisting = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
+
+    return {
+      startupName: startup.name,
+      nextInvoiceNumber: maxExisting + 1,
+    }
+  },
+})
+
+/**
  * Get the founder's startup name (for invoice naming validation).
+ * @deprecated Use getFounderInvoiceInfo instead.
  */
 export const getFounderStartupName = query({
   args: {},
@@ -292,14 +336,6 @@ export const updateStatus = mutation({
 
     if (args.status === 'paid') {
       patch.paidAt = new Date().toISOString()
-      // Auto-update deployed amount on the startup
-      const startup = await ctx.db.get(invoice.startupId)
-      if (startup) {
-        const currentDeployed = startup.fundingDeployed ?? 0
-        await ctx.db.patch(invoice.startupId, {
-          fundingDeployed: currentDeployed + invoice.amountGbp,
-        })
-      }
     }
 
     await ctx.db.patch(args.id, patch)
