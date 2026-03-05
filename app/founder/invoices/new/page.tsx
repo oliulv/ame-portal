@@ -31,9 +31,11 @@ export default function NewInvoicePage() {
 
   const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
   const createInvoice = useMutation(api.invoices.create)
-  const startupName = useQuery(api.invoices.getFounderStartupName)
+  const invoiceInfo = useQuery(api.invoices.getFounderInvoiceInfo)
   const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
 
+  const startupName = invoiceInfo?.startupName ?? null
+  const expectedNumber = invoiceInfo?.nextInvoiceNumber ?? 1
   const available = fundingSummary?.available ?? 0
 
   const form = useForm<FounderInvoiceUploadFormData>({
@@ -45,34 +47,35 @@ export default function NewInvoicePage() {
     },
   })
 
-  const invoiceNamePattern = startupName
-    ? new RegExp(`^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Invoice \\d+\\.pdf$`, 'i')
-    : null
-  const receiptNamePattern = startupName
-    ? new RegExp(`^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`, 'i')
-    : null
-
-  // Extract invoice number from filename for receipt matching
-  const invoiceNumber = invoiceFile?.name.match(/Invoice (\d+)\.pdf$/i)?.[1] ?? null
-
-  const invoiceNameError =
-    invoiceFile && invoiceNamePattern && !invoiceNamePattern.test(invoiceFile.name)
-      ? `Must be named "${startupName} Invoice {number}.pdf"`
-      : invoiceFile && !invoiceFile.name.toLowerCase().endsWith('.pdf')
-        ? 'Must be a PDF file'
-        : null
+  const invoiceNameError = (() => {
+    if (!invoiceFile) return null
+    if (!invoiceFile.name.toLowerCase().endsWith('.pdf')) return 'Must be a PDF file'
+    if (!startupName) return null
+    const pattern = new RegExp(
+      `^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Invoice \\d+\\.pdf$`,
+      'i'
+    )
+    if (!pattern.test(invoiceFile.name))
+      return `Must be named "${startupName} Invoice ${expectedNumber}.pdf"`
+    const num = invoiceFile.name.match(/Invoice (\d+)\.pdf$/i)?.[1]
+    if (num && parseInt(num, 10) !== expectedNumber)
+      return `Invoice number must be ${expectedNumber}. Please name your file "${startupName} Invoice ${expectedNumber}.pdf".`
+    return null
+  })()
 
   const receiptNameError = (() => {
     if (!receiptFile) return null
     if (!receiptFile.name.toLowerCase().endsWith('.pdf')) return 'Must be a PDF file'
-    if (receiptNamePattern && !receiptNamePattern.test(receiptFile.name))
-      return `Must be named "${startupName} Receipt {number}.pdf"`
-    // Enforce matching number between invoice and receipt
-    if (invoiceNumber) {
-      const receiptNumber = receiptFile.name.match(/Receipt (\d+)\.pdf$/i)?.[1] ?? null
-      if (receiptNumber && receiptNumber !== invoiceNumber)
-        return `Receipt number must match invoice number (${invoiceNumber})`
-    }
+    if (!startupName) return null
+    const pattern = new RegExp(
+      `^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`,
+      'i'
+    )
+    if (!pattern.test(receiptFile.name))
+      return `Must be named "${startupName} Receipt ${expectedNumber}.pdf"`
+    const num = receiptFile.name.match(/Receipt (\d+)\.pdf$/i)?.[1]
+    if (num && parseInt(num, 10) !== expectedNumber)
+      return `Receipt number must be ${expectedNumber} to match the invoice. Please name your file "${startupName} Receipt ${expectedNumber}.pdf".`
     return null
   })()
 
@@ -179,16 +182,19 @@ export default function NewInvoicePage() {
               <li>
                 Invoice:{' '}
                 <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
-                  {startupName ?? 'YourStartup'} Invoice N.pdf
+                  {startupName ?? 'YourStartup'} Invoice {expectedNumber}.pdf
                 </code>
               </li>
               <li>
                 Receipt:{' '}
                 <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
-                  {startupName ?? 'YourStartup'} Receipt N.pdf
+                  {startupName ?? 'YourStartup'} Receipt {expectedNumber}.pdf
                 </code>
               </li>
-              <li>PDF only. Each invoice number must be unique. Duplicates will be rejected.</li>
+              <li>
+                PDF only. Your next invoice number is <strong>{expectedNumber}</strong>. Numbers
+                must be sequential.
+              </li>
             </ul>
           </div>
         </CardContent>
