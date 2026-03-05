@@ -277,6 +277,7 @@ export default function StartupFundingPage() {
   const startupSlug = params.startupSlug as string
 
   const startup = useQuery(api.startups.getBySlug, { slug: startupSlug })
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const milestones = useQuery(
     api.milestones.listByStartup,
     startup ? { startupId: startup._id } : 'skip'
@@ -686,7 +687,7 @@ export default function StartupFundingPage() {
         </p>
       </HowItWorks>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
@@ -726,15 +727,32 @@ export default function StartupFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Potential (Admin)
-              <InfoTooltip text="Total value of all milestones (approved + pending + waiting). Only visible to admins." />
+              Potential
+              <InfoTooltip text="Total value of all milestones (approved + pending + waiting)." />
             </p>
             <p className="mt-1 text-2xl font-bold font-display">
               £{potential.toLocaleString('en-GB')}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {approvedCount} of {milestoneList.length} milestones approved
+              {approvedCount} of {milestoneList.length} approved
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Baseline Left
+              <InfoTooltip text="Cohort baseline minus this startup's total milestone potential. The portion of baseline not allocated to any milestone." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display text-muted-foreground">
+              £{Math.max(0, (cohort?.baseFunding ?? 0) - potential).toLocaleString('en-GB')}
+            </p>
+            {cohort?.baseFunding != null && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                of £{cohort.baseFunding.toLocaleString('en-GB')} baseline
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
