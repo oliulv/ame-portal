@@ -413,9 +413,6 @@ export default function AdminFundingPage() {
             >
               {formatCurrency(topUpPool)}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Remaining capacity: {formatCurrency(remainingTopUpCapacity)}
-            </p>
           </CardContent>
         </Card>
       </div>
