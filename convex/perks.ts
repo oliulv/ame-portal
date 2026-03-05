@@ -1,6 +1,7 @@
-import { query, mutation } from './functions'
+import { query, mutation, action } from './functions'
 import { v } from 'convex/values'
 import { requireAdmin, requireAuth, getFounderStartupIds } from './auth'
+import { api } from './_generated/api'
 
 /**
  * List all perks with claim counts (admin).
@@ -235,5 +236,48 @@ export const unclaim = mutation({
     if (!claim) throw new Error('Claim not found')
 
     await ctx.db.delete(claim._id)
+  },
+})
+
+/**
+ * Redeem Supabase partner credits for the current founder.
+ * Calls the Supabase Partner Credits API to generate a unique code.
+ */
+export const redeemSupabase = action({
+  args: { perkId: v.id('perks') },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+
+    const user = await ctx.runQuery(api.users.current)
+    if (!user) throw new Error('Not authenticated')
+
+    const apiKey = process.env.SUPABASE_PARTNER_API_KEY
+    if (!apiKey) throw new Error('Supabase partner integration is not configured yet')
+
+    const response = await fetch('https://api.supabase.com/partners/credits/get-code', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-partner-api-key': apiKey,
+      },
+      body: JSON.stringify({ user_identifier: user.email }),
+    })
+
+    if (response.ok) {
+      const data = (await response.json()) as { code: string; expires_at: string; link: string }
+
+      // Auto-claim the perk
+      await ctx.runMutation(api.perks.claim, { perkId: args.perkId })
+
+      return { code: data.code, link: data.link, expiresAt: data.expires_at }
+    }
+
+    if (response.status === 400) {
+      const error = (await response.json()) as { message: string }
+      throw new Error(error.message || 'Credits have already been redeemed')
+    }
+
+    throw new Error(`Supabase API error: ${response.status}`)
   },
 })
