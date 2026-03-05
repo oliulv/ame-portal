@@ -65,8 +65,12 @@ function SupabaseRedemption({ perk }: { perk: FounderPerk }) {
       <div className="space-y-3 rounded-md border bg-muted/30 p-4">
         <div className="flex items-center gap-2 text-sm font-medium text-green-600">
           <Check className="h-4 w-4" />
-          Credits ready to redeem
+          Code generated — follow the link below to apply it
         </div>
+        <p className="text-xs text-muted-foreground">
+          Click &quot;Redeem on Supabase&quot;, sign in with your Supabase account, choose which
+          organisation to apply the credits to, and confirm.
+        </p>
         <div className="flex items-center gap-2">
           <code className="flex-1 rounded bg-background px-3 py-2 text-sm font-mono border">
             {redemption.code}
