@@ -109,6 +109,8 @@ export const create = mutation({
         status: 'waiting',
         dueDate: template.dueDate,
         sortOrder: i,
+        requireLink: template.requireLink,
+        requireFile: template.requireFile,
       })
     }
 

@@ -109,6 +109,8 @@ export default defineSchema({
     dueDate: v.optional(v.string()),
     sortOrder: v.number(),
     isActive: v.boolean(),
+    requireLink: v.optional(v.boolean()),
+    requireFile: v.optional(v.boolean()),
   }).index('by_cohortId', ['cohortId']),
 
   // ── Milestones ────────────────────────────────────────────────────
@@ -124,6 +126,8 @@ export default defineSchema({
     planLink: v.optional(v.string()),
     planStorageId: v.optional(v.id('_storage')),
     planFileName: v.optional(v.string()),
+    requireLink: v.optional(v.boolean()),
+    requireFile: v.optional(v.boolean()),
   })
     .index('by_startupId', ['startupId'])
     .index('by_milestoneTemplateId', ['milestoneTemplateId']),
@@ -170,6 +174,8 @@ export default defineSchema({
     description: v.optional(v.string()),
     storageId: v.id('_storage'),
     fileName: v.string(),
+    receiptStorageId: v.optional(v.id('_storage')),
+    receiptFileName: v.optional(v.string()),
     status: v.union(
       v.literal('submitted'),
       v.literal('under_review'),

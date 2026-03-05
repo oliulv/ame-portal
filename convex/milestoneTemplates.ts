@@ -31,6 +31,8 @@ export const create = mutation({
     amount: v.number(),
     dueDate: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
+    requireLink: v.optional(v.boolean()),
+    requireFile: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
@@ -51,6 +53,8 @@ export const create = mutation({
       dueDate: args.dueDate,
       sortOrder,
       isActive,
+      requireLink: args.requireLink,
+      requireFile: args.requireFile,
     })
 
     // If active, auto-create milestones for all existing startups in the cohort
@@ -61,7 +65,6 @@ export const create = mutation({
         .collect()
 
       for (const startup of startups) {
-        // Get current milestone count for sortOrder
         const milestones = await ctx.db
           .query('milestones')
           .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
@@ -76,6 +79,8 @@ export const create = mutation({
           status: 'waiting',
           dueDate: args.dueDate,
           sortOrder: milestones.length,
+          requireLink: args.requireLink,
+          requireFile: args.requireFile,
         })
       }
     }
@@ -95,6 +100,8 @@ export const update = mutation({
     amount: v.optional(v.number()),
     dueDate: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
+    requireLink: v.optional(v.boolean()),
+    requireFile: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
@@ -102,6 +109,9 @@ export const update = mutation({
     const { id, ...updates } = args
     const template = await ctx.db.get(id)
     if (!template) throw new Error('Milestone template not found')
+
+    const wasActive = template.isActive
+    const willBeActive = updates.isActive ?? wasActive
 
     const patch: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(updates)) {
@@ -111,6 +121,61 @@ export const update = mutation({
     }
 
     await ctx.db.patch(id, patch)
+
+    // If toggling from inactive → active, assign to all startups that don't already have this milestone
+    if (!wasActive && willBeActive) {
+      const startups = await ctx.db
+        .query('startups')
+        .withIndex('by_cohortId', (q) => q.eq('cohortId', template.cohortId))
+        .collect()
+
+      for (const startup of startups) {
+        const existingMilestones = await ctx.db
+          .query('milestones')
+          .withIndex('by_milestoneTemplateId', (q) => q.eq('milestoneTemplateId', id))
+          .collect()
+
+        const alreadyHas = existingMilestones.some((m) => m.startupId === startup._id)
+        if (!alreadyHas) {
+          const allMilestones = await ctx.db
+            .query('milestones')
+            .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+            .collect()
+
+          await ctx.db.insert('milestones', {
+            startupId: startup._id,
+            milestoneTemplateId: id,
+            title: updates.title ?? template.title,
+            description: updates.description ?? template.description,
+            amount: updates.amount ?? template.amount,
+            status: 'waiting',
+            dueDate: updates.dueDate ?? template.dueDate,
+            sortOrder: allMilestones.length,
+            requireLink: updates.requireLink ?? template.requireLink,
+            requireFile: updates.requireFile ?? template.requireFile,
+          })
+        }
+      }
+    }
+
+    // Cascade requireLink/requireFile changes to linked waiting milestones
+    if (updates.requireLink !== undefined || updates.requireFile !== undefined) {
+      const linkedMilestones = await ctx.db
+        .query('milestones')
+        .withIndex('by_milestoneTemplateId', (q) => q.eq('milestoneTemplateId', id))
+        .collect()
+
+      for (const m of linkedMilestones) {
+        if (m.status === 'waiting') {
+          const mPatch: Record<string, unknown> = {}
+          if (updates.requireLink !== undefined) mPatch.requireLink = updates.requireLink
+          if (updates.requireFile !== undefined) mPatch.requireFile = updates.requireFile
+          if (Object.keys(mPatch).length > 0) {
+            await ctx.db.patch(m._id, mPatch)
+          }
+        }
+      }
+    }
   },
 })
 

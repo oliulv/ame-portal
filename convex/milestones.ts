@@ -162,6 +162,8 @@ export const create = mutation({
     ),
     dueDate: v.optional(v.string()),
     sortOrder: v.optional(v.number()),
+    requireLink: v.optional(v.boolean()),
+    requireFile: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
@@ -183,6 +185,8 @@ export const create = mutation({
       status: args.status ?? 'waiting',
       dueDate: args.dueDate,
       sortOrder,
+      requireLink: args.requireLink,
+      requireFile: args.requireFile,
     })
   },
 })
@@ -201,6 +205,8 @@ export const update = mutation({
     ),
     dueDate: v.optional(v.string()),
     sortOrder: v.optional(v.number()),
+    requireLink: v.optional(v.boolean()),
+    requireFile: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
@@ -277,8 +283,26 @@ export const submit = mutation({
       throw new Error('Only waiting milestones can be submitted')
     }
 
-    if (!args.planLink && !args.planStorageId) {
-      throw new Error('Please provide a plan link or upload a plan file')
+    const needsLink = milestone.requireLink !== false
+    const needsFile = milestone.requireFile !== false
+
+    if (needsLink && needsFile) {
+      if (!args.planLink && !args.planStorageId) {
+        throw new Error('Please provide a plan link or upload a plan file')
+      }
+    } else if (needsLink && !needsFile) {
+      if (!args.planLink) {
+        throw new Error('Please provide a plan link')
+      }
+    } else if (!needsLink && needsFile) {
+      if (!args.planStorageId) {
+        throw new Error('Please upload a plan file')
+      }
+    } else {
+      // Both false — still require at least one
+      if (!args.planLink && !args.planStorageId) {
+        throw new Error('Please provide a plan link or upload a plan file')
+      }
     }
 
     await ctx.db.patch(args.id, {
