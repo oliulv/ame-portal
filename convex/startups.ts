@@ -350,3 +350,21 @@ export const remove = mutation({
     await ctx.db.delete(args.id)
   },
 })
+
+/**
+ * Toggle whether a startup is excluded from cohort aggregate metrics.
+ */
+export const toggleExcludeFromMetrics = mutation({
+  args: {
+    id: v.id('startups'),
+    exclude: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const startup = await ctx.db.get(args.id)
+    if (!startup) throw new Error('Startup not found')
+
+    await ctx.db.patch(args.id, { excludeFromMetrics: args.exclude })
+  },
+})

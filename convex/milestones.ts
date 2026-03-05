@@ -107,10 +107,13 @@ export const fundingOverview = query({
           .reduce((sum, m) => sum + m.amount, 0)
         const deployed = startup.fundingDeployed ?? 0
         const available = Math.max(0, unlocked - deployed)
+        const excluded = startup.excludeFromMetrics === true
 
-        totalPotential += potential
-        totalUnlocked += unlocked
-        totalDeployed += deployed
+        if (!excluded) {
+          totalPotential += potential
+          totalUnlocked += unlocked
+          totalDeployed += deployed
+        }
 
         return {
           _id: startup._id,
@@ -121,9 +124,12 @@ export const fundingOverview = query({
           deployed,
           available,
           milestoneCount: milestones.length,
+          excludeFromMetrics: excluded,
         }
       })
     )
+
+    const includedCount = startups.filter((s) => s.excludeFromMetrics !== true).length
 
     return {
       startups: rows,
@@ -136,7 +142,7 @@ export const fundingOverview = query({
       cohort: {
         fundingBudget: cohort?.fundingBudget ?? null,
         baseFunding: cohort?.baseFunding ?? null,
-        startupCount: startups.length,
+        startupCount: includedCount,
       },
     }
   },

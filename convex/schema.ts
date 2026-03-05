@@ -48,6 +48,7 @@ export default defineSchema({
       v.literal('completed')
     ),
     fundingDeployed: v.optional(v.number()),
+    excludeFromMetrics: v.optional(v.boolean()),
   })
     .index('by_cohortId', ['cohortId'])
     .index('by_slug', ['slug']),

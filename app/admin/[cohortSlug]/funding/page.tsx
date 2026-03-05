@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Checkbox } from '@/components/ui/checkbox'
 import { BarChart3, Layers3, Save, Settings, Target, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -65,6 +66,7 @@ export default function AdminFundingPage() {
     cohort?._id ? { cohortId: cohort._id } : 'skip'
   )
   const updateFundingConfig = useMutation(api.cohorts.updateFundingConfig)
+  const toggleExclude = useMutation(api.startups.toggleExcludeFromMetrics)
 
   const [allocationInput, setAllocationInput] = useState('')
   const [baselineInput, setBaselineInput] = useState('')
@@ -149,11 +151,12 @@ export default function AdminFundingPage() {
   const unlockedNotYetDeployed = Math.max(0, totalUnlocked - totalDeployed)
   const remainingTopUpCapacity = Math.max(0, totalAllocation - totalUnlocked)
 
-  const baseUnlockedTotal = startups.reduce(
+  const includedStartups = startups.filter((s) => !s.excludeFromMetrics)
+  const baseUnlockedTotal = includedStartups.reduce(
     (sum, startup) => sum + Math.min(startup.unlocked, baselinePerStartup),
     0
   )
-  const baseDeployedTotal = startups.reduce(
+  const baseDeployedTotal = includedStartups.reduce(
     (sum, startup) => sum + Math.min(startup.deployed, baselinePerStartup),
     0
   )
@@ -169,6 +172,7 @@ export default function AdminFundingPage() {
     totalBaselineRequired > 0 ? (baseUnlockedTotal / totalBaselineRequired) * 100 : 0
 
   const startupChartData = [...startups]
+    .filter((s) => !s.excludeFromMetrics)
     .sort((a, b) => b.unlocked - a.unlocked)
     .map((startup) => ({
       name: startup.name,
@@ -547,6 +551,9 @@ export default function AdminFundingPage() {
                   <TableHead className="text-right">Deployed</TableHead>
                   <TableHead className="text-right">Available</TableHead>
                   <TableHead className="text-right">% Baseline Unlocked</TableHead>
+                  {isSuperAdmin && (
+                    <TableHead className="text-center w-24">Exclude</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -559,7 +566,7 @@ export default function AdminFundingPage() {
                   return (
                     <TableRow
                       key={startup._id}
-                      className="cursor-pointer transition-colors hover:bg-muted/50"
+                      className={`cursor-pointer transition-colors hover:bg-muted/50 ${startup.excludeFromMetrics ? 'opacity-50' : ''}`}
                       onClick={() =>
                         router.push(`/admin/${cohortSlug}/funding/${startup.slug || startup._id}`)
                       }
@@ -592,6 +599,21 @@ export default function AdminFundingPage() {
                           </div>
                         </div>
                       </TableCell>
+                      {isSuperAdmin && (
+                        <TableCell className="text-center">
+                          <Checkbox
+                            checked={startup.excludeFromMetrics}
+                            onCheckedChange={(checked) => {
+                              toggleExclude({
+                                id: startup._id,
+                                exclude: checked === true,
+                              })
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Exclude ${startup.name} from metrics`}
+                          />
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })}
