@@ -58,10 +58,9 @@ export async function requireSuperAdmin(ctx: QueryCtx | MutationCtx): Promise<Do
  */
 export async function requireFounder(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'>> {
   const user = await requireAuth(ctx)
-  if (user.role === 'founder') return user
 
-  // Allow admin/super_admin if they have a founder profile
-  if (user.role === 'admin' || user.role === 'super_admin') {
+  // All roles must have a founderProfile to access founder endpoints
+  if (user.role === 'founder' || user.role === 'admin' || user.role === 'super_admin') {
     const profile = await ctx.db
       .query('founderProfiles')
       .withIndex('by_userId', (q) => q.eq('userId', user._id))
