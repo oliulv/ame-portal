@@ -31,6 +31,10 @@ export default function FounderInvoiceDetailPage() {
     api.invoices.getFileUrl,
     invoice?.storageId ? { storageId: invoice.storageId } : 'skip'
   )
+  const receiptUrl = useQuery(
+    api.invoices.getFileUrl,
+    invoice?.receiptStorageId ? { storageId: invoice.receiptStorageId } : 'skip'
+  )
 
   if (invoicesData === undefined) {
     return (
@@ -123,7 +127,7 @@ export default function FounderInvoiceDetailPage() {
               )}
 
               <div>
-                <p className="mb-1 text-sm text-muted-foreground">Uploaded file</p>
+                <p className="mb-1 text-sm text-muted-foreground">Invoice file</p>
                 {fileUrl ? (
                   <a
                     href={fileUrl}
@@ -139,6 +143,26 @@ export default function FounderInvoiceDetailPage() {
                   <span className="text-sm text-muted-foreground">Loading file...</span>
                 )}
               </div>
+
+              {invoice.receiptStorageId && (
+                <div>
+                  <p className="mb-1 text-sm text-muted-foreground">Receipt file</p>
+                  {receiptUrl ? (
+                    <a
+                      href={receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-primary hover:underline"
+                    >
+                      <FileText className="h-4 w-4" />
+                      {invoice.receiptFileName || 'View receipt'}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Loading file...</span>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

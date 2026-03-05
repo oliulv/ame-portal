@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { HowItWorks } from '@/components/ui/how-it-works'
 import {
   Dialog,
   DialogContent,
@@ -28,6 +30,7 @@ import {
 } from '@/components/ui/select'
 import { Check, Clock, Search, Send, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
+import Link from 'next/link'
 import type { Id } from '@/convex/_generated/dataModel'
 
 type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved'
@@ -57,6 +60,12 @@ export default function FounderFundingPage() {
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const unlockedPct = potential > 0 ? (unlocked / potential) * 100 : 0
   const deployedPct = potential > 0 ? (cappedDeployed / potential) * 100 : 0
+
+  const submitDialogMilestone = milestoneList.find((m) => m._id === submitDialogId)
+  const requiresLink = submitDialogMilestone?.requireLink !== false
+  const requiresFile = submitDialogMilestone?.requireFile !== false
+  const onlyLink = requiresLink && !requiresFile
+  const onlyFile = !requiresLink && requiresFile
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const filteredMilestones = useMemo(() => {
@@ -163,12 +172,41 @@ export default function FounderFundingPage() {
     }
   }
 
+  const canSubmitDialog = onlyLink ? !!planLink : onlyFile ? !!planFile : !!planLink || !!planFile
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight font-display">Funding</h1>
         <p className="text-muted-foreground">Track your milestone-based funding</p>
       </div>
+
+      <HowItWorks title="How funding works">
+        <p>
+          <strong className="text-foreground">Funding is unlocked through milestones.</strong> These
+          milestones are agreed upon between you and the accelerator team to ensure funding flows to
+          those doing exceptional work.
+        </p>
+        <p>
+          Given that your startup completes all milestones in the programme, you will unlock at
+          least <strong className="text-foreground">£5,000 in baseline funding</strong>. On top of
+          this, outstanding startups may unlock further funding later in the programme when the team
+          can gauge which startups deploy capital most effectively.
+        </p>
+        <p>
+          Below you can see how much you have <strong className="text-foreground">unlocked</strong>{' '}
+          (approved milestones), how much has been{' '}
+          <strong className="text-foreground">deployed</strong> (approved reimbursements), and how
+          much is <strong className="text-foreground">available</strong> to spend right now.
+        </p>
+        <p>
+          To deploy your available funding, submit invoices for business expenses via the{' '}
+          <Link href="/founder/invoices" className="font-medium text-primary hover:underline">
+            Invoices page
+          </Link>
+          .
+        </p>
+      </HowItWorks>
 
       <Card>
         <CardContent className="space-y-3 pt-6">
@@ -204,24 +242,33 @@ export default function FounderFundingPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Unlocked</p>
+          <CardContent className="pt-5 pb-4">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Unlocked
+              <InfoTooltip text="Total funding unlocked from approved milestones. Complete milestones to increase this amount." />
+            </p>
             <p className="mt-1 text-2xl font-bold font-display">
               £{unlocked.toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Deployed</p>
+          <CardContent className="pt-5 pb-4">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Deployed
+              <InfoTooltip text="Total amount submitted via invoices and approved for reimbursement. This is funding you have already spent." />
+            </p>
             <p className="mt-1 text-2xl font-bold font-display text-blue-600">
               £{deployed.toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Available</p>
+          <CardContent className="pt-5 pb-4">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Available
+              <InfoTooltip text="Unlocked minus deployed. This is the amount you can still claim via invoice submissions on the Invoices page." />
+            </p>
             <p className="mt-1 text-2xl font-bold font-display text-green-600">
               £{available.toLocaleString('en-GB')}
             </p>
@@ -234,7 +281,11 @@ export default function FounderFundingPage() {
           <div>
             <CardTitle>Milestones</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Submit milestone evidence to unlock and deploy more funding.
+              Submit milestone evidence to unlock funding. Deploy your funding via the{' '}
+              <Link href="/founder/invoices" className="text-primary hover:underline">
+                Invoices page
+              </Link>
+              .
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_220px]">
@@ -263,30 +314,30 @@ export default function FounderFundingPage() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2">
           {filteredMilestones.length > 0 ? (
             filteredMilestones.map((milestone) => (
-              <Card key={milestone._id}>
-                <CardContent className="flex items-center justify-between py-4">
-                  <div className="flex items-center gap-4">
+              <Card key={milestone._id} className="shadow-none">
+                <CardContent className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
                     <div>
                       {milestone.status === 'approved' ? (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                          <Check className="h-5 w-5 text-green-600" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100">
+                          <Check className="h-4 w-4 text-green-600" />
                         </div>
                       ) : milestone.status === 'submitted' ? (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-                          <Clock className="h-5 w-5 text-amber-600" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100">
+                          <Clock className="h-4 w-4 text-amber-600" />
                         </div>
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-                          <Send className="h-5 w-5 text-blue-600" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
+                          <Send className="h-4 w-4 text-blue-600" />
                         </div>
                       )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{milestone.title}</span>
+                        <span className="text-sm font-medium">{milestone.title}</span>
                         {milestone.status === 'approved' && (
                           <Badge variant="success">Approved</Badge>
                         )}
@@ -297,17 +348,17 @@ export default function FounderFundingPage() {
                           <Badge variant="secondary">Waiting</Badge>
                         )}
                       </div>
-                      <p className="mt-0.5 text-sm text-muted-foreground">
+                      <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
                         {milestone.description}
                       </p>
                       {milestone.dueDate && (
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           Due: {new Date(milestone.dueDate).toLocaleDateString('en-GB')}
                         </p>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <div className="text-right">
                       <div className="text-sm font-medium">
                         £{milestone.amount.toLocaleString('en-GB')}
@@ -351,39 +402,51 @@ export default function FounderFundingPage() {
           <DialogHeader>
             <DialogTitle>Submit Milestone</DialogTitle>
             <DialogDescription>
-              Provide evidence of your milestone completion. Include a link to your plan or upload a
-              document.
+              Provide evidence of your milestone completion.
+              {onlyLink && ' Submit a link to your work.'}
+              {onlyFile && ' Upload a document as evidence.'}
+              {!onlyLink && !onlyFile && ' Include a link or upload a document.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="plan-link">Plan Link (URL)</Label>
-              <Input
-                id="plan-link"
-                type="url"
-                placeholder="https://docs.google.com/..."
-                value={planLink}
-                onChange={(e) => setPlanLink(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="plan-file">Plan Document (Optional)</Label>
-              <Input
-                id="plan-file"
-                type="file"
-                accept="application/pdf,image/*,.doc,.docx"
-                onChange={(e) => setPlanFile(e.target.files?.[0] ?? null)}
-                className="cursor-pointer"
-              />
-              {planFile && (
-                <p className="text-sm text-muted-foreground">
-                  Selected: {planFile.name} ({(planFile.size / 1024).toFixed(1)} KB)
-                </p>
-              )}
-            </div>
-            {!planLink && !planFile && (
+            {requiresLink && (
+              <div className="space-y-2">
+                <Label htmlFor="plan-link">
+                  Plan Link (URL){onlyLink ? '' : requiresFile ? '' : ' — or upload below'}
+                </Label>
+                <Input
+                  id="plan-link"
+                  type="url"
+                  placeholder="https://docs.google.com/..."
+                  value={planLink}
+                  onChange={(e) => setPlanLink(e.target.value)}
+                />
+              </div>
+            )}
+            {requiresFile && (
+              <div className="space-y-2">
+                <Label htmlFor="plan-file">Plan Document{onlyFile ? '' : ' (Optional)'}</Label>
+                <Input
+                  id="plan-file"
+                  type="file"
+                  accept="application/pdf,image/*,.doc,.docx"
+                  onChange={(e) => setPlanFile(e.target.files?.[0] ?? null)}
+                  className="cursor-pointer"
+                />
+                {planFile && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected: {planFile.name} ({(planFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+            )}
+            {!canSubmitDialog && (
               <p className="text-sm text-muted-foreground">
-                Please provide at least a plan link or upload a file.
+                {onlyLink
+                  ? 'Please provide a plan link.'
+                  : onlyFile
+                    ? 'Please upload a file.'
+                    : 'Please provide at least a plan link or upload a file.'}
               </p>
             )}
           </div>
@@ -391,7 +454,7 @@ export default function FounderFundingPage() {
             <Button variant="outline" onClick={() => setSubmitDialogId(null)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting || (!planLink && !planFile)}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || !canSubmitDialog}>
               {isSubmitting ? 'Submitting...' : 'Submit for Review'}
             </Button>
           </DialogFooter>

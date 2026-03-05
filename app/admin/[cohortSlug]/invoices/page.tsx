@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { HowItWorks } from '@/components/ui/how-it-works'
 import { FileText, AlertCircle, ExternalLink, Users, Plus, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
@@ -143,6 +144,32 @@ export default function AdminInvoicesPage() {
           Review and approve startup expense reimbursements for {cohort.label}
         </p>
       </div>
+
+      <HowItWorks title="How reimbursements work">
+        <p>
+          <strong className="text-foreground">
+            Founders deploy unlocked funding through reimbursements.
+          </strong>{' '}
+          They submit PDF invoices and receipts for legitimate business expenses. We can only
+          approve expenses related to their startup which we deem appropriate and in good faith.
+        </p>
+        <p>
+          <strong className="text-foreground">Naming rules:</strong> Invoices must be named{' '}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+            StartupName Invoice N.pdf
+          </code>{' '}
+          and receipts{' '}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+            StartupName Receipt N.pdf
+          </code>
+          . Duplicates or incorrectly named files are blocked. This ensures clean integration with
+          Xero.
+        </p>
+        <p>
+          Founders cannot submit invoices exceeding their available balance (unlocked minus
+          deployed). Larger invoices are preferred as they reduce admin overhead.
+        </p>
+      </HowItWorks>
 
       {/* Pending Alert */}
       {pendingCount > 0 && (

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
+import { HowItWorks } from '@/components/ui/how-it-works'
 import {
   Select,
   SelectContent,
@@ -81,7 +82,7 @@ export default function FounderInvoicesPage() {
         <div>
           <h1 className="text-2xl font-bold font-display">Invoices</h1>
           <p className="text-sm text-muted-foreground">
-            Upload expenses and track each invoice through review and payment.
+            Deploy your unlocked funding through expense reimbursements.
           </p>
         </div>
         {canUpload ? (
@@ -93,8 +94,56 @@ export default function FounderInvoicesPage() {
         )}
       </div>
 
+      <HowItWorks title="How reimbursements work">
+        <p>
+          <strong className="text-foreground">
+            Unlocked funding is deployed through reimbursements.
+          </strong>{' '}
+          You spend on legitimate business expenses for your startup, then submit an invoice and
+          receipt for reimbursement. We can only approve expenses that are genuine business costs
+          related to your venture and deemed appropriate and in good faith.
+        </p>
+        <p>
+          <strong className="text-foreground">To submit a reimbursement:</strong>
+        </p>
+        <ol className="list-decimal pl-5 space-y-1">
+          <li>
+            Prepare a <strong className="text-foreground">PDF invoice</strong> named exactly:{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+              YourStartupName Invoice N.pdf
+            </code>{' '}
+            (e.g. &quot;Sync It Invoice 1.pdf&quot;). Each invoice must have a unique number.
+          </li>
+          <li>
+            Prepare a <strong className="text-foreground">PDF receipt</strong> (collated into one
+            file) named:{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+              YourStartupName Receipt N.pdf
+            </code>{' '}
+            (matching the invoice number).
+          </li>
+          <li>Upload both files when creating the invoice submission.</li>
+          <li>
+            Your submission amount must not exceed your{' '}
+            <Link href="/founder/funding" className="font-medium text-primary hover:underline">
+              available balance
+            </Link>
+            .
+          </li>
+        </ol>
+        <p>
+          <strong className="text-foreground">Tips:</strong> Larger invoices mean fewer submissions
+          and less admin overhead for everyone. Collate smaller expenses into a single invoice where
+          possible. Only PDF files are accepted — Word documents will be rejected.
+        </p>
+        <p>
+          Wrongly named files or duplicate invoice numbers will be rejected automatically. This is
+          critical for our accounting workflow.
+        </p>
+      </HowItWorks>
+
       {!canUpload && (
-        <div className="mb-6 flex items-start gap-3  border border-amber-200 bg-amber-50 p-4">
+        <div className="flex items-start gap-3 border border-amber-200 bg-amber-50 p-4 rounded-lg">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div>
             <p className="text-sm font-medium text-amber-900">No available balance</p>
@@ -107,7 +156,7 @@ export default function FounderInvoicesPage() {
               href="/founder/funding"
               className="mt-1 inline-block text-sm font-medium text-amber-900 hover:underline"
             >
-              View funding details →
+              View funding details &rarr;
             </Link>
           </div>
         </div>

@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { HowItWorks } from '@/components/ui/how-it-works'
 import { BarChart3, Layers3, Save, Settings, Target, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -242,6 +244,19 @@ export default function AdminFundingPage() {
         </Link>
       </div>
 
+      <HowItWorks title="How funding works">
+        <p>
+          <strong className="text-foreground">Funding is unlocked through milestones.</strong>{' '}
+          Milestones are agreed upon between founders and the team. Upon completing all programme
+          milestones, startups unlock at least £5,000 in baseline funding.
+        </p>
+        <p>
+          Outstanding startups may unlock further funding later. Deployed = funding claimed via
+          approved invoices. Available = remaining balance founders can still claim. The top-up pool
+          is the budget above total baseline that can be allocated to high-performing startups.
+        </p>
+      </HowItWorks>
+
       {isSuperAdmin && (
         <Card>
           <CardHeader>
@@ -352,7 +367,10 @@ export default function AdminFundingPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Total allocation</p>
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Total allocation
+              <InfoTooltip text="The total funding budget for this cohort, set in funding controls above." />
+            </p>
             <p className="mt-1 text-2xl font-bold font-display">
               {formatCurrency(totalAllocation)}
             </p>
@@ -360,7 +378,10 @@ export default function AdminFundingPage() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Baseline required</p>
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Baseline required
+              <InfoTooltip text="The minimum funding reserved if all startups complete their milestones (startups x baseline per startup)." />
+            </p>
             <p className="mt-1 text-2xl font-bold font-display">
               {formatCurrency(totalBaselineRequired)}
             </p>
@@ -371,7 +392,10 @@ export default function AdminFundingPage() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Total unlocked</p>
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Total unlocked
+              <InfoTooltip text="Sum of all approved milestone amounts across all startups in this cohort." />
+            </p>
             <p className="mt-1 text-2xl font-bold font-display">{formatCurrency(totalUnlocked)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {Math.round(unlockedOfAllocationPct)}% of total allocation
@@ -380,7 +404,10 @@ export default function AdminFundingPage() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Top-up pool</p>
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Top-up pool
+              <InfoTooltip text="Budget above baseline that can be allocated to outstanding startups later in the programme. Total allocation minus baseline required." />
+            </p>
             <p
               className={`mt-1 text-2xl font-bold font-display ${topUpPool < 0 ? 'text-red-600' : ''}`}
             >
@@ -551,9 +578,7 @@ export default function AdminFundingPage() {
                   <TableHead className="text-right">Deployed</TableHead>
                   <TableHead className="text-right">Available</TableHead>
                   <TableHead className="text-right">% Baseline Unlocked</TableHead>
-                  {isSuperAdmin && (
-                    <TableHead className="text-center w-24">Exclude</TableHead>
-                  )}
+                  {isSuperAdmin && <TableHead className="text-center w-24">Exclude</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>

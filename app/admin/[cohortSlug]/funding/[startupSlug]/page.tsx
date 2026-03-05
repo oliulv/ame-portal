@@ -54,6 +54,9 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { HowItWorks } from '@/components/ui/how-it-works'
+import { Switch } from '@/components/ui/switch'
 import {
   ArrowLeft,
   Plus,
@@ -293,6 +296,8 @@ export default function StartupFundingPage() {
   const [formAmount, setFormAmount] = useState('')
   const [formStatus, setFormStatus] = useState<'waiting' | 'submitted' | 'approved'>('waiting')
   const [formDueDate, setFormDueDate] = useState('')
+  const [formRequireLink, setFormRequireLink] = useState(true)
+  const [formRequireFile, setFormRequireFile] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<MilestoneFilter>('all')
@@ -364,6 +369,8 @@ export default function StartupFundingPage() {
     setFormAmount('')
     setFormStatus('waiting')
     setFormDueDate('')
+    setFormRequireLink(true)
+    setFormRequireFile(true)
   }
 
   function openCreate() {
@@ -377,6 +384,8 @@ export default function StartupFundingPage() {
     setFormAmount(String(milestone.amount))
     setFormStatus(milestone.status)
     setFormDueDate(milestone.dueDate ?? '')
+    setFormRequireLink(milestone.requireLink !== false)
+    setFormRequireFile(milestone.requireFile !== false)
     setEditingMilestone(milestone)
   }
 
@@ -397,6 +406,8 @@ export default function StartupFundingPage() {
           amount,
           status: formStatus,
           dueDate: formDueDate || undefined,
+          requireLink: formRequireLink,
+          requireFile: formRequireFile,
         })
         toast.success('Milestone updated')
         setEditingMilestone(null)
@@ -408,6 +419,8 @@ export default function StartupFundingPage() {
           amount,
           status: formStatus,
           dueDate: formDueDate || undefined,
+          requireLink: formRequireLink,
+          requireFile: formRequireFile,
         })
         toast.success('Milestone created')
         setIsCreateOpen(false)
@@ -554,6 +567,29 @@ export default function StartupFundingPage() {
               onChange={(e) => setFormDueDate(e.target.value)}
             />
           </div>
+          <div className="space-y-3">
+            <Label>Submission requirements</Label>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="ms-req-link"
+                checked={formRequireLink}
+                onCheckedChange={setFormRequireLink}
+              />
+              <Label htmlFor="ms-req-link" className="font-normal">
+                Accept link submission
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="ms-req-file"
+                checked={formRequireFile}
+                onCheckedChange={setFormRequireFile}
+              />
+              <Label htmlFor="ms-req-file" className="font-normal">
+                Accept file upload
+              </Label>
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button
@@ -630,10 +666,26 @@ export default function StartupFundingPage() {
         </CardContent>
       </Card>
 
+      <HowItWorks title="How funding works">
+        <p>
+          <strong className="text-foreground">Funding is unlocked through milestones.</strong>{' '}
+          Milestones are agreed upon between founders and the team. Upon completing all programme
+          milestones, startups unlock at least £5,000 in baseline funding.
+        </p>
+        <p>
+          Outstanding startups may unlock further funding later in the programme. Deployed means
+          funding claimed via approved invoices. Available is the remaining balance founders can
+          claim.
+        </p>
+      </HowItWorks>
+
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Unlocked</p>
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Unlocked
+              <InfoTooltip text="Sum of all approved milestones for this startup." />
+            </p>
             <p className="mt-1 text-2xl font-bold font-display">
               £{unlocked.toLocaleString('en-GB')}
             </p>
@@ -642,7 +694,10 @@ export default function StartupFundingPage() {
 
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Deployed</p>
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Deployed
+              <InfoTooltip text="Amount already claimed via approved/paid invoices. Click the amount to manually adjust." />
+            </p>
             {deployedInput !== null ? (
               <div className="mt-1 flex items-center gap-2">
                 <Input
@@ -678,7 +733,10 @@ export default function StartupFundingPage() {
 
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Available</p>
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Available
+              <InfoTooltip text="Unlocked minus deployed. This is how much the startup can still claim via invoices." />
+            </p>
             <p className="mt-1 text-2xl font-bold font-display text-green-600">
               £{available.toLocaleString('en-GB')}
             </p>
@@ -687,7 +745,10 @@ export default function StartupFundingPage() {
 
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground">Potential (Admin)</p>
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Potential (Admin)
+              <InfoTooltip text="Total value of all milestones (approved + pending + waiting). Only visible to admins." />
+            </p>
             <p className="mt-1 text-2xl font-bold font-display">
               £{potential.toLocaleString('en-GB')}
             </p>

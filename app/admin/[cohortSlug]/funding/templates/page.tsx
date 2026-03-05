@@ -135,6 +135,8 @@ export default function MilestoneTemplatesPage() {
   const [formAmount, setFormAmount] = useState('')
   const [formDueDate, setFormDueDate] = useState('')
   const [formIsActive, setFormIsActive] = useState(true)
+  const [formRequireLink, setFormRequireLink] = useState(true)
+  const [formRequireFile, setFormRequireFile] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
   const sensors = useSensors(
@@ -175,6 +177,8 @@ export default function MilestoneTemplatesPage() {
     setFormAmount('')
     setFormDueDate('')
     setFormIsActive(true)
+    setFormRequireLink(true)
+    setFormRequireFile(true)
   }
 
   function openCreate() {
@@ -188,6 +192,8 @@ export default function MilestoneTemplatesPage() {
     setFormAmount(String(template.amount))
     setFormDueDate(template.dueDate ?? '')
     setFormIsActive(template.isActive)
+    setFormRequireLink(template.requireLink !== false)
+    setFormRequireFile(template.requireFile !== false)
     setEditingTemplate(template)
   }
 
@@ -208,6 +214,8 @@ export default function MilestoneTemplatesPage() {
           amount,
           dueDate: formDueDate || undefined,
           isActive: formIsActive,
+          requireLink: formRequireLink,
+          requireFile: formRequireFile,
         })
         toast.success('Template updated')
         setEditingTemplate(null)
@@ -219,6 +227,8 @@ export default function MilestoneTemplatesPage() {
           amount,
           dueDate: formDueDate || undefined,
           isActive: formIsActive,
+          requireLink: formRequireLink,
+          requireFile: formRequireFile,
         })
         toast.success(
           formIsActive
@@ -283,8 +293,8 @@ export default function MilestoneTemplatesPage() {
           </DialogTitle>
           <DialogDescription>
             {editingTemplate
-              ? 'Update template details.'
-              : 'Active templates are auto-assigned to all existing startups in the cohort.'}
+              ? 'Update template details. Submission requirement changes cascade to waiting milestones.'
+              : 'Active templates are auto-assigned to all startups in the cohort.'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -330,7 +340,30 @@ export default function MilestoneTemplatesPage() {
           </div>
           <div className="flex items-center gap-2">
             <Switch id="tpl-active" checked={formIsActive} onCheckedChange={setFormIsActive} />
-            <Label htmlFor="tpl-active">Active (auto-assign to new startups)</Label>
+            <Label htmlFor="tpl-active">Active (auto-assign to all startups in cohort)</Label>
+          </div>
+          <div className="space-y-3">
+            <Label>Submission requirements</Label>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="tpl-req-link"
+                checked={formRequireLink}
+                onCheckedChange={setFormRequireLink}
+              />
+              <Label htmlFor="tpl-req-link" className="font-normal">
+                Accept link submission
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="tpl-req-file"
+                checked={formRequireFile}
+                onCheckedChange={setFormRequireFile}
+              />
+              <Label htmlFor="tpl-req-file" className="font-normal">
+                Accept file upload
+              </Label>
+            </div>
           </div>
         </div>
         <DialogFooter>
@@ -381,7 +414,8 @@ export default function MilestoneTemplatesPage() {
         <CardHeader>
           <CardTitle>Templates</CardTitle>
           <CardDescription>
-            Active templates are automatically assigned to new startups. Drag to reorder.
+            Active templates are automatically assigned to all startups in the cohort. Drag to
+            reorder.
           </CardDescription>
         </CardHeader>
         <CardContent>

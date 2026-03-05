@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -19,17 +19,22 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { founderInvoiceUploadSchema, type FounderInvoiceUploadFormData } from '@/lib/schemas'
-import { Upload, ArrowLeft } from 'lucide-react'
+import { Upload, ArrowLeft, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
 export default function NewInvoicePage() {
   const router = useRouter()
-  const [file, setFile] = useState<File | null>(null)
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
   const createInvoice = useMutation(api.invoices.create)
+  const startupName = useQuery(api.invoices.getFounderStartupName)
+  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
+
+  const available = fundingSummary?.available ?? 0
 
   const form = useForm<FounderInvoiceUploadFormData>({
     resolver: zodResolver(founderInvoiceUploadSchema),
@@ -40,37 +45,91 @@ export default function NewInvoicePage() {
     },
   })
 
+  const invoiceNamePattern = startupName
+    ? new RegExp(`^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Invoice \\d+\\.pdf$`, 'i')
+    : null
+  const receiptNamePattern = startupName
+    ? new RegExp(`^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`, 'i')
+    : null
+
+  const invoiceNameError =
+    invoiceFile && invoiceNamePattern && !invoiceNamePattern.test(invoiceFile.name)
+      ? `Must be named "${startupName} Invoice {number}.pdf"`
+      : invoiceFile && !invoiceFile.name.toLowerCase().endsWith('.pdf')
+        ? 'Must be a PDF file'
+        : null
+
+  const receiptNameError =
+    receiptFile && receiptNamePattern && !receiptNamePattern.test(receiptFile.name)
+      ? `Must be named "${startupName} Receipt {number}.pdf"`
+      : receiptFile && !receiptFile.name.toLowerCase().endsWith('.pdf')
+        ? 'Must be a PDF file'
+        : null
+
+  const amountValue = form.watch('amount_gbp')
+  const amountExceedsBalance = typeof amountValue === 'number' && amountValue > available
+
+  const canSubmit = !!invoiceFile && !invoiceNameError && !receiptNameError && !amountExceedsBalance
+
   const onSubmit = async (data: FounderInvoiceUploadFormData) => {
-    if (!file) {
-      toast.error('Please select a file to upload')
+    if (!invoiceFile) {
+      toast.error('Please select an invoice file to upload')
+      return
+    }
+
+    if (invoiceNameError) {
+      toast.error(invoiceNameError)
+      return
+    }
+
+    if (receiptNameError) {
+      toast.error(receiptNameError)
+      return
+    }
+
+    if (amountExceedsBalance) {
+      toast.error(`Amount exceeds available balance of £${available.toFixed(2)}`)
       return
     }
 
     setIsSubmitting(true)
 
     try {
-      // Upload file to Convex storage
-      const uploadUrl = await generateUploadUrl()
-      const uploadResult = await fetch(uploadUrl, {
+      // Upload invoice file
+      const invoiceUploadUrl = await generateUploadUrl()
+      const invoiceUploadResult = await fetch(invoiceUploadUrl, {
         method: 'POST',
-        headers: { 'Content-Type': file.type },
-        body: file,
+        headers: { 'Content-Type': invoiceFile.type },
+        body: invoiceFile,
       })
+      if (!invoiceUploadResult.ok) throw new Error('Failed to upload invoice file')
+      const { storageId: invoiceStorageId } = await invoiceUploadResult.json()
 
-      if (!uploadResult.ok) {
-        throw new Error('Failed to upload file')
+      // Upload receipt file if present
+      let receiptStorageId: string | undefined
+      let receiptFileName: string | undefined
+      if (receiptFile) {
+        const receiptUploadUrl = await generateUploadUrl()
+        const receiptUploadResult = await fetch(receiptUploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': receiptFile.type },
+          body: receiptFile,
+        })
+        if (!receiptUploadResult.ok) throw new Error('Failed to upload receipt file')
+        const result = await receiptUploadResult.json()
+        receiptStorageId = result.storageId
+        receiptFileName = receiptFile.name
       }
 
-      const { storageId } = await uploadResult.json()
-
-      // Create invoice record
       await createInvoice({
-        storageId,
-        fileName: file.name,
+        storageId: invoiceStorageId,
+        fileName: invoiceFile.name,
         vendorName: data.vendor_name,
         invoiceDate: data.invoice_date,
         amountGbp: data.amount_gbp,
         description: data.description || undefined,
+        receiptStorageId: receiptStorageId as never,
+        receiptFileName,
       })
 
       toast.success('Invoice uploaded successfully')
@@ -100,12 +159,37 @@ export default function NewInvoicePage() {
         </div>
       </div>
 
+      {/* Naming rules */}
+      <Card className="border-amber-200 bg-amber-50/50">
+        <CardContent className="flex items-start gap-3 pt-4 pb-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="text-sm">
+            <p className="font-medium text-amber-900">File naming rules</p>
+            <ul className="mt-1 space-y-0.5 text-amber-800">
+              <li>
+                Invoice:{' '}
+                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
+                  {startupName ?? 'YourStartup'} Invoice N.pdf
+                </code>
+              </li>
+              <li>
+                Receipt:{' '}
+                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
+                  {startupName ?? 'YourStartup'} Receipt N.pdf
+                </code>
+              </li>
+              <li>PDF only. Each invoice number must be unique. Duplicates will be rejected.</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Form */}
       <Card>
         <CardHeader>
           <CardTitle>Invoice Details</CardTitle>
           <CardDescription>
-            Fill in the invoice information and upload the invoice document
+            Fill in the invoice information and upload the invoice and receipt documents
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -162,6 +246,11 @@ export default function NewInvoicePage() {
                           }}
                         />
                       </FormControl>
+                      {amountExceedsBalance && (
+                        <p className="text-sm text-destructive">
+                          Exceeds available balance of £{available.toFixed(2)}
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -177,7 +266,7 @@ export default function NewInvoicePage() {
                     <FormControl>
                       <Textarea
                         placeholder="Additional notes about this invoice..."
-                        rows={4}
+                        rows={3}
                         {...field}
                       />
                     </FormControl>
@@ -186,34 +275,45 @@ export default function NewInvoicePage() {
                 )}
               />
 
-              {/* File Upload */}
+              {/* Invoice File Upload */}
               <div className="space-y-2">
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Invoice File (Required)
+                <label className="text-sm font-medium leading-none">
+                  Invoice File (Required — PDF only)
                 </label>
-                <div className="flex items-center gap-4">
-                  <Input
-                    type="file"
-                    accept="application/pdf,image/*"
-                    onChange={(e) => {
-                      const selectedFile = e.target.files?.[0]
-                      if (selectedFile) {
-                        setFile(selectedFile)
-                      }
-                    }}
-                    className="cursor-pointer"
-                  />
-                </div>
-                {file && (
+                <Input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
+                  className="cursor-pointer"
+                />
+                {invoiceFile && (
                   <p className="text-sm text-muted-foreground">
-                    Selected: {file.name} ({(file.size / 1024).toFixed(2)} KB)
+                    Selected: {invoiceFile.name} ({(invoiceFile.size / 1024).toFixed(1)} KB)
                   </p>
                 )}
-                {!file && (
+                {invoiceNameError && <p className="text-sm text-destructive">{invoiceNameError}</p>}
+              </div>
+
+              {/* Receipt File Upload */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none">
+                  Receipt File (Recommended — PDF only)
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Collate all receipts for this invoice into a single PDF.
+                </p>
+                <Input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                  className="cursor-pointer"
+                />
+                {receiptFile && (
                   <p className="text-sm text-muted-foreground">
-                    Please upload a PDF or image file of your invoice
+                    Selected: {receiptFile.name} ({(receiptFile.size / 1024).toFixed(1)} KB)
                   </p>
                 )}
+                {receiptNameError && <p className="text-sm text-destructive">{receiptNameError}</p>}
               </div>
 
               <div className="flex justify-end gap-4">
@@ -222,7 +322,7 @@ export default function NewInvoicePage() {
                     Cancel
                   </Button>
                 </Link>
-                <Button type="submit" disabled={isSubmitting || !file}>
+                <Button type="submit" disabled={isSubmitting || !canSubmit}>
                   <Upload className="mr-2 h-4 w-4" />
                   {isSubmitting ? 'Uploading...' : 'Upload Invoice'}
                 </Button>
