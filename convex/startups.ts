@@ -2,6 +2,7 @@ import { query, mutation } from './functions'
 import { v } from 'convex/values'
 import { requireAdmin, requireSuperAdmin } from './auth'
 import { slugify, generateUniqueSlug } from './lib/slugify'
+import { evaluateUserCleanup } from './lib/userCleanup'
 
 /**
  * List startups, optionally filtered by cohort.
@@ -318,23 +319,13 @@ export const remove = mutation({
       .query('founderProfiles')
       .withIndex('by_startupId', (q) => q.eq('startupId', args.id))
       .collect()
+    const founderUserIds = founderProfiles.map((p) => p.userId)
     for (const profile of founderProfiles) {
-      // Check if this founder has profiles under other startups
-      const otherProfiles = await ctx.db
-        .query('founderProfiles')
-        .withIndex('by_userId', (q) => q.eq('userId', profile.userId))
-        .collect()
-      const hasOtherStartups = otherProfiles.some((p) => p.startupId !== args.id)
-
       await ctx.db.delete(profile._id)
-
-      // Delete the user record if they only belonged to this startup
-      if (!hasOtherStartups) {
-        const user = await ctx.db.get(profile.userId)
-        if (user && user.role === 'founder') {
-          await ctx.db.delete(user._id)
-        }
-      }
+    }
+    // Evaluate each founder for full cleanup (Convex + Clerk deletion)
+    for (const userId of founderUserIds) {
+      await evaluateUserCleanup(ctx, userId)
     }
 
     // 10. Delete invitations
