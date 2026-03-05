@@ -316,7 +316,9 @@ export default function StartupFundingPage() {
   )
 
   const milestoneList = useMemo(() => milestones ?? [], [milestones])
-  const potential = milestoneList.reduce((sum, m) => sum + m.amount, 0)
+  const potential = milestoneList
+    .filter((m) => m.status === 'waiting' || m.status === 'submitted')
+    .reduce((sum, m) => sum + m.amount, 0)
   const unlocked = milestoneList
     .filter((m) => m.status === 'approved')
     .reduce((sum, m) => sum + m.amount, 0)
@@ -326,8 +328,6 @@ export default function StartupFundingPage() {
   const available = Math.max(0, unlocked - deployed)
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
-  const approvedCount = milestoneList.filter((m) => m.status === 'approved').length
-
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const filteredMilestones = useMemo(() => {
     const filtered = milestoneList.filter((milestone) => {
@@ -691,8 +691,40 @@ export default function StartupFundingPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Baseline Left
+              <InfoTooltip text="Cohort baseline not yet allocated to any milestone." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display text-muted-foreground">
+              £
+              {Math.max(0, (cohort?.baseFunding ?? 0) - potential - unlocked).toLocaleString(
+                'en-GB'
+              )}
+            </p>
+            {cohort?.baseFunding != null && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                of £{cohort.baseFunding.toLocaleString('en-GB')} baseline
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Potential
+              <InfoTooltip text="Total value of pending and waiting milestones still to be unlocked." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display">
+              £{potential.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
               Unlocked
-              <InfoTooltip text="Sum of all approved milestones for this startup." />
+              <InfoTooltip text="Total funding unlocked from approved milestones." />
             </p>
             <p className="mt-1 text-2xl font-bold font-display">
               £{unlocked.toLocaleString('en-GB')}
@@ -721,38 +753,6 @@ export default function StartupFundingPage() {
             <p className="mt-1 text-2xl font-bold font-display text-green-600">
               £{available.toLocaleString('en-GB')}
             </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Potential
-              <InfoTooltip text="Total value of all milestones (approved + pending + waiting)." />
-            </p>
-            <p className="mt-1 text-2xl font-bold font-display">
-              £{potential.toLocaleString('en-GB')}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {approvedCount} of {milestoneList.length} approved
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Baseline Left
-              <InfoTooltip text="Cohort baseline minus this startup's total milestone potential. The portion of baseline not allocated to any milestone." />
-            </p>
-            <p className="mt-1 text-2xl font-bold font-display text-muted-foreground">
-              £{Math.max(0, (cohort?.baseFunding ?? 0) - potential).toLocaleString('en-GB')}
-            </p>
-            {cohort?.baseFunding != null && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                of £{cohort.baseFunding.toLocaleString('en-GB')} baseline
-              </p>
-            )}
           </CardContent>
         </Card>
       </div>

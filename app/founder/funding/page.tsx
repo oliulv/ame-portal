@@ -34,12 +34,16 @@ export default function FounderFundingPage() {
   const [sortBy, setSortBy] = useState<MilestoneSort>('priority')
 
   const milestoneList = useMemo(() => milestones ?? [], [milestones])
-  const potential = milestoneList.reduce((sum, m) => sum + m.amount, 0)
+  const potential = milestoneList
+    .filter((m) => m.status === 'waiting' || m.status === 'submitted')
+    .reduce((sum, m) => sum + m.amount, 0)
   const unlocked = milestoneList
     .filter((m) => m.status === 'approved')
     .reduce((sum, m) => sum + m.amount, 0)
   const deployed = fundingSummary?.deployed ?? 0
   const available = Math.max(0, unlocked - deployed)
+  const baseline = fundingSummary?.baseline ?? 0
+  const baselineLeft = Math.max(0, baseline - potential - unlocked)
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
 
@@ -171,12 +175,34 @@ export default function FounderFundingPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Baseline Left
+              <InfoTooltip text="Cohort baseline not yet allocated to any milestone." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display text-muted-foreground">
+              £{baselineLeft.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Potential
+              <InfoTooltip text="Total value of pending and waiting milestones still to be unlocked." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display">
+              £{potential.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="pt-5 pb-4">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
               Unlocked
-              <InfoTooltip text="Total funding unlocked from approved milestones. Complete milestones to increase this amount." />
+              <InfoTooltip text="Total funding unlocked from approved milestones." />
             </p>
             <p className="mt-1 text-2xl font-bold font-display">
               £{unlocked.toLocaleString('en-GB')}
@@ -202,17 +228,6 @@ export default function FounderFundingPage() {
             </p>
             <p className="mt-1 text-2xl font-bold font-display text-green-600">
               £{available.toLocaleString('en-GB')}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Remaining
-              <InfoTooltip text="Funding still available to unlock by completing remaining milestones." />
-            </p>
-            <p className="mt-1 text-2xl font-bold font-display text-muted-foreground">
-              £{Math.max(0, potential - unlocked).toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>
