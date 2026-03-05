@@ -65,13 +65,13 @@ export default function FounderDashboard() {
 
   const hasStartup = startup !== null
 
-  const potential = milestones?.reduce((sum, m) => sum + m.amount, 0) ?? 0
   const unlocked = fundingSummary?.unlocked ?? 0
   const deployed = fundingSummary?.deployed ?? 0
   const available = fundingSummary?.available ?? 0
+  const baseline = fundingSummary?.baseline ?? 0
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
-  const unlockedPct = potential > 0 ? (unlocked / potential) * 100 : 0
-  const deployedPct = potential > 0 ? (cappedDeployed / potential) * 100 : 0
+  const unlockedPct = baseline > 0 ? (unlocked / baseline) * 100 : 0
+  const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
   const unlockedPctRounded = Math.round(unlockedPct)
   const pendingInvoices = invoicesData?.pendingCount ?? 0
 
@@ -150,17 +150,21 @@ export default function FounderDashboard() {
                 Deployed £{deployed.toLocaleString('en-GB')} of £{unlocked.toLocaleString('en-GB')}{' '}
                 unlocked
               </p>
-              <span className="text-xs text-muted-foreground">{unlockedPctRounded}% unlocked</span>
+              {baseline > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {unlockedPctRounded}% of baseline unlocked
+                </span>
+              )}
             </div>
-            <div className="relative h-2.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className="absolute inset-y-0 left-0 bg-emerald-500/30 transition-all"
-                style={{ width: `${unlockedPct}%` }}
-              />
-              <div
-                className="absolute inset-y-0 left-0 bg-blue-600 transition-all"
-                style={{ width: `${deployedPct}%` }}
-              />
+            <div
+              className={`relative h-2.5 overflow-hidden rounded-full ${unlocked > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
+            >
+              {unlocked > 0 && (
+                <div
+                  className="absolute inset-y-0 left-0 bg-blue-600 transition-all"
+                  style={{ width: `${deployedPct}%` }}
+                />
+              )}
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className=" border bg-muted/40 px-2 py-1.5">

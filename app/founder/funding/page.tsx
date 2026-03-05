@@ -171,7 +171,7 @@ export default function FounderFundingPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="pt-5 pb-4">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
@@ -202,6 +202,17 @@ export default function FounderFundingPage() {
             </p>
             <p className="mt-1 text-2xl font-bold font-display text-green-600">
               £{available.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Remaining
+              <InfoTooltip text="Funding still available to unlock by completing remaining milestones." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display text-muted-foreground">
+              £{Math.max(0, potential - unlocked).toLocaleString('en-GB')}
             </p>
           </CardContent>
         </Card>

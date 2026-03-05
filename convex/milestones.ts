@@ -68,15 +68,26 @@ export const fundingSummaryForFounder = query({
     const startupIds = await getFounderStartupIds(ctx, user._id)
 
     if (startupIds.length === 0) {
-      return { unlocked: 0, deployed: 0, available: 0, hasMilestones: false }
+      return {
+        unlocked: 0,
+        deployed: 0,
+        available: 0,
+        potential: 0,
+        baseline: 0,
+        hasMilestones: false,
+      }
     }
 
     const startupId = startupIds[0]
+    const startup = await ctx.db.get(startupId)
+    const cohort = startup ? await ctx.db.get(startup.cohortId) : null
+
     const milestones = await ctx.db
       .query('milestones')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
 
+    const potential = milestones.reduce((sum, m) => sum + m.amount, 0)
     const unlocked = milestones
       .filter((m) => m.status === 'approved')
       .reduce((sum, m) => sum + m.amount, 0)
@@ -95,6 +106,8 @@ export const fundingSummaryForFounder = query({
       unlocked,
       deployed,
       available,
+      potential,
+      baseline: cohort?.baseFunding ?? 0,
       hasMilestones: milestones.length > 0,
     }
   },
