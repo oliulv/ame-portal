@@ -27,6 +27,7 @@ import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
 export default function FounderDashboard() {
+  const startup = useQuery(api.founderStartup.get)
   const milestones = useQuery(api.milestones.listForFounder)
   const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
   const invoicesData = useQuery(api.invoices.listForFounder)
@@ -67,13 +68,18 @@ export default function FounderDashboard() {
   }
 
   const isLoading =
-    milestones === undefined || fundingSummary === undefined || invoicesData === undefined
+    startup === undefined ||
+    milestones === undefined ||
+    fundingSummary === undefined ||
+    invoicesData === undefined
 
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
   const trackerHasEvents = trackerWebsites?.some((w) => w.lastEventAt) ?? false
   const hasAnyIntegration = hasStripe || hasTracker
   const integrationsLoaded = integrationStatus !== undefined && trackerWebsites !== undefined
+
+  const hasStartup = startup !== null
 
   const potential = milestones?.reduce((sum, m) => sum + m.amount, 0) ?? 0
   const unlocked = fundingSummary?.unlocked ?? 0
@@ -84,7 +90,6 @@ export default function FounderDashboard() {
   const deployedPct = potential > 0 ? (cappedDeployed / potential) * 100 : 0
   const unlockedPctRounded = Math.round(unlockedPct)
   const pendingInvoices = invoicesData?.pendingCount ?? 0
-  const hasStartups = (milestones?.length ?? 0) > 0
 
   const upcomingMilestones = (milestones ?? [])
     .filter((m) => m.status === 'waiting' || m.status === 'submitted')
@@ -126,7 +131,7 @@ export default function FounderDashboard() {
     )
   }
 
-  if (!hasStartups) {
+  if (!hasStartup) {
     return (
       <div className="space-y-8">
         <div>

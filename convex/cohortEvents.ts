@@ -149,7 +149,7 @@ export const nextForFounder = query({
     const startup = await ctx.db.get(startupIds[0])
     if (!startup) return null
 
-    const now = new Date().toISOString()
+    const today = new Date().toISOString().slice(0, 10)
 
     const events = await ctx.db
       .query('cohortEvents')
@@ -157,7 +157,7 @@ export const nextForFounder = query({
       .collect()
 
     const upcoming = events
-      .filter((e) => e.isActive && e.date >= now)
+      .filter((e) => e.isActive && e.date >= today)
       .sort((a, b) => a.date.localeCompare(b.date))
 
     const next = upcoming[0]
