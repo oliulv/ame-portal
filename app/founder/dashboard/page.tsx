@@ -3,7 +3,6 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { logClientError } from '@/lib/logging'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Target,
@@ -34,9 +33,7 @@ export default function FounderDashboard() {
   const nextEvent = useQuery(api.cohortEvents.nextForFounder)
   const integrationStatus = useQuery(api.integrations.status)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
-  const withdrawMilestone = useMutation(api.milestones.withdraw)
   const registerEvent = useMutation(api.cohortEvents.register)
-  const [withdrawingId, setWithdrawingId] = useState<Id<'milestones'> | null>(null)
   const [isRegistering, setIsRegistering] = useState(false)
 
   const handleRegister = useCallback(
@@ -53,19 +50,6 @@ export default function FounderDashboard() {
     },
     [registerEvent]
   )
-
-  async function handleWithdraw(id: Id<'milestones'>) {
-    setWithdrawingId(id)
-    try {
-      await withdrawMilestone({ id })
-      toast.success('Submission withdrawn — you can now re-submit')
-    } catch (error) {
-      logClientError('Failed to withdraw milestone:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to withdraw milestone')
-    } finally {
-      setWithdrawingId(null)
-    }
-  }
 
   const isLoading =
     startup === undefined ||
@@ -231,7 +215,11 @@ export default function FounderDashboard() {
               <>
                 <div className="flex-1 space-y-2">
                   {upcomingMilestones.map((m) => (
-                    <div key={m._id} className="flex items-center gap-3  border px-3 py-2.5">
+                    <Link
+                      key={m._id}
+                      href={`/founder/milestones/${m._id}`}
+                      className="flex items-center gap-3 border px-3 py-2.5 transition-colors hover:bg-muted/50"
+                    >
                       <div className="flex-shrink-0">
                         {m.status === 'submitted' ? (
                           <Clock className="h-4 w-4 text-amber-600" />
@@ -270,25 +258,17 @@ export default function FounderDashboard() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {m.status === 'waiting' && (
-                          <Link href="/founder/funding">
-                            <Button size="sm" variant="outline" className="h-7 text-xs">
-                              Submit
-                            </Button>
-                          </Link>
+                          <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
+                            <span>Submit</span>
+                          </Button>
                         )}
                         {m.status === 'submitted' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs"
-                            onClick={() => handleWithdraw(m._id)}
-                            disabled={withdrawingId === m._id}
-                          >
-                            {withdrawingId === m._id ? 'Withdrawing...' : 'Withdraw'}
+                          <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
+                            <span>View</span>
                           </Button>
                         )}
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
                 <Link href="/founder/funding" className="mt-auto pt-3 inline-block">
