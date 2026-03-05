@@ -154,12 +154,9 @@ export default function FounderMilestoneDetailPage() {
           </Link>
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {statusIcon}
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight font-display">{milestone.title}</h1>
-              <p className="text-muted-foreground">Milestone details and submission</p>
-            </div>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight font-display">{milestone.title}</h1>
+            <p className="text-muted-foreground">Milestone details and submission</p>
           </div>
           {statusBadge}
         </div>

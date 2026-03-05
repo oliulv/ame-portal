@@ -21,6 +21,9 @@ import { Check, Clock, Search, Send, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
 type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved'
+type MilestoneSort = 'priority' | 'amount-desc' | 'amount-asc' | 'name'
+
+const STATUS_ORDER: Record<string, number> = { waiting: 0, submitted: 1, approved: 2 }
 
 export default function FounderFundingPage() {
   const milestones = useQuery(api.milestones.listForFounder)
@@ -28,6 +31,7 @@ export default function FounderFundingPage() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<MilestoneFilter>('all')
+  const [sortBy, setSortBy] = useState<MilestoneSort>('priority')
 
   const milestoneList = useMemo(() => milestones ?? [], [milestones])
   const potential = milestoneList.reduce((sum, m) => sum + m.amount, 0)
@@ -42,7 +46,7 @@ export default function FounderFundingPage() {
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const filteredMilestones = useMemo(() => {
-    return milestoneList.filter((milestone) => {
+    const filtered = milestoneList.filter((milestone) => {
       const matchesStatus = statusFilter === 'all' || milestone.status === statusFilter
       const matchesSearch =
         normalizedQuery.length === 0 ||
@@ -50,7 +54,24 @@ export default function FounderFundingPage() {
         milestone.description.toLowerCase().includes(normalizedQuery)
       return matchesStatus && matchesSearch
     })
-  }, [milestoneList, normalizedQuery, statusFilter])
+
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'priority':
+          if (a.status !== b.status)
+            return (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
+          return b._creationTime - a._creationTime
+        case 'amount-desc':
+          return b.amount - a.amount
+        case 'amount-asc':
+          return a.amount - b.amount
+        case 'name':
+          return a.title.localeCompare(b.title)
+        default:
+          return 0
+      }
+    })
+  }, [milestoneList, normalizedQuery, statusFilter, sortBy])
 
   if (milestones === undefined) {
     return (
@@ -199,7 +220,7 @@ export default function FounderFundingPage() {
               .
             </p>
           </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+          <div className="grid gap-3 md:grid-cols-[1fr_170px_170px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -223,9 +244,20 @@ export default function FounderFundingPage() {
                 <SelectItem value="approved">Approved</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as MilestoneSort)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="priority">Priority</SelectItem>
+                <SelectItem value="amount-desc">Amount (high)</SelectItem>
+                <SelectItem value="amount-asc">Amount (low)</SelectItem>
+                <SelectItem value="name">Name</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="space-y-3">
           {filteredMilestones.length > 0 ? (
             filteredMilestones.map((milestone) => (
               <Link key={milestone._id} href={`/founder/milestones/${milestone._id}`}>

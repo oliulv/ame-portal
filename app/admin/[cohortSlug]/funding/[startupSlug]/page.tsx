@@ -74,6 +74,9 @@ import type { Id, Doc } from '@/convex/_generated/dataModel'
 
 type Milestone = Doc<'milestones'>
 type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved'
+type MilestoneSort = 'priority' | 'amount-desc' | 'amount-asc' | 'name'
+
+const STATUS_ORDER: Record<string, number> = { waiting: 0, submitted: 1, approved: 2 }
 
 function PlanFileLink({ storageId, fileName }: { storageId: Id<'_storage'>; fileName?: string }) {
   const fileUrl = useQuery(api.milestones.getFileUrl, { storageId })
@@ -302,6 +305,7 @@ export default function StartupFundingPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<MilestoneFilter>('all')
+  const [sortBy, setSortBy] = useState<MilestoneSort>('priority')
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -326,7 +330,7 @@ export default function StartupFundingPage() {
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const filteredMilestones = useMemo(() => {
-    return milestoneList.filter((milestone) => {
+    const filtered = milestoneList.filter((milestone) => {
       const matchesStatus = statusFilter === 'all' || milestone.status === statusFilter
       const matchesSearch =
         normalizedQuery.length === 0 ||
@@ -334,8 +338,26 @@ export default function StartupFundingPage() {
         milestone.description.toLowerCase().includes(normalizedQuery)
       return matchesStatus && matchesSearch
     })
-  }, [milestoneList, normalizedQuery, statusFilter])
-  const filtersActive = statusFilter !== 'all' || normalizedQuery.length > 0
+
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'priority':
+          if (a.status !== b.status)
+            return (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
+          return b._creationTime - a._creationTime
+        case 'amount-desc':
+          return b.amount - a.amount
+        case 'amount-asc':
+          return a.amount - b.amount
+        case 'name':
+          return a.title.localeCompare(b.title)
+        default:
+          return 0
+      }
+    })
+  }, [milestoneList, normalizedQuery, statusFilter, sortBy])
+  const filtersActive =
+    statusFilter !== 'all' || normalizedQuery.length > 0 || sortBy !== 'priority'
 
   const isLoading = startup === undefined || milestones === undefined
 
@@ -727,7 +749,7 @@ export default function StartupFundingPage() {
               ? 'Filtered view. Clear filters to drag and reorder milestones.'
               : 'Drag to reorder. Click approve to unlock funding.'}
           </CardDescription>
-          <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+          <div className="grid gap-3 md:grid-cols-[1fr_170px_170px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -749,6 +771,17 @@ export default function StartupFundingPage() {
                 <SelectItem value="waiting">Waiting</SelectItem>
                 <SelectItem value="submitted">Submitted</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as MilestoneSort)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="priority">Priority</SelectItem>
+                <SelectItem value="amount-desc">Amount (high)</SelectItem>
+                <SelectItem value="amount-asc">Amount (low)</SelectItem>
+                <SelectItem value="name">Name</SelectItem>
               </SelectContent>
             </Select>
           </div>
