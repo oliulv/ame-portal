@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npx convex dev --once && npx convex dev & next dev",
-    "build": "npx convex deploy --cmd 'next build'",
+    "build": "npx convex deploy --cmd 'next build' --preview-run 'seed:default_'",
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -12,7 +12,6 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "check": "bun run lint && bun run format:check && bun run typecheck",
-    "deploy:prod": "npx convex deploy --env-file .env.production.local",
     "clone:prod": "bun scripts/clone-prod-to-dev.ts"
   },
   "dependencies": {
@@ -58,6 +57,7 @@
     "@types/react-dom": "^19",
     "@typescript-eslint/eslint-plugin": "^8.47.0",
     "@typescript-eslint/parser": "^8.47.0",
+    "baseline-browser-mapping": "^2.10.0",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.3",
     "eslint-config-prettier": "^10.1.8",

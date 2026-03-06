@@ -4,8 +4,8 @@ import { internalMutation } from './functions'
 // TODO: Fill in actual Clerk IDs
 const CLERK_IDS = {
   super_admin: 'user_3A6qOM3s1o7PGR61JPGkX7CgzKo',
-  admin: 'dev_admin_clerk_id',
-  founder: 'dev_founder_clerk_id',
+  admin: 'user_3AZadW7ezwPpAhPnzlOlG1D4zMN',
+  founder: 'user_3AZbJ2xxRdUY1DeQP3CUVZK3Qj5',
 }
 
 // ── Startup definitions ──────────────────────────────────────────────
