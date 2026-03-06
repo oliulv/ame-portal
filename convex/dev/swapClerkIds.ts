@@ -8,10 +8,10 @@ const SWAPS = [
     devClerkId: 'user_3A6qOM3s1o7PGR61JPGkX7CgzKo',
   },
   // Admin — your prod admin account → your dev admin test account
-  { prodClerkId: 'user_3AZW0GqyKBzXqxC5jGf5oMw6nuk', devClerkId: 'DEV_CLERK_ID_HERE' },
+  { prodClerkId: 'user_3AZW0GqyKBzXqxC5jGf5oMw6nuk', devClerkId: 'user_3AZadW7ezwPpAhPnzlOlG1D4zMN'},
   // Founder — pick any real founder from prod whose startup you want to test as
   // When you sign in as your dev founder account, you'll see their startup's data
-  { prodClerkId: 'user_3AXA9rBbcQvT3qjltWkwILqvpnG', devClerkId: 'DEV_CLERK_ID_HERE' },
+  { prodClerkId: 'user_3AXA9rBbcQvT3qjltWkwILqvpnG', devClerkId: 'user_3AZbJ2xxRdUY1DeQP3CUVZK3Qj5' },
 ]
 
 export const run = internalMutation({
