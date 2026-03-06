@@ -90,9 +90,11 @@ export default function OnboardingPage() {
 
   // Convex queries and mutations
   const bankStatusResult = useQuery(api.founderOnboarding.bankStatus)
+  const startupProfileResult = useQuery(api.founderOnboarding.startupProfileStatus)
   const completeOnboarding = useMutation(api.founderOnboarding.complete)
 
   const hasBankDetails = bankStatusResult?.hasBankDetails ?? null
+  const hasStartupProfile = startupProfileResult?.hasStartupProfile ?? null
   const isCheckingBankStatus = bankStatusResult === undefined
 
   // Forms for each step
@@ -147,6 +149,8 @@ export default function OnboardingPage() {
   const getStepState = (index: number) => {
     if (index < currentStepIndex) return 'completed'
     if (index === currentStepIndex) return 'current'
+    // Startup step is pre-completed if another founder already filled it
+    if (steps[index].key === 'startup' && hasStartupProfile === true) return 'completed'
     // Bank step is pre-completed if startup already has bank details
     if (steps[index].key === 'bank' && hasBankDetails === true) return 'completed'
     return 'upcoming'
@@ -154,7 +158,16 @@ export default function OnboardingPage() {
 
   async function handlePersonalNext(data: FounderPersonalInfoFormData) {
     setPersonalData(data)
-    setCurrentStep('startup')
+    if (hasStartupProfile === true) {
+      // Startup profile already filled — skip to bank or submit
+      if (hasBankDetails === true) {
+        await submitOnboarding(undefined, undefined, data)
+      } else {
+        setCurrentStep('bank')
+      }
+    } else {
+      setCurrentStep('startup')
+    }
   }
 
   async function handleStartupNext(data: StartupProfileFormData) {
@@ -167,11 +180,14 @@ export default function OnboardingPage() {
     }
   }
 
+
   async function submitOnboarding(
-    startup: StartupProfileFormData,
-    bank: BankDetailsFormData | undefined
+    startup: StartupProfileFormData | undefined,
+    bank: BankDetailsFormData | undefined,
+    personalOverride?: FounderPersonalInfoFormData
   ) {
-    if (!personalData) {
+    const personal = personalOverride ?? personalData
+    if (!personal) {
       setError('Please complete all previous steps')
       return
     }
@@ -181,8 +197,8 @@ export default function OnboardingPage() {
 
     try {
       await completeOnboarding({
-        founderInfo: mapPersonalInfo(personalData),
-        startupProfile: mapStartupProfile(startup),
+        founderInfo: mapPersonalInfo(personal),
+        startupProfile: startup ? mapStartupProfile(startup) : undefined,
         bankDetails: bank ? mapBankDetails(bank) : undefined,
       })
 

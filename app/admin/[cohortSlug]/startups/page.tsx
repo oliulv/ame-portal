@@ -134,7 +134,14 @@ export default function StartupsPage() {
                       className="cursor-pointer transition-colors hover:bg-muted/50"
                       onClick={() => router.push(href)}
                     >
-                      <TableCell className="font-medium">{startup.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {startup.name}
+                        {startup.excludeFromMetrics === true && (
+                          <Badge variant="warning" className="ml-2">
+                            Excluded
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">
                           {startup.sector || '-'}

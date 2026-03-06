@@ -18,16 +18,18 @@ export const complete = mutation({
       linkedinUrl: v.optional(v.string()),
       xUrl: v.optional(v.string()),
     }),
-    startupProfile: v.object({
-      oneLiner: v.string(),
-      description: v.string(),
-      companyUrl: v.optional(v.string()),
-      productUrl: v.optional(v.string()),
-      industry: v.string(),
-      location: v.string(),
-      initialCustomers: v.optional(v.number()),
-      initialRevenue: v.optional(v.number()),
-    }),
+    startupProfile: v.optional(
+      v.object({
+        oneLiner: v.string(),
+        description: v.string(),
+        companyUrl: v.optional(v.string()),
+        productUrl: v.optional(v.string()),
+        industry: v.string(),
+        location: v.string(),
+        initialCustomers: v.optional(v.number()),
+        initialRevenue: v.optional(v.number()),
+      })
+    ),
     bankDetails: v.optional(
       v.object({
         accountHolderName: v.string(),
@@ -72,30 +74,32 @@ export const complete = mutation({
       })
     }
 
-    // Upsert startup profile
-    const existingProfile = await ctx.db
-      .query('startupProfiles')
-      .withIndex('by_startupId', (q) => q.eq('startupId', founderProfile.startupId))
-      .first()
+    // Upsert startup profile (skipped when 2nd founder joins a startup that already has one)
+    if (args.startupProfile) {
+      const existingProfile = await ctx.db
+        .query('startupProfiles')
+        .withIndex('by_startupId', (q) => q.eq('startupId', founderProfile.startupId))
+        .first()
 
-    const profileData = {
-      oneLiner: args.startupProfile.oneLiner,
-      description: args.startupProfile.description,
-      companyUrl: args.startupProfile.companyUrl,
-      productUrl: args.startupProfile.productUrl,
-      industry: args.startupProfile.industry,
-      location: args.startupProfile.location,
-      initialCustomers: args.startupProfile.initialCustomers,
-      initialRevenue: args.startupProfile.initialRevenue,
-    }
+      const profileData = {
+        oneLiner: args.startupProfile.oneLiner,
+        description: args.startupProfile.description,
+        companyUrl: args.startupProfile.companyUrl,
+        productUrl: args.startupProfile.productUrl,
+        industry: args.startupProfile.industry,
+        location: args.startupProfile.location,
+        initialCustomers: args.startupProfile.initialCustomers,
+        initialRevenue: args.startupProfile.initialRevenue,
+      }
 
-    if (existingProfile) {
-      await ctx.db.patch(existingProfile._id, profileData)
-    } else {
-      await ctx.db.insert('startupProfiles', {
-        startupId: founderProfile.startupId,
-        ...profileData,
-      })
+      if (existingProfile) {
+        await ctx.db.patch(existingProfile._id, profileData)
+      } else {
+        await ctx.db.insert('startupProfiles', {
+          startupId: founderProfile.startupId,
+          ...profileData,
+        })
+      }
     }
 
     // Upsert bank details if provided
@@ -127,6 +131,33 @@ export const complete = mutation({
     await ctx.db.patch(founderProfile.startupId, {
       onboardingStatus: 'completed',
     })
+  },
+})
+
+/**
+ * Check if the startup profile is already filled for the current founder's startup.
+ */
+export const startupProfileStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireFounder(ctx)
+    const founderProfile = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .first()
+    if (!founderProfile) return { hasStartupProfile: false }
+    const profile = await ctx.db
+      .query('startupProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', founderProfile.startupId))
+      .first()
+    return {
+      hasStartupProfile: !!(
+        profile?.oneLiner &&
+        profile?.description &&
+        profile?.industry &&
+        profile?.location
+      ),
+    }
   },
 })
 

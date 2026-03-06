@@ -271,19 +271,28 @@ export default function InvoiceDetailPage() {
           </Card>
 
           {/* Uploader Info */}
-          {founderProfile && (
+          {(founderProfile || invoice.uploadedByUserId) && (
             <Card>
               <CardHeader>
                 <CardTitle>Uploaded By</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">{founderProfile.fullName}</p>
-                    <p className="text-xs text-muted-foreground">{founderProfile.personalEmail}</p>
+                {founderProfile ? (
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">{founderProfile.fullName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {founderProfile.personalEmail}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground italic">Deleted user</p>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Calendar className="h-3 w-3" />
                   {new Date(invoice._creationTime).toLocaleDateString('en-GB', {

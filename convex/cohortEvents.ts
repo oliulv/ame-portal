@@ -114,8 +114,9 @@ export const listForFounder = query({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
       .collect()
 
+    const today = new Date().toISOString().slice(0, 10)
     const activeEvents = events
-      .filter((e) => e.isActive)
+      .filter((e) => e.isActive && e.date >= today)
       .sort((a, b) => a.date.localeCompare(b.date))
 
     // Check registration status for each event

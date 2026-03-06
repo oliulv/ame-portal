@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { startupSchema, type StartupFormData } from '@/lib/schemas'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ArrowLeft, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -43,6 +44,7 @@ export default function EditStartupPage() {
   const currentUser = useQuery(api.users.current)
   const updateStartup = useMutation(api.startups.update)
   const deleteStartup = useMutation(api.startups.remove)
+  const toggleExclude = useMutation(api.startups.toggleExcludeFromMetrics)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -270,6 +272,39 @@ export default function EditStartupPage() {
           </Form>
         </CardContent>
       </Card>
+
+      {isSuperAdmin && (
+        <Card className="border-amber-500">
+          <CardHeader>
+            <CardTitle className="text-amber-700">Exclude from Cohort</CardTitle>
+            <CardDescription>
+              Excluded startups are hidden from funding tables and excluded from dashboard
+              statistics. They remain visible in the startups overview and leaderboard with an
+              &quot;Excluded&quot; badge.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3">
+              <Checkbox
+                id="exclude-from-metrics"
+                checked={startup.excludeFromMetrics === true}
+                onCheckedChange={(checked) => {
+                  toggleExclude({
+                    id: startup._id,
+                    exclude: checked === true,
+                  })
+                }}
+              />
+              <label
+                htmlFor="exclude-from-metrics"
+                className="text-sm font-medium cursor-pointer"
+              >
+                Exclude this startup from cohort metrics
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isSuperAdmin && (
         <Card className="border-destructive">

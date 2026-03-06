@@ -191,27 +191,33 @@ export const dashboardStats = query({
           .query('startups')
           .withIndex('by_cohortId', (q) => q.eq('cohortId', cohort._id))
           .collect()
-
-        // Count invoices for these startups
-        for (const s of startups) {
-          const invoices = await ctx.db
-            .query('invoices')
-            .withIndex('by_startupId', (q) => q.eq('startupId', s._id))
-            .collect()
-          invoiceCount += invoices.length
-        }
       } else {
         startups = []
       }
     } else {
       startups = await ctx.db.query('startups').collect()
+    }
+
+    const activeStartups = startups.filter((s) => s.excludeFromMetrics !== true)
+
+    // Count invoices only from active (non-excluded) startups
+    if (args.cohortSlug) {
+      for (const s of activeStartups) {
+        const invoices = await ctx.db
+          .query('invoices')
+          .withIndex('by_startupId', (q) => q.eq('startupId', s._id))
+          .collect()
+        invoiceCount += invoices.length
+      }
+    } else {
       const allInvoices = await ctx.db.query('invoices').collect()
-      invoiceCount = allInvoices.length
+      const activeStartupIds = new Set(activeStartups.map((s) => s._id))
+      invoiceCount = allInvoices.filter((i) => activeStartupIds.has(i.startupId)).length
     }
 
     return {
       cohortsCount: allCohorts.length,
-      startupsCount: startups.length,
+      startupsCount: activeStartups.length,
       invoicesCount: invoiceCount,
     }
   },

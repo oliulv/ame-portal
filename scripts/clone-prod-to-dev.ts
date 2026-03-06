@@ -16,7 +16,7 @@ try {
 }
 
 console.log('\n== Exporting prod database ==')
-run(`npx convex export --path ${EXPORT_PATH} --prod`)
+run(`npx convex export --include-file-storage --path ${EXPORT_PATH} --prod`)
 
 console.log('\n== Importing into dev ==')
 run(`npx convex import --replace-all ${EXPORT_PATH}`)
