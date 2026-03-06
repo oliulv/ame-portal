@@ -1,9 +1,15 @@
 import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
 
+const syncFields = {
+  syncSource: v.optional(v.string()),
+  syncSourceId: v.optional(v.string()),
+}
+
 export default defineSchema({
   // ── Users ──────────────────────────────────────────────────────────
   users: defineTable({
+    ...syncFields,
     clerkId: v.string(),
     role: v.union(v.literal('super_admin'), v.literal('admin'), v.literal('founder')),
     email: v.optional(v.string()),
@@ -13,6 +19,7 @@ export default defineSchema({
 
   // ── Cohorts ────────────────────────────────────────────────────────
   cohorts: defineTable({
+    ...syncFields,
     name: v.string(),
     slug: v.string(),
     yearStart: v.number(),
@@ -25,6 +32,7 @@ export default defineSchema({
 
   // ── Admin ↔ Cohort assignments ────────────────────────────────────
   adminCohorts: defineTable({
+    ...syncFields,
     userId: v.id('users'),
     cohortId: v.id('cohorts'),
   })
@@ -34,6 +42,7 @@ export default defineSchema({
 
   // ── Startups ───────────────────────────────────────────────────────
   startups: defineTable({
+    ...syncFields,
     cohortId: v.id('cohorts'),
     name: v.string(),
     slug: v.optional(v.string()),
@@ -55,6 +64,7 @@ export default defineSchema({
 
   // ── Startup Profiles ───────────────────────────────────────────────
   startupProfiles: defineTable({
+    ...syncFields,
     startupId: v.id('startups'),
     oneLiner: v.optional(v.string()),
     description: v.optional(v.string()),
@@ -68,6 +78,7 @@ export default defineSchema({
 
   // ── Founder Profiles ───────────────────────────────────────────────
   founderProfiles: defineTable({
+    ...syncFields,
     userId: v.id('users'),
     startupId: v.id('startups'),
     fullName: v.string(),
@@ -92,6 +103,7 @@ export default defineSchema({
 
   // ── Bank Details ───────────────────────────────────────────────────
   bankDetails: defineTable({
+    ...syncFields,
     startupId: v.id('startups'),
     accountHolderName: v.string(),
     sortCode: v.string(),
@@ -102,6 +114,7 @@ export default defineSchema({
 
   // ── Milestone Templates ────────────────────────────────────────────
   milestoneTemplates: defineTable({
+    ...syncFields,
     cohortId: v.id('cohorts'),
     title: v.string(),
     description: v.string(),
@@ -115,6 +128,7 @@ export default defineSchema({
 
   // ── Milestones ────────────────────────────────────────────────────
   milestones: defineTable({
+    ...syncFields,
     startupId: v.id('startups'),
     milestoneTemplateId: v.optional(v.id('milestoneTemplates')),
     title: v.string(),
@@ -134,6 +148,7 @@ export default defineSchema({
 
   // ── Invitations (founder) ──────────────────────────────────────────
   invitations: defineTable({
+    ...syncFields,
     startupId: v.id('startups'),
     email: v.string(),
     fullName: v.string(),
@@ -150,6 +165,7 @@ export default defineSchema({
 
   // ── Admin Invitations ──────────────────────────────────────────────
   adminInvitations: defineTable({
+    ...syncFields,
     email: v.string(),
     token: v.string(),
     role: v.union(v.literal('admin'), v.literal('super_admin')),
@@ -164,6 +180,7 @@ export default defineSchema({
 
   // ── Invoices ───────────────────────────────────────────────────────
   invoices: defineTable({
+    ...syncFields,
     startupId: v.id('startups'),
     uploadedByUserId: v.id('users'),
     vendorName: v.string(),
@@ -193,6 +210,7 @@ export default defineSchema({
 
   // ── Integration Connections ────────────────────────────────────────
   integrationConnections: defineTable({
+    ...syncFields,
     startupId: v.id('startups'),
     provider: v.union(v.literal('stripe'), v.literal('tracker')),
     accountId: v.optional(v.string()),
@@ -213,6 +231,7 @@ export default defineSchema({
 
   // ── Metrics Data ───────────────────────────────────────────────────
   metricsData: defineTable({
+    ...syncFields,
     startupId: v.id('startups'),
     provider: v.union(v.literal('stripe'), v.literal('tracker'), v.literal('manual')),
     metricKey: v.string(),
@@ -227,6 +246,7 @@ export default defineSchema({
 
   // ── Tracker Websites ───────────────────────────────────────────────
   trackerWebsites: defineTable({
+    ...syncFields,
     startupId: v.id('startups'),
     name: v.string(),
     domain: v.optional(v.string()),
@@ -235,6 +255,7 @@ export default defineSchema({
 
   // ── Tracker Events ─────────────────────────────────────────────────
   trackerEvents: defineTable({
+    ...syncFields,
     websiteId: v.id('trackerWebsites'),
     sessionId: v.optional(v.string()),
     eventName: v.optional(v.string()),
@@ -260,6 +281,7 @@ export default defineSchema({
 
   // ── Cohort Events ─────────────────────────────────────────────
   cohortEvents: defineTable({
+    ...syncFields,
     cohortId: v.id('cohorts'),
     title: v.string(),
     description: v.optional(v.string()),
@@ -271,6 +293,7 @@ export default defineSchema({
 
   // ── Perks (global, not per-cohort) ──────────────────────────────
   perks: defineTable({
+    ...syncFields,
     cohortId: v.optional(v.id('cohorts')), // Legacy field, not used
     title: v.string(),
     description: v.string(),
@@ -286,6 +309,7 @@ export default defineSchema({
 
   // ── Event Registrations ────────────────────────────────────────
   eventRegistrations: defineTable({
+    ...syncFields,
     eventId: v.id('cohortEvents'),
     userId: v.id('users'),
     registeredAt: v.string(),
@@ -296,6 +320,7 @@ export default defineSchema({
 
   // ── Perk Claims ────────────────────────────────────────────────
   perkClaims: defineTable({
+    ...syncFields,
     perkId: v.id('perks'),
     userId: v.id('users'),
     startupId: v.id('startups'),

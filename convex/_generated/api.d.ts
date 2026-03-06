@@ -16,6 +16,7 @@ import type * as bankDetails from "../bankDetails.js";
 import type * as cohortEvents from "../cohortEvents.js";
 import type * as cohorts from "../cohorts.js";
 import type * as crons from "../crons.js";
+import type * as dev_syncFromProd from "../dev/syncFromProd.js";
 import type * as founderInvitations from "../founderInvitations.js";
 import type * as founderOnboarding from "../founderOnboarding.js";
 import type * as founderProfile from "../founderProfile.js";
@@ -35,6 +36,7 @@ import type * as migrations_updateSupabasePerk from "../migrations/updateSupabas
 import type * as milestoneTemplates from "../milestoneTemplates.js";
 import type * as milestones from "../milestones.js";
 import type * as perks from "../perks.js";
+import type * as seed from "../seed.js";
 import type * as startups from "../startups.js";
 import type * as trackerWebsites from "../trackerWebsites.js";
 import type * as users from "../users.js";
@@ -54,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   cohortEvents: typeof cohortEvents;
   cohorts: typeof cohorts;
   crons: typeof crons;
+  "dev/syncFromProd": typeof dev_syncFromProd;
   founderInvitations: typeof founderInvitations;
   founderOnboarding: typeof founderOnboarding;
   founderProfile: typeof founderProfile;
@@ -73,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   milestoneTemplates: typeof milestoneTemplates;
   milestones: typeof milestones;
   perks: typeof perks;
+  seed: typeof seed;
   startups: typeof startups;
   trackerWebsites: typeof trackerWebsites;
   users: typeof users;

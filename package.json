@@ -12,7 +12,8 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "check": "bun run lint && bun run format:check && bun run typecheck",
-    "deploy:prod": "npx convex deploy --env-file .env.production.local"
+    "deploy:prod": "npx convex deploy --env-file .env.production.local",
+    "sync:prod": "bun scripts/sync-prod-to-dev.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.1",
@@ -52,11 +53,13 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@typescript-eslint/eslint-plugin": "^8.47.0",
     "@typescript-eslint/parser": "^8.47.0",
+    "adm-zip": "^0.5.16",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.3",
     "eslint-config-prettier": "^10.1.8",
