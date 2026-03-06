@@ -25,11 +25,7 @@ try {
   // File doesn't exist, nothing to clean
 }
 
-// 2. Push local Convex functions to dev (so swapClerkIds is available)
-console.log('\n== Step 0: Pushing functions to dev ==')
-run('npx convex dev --once')
-
-// 3. Export prod database
+// 2. Export prod database
 // --env-file /dev/null prevents the CLI from reading .env.local
 console.log('\n== Step 1: Exporting prod database ==')
 run(
@@ -37,12 +33,16 @@ run(
   { stripConvexEnv: true }
 )
 
-// 4. Import into dev (replaces all data)
+// 3. Import into dev (replaces all data — clears old sync fields)
 console.log('\n== Step 2: Importing into dev ==')
 run(`npx convex import --replace-all ${EXPORT_PATH}`)
 
+// 4. Push local Convex functions to dev (must happen after import so schema matches clean data)
+console.log('\n== Step 3: Pushing functions to dev ==')
+run('npx convex dev --once')
+
 // 5. Swap Clerk IDs
-console.log('\n== Step 3: Swapping Clerk IDs ==')
+console.log('\n== Step 4: Swapping Clerk IDs ==')
 run('npx convex run dev/swapClerkIds:run')
 
 // 6. Clean up
