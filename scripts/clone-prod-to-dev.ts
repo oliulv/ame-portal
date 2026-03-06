@@ -24,7 +24,7 @@ try {
 
 // 2. Export prod database
 console.log('\n== Step 1: Exporting prod database ==')
-run(`npx convex export --path ${EXPORT_PATH} --deployment ${PROD_DEPLOYMENT}`, {
+run(`npx convex export --path ${EXPORT_PATH} --deployment-name ${PROD_DEPLOYMENT}`, {
   stripDeployKey: true,
 })
 
