@@ -180,7 +180,6 @@ export default function OnboardingPage() {
     }
   }
 
-
   async function submitOnboarding(
     startup: StartupProfileFormData | undefined,
     bank: BankDetailsFormData | undefined,

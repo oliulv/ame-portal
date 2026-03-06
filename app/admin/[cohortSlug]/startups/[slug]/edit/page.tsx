@@ -295,10 +295,7 @@ export default function EditStartupPage() {
                   })
                 }}
               />
-              <label
-                htmlFor="exclude-from-metrics"
-                className="text-sm font-medium cursor-pointer"
-              >
+              <label htmlFor="exclude-from-metrics" className="text-sm font-medium cursor-pointer">
                 Exclude this startup from cohort metrics
               </label>
             </div>

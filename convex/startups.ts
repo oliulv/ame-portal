@@ -1,5 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
+import { Doc } from './_generated/dataModel'
 import { requireAdmin, requireSuperAdmin } from './auth'
 import { slugify, generateUniqueSlug } from './lib/slugify'
 import { evaluateUserCleanup } from './lib/userCleanup'
@@ -177,7 +178,7 @@ export const dashboardStats = query({
 
     const allCohorts = await ctx.db.query('cohorts').collect()
 
-    let startups
+    let startups: Doc<'startups'>[] = []
     let invoiceCount = 0
 
     if (args.cohortSlug) {
