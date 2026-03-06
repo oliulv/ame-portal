@@ -3,12 +3,15 @@ import { internalMutation } from '../functions'
 // TODO: Fill in actual Clerk IDs
 const SWAPS = [
   // Super admin — your prod super_admin account → your dev super_admin test account
-  { prodClerkId: 'PROD_CLERK_ID_HERE', devClerkId: 'DEV_CLERK_ID_HERE' },
+  {
+    prodClerkId: 'user_3AROWgxuZ7nCII5SKsN9XSQnwRU',
+    devClerkId: 'user_3A6qOM3s1o7PGR61JPGkX7CgzKo',
+  },
   // Admin — your prod admin account → your dev admin test account
-  { prodClerkId: 'PROD_CLERK_ID_HERE', devClerkId: 'DEV_CLERK_ID_HERE' },
+  { prodClerkId: 'user_3AZW0GqyKBzXqxC5jGf5oMw6nuk', devClerkId: 'DEV_CLERK_ID_HERE' },
   // Founder — pick any real founder from prod whose startup you want to test as
   // When you sign in as your dev founder account, you'll see their startup's data
-  { prodClerkId: 'PROD_FOUNDER_CLERK_ID_HERE', devClerkId: 'DEV_CLERK_ID_HERE' },
+  { prodClerkId: 'user_3AXA9rBbcQvT3qjltWkwILqvpnG', devClerkId: 'DEV_CLERK_ID_HERE' },
 ]
 
 export const run = internalMutation({
