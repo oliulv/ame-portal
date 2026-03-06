@@ -12,7 +12,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "check": "bun run lint && bun run format:check && bun run typecheck",
-    "sync:prod": "bun scripts/sync-prod-to-dev.ts"
+    "clone:prod": "bun scripts/clone-prod-to-dev.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.1",
