@@ -81,13 +81,14 @@ export const create = mutation({
       )
     }
 
-    // Enforce sequential invoice numbering
+    // Enforce sequential invoice numbering (rejected invoices don't count)
     const existingInvoices = await ctx.db
       .query('invoices')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
 
     const existingNumbers = existingInvoices
+      .filter((inv) => inv.status !== 'rejected')
       .map((inv) => {
         const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
         return match ? parseInt(match[1], 10) : 0
@@ -180,6 +181,7 @@ export const getFounderInvoiceInfo = query({
       .collect()
 
     const existingNumbers = invoices
+      .filter((inv) => inv.status !== 'rejected')
       .map((inv) => {
         const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
         return match ? parseInt(match[1], 10) : 0
