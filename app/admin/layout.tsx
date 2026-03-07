@@ -15,7 +15,13 @@ function AdminHeader({ userRole }: { userRole: string }) {
 
   useEffect(() => {
     const match = pathname.match(/^\/admin\/([^/]+)(?:\/|$)/)
-    if (match && match[1] && match[1] !== 'cohorts' && match[1] !== 'settings') {
+    if (
+      match &&
+      match[1] &&
+      match[1] !== 'cohorts' &&
+      match[1] !== 'settings' &&
+      match[1] !== 'resources'
+    ) {
       setCohortSlug(match[1])
       return
     }
@@ -99,6 +105,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },
     { title: 'Perks', href: '/admin/perks', icon: 'Gift' },
     { title: 'Events', href: '/admin/events', icon: 'Calendar' },
+    { title: 'Resources', href: '/admin/resources', icon: 'BookOpen' },
     { title: 'Leaderboard', href: '/admin/leaderboard', icon: 'Trophy' },
     ...(user.role === 'super_admin'
       ? [{ title: 'Admins', href: '/admin/admins', icon: 'Users', mobileOnly: true }]

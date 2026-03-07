@@ -207,6 +207,8 @@ export default defineSchema({
     fileName: v.string(),
     receiptStorageId: v.optional(v.id('_storage')),
     receiptFileName: v.optional(v.string()),
+    receiptStorageIds: v.optional(v.array(v.id('_storage'))),
+    receiptFileNames: v.optional(v.array(v.string())),
     status: v.union(
       v.literal('submitted'),
       v.literal('under_review'),
@@ -324,6 +326,43 @@ export default defineSchema({
     .index('by_eventId', ['eventId'])
     .index('by_userId', ['userId'])
     .index('by_eventId_userId', ['eventId', 'userId']),
+
+  // ── Resources (global, not per-cohort) ─────────────────────────
+  resources: defineTable({
+    title: v.string(),
+    category: v.union(
+      v.literal('video'),
+      v.literal('podcast'),
+      v.literal('book'),
+      v.literal('other_reading')
+    ),
+    topic: v.optional(v.string()),
+    description: v.optional(v.string()),
+    url: v.optional(v.string()),
+    storageId: v.optional(v.id('_storage')),
+    fileName: v.optional(v.string()),
+    eventId: v.optional(v.id('cohortEvents')),
+    isActive: v.boolean(),
+    sortOrder: v.number(),
+  }),
+
+  // ── Resource Submissions (founder suggestions) ────────────────
+  resourceSubmissions: defineTable({
+    title: v.string(),
+    category: v.union(
+      v.literal('video'),
+      v.literal('podcast'),
+      v.literal('book'),
+      v.literal('other_reading')
+    ),
+    topic: v.optional(v.string()),
+    description: v.optional(v.string()),
+    url: v.optional(v.string()),
+    storageId: v.optional(v.id('_storage')),
+    fileName: v.optional(v.string()),
+    submittedBy: v.id('users'),
+    status: v.union(v.literal('pending'), v.literal('approved'), v.literal('rejected')),
+  }),
 
   // ── Perk Claims ────────────────────────────────────────────────
   perkClaims: defineTable({

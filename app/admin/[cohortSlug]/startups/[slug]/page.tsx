@@ -60,6 +60,14 @@ export default function StartupDetailPage() {
     api.invitations.listTeamAndPending,
     startup ? { startupId: startup._id } : 'skip'
   )
+  const startupProfile = useQuery(
+    api.startups.getProfileByStartupId,
+    startup ? { startupId: startup._id } : 'skip'
+  )
+  const founderProfiles = useQuery(
+    api.startups.getFounderProfilesByStartupId,
+    startup ? { startupId: startup._id } : 'skip'
+  )
 
   const createInvitation = useMutation(api.invitations.create)
   const resendInvitation = useMutation(api.invitations.resend)
@@ -289,27 +297,122 @@ export default function StartupDetailPage() {
         </Card>
       </div>
 
+      {/* Milestones summary */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Milestones</CardTitle>
+          <Target className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          {milestones && milestones.length > 0 ? (
+            <>
+              <div className="space-y-2">
+                {[...milestones].reverse().map((milestone) => (
+                  <div key={milestone._id} className="flex items-center gap-3  border px-3 py-2.5">
+                    <div className="flex-shrink-0">
+                      {milestone.status === 'approved' ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : milestone.status === 'submitted' ? (
+                        <Clock className="h-4 w-4 text-amber-600" />
+                      ) : milestone.status === 'changes_requested' ? (
+                        <RotateCw className="h-4 w-4 text-orange-600" />
+                      ) : (
+                        <Send className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium truncate">{milestone.title}</p>
+                        <Badge
+                          variant={
+                            milestone.status === 'approved'
+                              ? 'success'
+                              : milestone.status === 'submitted' ||
+                                  milestone.status === 'changes_requested'
+                                ? 'warning'
+                                : 'secondary'
+                          }
+                          className="shrink-0 text-[10px] px-1.5 py-0"
+                        >
+                          {milestone.status === 'changes_requested'
+                            ? 'changes requested'
+                            : milestone.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {'\u00A3'}
+                        {milestone.amount.toLocaleString('en-GB')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
+                <Button variant="link" size="sm" className="h-auto p-0">
+                  Manage milestones →
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3  border px-3 py-2.5">
+                  <div className="flex-shrink-0">
+                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">No milestones</p>
+                    <p className="text-xs text-muted-foreground">No milestones assigned yet.</p>
+                  </div>
+                </div>
+              </div>
+              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
+                <Button variant="link" size="sm" className="h-auto p-0">
+                  Manage milestones →
+                </Button>
+              </Link>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Startup Details */}
       <Card>
         <CardHeader>
           <CardTitle>Startup Details</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
+          {startupProfile?.oneLiner && (
+            <div className="md:col-span-2">
+              <span className="text-sm font-medium text-muted-foreground">One Liner</span>
+              <p className="mt-1">{startupProfile.oneLiner}</p>
+            </div>
+          )}
+          {startupProfile?.description && (
+            <div className="md:col-span-2">
+              <span className="text-sm font-medium text-muted-foreground">Description</span>
+              <p className="mt-1 text-sm whitespace-pre-wrap">{startupProfile.description}</p>
+            </div>
+          )}
           <div>
             <span className="text-sm font-medium text-muted-foreground">Sector</span>
-            <p className="mt-1">{startup.sector || '-'}</p>
+            <p className="mt-1">{startupProfile?.industry || startup.sector || '-'}</p>
+          </div>
+          <div>
+            <span className="text-sm font-medium text-muted-foreground">Location</span>
+            <p className="mt-1">{startupProfile?.location || '-'}</p>
           </div>
           <div>
             <span className="text-sm font-medium text-muted-foreground">Website</span>
             <p className="mt-1">
-              {startup.websiteUrl ? (
+              {startupProfile?.companyUrl || startup.websiteUrl ? (
                 <a
-                  href={startup.websiteUrl}
+                  href={startupProfile?.companyUrl || startup.websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline inline-flex items-center"
                 >
-                  {startup.websiteUrl}
+                  {startupProfile?.companyUrl || startup.websiteUrl}
                   <ExternalLink className="ml-1 h-3 w-3" />
                 </a>
               ) : (
@@ -317,6 +420,39 @@ export default function StartupDetailPage() {
               )}
             </p>
           </div>
+          {startupProfile?.productUrl && (
+            <div>
+              <span className="text-sm font-medium text-muted-foreground">Product URL</span>
+              <p className="mt-1">
+                <a
+                  href={startupProfile.productUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center"
+                >
+                  {startupProfile.productUrl}
+                  <ExternalLink className="ml-1 h-3 w-3" />
+                </a>
+              </p>
+            </div>
+          )}
+          {startupProfile?.initialCustomers !== undefined &&
+            startupProfile.initialCustomers !== null && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Initial Customers</span>
+                <p className="mt-1">{startupProfile.initialCustomers.toLocaleString('en-GB')}</p>
+              </div>
+            )}
+          {startupProfile?.initialRevenue !== undefined &&
+            startupProfile.initialRevenue !== null && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Initial Revenue</span>
+                <p className="mt-1">
+                  {'\u00A3'}
+                  {startupProfile.initialRevenue.toLocaleString('en-GB')}
+                </p>
+              </div>
+            )}
           {startup.notes && (
             <div className="md:col-span-2 border-t pt-4">
               <span className="text-sm font-medium text-muted-foreground">Internal Notes</span>
@@ -325,6 +461,53 @@ export default function StartupDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Founder Profiles */}
+      {founderProfiles && founderProfiles.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Founder Profiles</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            {founderProfiles.map((fp) => (
+              <div key={fp._id} className="border p-4 space-y-2">
+                <p className="font-medium">{fp.fullName}</p>
+                {fp.bio && <p className="text-sm text-muted-foreground">{fp.bio}</p>}
+                <div className="grid gap-1 text-sm">
+                  {fp.linkedinUrl && (
+                    <a
+                      href={fp.linkedinUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline inline-flex items-center"
+                    >
+                      LinkedIn
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </a>
+                  )}
+                  {fp.xUrl && (
+                    <a
+                      href={fp.xUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline inline-flex items-center"
+                    >
+                      X / Twitter
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </a>
+                  )}
+                  {(fp.city || fp.country) && (
+                    <p className="text-muted-foreground">
+                      {[fp.city, fp.country].filter(Boolean).join(', ')}
+                    </p>
+                  )}
+                  {fp.phone && <p className="text-muted-foreground">{fp.phone}</p>}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Founders & Invitations */}
       <Card>
@@ -461,85 +644,6 @@ export default function StartupDetailPage() {
               </p>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Milestones summary */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Milestones</CardTitle>
-          <Target className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          {milestones && milestones.length > 0 ? (
-            <>
-              <div className="space-y-2">
-                {[...milestones].reverse().map((milestone) => (
-                  <div key={milestone._id} className="flex items-center gap-3  border px-3 py-2.5">
-                    <div className="flex-shrink-0">
-                      {milestone.status === 'approved' ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : milestone.status === 'submitted' ? (
-                        <Clock className="h-4 w-4 text-amber-600" />
-                      ) : milestone.status === 'changes_requested' ? (
-                        <RotateCw className="h-4 w-4 text-orange-600" />
-                      ) : (
-                        <Send className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium truncate">{milestone.title}</p>
-                        <Badge
-                          variant={
-                            milestone.status === 'approved'
-                              ? 'success'
-                              : milestone.status === 'submitted' ||
-                                  milestone.status === 'changes_requested'
-                                ? 'warning'
-                                : 'secondary'
-                          }
-                          className="shrink-0 text-[10px] px-1.5 py-0"
-                        >
-                          {milestone.status === 'changes_requested'
-                            ? 'changes requested'
-                            : milestone.status}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {'\u00A3'}
-                        {milestone.amount.toLocaleString('en-GB')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
-                <Button variant="link" size="sm" className="h-auto p-0">
-                  Manage milestones →
-                </Button>
-              </Link>
-            </>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <div className="flex items-center gap-3  border px-3 py-2.5">
-                  <div className="flex-shrink-0">
-                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">No milestones</p>
-                    <p className="text-xs text-muted-foreground">No milestones assigned yet.</p>
-                  </div>
-                </div>
-              </div>
-              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
-                <Button variant="link" size="sm" className="h-auto p-0">
-                  Manage milestones →
-                </Button>
-              </Link>
-            </>
-          )}
         </CardContent>
       </Card>
 

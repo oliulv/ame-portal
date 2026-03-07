@@ -1,4 +1,5 @@
-import { query, mutation } from './functions'
+import { query, mutation, internalAction, internalQuery } from './functions'
+import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import {
   requireAdmin,
@@ -41,8 +42,7 @@ export const create = mutation({
     invoiceDate: v.string(),
     amountGbp: v.number(),
     description: v.optional(v.string()),
-    receiptStorageId: v.id('_storage'),
-    receiptFileName: v.string(),
+    receiptStorageIds: v.array(v.id('_storage')),
   },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
@@ -56,32 +56,33 @@ export const create = mutation({
     const startup = await ctx.db.get(startupId)
     if (!startup) throw new Error('Startup not found')
 
+    // Validate at least one receipt
+    if (args.receiptStorageIds.length === 0) {
+      throw new Error('At least one receipt is required')
+    }
+
     // Validate PDF extension
     if (!args.fileName.toLowerCase().endsWith('.pdf')) {
       throw new Error('Invoice must be a PDF file')
     }
-    if (!args.receiptFileName.toLowerCase().endsWith('.pdf')) {
-      throw new Error('Receipt must be a PDF file')
-    }
 
     // Validate naming convention: "{StartupName} Invoice {N}.pdf"
-    const namePattern = new RegExp(
-      `^${startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Invoice \\d+\\.pdf$`,
-      'i'
-    )
+    const escapedName = startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const namePattern = new RegExp(`^${escapedName} Invoice \\d+\\.pdf$`, 'i')
     if (!namePattern.test(args.fileName)) {
       throw new Error(
         `Invoice must be named "${startup.name} Invoice {number}.pdf" (e.g. "${startup.name} Invoice 1.pdf")`
       )
     }
 
-    // Enforce sequential invoice numbering
+    // Enforce sequential invoice numbering (rejected invoices don't count)
     const existingInvoices = await ctx.db
       .query('invoices')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
 
     const existingNumbers = existingInvoices
+      .filter((inv) => inv.status !== 'rejected')
       .map((inv) => {
         const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
         return match ? parseInt(match[1], 10) : 0
@@ -97,24 +98,14 @@ export const create = mutation({
       )
     }
 
-    // Validate receipt naming
-    const receiptPattern = new RegExp(
-      `^${startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`,
-      'i'
-    )
-    if (!receiptPattern.test(args.receiptFileName)) {
-      throw new Error(
-        `Receipt must be named "${startup.name} Receipt {number}.pdf" (e.g. "${startup.name} Receipt ${expectedNext}.pdf")`
-      )
-    }
-
-    // Enforce matching number between invoice and receipt
-    const receiptNum = args.receiptFileName.match(/Receipt (\d+)\.pdf$/i)?.[1]
-    if (receiptNum && parseInt(receiptNum, 10) !== expectedNext) {
-      throw new Error(
-        `Receipt number must be ${expectedNext} to match the invoice. Please name your file "${startup.name} Receipt ${expectedNext}.pdf".`
-      )
-    }
+    // Generate structured receipt filenames server-side
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    const receiptFileNames =
+      args.receiptStorageIds.length === 1
+        ? [`${startup.name} Receipt ${expectedNext}.pdf`]
+        : args.receiptStorageIds.map(
+            (_, i) => `${startup.name} Receipt ${expectedNext}-${letters[i]}.pdf`
+          )
 
     // Validate amount against available balance
     const milestones = await ctx.db
@@ -149,8 +140,12 @@ export const create = mutation({
       description: args.description,
       storageId: args.storageId,
       fileName: args.fileName,
-      receiptStorageId: args.receiptStorageId,
-      receiptFileName: args.receiptFileName,
+      // Array fields for multiple receipts
+      receiptStorageIds: args.receiptStorageIds,
+      receiptFileNames,
+      // Backward compat: first receipt in legacy fields
+      receiptStorageId: args.receiptStorageIds[0],
+      receiptFileName: receiptFileNames[0],
       status: 'submitted',
     })
   },
@@ -174,6 +169,7 @@ export const getFounderInvoiceInfo = query({
       .collect()
 
     const existingNumbers = invoices
+      .filter((inv) => inv.status !== 'rejected')
       .map((inv) => {
         const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
         return match ? parseInt(match[1], 10) : 0
@@ -360,5 +356,101 @@ export const updateStatus = mutation({
     }
 
     await ctx.db.patch(args.id, patch)
+
+    // Send to Xero on approval
+    if (args.status === 'approved') {
+      await ctx.scheduler.runAfter(0, internal.invoices.sendToXero, { invoiceId: args.id })
+    }
+  },
+})
+
+/**
+ * Internal query: get invoice data + startup name for the Xero action.
+ */
+export const getInvoiceForXero = internalQuery({
+  args: { invoiceId: v.id('invoices') },
+  handler: async (ctx, args) => {
+    const invoice = await ctx.db.get(args.invoiceId)
+    if (!invoice) return null
+    const startup = await ctx.db.get(invoice.startupId)
+    return { invoice, startupName: startup?.name ?? 'Unknown' }
+  },
+})
+
+/**
+ * Internal action: send invoice + receipt PDFs to Xero via Resend email.
+ */
+export const sendToXero = internalAction({
+  args: { invoiceId: v.id('invoices') },
+  handler: async (ctx, args) => {
+    const data = await ctx.runQuery(internal.invoices.getInvoiceForXero, {
+      invoiceId: args.invoiceId,
+    })
+    if (!data) throw new Error('Invoice not found for Xero send')
+
+    const { invoice, startupName } = data
+    const xeroBillsEmail = process.env.XERO_BILLS_EMAIL
+    const xeroReceiptsEmail = process.env.XERO_RECEIPTS_EMAIL
+    const fromEmail = process.env.FROM_EMAIL
+
+    if (!xeroBillsEmail || !xeroReceiptsEmail) {
+      console.log('Xero email addresses not configured, skipping Xero send')
+      return
+    }
+    if (!fromEmail) throw new Error('FROM_EMAIL environment variable is not set')
+
+    const { Resend } = await import('resend')
+    const resend = new Resend(process.env.RESEND_API_KEY)
+
+    // Extract invoice number from filename
+    const invoiceNumMatch = invoice.fileName.match(/Invoice (\d+)\.pdf$/i)
+    const invoiceNum = invoiceNumMatch?.[1] ?? '0'
+
+    // Use Resend's `path` option — Resend fetches the file from the URL directly,
+    // so we never load PDFs into the Convex action's 64MB memory.
+    const invoiceFileUrl = await ctx.storage.getUrl(invoice.storageId)
+    if (!invoiceFileUrl) throw new Error('Invoice file URL not found')
+
+    // Send invoice to Xero bills
+    const { error: billError } = await resend.emails.send({
+      from: fromEmail,
+      to: xeroBillsEmail,
+      subject: `${startupName} Invoice ${invoiceNum}`,
+      text: `Invoice ${invoiceNum} from ${startupName}`,
+      attachments: [{ filename: invoice.fileName, path: invoiceFileUrl }],
+    })
+    if (billError) {
+      throw new Error(`Failed to send invoice to Xero: ${billError.message}`)
+    }
+
+    // Collect receipt storage IDs (handle both old single and new array format)
+    const receiptIds: string[] =
+      invoice.receiptStorageIds ?? (invoice.receiptStorageId ? [invoice.receiptStorageId] : [])
+    const receiptNames: string[] =
+      invoice.receiptFileNames ?? (invoice.receiptFileName ? [invoice.receiptFileName] : [])
+
+    // Send all receipts in a single email — Resend fetches each via URL
+    const receiptAttachments = []
+    for (let i = 0; i < receiptIds.length; i++) {
+      const receiptFileUrl = await ctx.storage.getUrl(receiptIds[i] as any)
+      if (!receiptFileUrl) continue
+      receiptAttachments.push({
+        filename: receiptNames[i] || `Receipt ${i + 1}.pdf`,
+        path: receiptFileUrl,
+      })
+    }
+
+    if (receiptAttachments.length > 0) {
+      const { error: receiptError } = await resend.emails.send({
+        from: fromEmail,
+        to: xeroReceiptsEmail,
+        subject: `${startupName} Receipts for Invoice ${invoiceNum}`,
+        text: `Receipts for Invoice ${invoiceNum} from ${startupName}`,
+        attachments: receiptAttachments,
+      })
+      if (receiptError) {
+        throw new Error(`Failed to send receipts to Xero: ${receiptError.message}`)
+      }
+    }
   },
 })

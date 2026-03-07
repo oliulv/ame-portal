@@ -19,7 +19,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { founderInvoiceUploadSchema, type FounderInvoiceUploadFormData } from '@/lib/schemas'
-import { Upload, ArrowLeft, AlertTriangle, Info } from 'lucide-react'
+import { Upload, ArrowLeft, AlertTriangle, Info, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -27,7 +27,7 @@ import { toast } from 'sonner'
 export default function NewInvoicePage() {
   const router = useRouter()
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
-  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [receiptFiles, setReceiptFiles] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
@@ -64,30 +64,18 @@ export default function NewInvoicePage() {
     return null
   })()
 
-  const receiptNameError = (() => {
-    if (!receiptFile) return null
-    if (!receiptFile.name.toLowerCase().endsWith('.pdf')) return 'Must be a PDF file'
-    if (!startupName) return null
-    const pattern = new RegExp(
-      `^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`,
-      'i'
-    )
-    if (!pattern.test(receiptFile.name))
-      return `Must be named "${startupName} Receipt ${expectedNumber}.pdf"`
-    const num = receiptFile.name.match(/Receipt (\d+)\.pdf$/i)?.[1]
-    if (num && parseInt(num, 10) !== expectedNumber)
-      return `Receipt number must be ${expectedNumber} to match the invoice. Please name your file "${startupName} Receipt ${expectedNumber}.pdf".`
-    return null
-  })()
+  const receiptPdfError = receiptFiles.some((f) => !f.name.toLowerCase().endsWith('.pdf'))
+    ? 'All receipts must be PDF files'
+    : null
 
   const amountValue = form.watch('amount_gbp')
   const amountExceedsBalance = typeof amountValue === 'number' && amountValue > available
 
   const canSubmit =
     !!invoiceFile &&
-    !!receiptFile &&
+    receiptFiles.length > 0 &&
     !invoiceNameError &&
-    !receiptNameError &&
+    !receiptPdfError &&
     !amountExceedsBalance
 
   const onSubmit = async (data: FounderInvoiceUploadFormData) => {
@@ -96,8 +84,8 @@ export default function NewInvoicePage() {
       return
     }
 
-    if (!receiptFile) {
-      toast.error('Please select a receipt file to upload')
+    if (receiptFiles.length === 0) {
+      toast.error('Please select at least one receipt file')
       return
     }
 
@@ -106,8 +94,8 @@ export default function NewInvoicePage() {
       return
     }
 
-    if (receiptNameError) {
-      toast.error(receiptNameError)
+    if (receiptPdfError) {
+      toast.error(receiptPdfError)
       return
     }
 
@@ -129,15 +117,19 @@ export default function NewInvoicePage() {
       if (!invoiceUploadResult.ok) throw new Error('Failed to upload invoice file')
       const { storageId: invoiceStorageId } = await invoiceUploadResult.json()
 
-      // Upload receipt file (required)
-      const receiptUploadUrl = await generateUploadUrl()
-      const receiptUploadResult = await fetch(receiptUploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': receiptFile.type },
-        body: receiptFile,
-      })
-      if (!receiptUploadResult.ok) throw new Error('Failed to upload receipt file')
-      const { storageId: receiptStorageId } = await receiptUploadResult.json()
+      // Upload all receipt files sequentially
+      const receiptStorageIds: string[] = []
+      for (const file of receiptFiles) {
+        const uploadUrl = await generateUploadUrl()
+        const result = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        })
+        if (!result.ok) throw new Error(`Failed to upload receipt: ${file.name}`)
+        const { storageId } = await result.json()
+        receiptStorageIds.push(storageId)
+      }
 
       await createInvoice({
         storageId: invoiceStorageId,
@@ -146,8 +138,7 @@ export default function NewInvoicePage() {
         invoiceDate: data.invoice_date,
         amountGbp: data.amount_gbp,
         description: data.description || undefined,
-        receiptStorageId: receiptStorageId as never,
-        receiptFileName: receiptFile.name,
+        receiptStorageIds: receiptStorageIds as any,
       })
 
       toast.success('Invoice uploaded successfully')
@@ -182,23 +173,18 @@ export default function NewInvoicePage() {
         <CardContent className="flex items-start gap-3 pt-4 pb-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div className="text-sm">
-            <p className="font-medium text-amber-900">File naming rules</p>
+            <p className="font-medium text-amber-900">Invoice naming</p>
             <ul className="mt-1 space-y-0.5 text-amber-800">
               <li>
-                Invoice:{' '}
+                Invoice must be named:{' '}
                 <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
                   {startupName ?? 'YourStartup'} Invoice {expectedNumber}.pdf
                 </code>
               </li>
+              <li>Receipts: any PDF filename is fine — we rename them automatically.</li>
               <li>
-                Receipt:{' '}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
-                  {startupName ?? 'YourStartup'} Receipt {expectedNumber}.pdf
-                </code>
-              </li>
-              <li>
-                PDF only. Your next invoice number is <strong>{expectedNumber}</strong>. Numbers
-                must be sequential.
+                Your next invoice number is <strong>{expectedNumber}</strong>. Numbers must be
+                sequential.
               </li>
             </ul>
           </div>
@@ -335,7 +321,7 @@ export default function NewInvoicePage() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
                     <label className="text-sm font-medium leading-none">
-                      Receipt File (Required — PDF only)
+                      Receipt Files (Required — PDF only, multiple allowed)
                     </label>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -343,8 +329,8 @@ export default function NewInvoicePage() {
                       </TooltipTrigger>
                       <TooltipContent side="right" className="max-w-[280px]">
                         <p>
-                          The actual proof-of-purchase receipt from the vendor or supplier. Collate
-                          all receipts for this invoice into a single PDF.
+                          The actual proof-of-purchase receipts from the vendor or supplier. You can
+                          upload multiple receipt PDFs — we rename them automatically.
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -352,17 +338,41 @@ export default function NewInvoicePage() {
                   <Input
                     type="file"
                     accept="application/pdf"
-                    onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                    multiple
+                    onChange={(e) => {
+                      const files = e.target.files
+                      if (files && files.length > 0) {
+                        setReceiptFiles((prev) => [...prev, ...Array.from(files)])
+                      }
+                      // Reset input so the same file can be re-added if removed
+                      e.target.value = ''
+                    }}
                     className="cursor-pointer"
                   />
-                  {receiptFile && (
-                    <p className="text-sm text-muted-foreground">
-                      Selected: {receiptFile.name} ({(receiptFile.size / 1024).toFixed(1)} KB)
-                    </p>
+                  {receiptFiles.length > 0 && (
+                    <div className="space-y-1">
+                      {receiptFiles.map((file, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 text-sm text-muted-foreground"
+                        >
+                          <span>
+                            {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReceiptFiles((prev) => prev.filter((_, j) => j !== i))
+                            }
+                            className="text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                  {receiptNameError && (
-                    <p className="text-sm text-destructive">{receiptNameError}</p>
-                  )}
+                  {receiptPdfError && <p className="text-sm text-destructive">{receiptPdfError}</p>}
                 </div>
               </TooltipProvider>
 

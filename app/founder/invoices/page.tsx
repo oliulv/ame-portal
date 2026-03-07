@@ -118,13 +118,9 @@ export default function FounderInvoicesPage() {
             number.
           </li>
           <li>
-            <strong className="text-foreground">Receipt</strong> — the actual proof of purchase or
-            expense receipt from the vendor/supplier. Collate all receipts for this invoice into a
-            single PDF named:{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-              YourStartupName Receipt N.pdf
-            </code>{' '}
-            (matching the invoice number).
+            <strong className="text-foreground">Receipts</strong> — the actual proof of purchase or
+            expense receipts from vendors/suppliers. You can upload multiple receipt PDFs per
+            invoice. No special naming required — we rename them automatically.
           </li>
           <li>Upload both files when creating the submission.</li>
           <li>

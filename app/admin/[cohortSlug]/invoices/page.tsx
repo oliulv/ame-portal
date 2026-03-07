@@ -61,7 +61,15 @@ export default function AdminInvoicesPage() {
   // Filter invoices to only those belonging to startups in this cohort
   const cohortInvoices = useMemo(() => {
     if (!allInvoices || !startups) return undefined
-    return allInvoices.filter((invoice) => startupIdSet.has(invoice.startupId)).slice(0, 50)
+    const filtered = allInvoices.filter((invoice) => startupIdSet.has(invoice.startupId))
+    // Sort: submitted/under_review first, then by creation time desc
+    filtered.sort((a, b) => {
+      const aPending = a.status === 'submitted' || a.status === 'under_review' ? 0 : 1
+      const bPending = b.status === 'submitted' || b.status === 'under_review' ? 0 : 1
+      if (aPending !== bPending) return aPending - bPending
+      return b._creationTime - a._creationTime
+    })
+    return filtered.slice(0, 50)
   }, [allInvoices, startups, startupIdSet])
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -157,13 +165,10 @@ export default function AdminInvoicesPage() {
           <strong className="text-foreground">Naming rules:</strong> Invoices must be named{' '}
           <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
             StartupName Invoice N.pdf
-          </code>{' '}
-          and receipts{' '}
-          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-            StartupName Receipt N.pdf
           </code>
-          . The invoice number and receipt number must match. Founders cannot submit incorrectly
-          named or duplicate files — this is enforced before submission to keep Xero clean.
+          . Receipt filenames are generated automatically by the system. Multiple receipts per
+          invoice are supported. Founders cannot submit incorrectly named invoices or duplicate
+          numbers — this is enforced before submission to keep Xero clean.
         </p>
         <p>
           Founders cannot submit invoices exceeding their available balance (unlocked minus
@@ -207,7 +212,6 @@ export default function AdminInvoicesPage() {
           <SelectContent>
             <SelectItem value="all">All states</SelectItem>
             <SelectItem value="submitted">Submitted</SelectItem>
-            <SelectItem value="under_review">Under review</SelectItem>
             <SelectItem value="approved">Approved</SelectItem>
             <SelectItem value="rejected">Rejected</SelectItem>
             <SelectItem value="paid">Paid</SelectItem>

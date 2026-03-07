@@ -20,6 +20,25 @@ export const list = query({
 })
 
 /**
+ * List all events across all cohorts (admin) — for event-linking dropdown.
+ */
+export const listAll = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx)
+    const events = await ctx.db.query('cohortEvents').collect()
+    // Enrich with cohort info
+    const enriched = await Promise.all(
+      events.map(async (event) => {
+        const cohort = await ctx.db.get(event.cohortId)
+        return { ...event, cohortName: cohort?.label ?? 'Unknown' }
+      })
+    )
+    return enriched.sort((a, b) => b.date.localeCompare(a.date))
+  },
+})
+
+/**
  * Create an event (admin).
  */
 export const create = mutation({
