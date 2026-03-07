@@ -51,12 +51,17 @@ type ResourceItem = {
   eventTitle?: string
 }
 
+function normalizeUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `https://${url}`
+}
+
 function ResourceEntry({ resource }: { resource: ResourceItem }) {
   const fileUrl = useQuery(
     api.resources.getFileUrl,
     resource.storageId ? { storageId: resource.storageId } : 'skip'
   )
-  const href = resource.url || fileUrl || undefined
+  const href = resource.url ? normalizeUrl(resource.url) : fileUrl || undefined
 
   const inner = (
     <>

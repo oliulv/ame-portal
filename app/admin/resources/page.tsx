@@ -54,6 +54,11 @@ import type { Id } from '@/convex/_generated/dataModel'
 
 type MediaType = 'video' | 'podcast' | 'book' | 'other_reading'
 
+function normalizeUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `https://${url}`
+}
+
 const mediaTypeLabels: Record<MediaType, string> = {
   video: 'Video',
   podcast: 'Podcast',
@@ -539,7 +544,7 @@ export default function AdminResourcesPage() {
                         )}
                         {s.url && (
                           <a
-                            href={s.url}
+                            href={normalizeUrl(s.url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
@@ -629,7 +634,7 @@ export default function AdminResourcesPage() {
                         {resource.title}
                         {resource.url && (
                           <a
-                            href={resource.url}
+                            href={normalizeUrl(resource.url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
