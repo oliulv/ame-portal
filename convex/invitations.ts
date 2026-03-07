@@ -150,7 +150,22 @@ export const accept = mutation({
       .unique()
 
     if (!invitation) throw new Error('Invitation not found')
-    if (invitation.acceptedAt) throw new Error('Invitation already accepted')
+    if (invitation.acceptedAt) {
+      // Idempotent: if this same user already accepted, return silently
+      const existingUser = await ctx.db
+        .query('users')
+        .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+        .unique()
+      if (existingUser) {
+        const existingProfile = await ctx.db
+          .query('founderProfiles')
+          .withIndex('by_userId', (q) => q.eq('userId', existingUser._id))
+          .filter((q) => q.eq(q.field('startupId'), invitation.startupId))
+          .first()
+        if (existingProfile) return existingUser._id
+      }
+      throw new Error('Invitation already accepted')
+    }
     if (new Date(invitation.expiresAt) < new Date()) throw new Error('Invitation expired')
 
     // Create user record

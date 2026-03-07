@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import { Users, Plus } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -110,7 +111,10 @@ export default function LeaderboardPage() {
           </thead>
           <tbody className="bg-card divide-y divide-border">
             {sortedStartups.map((startup, index) => (
-              <tr key={startup._id}>
+              <tr
+                key={startup._id}
+                className={startup.excludeFromMetrics === true ? 'opacity-50' : ''}
+              >
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
                   #{index + 1}
                 </td>
@@ -126,7 +130,14 @@ export default function LeaderboardPage() {
                       />
                     )}
                     <div>
-                      <div className="text-sm font-medium text-foreground">{startup.name}</div>
+                      <div className="text-sm font-medium text-foreground">
+                        {startup.name}
+                        {startup.excludeFromMetrics === true && (
+                          <Badge variant="warning" className="ml-2">
+                            Excluded
+                          </Badge>
+                        )}
+                      </div>
                       {startup.websiteUrl && (
                         <a
                           href={startup.websiteUrl}
