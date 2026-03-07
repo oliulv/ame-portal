@@ -2,9 +2,10 @@
 
 import { useEffect, useRef } from 'react'
 import { ConvexProviderWithClerk } from 'convex/react-clerk'
-import { ConvexReactClient, useMutation } from 'convex/react'
+import { ConvexReactClient, useMutation, useQuery } from 'convex/react'
 import { useAuth } from '@clerk/nextjs'
 import { Toaster } from 'sonner'
+import posthog from 'posthog-js'
 import { api } from '@/convex/_generated/api'
 
 if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
@@ -37,10 +38,37 @@ function EnsureUser() {
   return null
 }
 
+function PostHogIdentify() {
+  const { userId: clerkUserId } = useAuth()
+  const user = useQuery(api.users.current)
+  const identified = useRef(false)
+
+  useEffect(() => {
+    if (!clerkUserId) {
+      if (identified.current) {
+        posthog.reset()
+        identified.current = false
+      }
+      return
+    }
+    if (user && !identified.current) {
+      identified.current = true
+      posthog.identify(clerkUserId, {
+        email: user.email,
+        name: user.fullName,
+        role: user.role,
+      })
+    }
+  }, [clerkUserId, user])
+
+  return null
+}
+
 export function ConvexClientProvider({ children }: { children: React.ReactNode }) {
   return (
     <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
       <EnsureUser />
+      <PostHogIdentify />
       {children}
       <Toaster position="top-right" richColors />
     </ConvexProviderWithClerk>
