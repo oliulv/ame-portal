@@ -201,19 +201,25 @@ export const dashboardStats = query({
 
     const activeStartups = startups.filter((s) => s.excludeFromMetrics !== true)
 
-    // Count invoices only from active (non-excluded) startups
+    // Count only submitted/under_review invoices (pending review) from active startups
     if (args.cohortSlug) {
       for (const s of activeStartups) {
         const invoices = await ctx.db
           .query('invoices')
           .withIndex('by_startupId', (q) => q.eq('startupId', s._id))
           .collect()
-        invoiceCount += invoices.length
+        invoiceCount += invoices.filter(
+          (i) => i.status === 'submitted' || i.status === 'under_review'
+        ).length
       }
     } else {
       const allInvoices = await ctx.db.query('invoices').collect()
       const activeStartupIds = new Set(activeStartups.map((s) => s._id))
-      invoiceCount = allInvoices.filter((i) => activeStartupIds.has(i.startupId)).length
+      invoiceCount = allInvoices.filter(
+        (i) =>
+          activeStartupIds.has(i.startupId) &&
+          (i.status === 'submitted' || i.status === 'under_review')
+      ).length
     }
 
     return {
@@ -357,6 +363,34 @@ export const remove = mutation({
 
     // 12. Finally delete the startup itself
     await ctx.db.delete(args.id)
+  },
+})
+
+/**
+ * Get startup profile by startup ID (admin).
+ */
+export const getProfileByStartupId = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+    return await ctx.db
+      .query('startupProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .unique()
+  },
+})
+
+/**
+ * Get founder profiles by startup ID (admin).
+ */
+export const getFounderProfilesByStartupId = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+    return await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
   },
 })
 
