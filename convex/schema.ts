@@ -147,6 +147,22 @@ export default defineSchema({
     .index('by_startupId', ['startupId'])
     .index('by_milestoneTemplateId', ['milestoneTemplateId']),
 
+  // ── Milestone Events (audit trail) ────────────────────────────────
+  milestoneEvents: defineTable({
+    milestoneId: v.id('milestones'),
+    action: v.union(
+      v.literal('submitted'),
+      v.literal('changes_requested'),
+      v.literal('approved'),
+      v.literal('withdrawn')
+    ),
+    userId: v.id('users'),
+    comment: v.optional(v.string()),
+    planLink: v.optional(v.string()),
+    planStorageId: v.optional(v.id('_storage')),
+    planFileName: v.optional(v.string()),
+  }).index('by_milestoneId', ['milestoneId']),
+
   // ── Invitations (founder) ──────────────────────────────────────────
   invitations: defineTable({
     startupId: v.id('startups'),

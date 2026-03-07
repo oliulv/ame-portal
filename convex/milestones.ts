@@ -63,6 +63,39 @@ export const getForFounder = query({
 })
 
 /**
+ * List audit trail events for a milestone, enriched with user info.
+ */
+export const listEvents = query({
+  args: { milestoneId: v.id('milestones') },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx)
+
+    const events = await ctx.db
+      .query('milestoneEvents')
+      .withIndex('by_milestoneId', (q) => q.eq('milestoneId', args.milestoneId))
+      .collect()
+
+    const enriched = await Promise.all(
+      events.map(async (event) => {
+        const user = await ctx.db.get(event.userId)
+        let fileUrl: string | null = null
+        if (event.planStorageId) {
+          fileUrl = await ctx.storage.getUrl(event.planStorageId)
+        }
+        return {
+          ...event,
+          userName: user?.fullName ?? user?.email ?? 'Unknown',
+          userRole: user?.role,
+          fileUrl,
+        }
+      })
+    )
+
+    return enriched.sort((a, b) => a._creationTime - b._creationTime)
+  },
+})
+
+/**
  * Get a single milestone by ID (admin).
  */
 export const getForAdmin = query({
@@ -368,9 +401,15 @@ export const approve = mutation({
 
     const startup = await ctx.db.get(milestone.startupId)
     if (!startup) throw new Error('Startup not found')
-    await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
+    const admin = await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
 
     await ctx.db.patch(args.id, { status: 'approved' })
+
+    await ctx.db.insert('milestoneEvents', {
+      milestoneId: args.id,
+      action: 'approved',
+      userId: admin._id,
+    })
   },
 })
 
@@ -392,11 +431,24 @@ export const requestChanges = mutation({
 
     const startup = await ctx.db.get(milestone.startupId)
     if (!startup) throw new Error('Startup not found')
-    await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
+    const admin = await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
+
+    const comment = args.adminComment?.trim() || undefined
 
     await ctx.db.patch(args.id, {
       status: 'changes_requested',
-      adminComment: args.adminComment?.trim() || undefined,
+      adminComment: comment,
+    })
+
+    await ctx.db.insert('milestoneEvents', {
+      milestoneId: args.id,
+      action: 'changes_requested',
+      userId: admin._id,
+      comment,
+      // Snapshot the evidence that was reviewed
+      planLink: milestone.planLink,
+      planStorageId: milestone.planStorageId,
+      planFileName: milestone.planFileName,
     })
   },
 })
@@ -453,6 +505,15 @@ export const submit = mutation({
       planStorageId: args.planStorageId,
       planFileName: args.planFileName,
     })
+
+    await ctx.db.insert('milestoneEvents', {
+      milestoneId: args.id,
+      action: 'submitted',
+      userId: user._id,
+      planLink: args.planLink,
+      planStorageId: args.planStorageId,
+      planFileName: args.planFileName,
+    })
   },
 })
 
@@ -474,6 +535,16 @@ export const withdraw = mutation({
     if (milestone.status !== 'submitted') {
       throw new Error('Only submitted milestones can be withdrawn')
     }
+
+    // Snapshot the evidence before clearing it
+    await ctx.db.insert('milestoneEvents', {
+      milestoneId: args.id,
+      action: 'withdrawn',
+      userId: user._id,
+      planLink: milestone.planLink,
+      planStorageId: milestone.planStorageId,
+      planFileName: milestone.planFileName,
+    })
 
     await ctx.db.patch(args.id, {
       status: 'waiting',

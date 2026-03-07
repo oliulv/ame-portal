@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/ui/empty-state'
+import { MilestoneTimeline } from '@/components/milestone-timeline'
 import {
   ArrowLeft,
   Check,
@@ -328,6 +329,9 @@ export default function FounderMilestoneDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Activity timeline */}
+          <MilestoneTimeline milestoneId={milestoneId} />
         </div>
 
         <div className="space-y-6">

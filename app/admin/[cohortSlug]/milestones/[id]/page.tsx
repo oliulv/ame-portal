@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/ui/empty-state'
+import { MilestoneTimeline } from '@/components/milestone-timeline'
 import {
   ArrowLeft,
   Check,
@@ -216,16 +217,6 @@ export default function AdminMilestoneDetailPage() {
                     )}
                   </div>
                 )}
-
-              {/* Admin comment */}
-              {milestone.adminComment && (
-                <div className="rounded-md border border-amber-200 bg-amber-50/50 p-3">
-                  <p className="text-sm font-medium text-amber-900">Admin Comment</p>
-                  <p className="mt-1 text-sm text-amber-800 whitespace-pre-wrap">
-                    {milestone.adminComment}
-                  </p>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -269,6 +260,9 @@ export default function AdminMilestoneDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Activity timeline */}
+          <MilestoneTimeline milestoneId={milestoneId} />
         </div>
 
         <div className="space-y-6">
