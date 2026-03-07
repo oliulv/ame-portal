@@ -6,7 +6,6 @@ import { api } from '@/convex/_generated/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { EmptyState } from '@/components/ui/empty-state'
 import {
   Select,
   SelectContent,
@@ -14,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ExternalLink, Download, Search, BookOpen } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { ExternalLink, Download, Search } from 'lucide-react'
 import type { Id } from '@/convex/_generated/dataModel'
 
 type MediaType = 'video' | 'podcast' | 'book' | 'other_reading'
@@ -44,6 +44,11 @@ function ResourceEntry({ resource }: { resource: ResourceItem }) {
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium truncate">{resource.title}</p>
           {resource.url && <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          {resource.topic && (
+            <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 font-normal">
+              {resource.topic}
+            </Badge>
+          )}
         </div>
         {resource.eventTitle && (
           <p className="text-xs text-muted-foreground mt-0.5">{resource.eventTitle}</p>
@@ -133,8 +138,6 @@ export default function FounderResourcesPage() {
     )
   }
 
-  const hasResults = sections.some((s) => (grouped?.get(s.category) ?? []).length > 0)
-
   return (
     <div className="space-y-6">
       <div>
@@ -170,17 +173,16 @@ export default function FounderResourcesPage() {
         </Select>
       </div>
 
-      {hasResults ? (
-        <div className="grid gap-6 md:grid-cols-2">
-          {sections.map(({ category, title }) => {
-            const items = grouped?.get(category) ?? []
-            if (items.length === 0) return null
-            return (
-              <Card key={category}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">{title}</CardTitle>
-                </CardHeader>
-                <CardContent>
+      <div className="grid gap-6 md:grid-cols-2">
+        {sections.map(({ category, title }) => {
+          const items = grouped?.get(category) ?? []
+          return (
+            <Card key={category}>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">{title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {items.length > 0 ? (
                   <div
                     className={
                       items.length > MAX_VISIBLE
@@ -192,18 +194,14 @@ export default function FounderResourcesPage() {
                       <ResourceEntry key={r._id} resource={r} />
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-      ) : (
-        <EmptyState
-          icon={<BookOpen className="h-6 w-6" />}
-          title="No resources match your search"
-          description="Try adjusting the search term or selected category."
-        />
-      )}
+                ) : (
+                  <p className="text-sm text-muted-foreground py-2">No matching resources.</p>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
     </div>
   )
 }
