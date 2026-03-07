@@ -297,6 +297,85 @@ export default function StartupDetailPage() {
         </Card>
       </div>
 
+      {/* Milestones summary */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Milestones</CardTitle>
+          <Target className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          {milestones && milestones.length > 0 ? (
+            <>
+              <div className="space-y-2">
+                {[...milestones].reverse().map((milestone) => (
+                  <div key={milestone._id} className="flex items-center gap-3  border px-3 py-2.5">
+                    <div className="flex-shrink-0">
+                      {milestone.status === 'approved' ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : milestone.status === 'submitted' ? (
+                        <Clock className="h-4 w-4 text-amber-600" />
+                      ) : milestone.status === 'changes_requested' ? (
+                        <RotateCw className="h-4 w-4 text-orange-600" />
+                      ) : (
+                        <Send className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium truncate">{milestone.title}</p>
+                        <Badge
+                          variant={
+                            milestone.status === 'approved'
+                              ? 'success'
+                              : milestone.status === 'submitted' ||
+                                  milestone.status === 'changes_requested'
+                                ? 'warning'
+                                : 'secondary'
+                          }
+                          className="shrink-0 text-[10px] px-1.5 py-0"
+                        >
+                          {milestone.status === 'changes_requested'
+                            ? 'changes requested'
+                            : milestone.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {'\u00A3'}
+                        {milestone.amount.toLocaleString('en-GB')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
+                <Button variant="link" size="sm" className="h-auto p-0">
+                  Manage milestones →
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3  border px-3 py-2.5">
+                  <div className="flex-shrink-0">
+                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">No milestones</p>
+                    <p className="text-xs text-muted-foreground">No milestones assigned yet.</p>
+                  </div>
+                </div>
+              </div>
+              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
+                <Button variant="link" size="sm" className="h-auto p-0">
+                  Manage milestones →
+                </Button>
+              </Link>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Startup Details */}
       <Card>
         <CardHeader>
@@ -565,85 +644,6 @@ export default function StartupDetailPage() {
               </p>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Milestones summary */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Milestones</CardTitle>
-          <Target className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          {milestones && milestones.length > 0 ? (
-            <>
-              <div className="space-y-2">
-                {[...milestones].reverse().map((milestone) => (
-                  <div key={milestone._id} className="flex items-center gap-3  border px-3 py-2.5">
-                    <div className="flex-shrink-0">
-                      {milestone.status === 'approved' ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : milestone.status === 'submitted' ? (
-                        <Clock className="h-4 w-4 text-amber-600" />
-                      ) : milestone.status === 'changes_requested' ? (
-                        <RotateCw className="h-4 w-4 text-orange-600" />
-                      ) : (
-                        <Send className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium truncate">{milestone.title}</p>
-                        <Badge
-                          variant={
-                            milestone.status === 'approved'
-                              ? 'success'
-                              : milestone.status === 'submitted' ||
-                                  milestone.status === 'changes_requested'
-                                ? 'warning'
-                                : 'secondary'
-                          }
-                          className="shrink-0 text-[10px] px-1.5 py-0"
-                        >
-                          {milestone.status === 'changes_requested'
-                            ? 'changes requested'
-                            : milestone.status}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {'\u00A3'}
-                        {milestone.amount.toLocaleString('en-GB')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
-                <Button variant="link" size="sm" className="h-auto p-0">
-                  Manage milestones →
-                </Button>
-              </Link>
-            </>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <div className="flex items-center gap-3  border px-3 py-2.5">
-                  <div className="flex-shrink-0">
-                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">No milestones</p>
-                    <p className="text-xs text-muted-foreground">No milestones assigned yet.</p>
-                  </div>
-                </div>
-              </div>
-              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
-                <Button variant="link" size="sm" className="h-auto p-0">
-                  Manage milestones →
-                </Button>
-              </Link>
-            </>
-          )}
         </CardContent>
       </Card>
 
