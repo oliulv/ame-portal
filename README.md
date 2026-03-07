@@ -1,69 +1,71 @@
-# AccelerateMe Internal Tool
+# Accelerator OS
 
-Internal tool for managing cohorts, startups, founders, goals, and invoices.
+An operating system for running startup accelerator programs. Manages the full lifecycle — from cohort setup and founder onboarding through milestone-based funding, invoice processing, and resource curation.
 
 ## Tech Stack
 
-- **Framework**: Next.js 16 (App Router) with Bun
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Clerk
+- **Framework**: Next.js (App Router)
+- **Runtime**: Bun
+- **Backend & Database**: Convex (real-time queries, mutations, file storage)
+- **Auth**: Clerk
 - **Email**: Resend
-- **Storage**: Supabase Storage
-- **Deployment**: Vercel
+- **Deployment**: Vercel + Convex Cloud
 
 ## Getting Started
 
-See [SETUP.md](./SETUP.md) for detailed setup instructions.
+```bash
+bun install
+bun dev
+```
 
-Quick start:
+Visit http://localhost:3000
 
-1. Install dependencies:
+## Architecture
 
-   ```bash
-   bun install
-   ```
+### Admin Portal (`/admin`)
 
-2. Start the development server:
+Cohort-scoped routes under `/admin/[cohortSlug]/` with a few global routes (`/admin/cohorts`, `/admin/settings`, `/admin/resources`).
 
-   ```bash
-   bun dev
-   ```
+- **Cohorts** — create and manage accelerator cohorts
+- **Startups** — enrol startups, assign founders, manage profiles
+- **Funding & Milestones** — define milestone templates, review submissions, approve payouts
+- **Invoices** — review founder-submitted invoices, approve/reject, forward to Xero via email
+- **Events** — schedule cohort events and link resources
+- **Resources** — curate a library of videos, podcasts, books, and reading materials with drag-and-drop ordering; review founder-suggested resources
+- **Leaderboard** — track startup metrics and rankings
+- **Admin Management** — invite admins, delegate permissions per cohort
+- **Perks** — manage partner perks available to founders
 
-3. Visit http://localhost:3000
+### Founder Portal (`/founder`)
 
-## Development Commands
+Flat routes — cohort is resolved from the founder's startup.
 
-- `bun dev` - Start development server
-- `bun run lint` - Run ESLint
-- `bun run lint:fix` - Auto-fix ESLint issues
-- `bun run format` - Format code with Prettier
-- `bun run format:check` - Check code formatting
+- **Dashboard** — overview of funding, milestones, and key metrics
+- **Onboarding** — guided setup (personal details, startup profile, bank details)
+- **Funding & Milestones** — view allocated funding, submit milestones for review
+- **Invoices** — upload invoices with receipts for reimbursement
+- **Resources** — browse curated content across four media types, suggest new resources
+- **Calendar** — upcoming cohort events
+- **Analytics** — website traffic tracking via integrations
+- **Perks** — browse available partner perks
+- **Settings** — profile and startup details
+
+### Backend (`/convex`)
+
+All server logic lives in Convex — schema, queries, mutations, actions, and cron jobs. Custom function wrappers in `convex/functions.ts` (built with `convex-helpers`) handle structured logging and auth context.
+
+## Development
+
+```bash
+bun run typecheck    # Type check
+bun run lint         # ESLint
+bun run lint:fix     # Auto-fix lint issues
+bun run format       # Prettier
+bun run check        # All checks
+```
 
 ## Logging
 
-- Use structured logging helpers in `lib/logging.ts` for Next.js/client code.
-  - Client errors: `logClientError(...)`
-  - Server logs: `logServerInfo(...)`, `logServerWarn(...)`, `logServerError(...)`
-- Convex functions use wrappers in `convex/functions.ts` built with `convex-helpers` (`customQuery`, `customMutation`, `customAction`).
-  - Import Convex builders from `./functions` (or `../functions`), not `./_generated/server`.
-  - Wrapper logs function success and slow executions in `convex/lib/logging.ts`.
-
-## Phase 1 Features
-
-- ✅ Admin: Create cohorts, startups, and founders
-- ✅ Admin: Send invitations to founders via Resend
-- ✅ Founders: Accept invite, create account
-- ✅ Founders: Complete onboarding (personal details, startup profile, bank details)
-- ✅ Goals: Attach default goal templates to startups
-- ✅ Goals: Manual goal status updates and admin overrides
-- ✅ Invoices: Upload invoices (file + metadata)
-- ✅ Invoices: Manual approval/rejection and paid status updates
-- ✅ Leaderboard: Basic leaderboard using manual metrics
-- ✅ Authentication and authorization with Clerk
-
-## Project Structure
-
-- `app/` - Next.js App Router pages and routes
-- `lib/` - Utility libraries (auth, email, Supabase clients)
-- `supabase/migrations/` - Database schema migrations
-- `middleware.ts` - Clerk authentication middleware.
+- **Client**: `logClientError()` from `lib/logging.ts`
+- **Server**: `logServerInfo()`, `logServerWarn()`, `logServerError()` from `lib/logging.ts`
+- **Convex**: Automatic via custom function wrappers — logs success and slow executions
