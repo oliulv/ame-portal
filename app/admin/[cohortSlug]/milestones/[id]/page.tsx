@@ -6,11 +6,10 @@ import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import Link from 'next/link'
-import { logClientError } from '@/lib/logging'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -25,26 +24,26 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-export default function FounderMilestoneDetailPage() {
-  const params = useParams<{ id: string }>()
+export default function AdminMilestoneDetailPage() {
+  const params = useParams<{ cohortSlug: string; id: string }>()
+  const cohortSlug = params.cohortSlug
   const milestoneId = params.id as Id<'milestones'>
 
-  const milestone = useQuery(api.milestones.getForFounder, { id: milestoneId })
-  const submitMilestone = useMutation(api.milestones.submit)
-  const withdrawMilestone = useMutation(api.milestones.withdraw)
-  const generateUploadUrl = useMutation(api.milestones.generateUploadUrl)
+  const milestone = useQuery(api.milestones.getForAdmin, { id: milestoneId })
+  const currentUser = useQuery(api.users.current)
+  const approveMilestone = useMutation(api.milestones.approve)
+  const requestChangesMutation = useMutation(api.milestones.requestChanges)
 
-  const [planLink, setPlanLink] = useState('')
-  const [planFile, setPlanFile] = useState<File | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isWithdrawing, setIsWithdrawing] = useState(false)
+  const [isApproving, setIsApproving] = useState(false)
+  const [isRequestingChanges, setIsRequestingChanges] = useState(false)
+  const [adminComment, setAdminComment] = useState('')
 
   const fileUrl = useQuery(
     api.milestones.getFileUrl,
     milestone?.planStorageId ? { storageId: milestone.planStorageId } : 'skip'
   )
 
-  if (milestone === undefined) {
+  if (milestone === undefined || currentUser === undefined) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-sm text-muted-foreground">Loading milestone...</div>
@@ -59,7 +58,7 @@ export default function FounderMilestoneDetailPage() {
         title="Milestone not found"
         description="This milestone does not exist or you do not have access to it."
         action={
-          <Link href="/founder/funding">
+          <Link href={`/admin/${cohortSlug}/funding`}>
             <Button variant="outline">Back to Funding</Button>
           </Link>
         }
@@ -67,63 +66,31 @@ export default function FounderMilestoneDetailPage() {
     )
   }
 
-  const requiresLink = milestone.requireLink !== false
-  const requiresFile = milestone.requireFile !== false
-  const onlyLink = requiresLink && !requiresFile
-  const onlyFile = !requiresLink && requiresFile
-  const canSubmitForm = onlyLink ? !!planLink : onlyFile ? !!planFile : !!planLink || !!planFile
-
-  async function handleSubmit() {
-    if (!planLink && !planFile) {
-      toast.error('Please provide a plan link or upload a plan file')
-      return
-    }
-
-    setIsSubmitting(true)
+  async function handleApprove() {
+    setIsApproving(true)
     try {
-      let planStorageId: Id<'_storage'> | undefined
-      let planFileName: string | undefined
-
-      if (planFile) {
-        const uploadUrl = await generateUploadUrl()
-        const result = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': planFile.type },
-          body: planFile,
-        })
-        if (!result.ok) throw new Error('Failed to upload file')
-        const { storageId } = await result.json()
-        planStorageId = storageId
-        planFileName = planFile.name
-      }
-
-      await submitMilestone({
-        id: milestoneId,
-        planLink: planLink || undefined,
-        planStorageId,
-        planFileName,
-      })
-      toast.success('Milestone submitted for review')
+      await approveMilestone({ id: milestoneId })
+      toast.success('Milestone approved')
     } catch (error) {
-      logClientError('Failed to submit milestone:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to submit milestone')
+      toast.error(error instanceof Error ? error.message : 'Failed to approve milestone')
     } finally {
-      setIsSubmitting(false)
+      setIsApproving(false)
     }
   }
 
-  async function handleWithdraw() {
-    setIsWithdrawing(true)
+  async function handleRequestChanges() {
+    setIsRequestingChanges(true)
     try {
-      await withdrawMilestone({ id: milestoneId })
-      toast.success('Submission withdrawn - you can now re-submit')
-      setPlanLink('')
-      setPlanFile(null)
+      await requestChangesMutation({
+        id: milestoneId,
+        adminComment: adminComment.trim() || undefined,
+      })
+      toast.success('Changes requested')
+      setAdminComment('')
     } catch (error) {
-      logClientError('Failed to withdraw milestone:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to withdraw milestone')
+      toast.error(error instanceof Error ? error.message : 'Failed to request changes')
     } finally {
-      setIsWithdrawing(false)
+      setIsRequestingChanges(false)
     }
   }
 
@@ -157,21 +124,25 @@ export default function FounderMilestoneDetailPage() {
       <Badge variant="secondary">Waiting</Badge>
     )
 
+  const backHref = milestone.startupSlug
+    ? `/admin/${cohortSlug}/funding/${milestone.startupSlug}`
+    : `/admin/${cohortSlug}/funding`
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
         <div>
-          <Link href="/founder/funding">
+          <Link href={backHref}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Funding
+              Back to {milestone.startupName || 'Funding'}
             </Button>
           </Link>
         </div>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight font-display">{milestone.title}</h1>
-            <p className="text-muted-foreground">Milestone details and submission</p>
+            <p className="text-muted-foreground">{milestone.startupName}</p>
           </div>
           {statusBadge}
         </div>
@@ -211,16 +182,6 @@ export default function FounderMilestoneDetailPage() {
                 <p className="mt-1 whitespace-pre-wrap text-sm">{milestone.description}</p>
               </div>
 
-              {/* Admin comment for changes_requested */}
-              {milestone.status === 'changes_requested' && milestone.adminComment && (
-                <div className="rounded-md border border-amber-200 bg-amber-50/50 p-3">
-                  <p className="text-sm font-medium text-amber-900">Changes Requested</p>
-                  <p className="mt-1 text-sm text-amber-800 whitespace-pre-wrap">
-                    {milestone.adminComment}
-                  </p>
-                </div>
-              )}
-
               {/* Submitted evidence */}
               {(milestone.status === 'submitted' ||
                 milestone.status === 'approved' ||
@@ -255,76 +216,56 @@ export default function FounderMilestoneDetailPage() {
                     )}
                   </div>
                 )}
+
+              {/* Admin comment */}
+              {milestone.adminComment && (
+                <div className="rounded-md border border-amber-200 bg-amber-50/50 p-3">
+                  <p className="text-sm font-medium text-amber-900">Admin Comment</p>
+                  <p className="mt-1 text-sm text-amber-800 whitespace-pre-wrap">
+                    {milestone.adminComment}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Submission form (for waiting or changes_requested milestones) */}
-          {(milestone.status === 'waiting' || milestone.status === 'changes_requested') && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Submit Evidence</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Provide evidence of your milestone completion.
-                  {onlyLink && ' Submit a link to your work.'}
-                  {onlyFile && ' Upload a document as evidence.'}
-                  {!onlyLink && !onlyFile && ' Include a link or upload a document.'}
-                </p>
-                {requiresLink && (
-                  <div className="space-y-2">
-                    <Label htmlFor="plan-link">
-                      Plan Link (URL){onlyLink ? '' : requiresFile ? '' : ' - or upload below'}
-                    </Label>
-                    <Input
-                      id="plan-link"
-                      type="url"
-                      placeholder="https://docs.google.com/..."
-                      value={planLink}
-                      onChange={(e) => setPlanLink(e.target.value)}
-                    />
-                  </div>
-                )}
-                {requiresFile && (
-                  <div className="space-y-2">
-                    <Label htmlFor="plan-file">Plan Document{onlyFile ? '' : ' (Optional)'}</Label>
-                    <Input
-                      id="plan-file"
-                      type="file"
-                      accept="application/pdf,image/*,.doc,.docx"
-                      onChange={(e) => setPlanFile(e.target.files?.[0] ?? null)}
-                      className="cursor-pointer"
-                    />
-                    {planFile && (
-                      <p className="text-sm text-muted-foreground">
-                        Selected: {planFile.name} ({(planFile.size / 1024).toFixed(1)} KB)
-                      </p>
-                    )}
-                  </div>
-                )}
-                <div className="flex justify-end">
-                  <Button onClick={handleSubmit} disabled={isSubmitting || !canSubmitForm}>
-                    {isSubmitting ? 'Submitting...' : 'Submit for Review'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Withdraw option for submitted milestones */}
+          {/* Admin Actions */}
           {milestone.status === 'submitted' && (
             <Card>
               <CardHeader>
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  Your submission is pending review. You can withdraw it to make changes and
-                  re-submit.
-                </p>
-                <Button variant="outline" onClick={handleWithdraw} disabled={isWithdrawing}>
-                  {isWithdrawing ? 'Withdrawing...' : 'Withdraw Submission'}
-                </Button>
+              <CardContent className="space-y-4">
+                <div className="flex gap-3">
+                  <Button
+                    onClick={handleApprove}
+                    disabled={isApproving || isRequestingChanges}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <Check className="mr-2 h-4 w-4" />
+                    {isApproving ? 'Approving...' : 'Approve'}
+                  </Button>
+                </div>
+
+                <div className="border-t pt-4 space-y-3">
+                  <Label htmlFor="admin-comment">Request Changes</Label>
+                  <Textarea
+                    id="admin-comment"
+                    placeholder="Describe what needs to be revised (optional)..."
+                    value={adminComment}
+                    onChange={(e) => setAdminComment(e.target.value)}
+                    rows={3}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={handleRequestChanges}
+                    disabled={isApproving || isRequestingChanges}
+                    className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                  >
+                    <RotateCw className="mr-2 h-4 w-4" />
+                    {isRequestingChanges ? 'Requesting...' : 'Request Changes'}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -352,10 +293,10 @@ export default function FounderMilestoneDetailPage() {
                     {milestone.status === 'approved'
                       ? `£${milestone.amount.toLocaleString('en-GB')} unlocked`
                       : milestone.status === 'submitted'
-                        ? 'Your submission is being reviewed'
+                        ? 'Review and approve or request changes'
                         : milestone.status === 'changes_requested'
-                          ? 'Please revise and resubmit'
-                          : 'Submit evidence to unlock funding'}
+                          ? 'Waiting for founder to revise and resubmit'
+                          : 'Founder has not submitted yet'}
                   </p>
                 </div>
               </div>
@@ -372,7 +313,7 @@ export default function FounderMilestoneDetailPage() {
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {milestone.status === 'approved'
-                  ? 'This amount has been unlocked and added to your available balance.'
+                  ? "This amount has been unlocked and added to the startup's available balance."
                   : 'This amount will be unlocked when the milestone is approved.'}
               </p>
             </CardContent>

@@ -89,6 +89,7 @@ export default function StartupDetailPage() {
         email: inviteEmail.trim(),
         fullName: inviteFullName.trim(),
         expiresInDays,
+        appUrl: window.location.origin,
       })
       toast.success('Invitation sent successfully')
       setShowInviteDialog(false)
@@ -105,7 +106,7 @@ export default function StartupDetailPage() {
   async function handleResend(invitationId: string) {
     setResendingId(invitationId)
     try {
-      await resendInvitation({ id: invitationId as any })
+      await resendInvitation({ id: invitationId as any, appUrl: window.location.origin })
       toast.success('Invitation resent')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to resend invitation')
@@ -480,6 +481,8 @@ export default function StartupDetailPage() {
                         <CheckCircle className="h-4 w-4 text-green-600" />
                       ) : milestone.status === 'submitted' ? (
                         <Clock className="h-4 w-4 text-amber-600" />
+                      ) : milestone.status === 'changes_requested' ? (
+                        <RotateCw className="h-4 w-4 text-orange-600" />
                       ) : (
                         <Send className="h-4 w-4 text-muted-foreground" />
                       )}
@@ -491,13 +494,16 @@ export default function StartupDetailPage() {
                           variant={
                             milestone.status === 'approved'
                               ? 'success'
-                              : milestone.status === 'submitted'
+                              : milestone.status === 'submitted' ||
+                                  milestone.status === 'changes_requested'
                                 ? 'warning'
                                 : 'secondary'
                           }
                           className="shrink-0 text-[10px] px-1.5 py-0"
                         >
-                          {milestone.status}
+                          {milestone.status === 'changes_requested'
+                            ? 'changes requested'
+                            : milestone.status}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">

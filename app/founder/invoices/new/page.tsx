@@ -83,7 +83,11 @@ export default function NewInvoicePage() {
   const amountExceedsBalance = typeof amountValue === 'number' && amountValue > available
 
   const canSubmit =
-    !!invoiceFile && !!receiptFile && !invoiceNameError && !receiptNameError && !amountExceedsBalance
+    !!invoiceFile &&
+    !!receiptFile &&
+    !invoiceNameError &&
+    !receiptNameError &&
+    !amountExceedsBalance
 
   const onSubmit = async (data: FounderInvoiceUploadFormData) => {
     if (!invoiceFile) {

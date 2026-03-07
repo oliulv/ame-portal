@@ -17,13 +17,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Check, Clock, Search, Send, Building2 } from 'lucide-react'
+import { Check, Clock, RotateCw, Search, Send, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
-type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved'
+type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved' | 'changes_requested'
 type MilestoneSort = 'priority' | 'amount-desc' | 'amount-asc' | 'name'
 
-const STATUS_ORDER: Record<string, number> = { waiting: 0, submitted: 1, approved: 2 }
+const STATUS_ORDER: Record<string, number> = {
+  waiting: 0,
+  changes_requested: 1,
+  submitted: 2,
+  approved: 3,
+}
 
 export default function FounderFundingPage() {
   const milestones = useQuery(api.milestones.listForFounder)
@@ -35,7 +40,9 @@ export default function FounderFundingPage() {
 
   const milestoneList = useMemo(() => milestones ?? [], [milestones])
   const potential = milestoneList
-    .filter((m) => m.status === 'waiting' || m.status === 'submitted')
+    .filter(
+      (m) => m.status === 'waiting' || m.status === 'submitted' || m.status === 'changes_requested'
+    )
     .reduce((sum, m) => sum + m.amount, 0)
   const unlocked = milestoneList
     .filter((m) => m.status === 'approved')
@@ -267,6 +274,7 @@ export default function FounderFundingPage() {
                 <SelectItem value="waiting">Waiting</SelectItem>
                 <SelectItem value="submitted">Submitted</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="changes_requested">Changes Requested</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as MilestoneSort)}>
@@ -298,6 +306,10 @@ export default function FounderFundingPage() {
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100">
                             <Clock className="h-4 w-4 text-amber-600" />
                           </div>
+                        ) : milestone.status === 'changes_requested' ? (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100">
+                            <RotateCw className="h-4 w-4 text-orange-600" />
+                          </div>
                         ) : (
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
                             <Send className="h-4 w-4 text-blue-600" />
@@ -312,6 +324,9 @@ export default function FounderFundingPage() {
                           )}
                           {milestone.status === 'submitted' && (
                             <Badge variant="warning">Pending Review</Badge>
+                          )}
+                          {milestone.status === 'changes_requested' && (
+                            <Badge variant="warning">Changes Requested</Badge>
                           )}
                           {milestone.status === 'waiting' && (
                             <Badge variant="secondary">Waiting</Badge>

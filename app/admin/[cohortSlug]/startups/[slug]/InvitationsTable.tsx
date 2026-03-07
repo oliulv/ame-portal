@@ -33,7 +33,7 @@ export function InvitationsTable({ invitations }: InvitationsTableProps) {
     setResendingId(invitationId)
 
     try {
-      await resendInvitation({ id: invitationId })
+      await resendInvitation({ id: invitationId, appUrl: window.location.origin })
       toast.success('Invitation resent successfully')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to resend invitation')

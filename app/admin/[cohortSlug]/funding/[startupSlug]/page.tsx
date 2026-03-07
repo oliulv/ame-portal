@@ -135,8 +135,8 @@ function SortableRow({
       <TableCell className="max-w-[250px] text-sm text-muted-foreground">
         <div className="truncate">{milestone.description}</div>
         {(milestone.status === 'submitted' ||
-              milestone.status === 'approved' ||
-              milestone.status === 'changes_requested') &&
+          milestone.status === 'approved' ||
+          milestone.status === 'changes_requested') &&
           (milestone.planLink || milestone.planStorageId) && (
             <div className="flex items-center gap-3 mt-1">
               {milestone.planLink && (
@@ -220,8 +220,8 @@ function StaticRow({
       <TableCell className="max-w-[250px] text-sm text-muted-foreground">
         <div className="truncate">{milestone.description}</div>
         {(milestone.status === 'submitted' ||
-              milestone.status === 'approved' ||
-              milestone.status === 'changes_requested') &&
+          milestone.status === 'approved' ||
+          milestone.status === 'changes_requested') &&
           (milestone.planLink || milestone.planStorageId) && (
             <div className="mt-1 flex items-center gap-3">
               {milestone.planLink && (
