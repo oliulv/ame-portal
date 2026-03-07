@@ -206,7 +206,6 @@ export default function AdminInvoicesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All states</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="submitted">Submitted</SelectItem>
             <SelectItem value="under_review">Under review</SelectItem>
             <SelectItem value="approved">Approved</SelectItem>
