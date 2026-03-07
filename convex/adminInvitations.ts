@@ -46,6 +46,7 @@ export const create = mutation({
     cohortId: v.id('cohorts'),
     expiresInDays: v.optional(v.number()),
     role: v.optional(v.union(v.literal('admin'), v.literal('super_admin'))),
+    appUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const inviter = await requireAdmin(ctx)
@@ -90,6 +91,7 @@ export const create = mutation({
       invitedName: args.invitedName,
       inviteToken: token,
       expirationDays: expiresInDays,
+      appUrl: args.appUrl,
     })
 
     return id
@@ -100,7 +102,7 @@ export const create = mutation({
  * Resend an admin invitation email.
  */
 export const resend = mutation({
-  args: { id: v.id('adminInvitations') },
+  args: { id: v.id('adminInvitations'), appUrl: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
 
@@ -119,6 +121,7 @@ export const resend = mutation({
       invitedName: invitation.invitedName,
       inviteToken: invitation.token,
       expirationDays: daysLeft,
+      appUrl: args.appUrl,
     })
   },
 })
@@ -225,12 +228,13 @@ export const sendEmail = internalAction({
     invitedName: v.optional(v.string()),
     inviteToken: v.string(),
     expirationDays: v.number(),
+    appUrl: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
     const fromEmail = process.env.FROM_EMAIL
-    const appUrl = process.env.APP_URL
+    const appUrl = args.appUrl ?? process.env.APP_URL
     if (!fromEmail) throw new Error('FROM_EMAIL environment variable is not set')
-    if (!appUrl) throw new Error('APP_URL environment variable is not set')
+    if (!appUrl) throw new Error('APP_URL environment variable is not set and no appUrl provided')
 
     const { Resend } = await import('resend')
     const resend = new Resend(process.env.RESEND_API_KEY)

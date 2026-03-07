@@ -92,6 +92,7 @@ export const create = mutation({
     email: v.string(),
     fullName: v.string(),
     expiresInDays: v.optional(v.number()),
+    appUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx)
@@ -132,6 +133,7 @@ export const create = mutation({
       startupName: startup?.name ?? 'Unknown Startup',
       inviteToken: token,
       expirationDays: expiresInDays,
+      appUrl: args.appUrl,
     })
 
     return invitationId
@@ -297,7 +299,7 @@ export const removeTeamMember = mutation({
  * Resend invitation email (action).
  */
 export const resend = mutation({
-  args: { id: v.id('invitations') },
+  args: { id: v.id('invitations'), appUrl: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
 
@@ -312,6 +314,7 @@ export const resend = mutation({
       founderName: invitation.fullName,
       startupName: startup?.name ?? 'Unknown Startup',
       inviteToken: invitation.token,
+      appUrl: args.appUrl,
     })
   },
 })
@@ -326,12 +329,13 @@ export const sendEmail = internalAction({
     startupName: v.string(),
     inviteToken: v.string(),
     expirationDays: v.optional(v.number()),
+    appUrl: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
     const fromEmail = process.env.FROM_EMAIL
-    const appUrl = process.env.APP_URL
+    const appUrl = args.appUrl ?? process.env.APP_URL
     if (!fromEmail) throw new Error('FROM_EMAIL environment variable is not set')
-    if (!appUrl) throw new Error('APP_URL environment variable is not set')
+    if (!appUrl) throw new Error('APP_URL environment variable is not set and no appUrl provided')
 
     const { Resend } = await import('resend')
     const resend = new Resend(process.env.RESEND_API_KEY)

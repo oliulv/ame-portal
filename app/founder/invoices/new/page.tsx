@@ -82,11 +82,17 @@ export default function NewInvoicePage() {
   const amountValue = form.watch('amount_gbp')
   const amountExceedsBalance = typeof amountValue === 'number' && amountValue > available
 
-  const canSubmit = !!invoiceFile && !invoiceNameError && !receiptNameError && !amountExceedsBalance
+  const canSubmit =
+    !!invoiceFile && !!receiptFile && !invoiceNameError && !receiptNameError && !amountExceedsBalance
 
   const onSubmit = async (data: FounderInvoiceUploadFormData) => {
     if (!invoiceFile) {
       toast.error('Please select an invoice file to upload')
+      return
+    }
+
+    if (!receiptFile) {
+      toast.error('Please select a receipt file to upload')
       return
     }
 
@@ -118,21 +124,15 @@ export default function NewInvoicePage() {
       if (!invoiceUploadResult.ok) throw new Error('Failed to upload invoice file')
       const { storageId: invoiceStorageId } = await invoiceUploadResult.json()
 
-      // Upload receipt file if present
-      let receiptStorageId: string | undefined
-      let receiptFileName: string | undefined
-      if (receiptFile) {
-        const receiptUploadUrl = await generateUploadUrl()
-        const receiptUploadResult = await fetch(receiptUploadUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': receiptFile.type },
-          body: receiptFile,
-        })
-        if (!receiptUploadResult.ok) throw new Error('Failed to upload receipt file')
-        const result = await receiptUploadResult.json()
-        receiptStorageId = result.storageId
-        receiptFileName = receiptFile.name
-      }
+      // Upload receipt file (required)
+      const receiptUploadUrl = await generateUploadUrl()
+      const receiptUploadResult = await fetch(receiptUploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': receiptFile.type },
+        body: receiptFile,
+      })
+      if (!receiptUploadResult.ok) throw new Error('Failed to upload receipt file')
+      const { storageId: receiptStorageId } = await receiptUploadResult.json()
 
       await createInvoice({
         storageId: invoiceStorageId,
@@ -142,7 +142,7 @@ export default function NewInvoicePage() {
         amountGbp: data.amount_gbp,
         description: data.description || undefined,
         receiptStorageId: receiptStorageId as never,
-        receiptFileName,
+        receiptFileName: receiptFile.name,
       })
 
       toast.success('Invoice uploaded successfully')
@@ -313,7 +313,7 @@ export default function NewInvoicePage() {
               {/* Receipt File Upload */}
               <div className="space-y-2">
                 <label className="text-sm font-medium leading-none">
-                  Receipt File (Recommended — PDF only)
+                  Receipt File (Required — PDF only)
                 </label>
                 <p className="text-xs text-muted-foreground">
                   Collate all receipts for this invoice into a single PDF.

@@ -10,6 +10,7 @@
 
 import type * as adminCohorts from "../adminCohorts.js";
 import type * as adminInvitations from "../adminInvitations.js";
+import type * as adminPermissions from "../adminPermissions.js";
 import type * as adminUsers from "../adminUsers.js";
 import type * as auth from "../auth.js";
 import type * as bankDetails from "../bankDetails.js";
@@ -50,6 +51,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   adminCohorts: typeof adminCohorts;
   adminInvitations: typeof adminInvitations;
+  adminPermissions: typeof adminPermissions;
   adminUsers: typeof adminUsers;
   auth: typeof auth;
   bankDetails: typeof bankDetails;

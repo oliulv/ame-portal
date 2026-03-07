@@ -1,6 +1,12 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireAuth, requireFounder, getFounderStartupIds } from './auth'
+import {
+  requireAdmin,
+  requireAdminWithPermission,
+  requireAuth,
+  requireFounder,
+  getFounderStartupIds,
+} from './auth'
 
 /**
  * List milestones for a startup (admin).
@@ -53,6 +59,57 @@ export const getForFounder = query({
     if (!startupIds.includes(milestone.startupId)) return null
 
     return milestone
+  },
+})
+
+/**
+ * Get a single milestone by ID (admin).
+ */
+export const getForAdmin = query({
+  args: { id: v.id('milestones') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+    const milestone = await ctx.db.get(args.id)
+    if (!milestone) return null
+
+    const startup = await ctx.db.get(milestone.startupId)
+    return { ...milestone, startupName: startup?.name, startupSlug: startup?.slug }
+  },
+})
+
+/**
+ * List all submitted milestones across a cohort (admin inbox).
+ */
+export const listSubmittedByCohort = query({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const startups = await ctx.db
+      .query('startups')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    const results = []
+    for (const startup of startups) {
+      const milestones = await ctx.db
+        .query('milestones')
+        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+        .collect()
+
+      for (const m of milestones) {
+        if (m.status === 'submitted') {
+          results.push({
+            ...m,
+            startupName: startup.name,
+            startupSlug: startup.slug,
+          })
+        }
+      }
+    }
+
+    // Sort by creation time, newest first
+    return results.sort((a, b) => b._creationTime - a._creationTime)
   },
 })
 
@@ -204,7 +261,12 @@ export const create = mutation({
     description: v.string(),
     amount: v.number(),
     status: v.optional(
-      v.union(v.literal('waiting'), v.literal('submitted'), v.literal('approved'))
+      v.union(
+        v.literal('waiting'),
+        v.literal('submitted'),
+        v.literal('approved'),
+        v.literal('changes_requested')
+      )
     ),
     dueDate: v.optional(v.string()),
     sortOrder: v.optional(v.number()),
@@ -247,7 +309,12 @@ export const update = mutation({
     description: v.optional(v.string()),
     amount: v.optional(v.number()),
     status: v.optional(
-      v.union(v.literal('waiting'), v.literal('submitted'), v.literal('approved'))
+      v.union(
+        v.literal('waiting'),
+        v.literal('submitted'),
+        v.literal('approved'),
+        v.literal('changes_requested')
+      )
     ),
     dueDate: v.optional(v.string()),
     sortOrder: v.optional(v.number()),
@@ -293,15 +360,44 @@ export const remove = mutation({
 export const approve = mutation({
   args: { id: v.id('milestones') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const milestone = await ctx.db.get(args.id)
     if (!milestone) throw new Error('Milestone not found')
     if (milestone.status !== 'submitted') {
       throw new Error('Only submitted milestones can be approved')
     }
 
+    const startup = await ctx.db.get(milestone.startupId)
+    if (!startup) throw new Error('Startup not found')
+    await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
+
     await ctx.db.patch(args.id, { status: 'approved' })
+  },
+})
+
+/**
+ * Request changes on a submitted milestone (admin).
+ * Sets submitted -> changes_requested with optional comment.
+ */
+export const requestChanges = mutation({
+  args: {
+    id: v.id('milestones'),
+    adminComment: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const milestone = await ctx.db.get(args.id)
+    if (!milestone) throw new Error('Milestone not found')
+    if (milestone.status !== 'submitted') {
+      throw new Error('Only submitted milestones can have changes requested')
+    }
+
+    const startup = await ctx.db.get(milestone.startupId)
+    if (!startup) throw new Error('Startup not found')
+    await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
+
+    await ctx.db.patch(args.id, {
+      status: 'changes_requested',
+      adminComment: args.adminComment?.trim() || undefined,
+    })
   },
 })
 
@@ -325,8 +421,8 @@ export const submit = mutation({
     if (!startupIds.includes(milestone.startupId)) {
       throw new Error('Not authorized')
     }
-    if (milestone.status !== 'waiting') {
-      throw new Error('Only waiting milestones can be submitted')
+    if (milestone.status !== 'waiting' && milestone.status !== 'changes_requested') {
+      throw new Error('Only waiting or changes-requested milestones can be submitted')
     }
 
     const needsLink = milestone.requireLink !== false

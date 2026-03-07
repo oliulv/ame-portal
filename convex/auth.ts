@@ -72,6 +72,41 @@ export async function requireFounder(ctx: QueryCtx | MutationCtx): Promise<Doc<'
 }
 
 /**
+ * Check if a user has a specific delegated permission for a cohort.
+ */
+export async function hasPermission(
+  ctx: QueryCtx | MutationCtx,
+  userId: Doc<'users'>['_id'],
+  cohortId: Doc<'cohorts'>['_id'],
+  permission: 'approve_milestones' | 'approve_invoices'
+): Promise<boolean> {
+  const row = await ctx.db
+    .query('adminPermissions')
+    .withIndex('by_userId_cohortId_permission', (q) =>
+      q.eq('userId', userId).eq('cohortId', cohortId).eq('permission', permission)
+    )
+    .first()
+  return !!row
+}
+
+/**
+ * Require the user to be a super_admin OR have a specific delegated permission.
+ */
+export async function requireAdminWithPermission(
+  ctx: QueryCtx | MutationCtx,
+  cohortId: Doc<'cohorts'>['_id'],
+  permission: 'approve_milestones' | 'approve_invoices'
+): Promise<Doc<'users'>> {
+  const user = await requireAdmin(ctx)
+  if (user.role === 'super_admin') return user
+  const has = await hasPermission(ctx, user._id, cohortId, permission)
+  if (!has) {
+    throw new Error(`Permission required: ${permission}`)
+  }
+  return user
+}
+
+/**
  * Get the startup IDs associated with a founder user.
  */
 export async function getFounderStartupIds(

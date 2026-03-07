@@ -73,10 +73,15 @@ import { toast } from 'sonner'
 import type { Id, Doc } from '@/convex/_generated/dataModel'
 
 type Milestone = Doc<'milestones'>
-type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved'
+type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved' | 'changes_requested'
 type MilestoneSort = 'priority' | 'amount-desc' | 'amount-asc' | 'name'
 
-const STATUS_ORDER: Record<string, number> = { waiting: 0, submitted: 1, approved: 2 }
+const STATUS_ORDER: Record<string, number> = {
+  waiting: 0,
+  submitted: 1,
+  changes_requested: 2,
+  approved: 3,
+}
 
 function PlanFileLink({ storageId, fileName }: { storageId: Id<'_storage'>; fileName?: string }) {
   const fileUrl = useQuery(api.milestones.getFileUrl, { storageId })
@@ -129,7 +134,9 @@ function SortableRow({
       <TableCell className="font-medium">{milestone.title}</TableCell>
       <TableCell className="max-w-[250px] text-sm text-muted-foreground">
         <div className="truncate">{milestone.description}</div>
-        {(milestone.status === 'submitted' || milestone.status === 'approved') &&
+        {(milestone.status === 'submitted' ||
+              milestone.status === 'approved' ||
+              milestone.status === 'changes_requested') &&
           (milestone.planLink || milestone.planStorageId) && (
             <div className="flex items-center gap-3 mt-1">
               {milestone.planLink && (
@@ -163,10 +170,12 @@ function SortableRow({
               ? 'success'
               : milestone.status === 'submitted'
                 ? 'warning'
-                : 'secondary'
+                : milestone.status === 'changes_requested'
+                  ? 'warning'
+                  : 'secondary'
           }
         >
-          {milestone.status}
+          {milestone.status === 'changes_requested' ? 'changes requested' : milestone.status}
         </Badge>
       </TableCell>
       <TableCell className="text-right">
@@ -210,7 +219,9 @@ function StaticRow({
       <TableCell className="font-medium">{milestone.title}</TableCell>
       <TableCell className="max-w-[250px] text-sm text-muted-foreground">
         <div className="truncate">{milestone.description}</div>
-        {(milestone.status === 'submitted' || milestone.status === 'approved') &&
+        {(milestone.status === 'submitted' ||
+              milestone.status === 'approved' ||
+              milestone.status === 'changes_requested') &&
           (milestone.planLink || milestone.planStorageId) && (
             <div className="mt-1 flex items-center gap-3">
               {milestone.planLink && (
@@ -241,10 +252,12 @@ function StaticRow({
               ? 'success'
               : milestone.status === 'submitted'
                 ? 'warning'
-                : 'secondary'
+                : milestone.status === 'changes_requested'
+                  ? 'warning'
+                  : 'secondary'
           }
         >
-          {milestone.status}
+          {milestone.status === 'changes_requested' ? 'changes requested' : milestone.status}
         </Badge>
       </TableCell>
       <TableCell className="text-right">
@@ -299,7 +312,9 @@ export default function StartupFundingPage() {
   const [formTitle, setFormTitle] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formAmount, setFormAmount] = useState('')
-  const [formStatus, setFormStatus] = useState<'waiting' | 'submitted' | 'approved'>('waiting')
+  const [formStatus, setFormStatus] = useState<
+    'waiting' | 'submitted' | 'approved' | 'changes_requested'
+  >('waiting')
   const [formDueDate, setFormDueDate] = useState('')
   const [formRequireLink, setFormRequireLink] = useState(true)
   const [formRequireFile, setFormRequireFile] = useState(true)
@@ -562,6 +577,7 @@ export default function StartupFundingPage() {
                   <SelectItem value="waiting">Waiting</SelectItem>
                   <SelectItem value="submitted">Submitted</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="changes_requested">Changes Requested</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -788,6 +804,7 @@ export default function StartupFundingPage() {
                 <SelectItem value="waiting">Waiting</SelectItem>
                 <SelectItem value="submitted">Submitted</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="changes_requested">Changes Requested</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as MilestoneSort)}>
