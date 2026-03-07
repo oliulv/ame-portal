@@ -165,14 +165,10 @@ export default function AdminInvoicesPage() {
           <strong className="text-foreground">Naming rules:</strong> Invoices must be named{' '}
           <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
             StartupName Invoice N.pdf
-          </code>{' '}
-          and receipts{' '}
-          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-            StartupName Receipt N-A.pdf
           </code>
-          , <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">N-B.pdf</code> etc.
-          Multiple receipts are supported. Founders cannot submit incorrectly named or duplicate
-          files — this is enforced before submission to keep Xero clean.
+          . Receipt filenames are generated automatically by the system. Multiple receipts per
+          invoice are supported. Founders cannot submit incorrectly named invoices or duplicate
+          numbers — this is enforced before submission to keep Xero clean.
         </p>
         <p>
           Founders cannot submit invoices exceeding their available balance (unlocked minus

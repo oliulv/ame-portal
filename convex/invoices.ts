@@ -43,7 +43,6 @@ export const create = mutation({
     amountGbp: v.number(),
     description: v.optional(v.string()),
     receiptStorageIds: v.array(v.id('_storage')),
-    receiptFileNames: v.array(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
@@ -58,18 +57,13 @@ export const create = mutation({
     if (!startup) throw new Error('Startup not found')
 
     // Validate at least one receipt
-    if (args.receiptStorageIds.length === 0 || args.receiptFileNames.length === 0) {
+    if (args.receiptStorageIds.length === 0) {
       throw new Error('At least one receipt is required')
     }
 
     // Validate PDF extension
     if (!args.fileName.toLowerCase().endsWith('.pdf')) {
       throw new Error('Invoice must be a PDF file')
-    }
-    for (const name of args.receiptFileNames) {
-      if (!name.toLowerCase().endsWith('.pdf')) {
-        throw new Error('All receipts must be PDF files')
-      }
     }
 
     // Validate naming convention: "{StartupName} Invoice {N}.pdf"
@@ -104,20 +98,14 @@ export const create = mutation({
       )
     }
 
-    // Validate receipt naming: "{StartupName} Receipt {N}-{Letter}.pdf"
+    // Generate structured receipt filenames server-side
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    for (let i = 0; i < args.receiptFileNames.length; i++) {
-      const expectedLetter = letters[i]
-      const receiptPattern = new RegExp(
-        `^${escapedName} Receipt ${expectedNext}-${expectedLetter}\\.pdf$`,
-        'i'
-      )
-      if (!receiptPattern.test(args.receiptFileNames[i])) {
-        throw new Error(
-          `Receipt ${i + 1} must be named "${startup.name} Receipt ${expectedNext}-${expectedLetter}.pdf"`
-        )
-      }
-    }
+    const receiptFileNames =
+      args.receiptStorageIds.length === 1
+        ? [`${startup.name} Receipt ${expectedNext}.pdf`]
+        : args.receiptStorageIds.map(
+            (_, i) => `${startup.name} Receipt ${expectedNext}-${letters[i]}.pdf`
+          )
 
     // Validate amount against available balance
     const milestones = await ctx.db
@@ -154,10 +142,10 @@ export const create = mutation({
       fileName: args.fileName,
       // Array fields for multiple receipts
       receiptStorageIds: args.receiptStorageIds,
-      receiptFileNames: args.receiptFileNames,
+      receiptFileNames,
       // Backward compat: first receipt in legacy fields
       receiptStorageId: args.receiptStorageIds[0],
-      receiptFileName: args.receiptFileNames[0],
+      receiptFileName: receiptFileNames[0],
       status: 'submitted',
     })
   },

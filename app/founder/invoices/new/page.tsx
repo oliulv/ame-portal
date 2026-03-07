@@ -64,21 +64,9 @@ export default function NewInvoicePage() {
     return null
   })()
 
-  const receiptNameErrors: (string | null)[] = receiptFiles.map((file, i) => {
-    if (!file.name.toLowerCase().endsWith('.pdf')) return 'Must be a PDF file'
-    if (!startupName) return null
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    const expectedLetter = letters[i] ?? '?'
-    const escapedName = startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const pattern = new RegExp(
-      `^${escapedName} Receipt ${expectedNumber}-${expectedLetter}\\.pdf$`,
-      'i'
-    )
-    if (!pattern.test(file.name))
-      return `Must be named "${startupName} Receipt ${expectedNumber}-${expectedLetter}.pdf"`
-    return null
-  })
-  const hasReceiptErrors = receiptNameErrors.some((e) => e !== null)
+  const receiptPdfError = receiptFiles.some((f) => !f.name.toLowerCase().endsWith('.pdf'))
+    ? 'All receipts must be PDF files'
+    : null
 
   const amountValue = form.watch('amount_gbp')
   const amountExceedsBalance = typeof amountValue === 'number' && amountValue > available
@@ -87,7 +75,7 @@ export default function NewInvoicePage() {
     !!invoiceFile &&
     receiptFiles.length > 0 &&
     !invoiceNameError &&
-    !hasReceiptErrors &&
+    !receiptPdfError &&
     !amountExceedsBalance
 
   const onSubmit = async (data: FounderInvoiceUploadFormData) => {
@@ -106,8 +94,8 @@ export default function NewInvoicePage() {
       return
     }
 
-    if (hasReceiptErrors) {
-      toast.error('One or more receipt files have naming errors')
+    if (receiptPdfError) {
+      toast.error(receiptPdfError)
       return
     }
 
@@ -131,7 +119,6 @@ export default function NewInvoicePage() {
 
       // Upload all receipt files sequentially
       const receiptStorageIds: string[] = []
-      const receiptFileNames: string[] = []
       for (const file of receiptFiles) {
         const uploadUrl = await generateUploadUrl()
         const result = await fetch(uploadUrl, {
@@ -142,7 +129,6 @@ export default function NewInvoicePage() {
         if (!result.ok) throw new Error(`Failed to upload receipt: ${file.name}`)
         const { storageId } = await result.json()
         receiptStorageIds.push(storageId)
-        receiptFileNames.push(file.name)
       }
 
       await createInvoice({
@@ -153,7 +139,6 @@ export default function NewInvoicePage() {
         amountGbp: data.amount_gbp,
         description: data.description || undefined,
         receiptStorageIds: receiptStorageIds as any,
-        receiptFileNames,
       })
 
       toast.success('Invoice uploaded successfully')
@@ -188,28 +173,18 @@ export default function NewInvoicePage() {
         <CardContent className="flex items-start gap-3 pt-4 pb-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div className="text-sm">
-            <p className="font-medium text-amber-900">File naming rules</p>
+            <p className="font-medium text-amber-900">Invoice naming</p>
             <ul className="mt-1 space-y-0.5 text-amber-800">
               <li>
-                Invoice:{' '}
+                Invoice must be named:{' '}
                 <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
                   {startupName ?? 'YourStartup'} Invoice {expectedNumber}.pdf
                 </code>
               </li>
+              <li>Receipts: any PDF filename is fine — we rename them automatically.</li>
               <li>
-                Receipts:{' '}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
-                  {startupName ?? 'YourStartup'} Receipt {expectedNumber}-A.pdf
-                </code>
-                {', '}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
-                  ...{expectedNumber}-B.pdf
-                </code>
-                {' etc.'}
-              </li>
-              <li>
-                PDF only. Your next invoice number is <strong>{expectedNumber}</strong>. Numbers
-                must be sequential. Use letters (A, B, C...) for multiple receipts.
+                Your next invoice number is <strong>{expectedNumber}</strong>. Numbers must be
+                sequential.
               </li>
             </ul>
           </div>
@@ -355,7 +330,7 @@ export default function NewInvoicePage() {
                       <TooltipContent side="right" className="max-w-[280px]">
                         <p>
                           The actual proof-of-purchase receipts from the vendor or supplier. You can
-                          upload multiple receipt PDFs — name them with letters (A, B, C...).
+                          upload multiple receipt PDFs — we rename them automatically.
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -373,17 +348,13 @@ export default function NewInvoicePage() {
                   {receiptFiles.length > 0 && (
                     <div className="space-y-1">
                       {receiptFiles.map((file, i) => (
-                        <div key={i}>
-                          <p className="text-sm text-muted-foreground">
-                            {file.name} ({(file.size / 1024).toFixed(1)} KB)
-                          </p>
-                          {receiptNameErrors[i] && (
-                            <p className="text-sm text-destructive">{receiptNameErrors[i]}</p>
-                          )}
-                        </div>
+                        <p key={i} className="text-sm text-muted-foreground">
+                          {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                        </p>
                       ))}
                     </div>
                   )}
+                  {receiptPdfError && <p className="text-sm text-destructive">{receiptPdfError}</p>}
                 </div>
               </TooltipProvider>
 
