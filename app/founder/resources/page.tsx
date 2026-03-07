@@ -44,22 +44,27 @@ function ResourceEntry({ resource }: { resource: ResourceItem }) {
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium truncate">{resource.title}</p>
           {resource.url && <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-          {resource.topic && (
-            <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 font-normal">
-              {resource.topic}
-            </Badge>
-          )}
         </div>
         {resource.eventTitle && (
           <p className="text-xs text-muted-foreground mt-0.5">{resource.eventTitle}</p>
         )}
       </div>
-      {resource.storageId && resource.fileName && (
-        <div className="shrink-0 flex items-center gap-1 text-sm text-muted-foreground">
-          <Download className="h-3.5 w-3.5" />
-          <span>{resource.fileName}</span>
-        </div>
-      )}
+      <div className="shrink-0 flex items-center gap-2">
+        {resource.storageId && resource.fileName && (
+          <span className="flex items-center gap-1 text-sm text-muted-foreground">
+            <Download className="h-3.5 w-3.5" />
+            {resource.fileName}
+          </span>
+        )}
+        {resource.topic && (
+          <Badge
+            variant="outline"
+            className="text-[10px] px-1.5 py-0 font-normal whitespace-nowrap"
+          >
+            {resource.topic}
+          </Badge>
+        )}
+      </div>
     </>
   )
 
