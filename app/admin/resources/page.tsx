@@ -40,9 +40,9 @@ import { Plus, Edit, Trash2, BookOpen, ExternalLink, Download, Search } from 'lu
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
-type ResourceCategory = 'video' | 'podcast' | 'book' | 'other_reading'
+type MediaType = 'video' | 'podcast' | 'book' | 'other_reading'
 
-const categoryLabels: Record<ResourceCategory, string> = {
+const mediaTypeLabels: Record<MediaType, string> = {
   video: 'Video',
   podcast: 'Podcast',
   book: 'Book',
@@ -53,7 +53,8 @@ type ResourceWithEvent = {
   _id: Id<'resources'>
   _creationTime: number
   title: string
-  category: ResourceCategory
+  category: MediaType
+  topic?: string
   description?: string
   url?: string
   storageId?: Id<'_storage'>
@@ -67,6 +68,7 @@ type ResourceWithEvent = {
 export default function AdminResourcesPage() {
   const resources = useQuery(api.resources.list) as ResourceWithEvent[] | undefined
   const allEvents = useQuery(api.cohortEvents.listAll)
+  const topics = useQuery(api.resources.listTopics)
 
   const createResource = useMutation(api.resources.create)
   const updateResource = useMutation(api.resources.update)
@@ -76,11 +78,14 @@ export default function AdminResourcesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingResource, setEditingResource] = useState<ResourceWithEvent | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<string>('all')
+  const [topicFilter, setTopicFilter] = useState<string>('all')
 
   // Form state
   const [formTitle, setFormTitle] = useState('')
-  const [formCategory, setFormCategory] = useState<ResourceCategory>('video')
+  const [formMediaType, setFormMediaType] = useState<MediaType>('video')
+  const [formTopic, setFormTopic] = useState('')
+  const [isNewTopic, setIsNewTopic] = useState(false)
   const [formDescription, setFormDescription] = useState('')
   const [formUrl, setFormUrl] = useState('')
   const [formEventId, setFormEventId] = useState<string>('')
@@ -95,15 +100,18 @@ export default function AdminResourcesPage() {
     if (!resources) return undefined
     const normalized = searchQuery.trim().toLowerCase()
     return resources.filter((r) => {
-      const matchesCategory = categoryFilter === 'all' || r.category === categoryFilter
+      const matchesMediaType = mediaTypeFilter === 'all' || r.category === mediaTypeFilter
+      const matchesTopic =
+        topicFilter === 'all' || (topicFilter === '__none__' ? !r.topic : r.topic === topicFilter)
       const matchesSearch =
         normalized.length === 0 ||
         r.title.toLowerCase().includes(normalized) ||
         (r.description || '').toLowerCase().includes(normalized) ||
-        (r.eventTitle || '').toLowerCase().includes(normalized)
-      return matchesCategory && matchesSearch
+        (r.eventTitle || '').toLowerCase().includes(normalized) ||
+        (r.topic || '').toLowerCase().includes(normalized)
+      return matchesMediaType && matchesTopic && matchesSearch
     })
-  }, [resources, categoryFilter, searchQuery])
+  }, [resources, mediaTypeFilter, topicFilter, searchQuery])
 
   const filteredEvents = useMemo(() => {
     if (!allEvents) return []
@@ -133,7 +141,9 @@ export default function AdminResourcesPage() {
 
   function resetForm() {
     setFormTitle('')
-    setFormCategory('video')
+    setFormMediaType('video')
+    setFormTopic('')
+    setIsNewTopic(false)
     setFormDescription('')
     setFormUrl('')
     setFormEventId('')
@@ -149,7 +159,9 @@ export default function AdminResourcesPage() {
 
   function openEdit(resource: ResourceWithEvent) {
     setFormTitle(resource.title)
-    setFormCategory(resource.category)
+    setFormMediaType(resource.category)
+    setFormTopic(resource.topic ?? '')
+    setIsNewTopic(false)
     setFormDescription(resource.description ?? '')
     setFormUrl(resource.url ?? '')
     setFormEventId(resource.eventId ?? '')
@@ -187,7 +199,9 @@ export default function AdminResourcesPage() {
         await updateResource({
           id: editingResource._id,
           title: formTitle,
-          category: formCategory,
+          category: formMediaType,
+          topic: formTopic || undefined,
+          clearTopic: !formTopic && !!editingResource.topic ? true : undefined,
           description: formDescription || undefined,
           url: formUrl || undefined,
           ...(storageId ? { storageId, fileName } : {}),
@@ -200,7 +214,8 @@ export default function AdminResourcesPage() {
       } else {
         await createResource({
           title: formTitle,
-          category: formCategory,
+          category: formMediaType,
+          topic: formTopic || undefined,
           description: formDescription || undefined,
           url: formUrl || undefined,
           storageId,
@@ -259,22 +274,60 @@ export default function AdminResourcesPage() {
               placeholder="e.g. How to Build a Startup"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="resource-category">Category</Label>
-            <Select
-              value={formCategory}
-              onValueChange={(v) => setFormCategory(v as ResourceCategory)}
-            >
-              <SelectTrigger id="resource-category">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="video">Video</SelectItem>
-                <SelectItem value="podcast">Podcast</SelectItem>
-                <SelectItem value="book">Book</SelectItem>
-                <SelectItem value="other_reading">Other Reading</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid gap-4 grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="resource-media-type">Media Type</Label>
+              <Select value={formMediaType} onValueChange={(v) => setFormMediaType(v as MediaType)}>
+                <SelectTrigger id="resource-media-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="video">Video</SelectItem>
+                  <SelectItem value="podcast">Podcast</SelectItem>
+                  <SelectItem value="book">Book</SelectItem>
+                  <SelectItem value="other_reading">Other Reading</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select
+                value={isNewTopic ? '__new__' : formTopic || 'none'}
+                onValueChange={(v) => {
+                  if (v === '__new__') {
+                    setIsNewTopic(true)
+                    setFormTopic('')
+                  } else if (v === 'none') {
+                    setIsNewTopic(false)
+                    setFormTopic('')
+                  } else {
+                    setIsNewTopic(false)
+                    setFormTopic(v)
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No category</SelectItem>
+                  {topics?.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__new__">+ New category...</SelectItem>
+                </SelectContent>
+              </Select>
+              {isNewTopic && (
+                <Input
+                  value={formTopic}
+                  onChange={(e) => setFormTopic(e.target.value)}
+                  placeholder="e.g. Fundraising"
+                  autoFocus
+                />
+              )}
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="resource-desc">Description (optional)</Label>
@@ -388,8 +441,8 @@ export default function AdminResourcesPage() {
         </Button>
       </div>
 
-      {/* Search + Category filter */}
-      <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+      {/* Search + Filters */}
+      <div className="grid gap-3 md:grid-cols-[1fr_180px_180px]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -399,16 +452,30 @@ export default function AdminResourcesPage() {
             className="pl-9"
           />
         </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        <Select value={mediaTypeFilter} onValueChange={setMediaTypeFilter}>
           <SelectTrigger>
-            <SelectValue placeholder="Filter by category" />
+            <SelectValue placeholder="Media type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
+            <SelectItem value="all">All types</SelectItem>
             <SelectItem value="video">Video</SelectItem>
             <SelectItem value="podcast">Podcast</SelectItem>
             <SelectItem value="book">Book</SelectItem>
             <SelectItem value="other_reading">Other Reading</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={topicFilter} onValueChange={setTopicFilter}>
+          <SelectTrigger>
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            <SelectItem value="__none__">Uncategorised</SelectItem>
+            {topics?.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -425,6 +492,7 @@ export default function AdminResourcesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Title</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Event</TableHead>
                   <TableHead>Status</TableHead>
@@ -457,7 +525,10 @@ export default function AdminResourcesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{categoryLabels[resource.category]}</Badge>
+                      <Badge variant="outline">{mediaTypeLabels[resource.category]}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {resource.topic ?? '—'}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {resource.eventTitle ?? '—'}

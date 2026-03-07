@@ -67,6 +67,7 @@ export const create = mutation({
       v.literal('book'),
       v.literal('other_reading')
     ),
+    topic: v.optional(v.string()),
     description: v.optional(v.string()),
     url: v.optional(v.string()),
     storageId: v.optional(v.id('_storage')),
@@ -83,6 +84,7 @@ export const create = mutation({
     return await ctx.db.insert('resources', {
       title: args.title,
       category: args.category,
+      topic: args.topic,
       description: args.description,
       url: args.url,
       storageId: args.storageId,
@@ -109,6 +111,7 @@ export const update = mutation({
         v.literal('other_reading')
       )
     ),
+    topic: v.optional(v.string()),
     description: v.optional(v.string()),
     url: v.optional(v.string()),
     storageId: v.optional(v.id('_storage')),
@@ -117,11 +120,12 @@ export const update = mutation({
     isActive: v.optional(v.boolean()),
     clearFile: v.optional(v.boolean()),
     clearEvent: v.optional(v.boolean()),
+    clearTopic: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
 
-    const { id, clearFile, clearEvent, ...updates } = args
+    const { id, clearFile, clearEvent, clearTopic, ...updates } = args
     const resource = await ctx.db.get(id)
     if (!resource) throw new Error('Resource not found')
 
@@ -143,6 +147,10 @@ export const update = mutation({
 
     if (clearEvent) {
       patch.eventId = undefined
+    }
+
+    if (clearTopic) {
+      patch.topic = undefined
     }
 
     await ctx.db.patch(id, patch)
@@ -186,5 +194,17 @@ export const getFileUrl = query({
   args: { storageId: v.id('_storage') },
   handler: async (ctx, args) => {
     return await ctx.storage.getUrl(args.storageId)
+  },
+})
+
+/**
+ * List all unique topic strings across resources.
+ */
+export const listTopics = query({
+  args: {},
+  handler: async (ctx) => {
+    const resources = await ctx.db.query('resources').collect()
+    const topics = [...new Set(resources.map((r) => r.topic).filter((t): t is string => !!t))]
+    return topics.sort()
   },
 })

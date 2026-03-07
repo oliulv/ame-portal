@@ -336,6 +336,7 @@ export default defineSchema({
       v.literal('book'),
       v.literal('other_reading')
     ),
+    topic: v.optional(v.string()),
     description: v.optional(v.string()),
     url: v.optional(v.string()),
     storageId: v.optional(v.id('_storage')),

@@ -17,12 +17,13 @@ import {
 import { ExternalLink, Download, Search, BookOpen } from 'lucide-react'
 import type { Id } from '@/convex/_generated/dataModel'
 
-type ResourceCategory = 'video' | 'podcast' | 'book' | 'other_reading'
+type MediaType = 'video' | 'podcast' | 'book' | 'other_reading'
 
 type ResourceItem = {
   _id: Id<'resources'>
   title: string
-  category: ResourceCategory
+  category: MediaType
+  topic?: string
   description?: string
   url?: string
   storageId?: Id<'_storage'>
@@ -73,7 +74,7 @@ function ResourceEntry({ resource }: { resource: ResourceItem }) {
   return <div className="flex items-start justify-between gap-3 py-3">{inner}</div>
 }
 
-const sections: { category: ResourceCategory; title: string }[] = [
+const sections: { category: MediaType; title: string }[] = [
   { category: 'video', title: 'Video' },
   { category: 'podcast', title: 'Podcasts' },
   { category: 'book', title: 'Books' },
@@ -82,27 +83,30 @@ const sections: { category: ResourceCategory; title: string }[] = [
 
 export default function FounderResourcesPage() {
   const resources = useQuery(api.resources.listForFounder) as ResourceItem[] | undefined
+  const topics = useQuery(api.resources.listTopics)
   const [searchQuery, setSearchQuery] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [topicFilter, setTopicFilter] = useState<string>('all')
 
   const filteredResources = useMemo(() => {
     if (!resources) return null
     const normalized = searchQuery.trim().toLowerCase()
     return resources.filter((r) => {
-      const matchesCategory = categoryFilter === 'all' || r.category === categoryFilter
+      const matchesTopic =
+        topicFilter === 'all' || (topicFilter === '__none__' ? !r.topic : r.topic === topicFilter)
       const matchesSearch =
         normalized.length === 0 ||
         r.title.toLowerCase().includes(normalized) ||
         (r.description || '').toLowerCase().includes(normalized) ||
         (r.eventTitle || '').toLowerCase().includes(normalized) ||
+        (r.topic || '').toLowerCase().includes(normalized) ||
         (r.fileName || '').toLowerCase().includes(normalized)
-      return matchesCategory && matchesSearch
+      return matchesTopic && matchesSearch
     })
-  }, [resources, searchQuery, categoryFilter])
+  }, [resources, searchQuery, topicFilter])
 
   const grouped = useMemo(() => {
     if (!filteredResources) return null
-    const map = new Map<ResourceCategory, ResourceItem[]>()
+    const map = new Map<MediaType, ResourceItem[]>()
     for (const r of filteredResources) {
       const list = map.get(r.category) ?? []
       list.push(r)
@@ -110,11 +114,6 @@ export default function FounderResourcesPage() {
     }
     return map
   }, [filteredResources])
-
-  const visibleSections = useMemo(() => {
-    if (categoryFilter === 'all') return sections
-    return sections.filter((s) => s.category === categoryFilter)
-  }, [categoryFilter])
 
   if (resources === undefined) {
     return (
@@ -132,7 +131,7 @@ export default function FounderResourcesPage() {
     )
   }
 
-  const hasResults = visibleSections.some((s) => (grouped?.get(s.category) ?? []).length > 0)
+  const hasResults = sections.some((s) => (grouped?.get(s.category) ?? []).length > 0)
 
   return (
     <div className="space-y-6">
@@ -154,23 +153,24 @@ export default function FounderResourcesPage() {
             className="pl-9"
           />
         </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        <Select value={topicFilter} onValueChange={setTopicFilter}>
           <SelectTrigger>
-            <SelectValue placeholder="Filter by category" />
+            <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All categories</SelectItem>
-            <SelectItem value="video">Video</SelectItem>
-            <SelectItem value="podcast">Podcast</SelectItem>
-            <SelectItem value="book">Book</SelectItem>
-            <SelectItem value="other_reading">Other Reading</SelectItem>
+            {topics?.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
       {hasResults ? (
         <div className="grid gap-6 md:grid-cols-2">
-          {visibleSections.map(({ category, title }) => {
+          {sections.map(({ category, title }) => {
             const items = grouped?.get(category) ?? []
             if (items.length === 0) return null
             return (
