@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Edit, Trash2, BookOpen, ExternalLink, Download } from 'lucide-react'
+import { Plus, Edit, Trash2, BookOpen, ExternalLink, Download, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
@@ -75,6 +75,7 @@ export default function AdminResourcesPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingResource, setEditingResource] = useState<ResourceWithEvent | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
 
   // Form state
@@ -92,9 +93,17 @@ export default function AdminResourcesPage() {
 
   const filteredResources = useMemo(() => {
     if (!resources) return undefined
-    if (categoryFilter === 'all') return resources
-    return resources.filter((r) => r.category === categoryFilter)
-  }, [resources, categoryFilter])
+    const normalized = searchQuery.trim().toLowerCase()
+    return resources.filter((r) => {
+      const matchesCategory = categoryFilter === 'all' || r.category === categoryFilter
+      const matchesSearch =
+        normalized.length === 0 ||
+        r.title.toLowerCase().includes(normalized) ||
+        (r.description || '').toLowerCase().includes(normalized) ||
+        (r.eventTitle || '').toLowerCase().includes(normalized)
+      return matchesCategory && matchesSearch
+    })
+  }, [resources, categoryFilter, searchQuery])
 
   const filteredEvents = useMemo(() => {
     if (!allEvents) return []
@@ -379,8 +388,17 @@ export default function AdminResourcesPage() {
         </Button>
       </div>
 
-      {/* Category filter */}
-      <div className="w-[220px]">
+      {/* Search + Category filter */}
+      <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search title, description, or event"
+            className="pl-9"
+          />
+        </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger>
             <SelectValue placeholder="Filter by category" />
@@ -415,7 +433,11 @@ export default function AdminResourcesPage() {
               </TableHeader>
               <TableBody>
                 {filteredResources.map((resource) => (
-                  <TableRow key={resource._id}>
+                  <TableRow
+                    key={resource._id}
+                    className="cursor-pointer transition-colors hover:bg-muted/50"
+                    onClick={() => openEdit(resource)}
+                  >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         {resource.title}
@@ -447,13 +469,23 @@ export default function AdminResourcesPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(resource)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEdit(resource)
+                          }}
+                        >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(resource._id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(resource._id)
+                          }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
