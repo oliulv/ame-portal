@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Gift,
   Calendar,
+  BookOpen,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -59,6 +60,7 @@ const iconMap: Record<string, LucideIcon> = {
   TrendingUp,
   Gift,
   Calendar,
+  BookOpen,
 }
 
 /**
@@ -70,7 +72,7 @@ function extractCohortSlugFromPath(pathname: string, knownSlugs?: string[]): str
   const match = pathname.match(/^\/admin\/([^/]+)(?:\/|$)/)
   if (!match || !match[1]) return null
   const segment = match[1]
-  if (segment === 'cohorts' || segment === 'settings') return null
+  if (segment === 'cohorts' || segment === 'settings' || segment === 'resources') return null
   if (knownSlugs && knownSlugs.length > 0) {
     return knownSlugs.includes(segment) ? segment : null
   }
@@ -85,7 +87,12 @@ function extractCohortSlugFromPath(pathname: string, knownSlugs?: string[]): str
  */
 function buildNavHref(baseHref: string, cohortSlug: string | null): string {
   if (!baseHref.startsWith('/admin')) return baseHref
-  if (baseHref === '/admin/cohorts' || baseHref === '/admin/settings') return baseHref
+  if (
+    baseHref === '/admin/cohorts' ||
+    baseHref === '/admin/settings' ||
+    baseHref === '/admin/resources'
+  )
+    return baseHref
   if (!cohortSlug) return '#'
   if (baseHref === '/admin') return `/admin/${cohortSlug}`
   return baseHref.replace(/^\/admin/, `/admin/${cohortSlug}`)
@@ -152,7 +159,9 @@ function SidebarContent({
       localStorage.setItem('selectedCohortSlug', resolvedSlug)
 
       const isGlobalRoute =
-        pathname.startsWith('/admin/settings') || pathname.startsWith('/admin/cohorts')
+        pathname.startsWith('/admin/settings') ||
+        pathname.startsWith('/admin/cohorts') ||
+        pathname.startsWith('/admin/resources')
 
       if (!urlCohortSlug && pathname.startsWith('/admin') && !isGlobalRoute) {
         if (pathname === '/admin' || pathname === '/admin/') {
@@ -208,7 +217,10 @@ function SidebarContent({
     const Icon = iconMap[item.icon] || LayoutDashboard
 
     const isAdminRoute = item.href.startsWith('/admin')
-    const isGlobalAdmin = item.href === '/admin/cohorts' || item.href === '/admin/settings'
+    const isGlobalAdmin =
+      item.href === '/admin/cohorts' ||
+      item.href === '/admin/settings' ||
+      item.href === '/admin/resources'
     const needsCohortSlug =
       showCohortSelector && isAdminRoute && !isGlobalAdmin && !cohortSlugForHref
     const isDisabled = (needsCohortSlug && isLoadingCohorts) || href === '#'

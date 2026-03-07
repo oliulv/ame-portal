@@ -37,6 +37,7 @@ import type * as migrations_updateSupabasePerk from "../migrations/updateSupabas
 import type * as milestoneTemplates from "../milestoneTemplates.js";
 import type * as milestones from "../milestones.js";
 import type * as perks from "../perks.js";
+import type * as resources from "../resources.js";
 import type * as seed from "../seed.js";
 import type * as startups from "../startups.js";
 import type * as trackerWebsites from "../trackerWebsites.js";
@@ -78,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   milestoneTemplates: typeof milestoneTemplates;
   milestones: typeof milestones;
   perks: typeof perks;
+  resources: typeof resources;
   seed: typeof seed;
   startups: typeof startups;
   trackerWebsites: typeof trackerWebsites;
