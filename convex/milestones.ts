@@ -209,6 +209,47 @@ export const fundingSummaryForFounder = query({
 })
 
 /**
+ * Funding summary for a specific startup (admin).
+ */
+export const fundingSummaryForAdmin = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const startup = await ctx.db.get(args.startupId)
+    const cohort = startup ? await ctx.db.get(startup.cohortId) : null
+
+    const milestones = await ctx.db
+      .query('milestones')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+
+    const potential = milestones.reduce((sum, m) => sum + m.amount, 0)
+    const unlocked = milestones
+      .filter((m) => m.status === 'approved')
+      .reduce((sum, m) => sum + m.amount, 0)
+
+    const invoices = await ctx.db
+      .query('invoices')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+    const deployed = invoices
+      .filter((i) => i.status === 'paid')
+      .reduce((sum, i) => sum + i.amountGbp, 0)
+
+    const available = Math.max(0, unlocked - deployed)
+
+    return {
+      unlocked,
+      deployed,
+      available,
+      potential,
+      baseline: cohort?.baseFunding ?? 0,
+    }
+  },
+})
+
+/**
  * Funding overview for all startups in a cohort (admin).
  */
 export const fundingOverview = query({

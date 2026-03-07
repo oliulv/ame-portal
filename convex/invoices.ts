@@ -277,7 +277,14 @@ export const listForAdmin = query({
     }
 
     invoices.sort((a, b) => b._creationTime - a._creationTime)
-    return invoices
+
+    const enriched = await Promise.all(
+      invoices.map(async (inv) => {
+        const startup = await ctx.db.get(inv.startupId)
+        return { ...inv, startupName: startup?.name }
+      })
+    )
+    return enriched
   },
 })
 

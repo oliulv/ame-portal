@@ -239,12 +239,19 @@ export default function AdminDashboard() {
               return (
                 <div className="max-h-[13rem] overflow-y-auto space-y-2">
                   {pending.map((inv) => (
-                    <div
+                    <Link
                       key={inv._id}
-                      className="flex items-center justify-between gap-4 border px-3 py-2.5"
+                      href={`/admin/${cohortSlug}/invoices/${inv._id}`}
+                      className="flex items-center justify-between gap-4 border px-3 py-2.5 transition-colors hover:bg-muted/50"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{inv.vendorName}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium truncate">{inv.startupName}</span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className="text-sm text-muted-foreground truncate">
+                            {inv.vendorName}
+                          </span>
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {new Date(inv.invoiceDate).toLocaleDateString('en-GB', {
                             day: 'numeric',
@@ -254,14 +261,14 @@ export default function AdminDashboard() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <Badge variant={inv.status === 'submitted' ? 'warning' : 'info'}>
-                          {inv.status === 'under_review' ? 'under review' : inv.status}
-                        </Badge>
                         <span className="text-sm font-medium">
                           £{inv.amountGbp.toLocaleString('en-GB')}
                         </span>
+                        <Badge variant={inv.status === 'submitted' ? 'warning' : 'info'}>
+                          {inv.status === 'under_review' ? 'under review' : inv.status}
+                        </Badge>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )
