@@ -17,6 +17,7 @@ import {
   Calendar,
   Building2,
   User,
+  TrendingDown,
 } from 'lucide-react'
 import { InvoiceActions } from './InvoiceActions'
 import {
@@ -48,6 +49,10 @@ export default function InvoiceDetailPage() {
   const founderProfile = useQuery(
     api.founderProfile.getByUserId,
     invoice?.uploadedByUserId ? { userId: invoice.uploadedByUserId } : 'skip'
+  )
+  const fundingSummary = useQuery(
+    api.milestones.fundingSummaryForAdmin,
+    invoice?.startupId ? { startupId: invoice.startupId } : 'skip'
   )
 
   // Loading state
@@ -130,7 +135,7 @@ export default function InvoiceDetailPage() {
 
       <div className="grid gap-6 md:grid-cols-3">
         {/* Main Content */}
-        <div className="md:col-span-2 space-y-6">
+        <div className="md:col-span-2 flex flex-col gap-6">
           {/* Invoice Details */}
           <Card>
             <CardHeader>
@@ -244,10 +249,114 @@ export default function InvoiceDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Funding Impact */}
+          {fundingSummary && (
+            <Card className="flex-1">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>Funding Impact</CardTitle>
+                <TrendingDown className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {(() => {
+                  const invoiceAmount = invoice.amountGbp
+                  const currentAvailable = fundingSummary.available
+                  const afterAvailable = Math.max(0, currentAvailable - invoiceAmount)
+                  const barTotal = fundingSummary.unlocked || 1
+                  const deployedPct = Math.min(100, (fundingSummary.deployed / barTotal) * 100)
+                  const thisPct = Math.min(100 - deployedPct, (invoiceAmount / barTotal) * 100)
+
+                  return (
+                    <>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="border bg-muted/40 px-2 py-1.5">
+                          <p className="text-muted-foreground">Unlocked</p>
+                          <p className="font-medium">
+                            £{fundingSummary.unlocked.toLocaleString('en-GB')}
+                          </p>
+                        </div>
+                        <div className="border bg-muted/40 px-2 py-1.5">
+                          <p className="text-muted-foreground">Deployed</p>
+                          <p className="font-medium text-blue-600">
+                            £{fundingSummary.deployed.toLocaleString('en-GB')}
+                          </p>
+                        </div>
+                        <div className="border bg-muted/40 px-2 py-1.5">
+                          <p className="text-muted-foreground">Available</p>
+                          <p className="font-medium text-green-600">
+                            £{currentAvailable.toLocaleString('en-GB')}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Stacked bar */}
+                      <div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                          <span>Funding usage</span>
+                          <span>£{fundingSummary.unlocked.toLocaleString('en-GB')} unlocked</span>
+                        </div>
+                        <div className="relative h-3 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="absolute inset-y-0 left-0 bg-blue-600 transition-all"
+                            style={{ width: `${deployedPct}%` }}
+                          />
+                          <div
+                            className="absolute inset-y-0 bg-amber-500 transition-all"
+                            style={{
+                              left: `${deployedPct}%`,
+                              width: `${thisPct}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-4 mt-1.5 text-[10px] text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
+                            Deployed
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                            This invoice
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block h-2 w-2 rounded-full bg-muted" />
+                            Remaining
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Before / After */}
+                      <div className="border-t pt-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Available after reimbursement
+                          </span>
+                          <span className="font-mono font-semibold">
+                            £{currentAvailable.toLocaleString('en-GB')}
+                            {' → '}
+                            <span
+                              className={afterAvailable === 0 ? 'text-red-600' : 'text-green-600'}
+                            >
+                              £{afterAvailable.toLocaleString('en-GB')}
+                            </span>
+                          </span>
+                        </div>
+                        {invoiceAmount > currentAvailable && (
+                          <p className="mt-1.5 text-xs text-red-600">
+                            This invoice exceeds available funding by £
+                            {(invoiceAmount - currentAvailable).toLocaleString('en-GB')}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )
+                })()}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           {/* Startup Info */}
           <Card>
             <CardHeader>
@@ -336,7 +445,11 @@ export default function InvoiceDetailPage() {
 
           {/* Actions */}
           {(canApprove || canMarkPaid) && (
-            <InvoiceActions invoiceId={invoice._id} currentStatus={invoice.status} />
+            <InvoiceActions
+              invoiceId={invoice._id}
+              currentStatus={invoice.status}
+              className="flex-1"
+            />
           )}
         </div>
       </div>

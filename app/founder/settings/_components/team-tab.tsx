@@ -53,6 +53,7 @@ export function TeamTab() {
         email: data.email,
         fullName: data.fullName,
         expiresInDays: data.expiresInDays,
+        appUrl: window.location.origin,
       })
       toast.success('Invitation sent successfully')
       form.reset()
@@ -66,7 +67,7 @@ export function TeamTab() {
   const handleResend = async (id: string) => {
     setResendingId(id)
     try {
-      await resendInvitation({ id: id as any })
+      await resendInvitation({ id: id as any, appUrl: window.location.origin })
       toast.success('Invitation resent')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to resend invitation')

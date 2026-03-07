@@ -32,6 +32,15 @@ export default defineSchema({
     .index('by_cohortId', ['cohortId'])
     .index('by_userId_cohortId', ['userId', 'cohortId']),
 
+  // ── Admin Permissions (delegated) ─────────────────────────────────
+  adminPermissions: defineTable({
+    userId: v.id('users'),
+    cohortId: v.id('cohorts'),
+    permission: v.union(v.literal('approve_milestones'), v.literal('approve_invoices')),
+  })
+    .index('by_userId_cohortId', ['userId', 'cohortId'])
+    .index('by_userId_cohortId_permission', ['userId', 'cohortId', 'permission']),
+
   // ── Startups ───────────────────────────────────────────────────────
   startups: defineTable({
     cohortId: v.id('cohorts'),
@@ -120,7 +129,12 @@ export default defineSchema({
     title: v.string(),
     description: v.string(),
     amount: v.number(),
-    status: v.union(v.literal('waiting'), v.literal('submitted'), v.literal('approved')),
+    status: v.union(
+      v.literal('waiting'),
+      v.literal('submitted'),
+      v.literal('approved'),
+      v.literal('changes_requested')
+    ),
     dueDate: v.optional(v.string()),
     sortOrder: v.number(),
     planLink: v.optional(v.string()),
@@ -128,9 +142,26 @@ export default defineSchema({
     planFileName: v.optional(v.string()),
     requireLink: v.optional(v.boolean()),
     requireFile: v.optional(v.boolean()),
+    adminComment: v.optional(v.string()),
   })
     .index('by_startupId', ['startupId'])
     .index('by_milestoneTemplateId', ['milestoneTemplateId']),
+
+  // ── Milestone Events (audit trail) ────────────────────────────────
+  milestoneEvents: defineTable({
+    milestoneId: v.id('milestones'),
+    action: v.union(
+      v.literal('submitted'),
+      v.literal('changes_requested'),
+      v.literal('approved'),
+      v.literal('withdrawn')
+    ),
+    userId: v.id('users'),
+    comment: v.optional(v.string()),
+    planLink: v.optional(v.string()),
+    planStorageId: v.optional(v.id('_storage')),
+    planFileName: v.optional(v.string()),
+  }).index('by_milestoneId', ['milestoneId']),
 
   // ── Invitations (founder) ──────────────────────────────────────────
   invitations: defineTable({

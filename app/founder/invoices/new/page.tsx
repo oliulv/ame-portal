@@ -19,7 +19,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { founderInvoiceUploadSchema, type FounderInvoiceUploadFormData } from '@/lib/schemas'
-import { Upload, ArrowLeft, AlertTriangle } from 'lucide-react'
+import { Upload, ArrowLeft, AlertTriangle, Info } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -82,11 +83,21 @@ export default function NewInvoicePage() {
   const amountValue = form.watch('amount_gbp')
   const amountExceedsBalance = typeof amountValue === 'number' && amountValue > available
 
-  const canSubmit = !!invoiceFile && !invoiceNameError && !receiptNameError && !amountExceedsBalance
+  const canSubmit =
+    !!invoiceFile &&
+    !!receiptFile &&
+    !invoiceNameError &&
+    !receiptNameError &&
+    !amountExceedsBalance
 
   const onSubmit = async (data: FounderInvoiceUploadFormData) => {
     if (!invoiceFile) {
       toast.error('Please select an invoice file to upload')
+      return
+    }
+
+    if (!receiptFile) {
+      toast.error('Please select a receipt file to upload')
       return
     }
 
@@ -118,21 +129,15 @@ export default function NewInvoicePage() {
       if (!invoiceUploadResult.ok) throw new Error('Failed to upload invoice file')
       const { storageId: invoiceStorageId } = await invoiceUploadResult.json()
 
-      // Upload receipt file if present
-      let receiptStorageId: string | undefined
-      let receiptFileName: string | undefined
-      if (receiptFile) {
-        const receiptUploadUrl = await generateUploadUrl()
-        const receiptUploadResult = await fetch(receiptUploadUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': receiptFile.type },
-          body: receiptFile,
-        })
-        if (!receiptUploadResult.ok) throw new Error('Failed to upload receipt file')
-        const result = await receiptUploadResult.json()
-        receiptStorageId = result.storageId
-        receiptFileName = receiptFile.name
-      }
+      // Upload receipt file (required)
+      const receiptUploadUrl = await generateUploadUrl()
+      const receiptUploadResult = await fetch(receiptUploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': receiptFile.type },
+        body: receiptFile,
+      })
+      if (!receiptUploadResult.ok) throw new Error('Failed to upload receipt file')
+      const { storageId: receiptStorageId } = await receiptUploadResult.json()
 
       await createInvoice({
         storageId: invoiceStorageId,
@@ -142,7 +147,7 @@ export default function NewInvoicePage() {
         amountGbp: data.amount_gbp,
         description: data.description || undefined,
         receiptStorageId: receiptStorageId as never,
-        receiptFileName,
+        receiptFileName: receiptFile.name,
       })
 
       toast.success('Invoice uploaded successfully')
@@ -292,45 +297,74 @@ export default function NewInvoicePage() {
               />
 
               {/* Invoice File Upload */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none">
-                  Invoice File (Required — PDF only)
-                </label>
-                <Input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
-                  className="cursor-pointer"
-                />
-                {invoiceFile && (
-                  <p className="text-sm text-muted-foreground">
-                    Selected: {invoiceFile.name} ({(invoiceFile.size / 1024).toFixed(1)} KB)
-                  </p>
-                )}
-                {invoiceNameError && <p className="text-sm text-destructive">{invoiceNameError}</p>}
-              </div>
+              <TooltipProvider>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-sm font-medium leading-none">
+                      Invoice File (Required — PDF only)
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-amber-500 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[280px]">
+                        <p>
+                          A PDF document from your company or you as a founder, addressed to
+                          Accelerate ME, requesting reimbursement for expenses.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
+                    className="cursor-pointer"
+                  />
+                  {invoiceFile && (
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {invoiceFile.name} ({(invoiceFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                  {invoiceNameError && (
+                    <p className="text-sm text-destructive">{invoiceNameError}</p>
+                  )}
+                </div>
 
-              {/* Receipt File Upload */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none">
-                  Receipt File (Recommended — PDF only)
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  Collate all receipts for this invoice into a single PDF.
-                </p>
-                <Input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-                  className="cursor-pointer"
-                />
-                {receiptFile && (
-                  <p className="text-sm text-muted-foreground">
-                    Selected: {receiptFile.name} ({(receiptFile.size / 1024).toFixed(1)} KB)
-                  </p>
-                )}
-                {receiptNameError && <p className="text-sm text-destructive">{receiptNameError}</p>}
-              </div>
+                {/* Receipt File Upload */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-sm font-medium leading-none">
+                      Receipt File (Required — PDF only)
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-amber-500 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[280px]">
+                        <p>
+                          The actual proof-of-purchase receipt from the vendor or supplier. Collate
+                          all receipts for this invoice into a single PDF.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                    className="cursor-pointer"
+                  />
+                  {receiptFile && (
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {receiptFile.name} ({(receiptFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                  {receiptNameError && (
+                    <p className="text-sm text-destructive">{receiptNameError}</p>
+                  )}
+                </div>
+              </TooltipProvider>
 
               <div className="flex justify-end gap-4">
                 <Link href="/founder/invoices">

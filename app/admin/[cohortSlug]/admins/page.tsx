@@ -95,6 +95,14 @@ export default function AdminsPage() {
     cohort ? { cohortId: cohort._id } : 'skip'
   )
 
+  // Permissions (super_admin only)
+  const permissions = useQuery(
+    api.adminPermissions.list,
+    currentUser?.role === 'super_admin' && cohort ? { cohortId: cohort._id } : 'skip'
+  )
+  const grantPermission = useMutation(api.adminPermissions.grant)
+  const revokePermission = useMutation(api.adminPermissions.revoke)
+
   // Mutations
   const createInvitation = useMutation(api.adminInvitations.create)
   const resendInvitation = useMutation(api.adminInvitations.resend)
@@ -142,6 +150,7 @@ export default function AdminsPage() {
         cohortId: cohort._id,
         expiresInDays: data.expiresInDays,
         role: data.role,
+        appUrl: window.location.origin,
       })
       toast.success('Admin invitation created and email sent successfully')
       form.reset()
@@ -156,7 +165,7 @@ export default function AdminsPage() {
   async function handleResend(invitationId: string) {
     setResendingId(invitationId)
     try {
-      await resendInvitation({ id: invitationId as any })
+      await resendInvitation({ id: invitationId as any, appUrl: window.location.origin })
       toast.success('Invitation email resent successfully')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to resend invitation')
@@ -178,6 +187,40 @@ export default function AdminsPage() {
       setIsDeletingInvitation(false)
     }
   }
+
+  function hasUserPermission(
+    userId: string,
+    permission: 'approve_milestones' | 'approve_invoices'
+  ) {
+    return permissions?.some((p) => p.userId === userId && p.permission === permission) ?? false
+  }
+
+  async function handleTogglePermission(
+    userId: string,
+    permission: 'approve_milestones' | 'approve_invoices',
+    currentlyGranted: boolean
+  ) {
+    if (!cohort) return
+    try {
+      if (currentlyGranted) {
+        await revokePermission({
+          userId: userId as any,
+          cohortId: cohort._id,
+          permission,
+        })
+      } else {
+        await grantPermission({
+          userId: userId as any,
+          cohortId: cohort._id,
+          permission,
+        })
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update permission')
+    }
+  }
+
+  const isSuperAdmin = currentUser?.role === 'super_admin'
 
   // Convex useQuery returns undefined while loading, null if not found
   if (cohort === undefined) {
@@ -236,6 +279,7 @@ export default function AdminsPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    {isSuperAdmin && <TableHead>Permissions</TableHead>}
                     <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -263,6 +307,46 @@ export default function AdminsPage() {
                             {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
                           </Badge>
                         </TableCell>
+                        {isSuperAdmin && (
+                          <TableCell>
+                            {user.role === 'super_admin' ? (
+                              <Badge variant="secondary">All permissions</Badge>
+                            ) : (
+                              <div className="flex flex-col gap-1.5">
+                                <label className="flex items-center gap-2 text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={hasUserPermission(user._id, 'approve_milestones')}
+                                    onChange={() =>
+                                      handleTogglePermission(
+                                        user._id,
+                                        'approve_milestones',
+                                        hasUserPermission(user._id, 'approve_milestones')
+                                      )
+                                    }
+                                    className="h-3.5 w-3.5 rounded border-gray-300"
+                                  />
+                                  Approve milestones
+                                </label>
+                                <label className="flex items-center gap-2 text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={hasUserPermission(user._id, 'approve_invoices')}
+                                    onChange={() =>
+                                      handleTogglePermission(
+                                        user._id,
+                                        'approve_invoices',
+                                        hasUserPermission(user._id, 'approve_invoices')
+                                      )
+                                    }
+                                    className="h-3.5 w-3.5 rounded border-gray-300"
+                                  />
+                                  Approve invoices
+                                </label>
+                              </div>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(user._creationTime).toLocaleDateString()}
                         </TableCell>

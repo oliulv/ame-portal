@@ -99,30 +99,34 @@ export default function FounderInvoicesPage() {
           <strong className="text-foreground">
             Unlocked funding is deployed through reimbursements.
           </strong>{' '}
-          You spend on legitimate business expenses for your startup, then submit an invoice and
-          receipt for reimbursement. We can only approve expenses that are genuine business costs
-          related to your venture and deemed appropriate and in good faith.
+          You spend on legitimate business expenses for your startup, then submit a reimbursement
+          request. We can only approve expenses that are genuine business costs related to your
+          venture and deemed appropriate and in good faith.
         </p>
         <p>
-          <strong className="text-foreground">To submit a reimbursement:</strong>
+          <strong className="text-foreground">Each submission requires two documents:</strong>
         </p>
         <ol className="list-decimal pl-5 space-y-1">
           <li>
-            Prepare a <strong className="text-foreground">PDF invoice</strong> named exactly:{' '}
+            <strong className="text-foreground">Invoice</strong> — a PDF document from your company
+            (or you as a founder) addressed to Accelerate ME, requesting reimbursement. Name it
+            exactly:{' '}
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
               YourStartupName Invoice N.pdf
             </code>{' '}
-            (e.g. &quot;Sync It Invoice 1.pdf&quot;). Each invoice must have a unique number.
+            (e.g. &quot;Sync It Invoice 1.pdf&quot;). Each invoice must have a unique, sequential
+            number.
           </li>
           <li>
-            Prepare a <strong className="text-foreground">PDF receipt</strong> (collated into one
-            file) named:{' '}
+            <strong className="text-foreground">Receipt</strong> — the actual proof of purchase or
+            expense receipt from the vendor/supplier. Collate all receipts for this invoice into a
+            single PDF named:{' '}
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
               YourStartupName Receipt N.pdf
             </code>{' '}
             (matching the invoice number).
           </li>
-          <li>Upload both files when creating the invoice submission.</li>
+          <li>Upload both files when creating the submission.</li>
           <li>
             Your submission amount must not exceed your{' '}
             <Link href="/founder/funding" className="font-medium text-primary hover:underline">

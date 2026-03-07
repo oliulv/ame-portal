@@ -1,6 +1,12 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireFounder, requireAuth, getFounderStartupIds } from './auth'
+import {
+  requireAdmin,
+  requireAdminWithPermission,
+  requireFounder,
+  requireAuth,
+  getFounderStartupIds,
+} from './auth'
 
 /**
  * Generate a pre-signed upload URL for invoice files.
@@ -35,8 +41,8 @@ export const create = mutation({
     invoiceDate: v.string(),
     amountGbp: v.number(),
     description: v.optional(v.string()),
-    receiptStorageId: v.optional(v.id('_storage')),
-    receiptFileName: v.optional(v.string()),
+    receiptStorageId: v.id('_storage'),
+    receiptFileName: v.string(),
   },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
@@ -54,7 +60,7 @@ export const create = mutation({
     if (!args.fileName.toLowerCase().endsWith('.pdf')) {
       throw new Error('Invoice must be a PDF file')
     }
-    if (args.receiptFileName && !args.receiptFileName.toLowerCase().endsWith('.pdf')) {
+    if (!args.receiptFileName.toLowerCase().endsWith('.pdf')) {
       throw new Error('Receipt must be a PDF file')
     }
 
@@ -91,25 +97,23 @@ export const create = mutation({
       )
     }
 
-    // Validate receipt naming if present
-    if (args.receiptFileName) {
-      const receiptPattern = new RegExp(
-        `^${startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`,
-        'i'
+    // Validate receipt naming
+    const receiptPattern = new RegExp(
+      `^${startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`,
+      'i'
+    )
+    if (!receiptPattern.test(args.receiptFileName)) {
+      throw new Error(
+        `Receipt must be named "${startup.name} Receipt {number}.pdf" (e.g. "${startup.name} Receipt ${expectedNext}.pdf")`
       )
-      if (!receiptPattern.test(args.receiptFileName)) {
-        throw new Error(
-          `Receipt must be named "${startup.name} Receipt {number}.pdf" (e.g. "${startup.name} Receipt ${expectedNext}.pdf")`
-        )
-      }
+    }
 
-      // Enforce matching number between invoice and receipt
-      const receiptNum = args.receiptFileName.match(/Receipt (\d+)\.pdf$/i)?.[1]
-      if (receiptNum && parseInt(receiptNum, 10) !== expectedNext) {
-        throw new Error(
-          `Receipt number must be ${expectedNext} to match the invoice. Please name your file "${startup.name} Receipt ${expectedNext}.pdf".`
-        )
-      }
+    // Enforce matching number between invoice and receipt
+    const receiptNum = args.receiptFileName.match(/Receipt (\d+)\.pdf$/i)?.[1]
+    if (receiptNum && parseInt(receiptNum, 10) !== expectedNext) {
+      throw new Error(
+        `Receipt number must be ${expectedNext} to match the invoice. Please name your file "${startup.name} Receipt ${expectedNext}.pdf".`
+      )
     }
 
     // Validate amount against available balance
@@ -273,7 +277,14 @@ export const listForAdmin = query({
     }
 
     invoices.sort((a, b) => b._creationTime - a._creationTime)
-    return invoices
+
+    const enriched = await Promise.all(
+      invoices.map(async (inv) => {
+        const startup = await ctx.db.get(inv.startupId)
+        return { ...inv, startupName: startup?.name }
+      })
+    )
+    return enriched
   },
 })
 
@@ -303,9 +314,19 @@ export const updateStatus = mutation({
     adminComment: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx)
     const invoice = await ctx.db.get(args.id)
     if (!invoice) throw new Error('Invoice not found')
+
+    // Permission gating: approved/rejected require approve_invoices permission
+    const startup = await ctx.db.get(invoice.startupId)
+    if (!startup) throw new Error('Startup not found')
+
+    let admin
+    if (args.status === 'approved' || args.status === 'rejected') {
+      admin = await requireAdminWithPermission(ctx, startup.cohortId, 'approve_invoices')
+    } else {
+      admin = await requireAdmin(ctx)
+    }
 
     // Validate status transitions
     const validTransitions: Record<string, string[]> = {

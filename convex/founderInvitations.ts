@@ -69,6 +69,7 @@ export const create = mutation({
     email: v.string(),
     fullName: v.string(),
     expiresInDays: v.optional(v.number()),
+    appUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
@@ -116,6 +117,7 @@ export const create = mutation({
       startupName: startup?.name ?? 'Unknown Startup',
       inviteToken: token,
       expirationDays: expiresInDays,
+      appUrl: args.appUrl,
     })
 
     return invitationId
@@ -126,7 +128,7 @@ export const create = mutation({
  * Resend a pending invitation email.
  */
 export const resend = mutation({
-  args: { id: v.id('invitations') },
+  args: { id: v.id('invitations'), appUrl: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
@@ -145,6 +147,7 @@ export const resend = mutation({
       founderName: invitation.fullName,
       startupName: startup?.name ?? 'Unknown Startup',
       inviteToken: invitation.token,
+      appUrl: args.appUrl,
     })
   },
 })
