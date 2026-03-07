@@ -106,7 +106,12 @@ export const getForAdmin = query({
     if (!milestone) return null
 
     const startup = await ctx.db.get(milestone.startupId)
-    return { ...milestone, startupName: startup?.name, startupSlug: startup?.slug }
+    return {
+      ...milestone,
+      startupName: startup?.name,
+      startupSlug: startup?.slug,
+      cohortId: startup?.cohortId,
+    }
   },
 })
 

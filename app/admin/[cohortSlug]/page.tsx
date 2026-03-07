@@ -21,14 +21,23 @@ export default function AdminDashboard() {
 
   const isSuperAdmin = currentUser?.role === 'super_admin'
 
+  // Permission checks for delegated admins
+  const canApproveInvoices = useQuery(
+    api.adminPermissions.checkMyPermission,
+    cohort && currentUser
+      ? { cohortId: cohort._id, permission: 'approve_invoices' as const }
+      : 'skip'
+  )
+
   // Milestones inbox — both roles
   const submittedMilestones = useQuery(
     api.milestones.listSubmittedByCohort,
     cohort ? { cohortId: cohort._id } : 'skip'
   )
 
-  // Super admin extras
-  const recentInvoices = useQuery(api.invoices.listForAdmin, isSuperAdmin ? {} : 'skip')
+  // Invoice inbox — super_admin or delegated approve_invoices
+  const showInvoices = isSuperAdmin || canApproveInvoices === true
+  const recentInvoices = useQuery(api.invoices.listForAdmin, showInvoices ? {} : 'skip')
   const upcomingEvents = useQuery(
     api.cohortEvents.list,
     isSuperAdmin && cohort ? { cohortId: cohort._id } : 'skip'
@@ -170,12 +179,12 @@ export default function AdminDashboard() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : submittedMilestones.length > 0 ? (
-            <div className="divide-y">
-              {submittedMilestones.slice(0, 10).map((m) => (
+            <div className="max-h-[13rem] overflow-y-auto space-y-2">
+              {submittedMilestones.map((m) => (
                 <Link
                   key={m._id}
                   href={`/admin/${cohortSlug}/milestones/${m._id}`}
-                  className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0 hover:bg-muted/50 -mx-2 px-2 transition-colors"
+                  className="flex items-center justify-between gap-4 border px-3 py-2.5 transition-colors hover:bg-muted/50"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -206,8 +215,8 @@ export default function AdminDashboard() {
         </CardContent>
       </Card>
 
-      {/* Super admin extras: Pending Invoices */}
-      {isSuperAdmin && recentInvoices && (
+      {/* Pending Invoices — super_admin or delegated approve_invoices */}
+      {showInvoices && recentInvoices && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -228,11 +237,11 @@ export default function AdminDashboard() {
                 return <p className="text-sm text-muted-foreground py-2">No pending invoices</p>
               }
               return (
-                <div className="divide-y">
-                  {pending.slice(0, 5).map((inv) => (
+                <div className="max-h-[13rem] overflow-y-auto space-y-2">
+                  {pending.map((inv) => (
                     <div
                       key={inv._id}
-                      className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                      className="flex items-center justify-between gap-4 border px-3 py-2.5"
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{inv.vendorName}</p>
@@ -285,11 +294,11 @@ export default function AdminDashboard() {
                 return <p className="text-sm text-muted-foreground py-2">No upcoming events</p>
               }
               return (
-                <div className="divide-y">
+                <div className="max-h-[13rem] overflow-y-auto space-y-2">
                   {upcoming.map((evt) => (
                     <div
                       key={evt._id}
-                      className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                      className="flex items-center justify-between gap-4 border px-3 py-2.5"
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{evt.title}</p>

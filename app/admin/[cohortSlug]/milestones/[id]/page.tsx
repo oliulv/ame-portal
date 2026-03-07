@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/ui/empty-state'
 import { MilestoneTimeline } from '@/components/milestone-timeline'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   ArrowLeft,
   Check,
@@ -32,6 +33,11 @@ export default function AdminMilestoneDetailPage() {
 
   const milestone = useQuery(api.milestones.getForAdmin, { id: milestoneId })
   const currentUser = useQuery(api.users.current)
+  const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
+  const canApproveMilestones = useQuery(
+    api.adminPermissions.checkMyPermission,
+    cohort ? { cohortId: cohort._id, permission: 'approve_milestones' as const } : 'skip'
+  )
   const approveMilestone = useMutation(api.milestones.approve)
   const requestChangesMutation = useMutation(api.milestones.requestChanges)
 
@@ -227,36 +233,74 @@ export default function AdminMilestoneDetailPage() {
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex gap-3">
-                  <Button
-                    onClick={handleApprove}
-                    disabled={isApproving || isRequestingChanges}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <Check className="mr-2 h-4 w-4" />
-                    {isApproving ? 'Approving...' : 'Approve'}
-                  </Button>
-                </div>
+                <TooltipProvider>
+                  <div className="flex gap-3">
+                    {canApproveMilestones === false ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span tabIndex={0}>
+                            <Button disabled className="bg-green-600 opacity-50">
+                              <Check className="mr-2 h-4 w-4" />
+                              Approve
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>You don&apos;t have permission to approve milestones</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Button
+                        onClick={handleApprove}
+                        disabled={isApproving || isRequestingChanges}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <Check className="mr-2 h-4 w-4" />
+                        {isApproving ? 'Approving...' : 'Approve'}
+                      </Button>
+                    )}
+                  </div>
 
-                <div className="border-t pt-4 space-y-3">
-                  <Label htmlFor="admin-comment">Request Changes</Label>
-                  <Textarea
-                    id="admin-comment"
-                    placeholder="Describe what needs to be revised (optional)..."
-                    value={adminComment}
-                    onChange={(e) => setAdminComment(e.target.value)}
-                    rows={3}
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={handleRequestChanges}
-                    disabled={isApproving || isRequestingChanges}
-                    className="border-amber-300 text-amber-700 hover:bg-amber-50"
-                  >
-                    <RotateCw className="mr-2 h-4 w-4" />
-                    {isRequestingChanges ? 'Requesting...' : 'Request Changes'}
-                  </Button>
-                </div>
+                  <div className="border-t pt-4 space-y-3">
+                    <Label htmlFor="admin-comment">Request Changes</Label>
+                    <Textarea
+                      id="admin-comment"
+                      placeholder="Describe what needs to be revised (optional)..."
+                      value={adminComment}
+                      onChange={(e) => setAdminComment(e.target.value)}
+                      disabled={canApproveMilestones === false}
+                    />
+                    {canApproveMilestones === false ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span tabIndex={0}>
+                            <Button
+                              variant="outline"
+                              disabled
+                              className="border-amber-300 text-amber-700 opacity-50"
+                            >
+                              <RotateCw className="mr-2 h-4 w-4" />
+                              Request Changes
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>You don&apos;t have permission to request changes on milestones</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={handleRequestChanges}
+                        disabled={isApproving || isRequestingChanges}
+                        className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                      >
+                        <RotateCw className="mr-2 h-4 w-4" />
+                        {isRequestingChanges ? 'Requesting...' : 'Request Changes'}
+                      </Button>
+                    )}
+                  </div>
+                </TooltipProvider>
               </CardContent>
             </Card>
           )}

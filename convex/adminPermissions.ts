@@ -1,8 +1,24 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireSuperAdmin } from './auth'
+import { requireAdmin, requireSuperAdmin, hasPermission } from './auth'
 
 const permissionValue = v.union(v.literal('approve_milestones'), v.literal('approve_invoices'))
+
+/**
+ * Check if the current user has a specific permission for a cohort.
+ * Super admins always return true.
+ */
+export const checkMyPermission = query({
+  args: {
+    cohortId: v.id('cohorts'),
+    permission: permissionValue,
+  },
+  handler: async (ctx, args) => {
+    const user = await requireAdmin(ctx)
+    if (user.role === 'super_admin') return true
+    return hasPermission(ctx, user._id, args.cohortId, args.permission)
+  },
+})
 
 /**
  * List all delegated permissions for a cohort.
