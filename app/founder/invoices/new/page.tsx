@@ -19,7 +19,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { founderInvoiceUploadSchema, type FounderInvoiceUploadFormData } from '@/lib/schemas'
-import { Upload, ArrowLeft, AlertTriangle, Info } from 'lucide-react'
+import { Upload, ArrowLeft, AlertTriangle, Info, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -341,16 +341,34 @@ export default function NewInvoicePage() {
                     multiple
                     onChange={(e) => {
                       const files = e.target.files
-                      if (files) setReceiptFiles(Array.from(files))
+                      if (files && files.length > 0) {
+                        setReceiptFiles((prev) => [...prev, ...Array.from(files)])
+                      }
+                      // Reset input so the same file can be re-added if removed
+                      e.target.value = ''
                     }}
                     className="cursor-pointer"
                   />
                   {receiptFiles.length > 0 && (
                     <div className="space-y-1">
                       {receiptFiles.map((file, i) => (
-                        <p key={i} className="text-sm text-muted-foreground">
-                          {file.name} ({(file.size / 1024).toFixed(1)} KB)
-                        </p>
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 text-sm text-muted-foreground"
+                        >
+                          <span>
+                            {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReceiptFiles((prev) => prev.filter((_, j) => j !== i))
+                            }
+                            className="text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}

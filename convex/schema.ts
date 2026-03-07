@@ -346,6 +346,24 @@ export default defineSchema({
     sortOrder: v.number(),
   }),
 
+  // ── Resource Submissions (founder suggestions) ────────────────
+  resourceSubmissions: defineTable({
+    title: v.string(),
+    category: v.union(
+      v.literal('video'),
+      v.literal('podcast'),
+      v.literal('book'),
+      v.literal('other_reading')
+    ),
+    topic: v.optional(v.string()),
+    description: v.optional(v.string()),
+    url: v.optional(v.string()),
+    storageId: v.optional(v.id('_storage')),
+    fileName: v.optional(v.string()),
+    submittedBy: v.id('users'),
+    status: v.union(v.literal('pending'), v.literal('approved'), v.literal('rejected')),
+  }),
+
   // ── Perk Claims ────────────────────────────────────────────────
   perkClaims: defineTable({
     perkId: v.id('perks'),

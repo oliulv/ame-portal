@@ -406,11 +406,10 @@ export const sendToXero = internalAction({
     const invoiceNumMatch = invoice.fileName.match(/Invoice (\d+)\.pdf$/i)
     const invoiceNum = invoiceNumMatch?.[1] ?? '0'
 
-    // Download invoice PDF
-    const invoiceUrl = await ctx.storage.getUrl(invoice.storageId)
-    if (!invoiceUrl) throw new Error('Invoice file URL not found')
-    const invoiceResponse = await fetch(invoiceUrl)
-    const invoiceBuffer = Buffer.from(await invoiceResponse.arrayBuffer())
+    // Use Resend's `path` option — Resend fetches the file from the URL directly,
+    // so we never load PDFs into the Convex action's 64MB memory.
+    const invoiceFileUrl = await ctx.storage.getUrl(invoice.storageId)
+    if (!invoiceFileUrl) throw new Error('Invoice file URL not found')
 
     // Send invoice to Xero bills
     const { error: billError } = await resend.emails.send({
@@ -418,7 +417,7 @@ export const sendToXero = internalAction({
       to: xeroBillsEmail,
       subject: `${startupName} Invoice ${invoiceNum}`,
       text: `Invoice ${invoiceNum} from ${startupName}`,
-      attachments: [{ filename: invoice.fileName, content: invoiceBuffer }],
+      attachments: [{ filename: invoice.fileName, path: invoiceFileUrl }],
     })
     if (billError) {
       throw new Error(`Failed to send invoice to Xero: ${billError.message}`)
@@ -430,31 +429,27 @@ export const sendToXero = internalAction({
     const receiptNames: string[] =
       invoice.receiptFileNames ?? (invoice.receiptFileName ? [invoice.receiptFileName] : [])
 
-    if (receiptIds.length > 0) {
-      // Download all receipt PDFs
-      const attachments = []
-      for (let i = 0; i < receiptIds.length; i++) {
-        const receiptUrl = await ctx.storage.getUrl(receiptIds[i] as any)
-        if (!receiptUrl) continue
-        const receiptResponse = await fetch(receiptUrl)
-        const receiptBuffer = Buffer.from(await receiptResponse.arrayBuffer())
-        attachments.push({
-          filename: receiptNames[i] || `Receipt ${i + 1}.pdf`,
-          content: receiptBuffer,
-        })
-      }
+    // Send all receipts in a single email — Resend fetches each via URL
+    const receiptAttachments = []
+    for (let i = 0; i < receiptIds.length; i++) {
+      const receiptFileUrl = await ctx.storage.getUrl(receiptIds[i] as any)
+      if (!receiptFileUrl) continue
+      receiptAttachments.push({
+        filename: receiptNames[i] || `Receipt ${i + 1}.pdf`,
+        path: receiptFileUrl,
+      })
+    }
 
-      if (attachments.length > 0) {
-        const { error: receiptError } = await resend.emails.send({
-          from: fromEmail,
-          to: xeroReceiptsEmail,
-          subject: `${startupName} Receipts for Invoice ${invoiceNum}`,
-          text: `Receipts for Invoice ${invoiceNum} from ${startupName}`,
-          attachments,
-        })
-        if (receiptError) {
-          throw new Error(`Failed to send receipts to Xero: ${receiptError.message}`)
-        }
+    if (receiptAttachments.length > 0) {
+      const { error: receiptError } = await resend.emails.send({
+        from: fromEmail,
+        to: xeroReceiptsEmail,
+        subject: `${startupName} Receipts for Invoice ${invoiceNum}`,
+        text: `Receipts for Invoice ${invoiceNum} from ${startupName}`,
+        attachments: receiptAttachments,
+      })
+      if (receiptError) {
+        throw new Error(`Failed to send receipts to Xero: ${receiptError.message}`)
       }
     }
   },

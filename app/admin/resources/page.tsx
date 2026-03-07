@@ -36,7 +36,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Edit, Trash2, BookOpen, ExternalLink, Download, Search } from 'lucide-react'
+import {
+  Plus,
+  Edit,
+  Trash2,
+  BookOpen,
+  ExternalLink,
+  Download,
+  Search,
+  Eye,
+  Check,
+  X,
+} from 'lucide-react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
@@ -69,6 +81,9 @@ export default function AdminResourcesPage() {
   const resources = useQuery(api.resources.list) as ResourceWithEvent[] | undefined
   const allEvents = useQuery(api.cohortEvents.listAll)
   const topics = useQuery(api.resources.listTopics)
+
+  const submissions = useQuery(api.resources.listSubmissions)
+  const reviewSubmission = useMutation(api.resources.reviewSubmission)
 
   const createResource = useMutation(api.resources.create)
   const updateResource = useMutation(api.resources.update)
@@ -435,10 +450,18 @@ export default function AdminResourcesPage() {
             Curated library of videos, podcasts, books, and reading materials for founders
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Resource
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/resources/preview">
+            <Button variant="outline">
+              <Eye className="mr-2 h-4 w-4" />
+              Preview & Reorder
+            </Button>
+          </Link>
+          <Button onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Resource
+          </Button>
+        </div>
       </div>
 
       {/* Search + Filters */}
@@ -479,6 +502,101 @@ export default function AdminResourcesPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Submissions Inbox */}
+      {submissions && submissions.filter((s) => s.status === 'pending').length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CardTitle>Suggested Resources</CardTitle>
+                <Badge variant="warning">
+                  {submissions.filter((s) => s.status === 'pending').length}
+                </Badge>
+              </div>
+              <CardDescription>Submitted by founders for approval</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {submissions
+                .filter((s) => s.status === 'pending')
+                .map((s) => (
+                  <div
+                    key={s._id}
+                    className="flex items-center justify-between gap-4 rounded-md border bg-white px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium truncate">{s.title}</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                          {mediaTypeLabels[s.category]}
+                        </Badge>
+                        {s.topic && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                            {s.topic}
+                          </Badge>
+                        )}
+                        {s.url && (
+                          <a
+                            href={s.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                          </a>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        by {s.submitterName} &middot;{' '}
+                        {new Date(s._creationTime).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                        {s.description && ` — ${s.description}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                        onClick={async () => {
+                          try {
+                            await reviewSubmission({ id: s._id, action: 'approve' })
+                            toast.success(`"${s.title}" approved and added to resources`)
+                          } catch (error) {
+                            logClientError('Failed to approve submission:', error)
+                            toast.error('Failed to approve')
+                          }
+                        }}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={async () => {
+                          try {
+                            await reviewSubmission({ id: s._id, action: 'reject' })
+                            toast.success('Submission rejected')
+                          } catch (error) {
+                            logClientError('Failed to reject submission:', error)
+                            toast.error('Failed to reject')
+                          }
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resources table */}
       <Card>

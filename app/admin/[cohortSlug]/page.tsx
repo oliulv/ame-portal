@@ -6,7 +6,17 @@ import { useParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Users, Building2, FileText, ArrowRight, Plus, Target, Inbox, Calendar } from 'lucide-react'
+import {
+  Users,
+  Building2,
+  FileText,
+  ArrowRight,
+  Plus,
+  Target,
+  Inbox,
+  Calendar,
+  BookOpen,
+} from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -41,6 +51,12 @@ export default function AdminDashboard() {
   const upcomingEvents = useQuery(
     api.cohortEvents.list,
     isSuperAdmin && cohort ? { cohortId: cohort._id } : 'skip'
+  )
+
+  // Resource submissions inbox — super_admin only
+  const pendingResourceCount = useQuery(
+    api.resources.pendingSubmissionCount,
+    isSuperAdmin ? {} : 'skip'
   )
 
   const isLoading = cohort === undefined || stats === undefined || currentUser === undefined
@@ -273,6 +289,32 @@ export default function AdminDashboard() {
                 </div>
               )
             })()}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Resource Submissions Inbox — super_admin only */}
+      {isSuperAdmin && pendingResourceCount !== undefined && pendingResourceCount > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CardTitle>Resource Suggestions</CardTitle>
+                <Badge variant="warning">{pendingResourceCount}</Badge>
+              </div>
+              <Link href="/admin/resources">
+                <Button variant="link" size="sm" className="h-auto p-0">
+                  Review →
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3 py-2 text-sm text-muted-foreground">
+              <BookOpen className="h-5 w-5" />
+              {pendingResourceCount} resource{pendingResourceCount === 1 ? '' : 's'} submitted by
+              founders for approval
+            </div>
           </CardContent>
         </Card>
       )}
