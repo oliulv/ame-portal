@@ -44,18 +44,15 @@ function ResourceEntry({ resource }: { resource: ResourceItem }) {
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium truncate">{resource.title}</p>
           {resource.url && <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          {resource.storageId && (
+            <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
         </div>
         {resource.eventTitle && (
           <p className="text-xs text-muted-foreground mt-0.5">{resource.eventTitle}</p>
         )}
       </div>
       <div className="shrink-0 flex items-center gap-2">
-        {resource.storageId && resource.fileName && (
-          <span className="flex items-center gap-1 text-sm text-muted-foreground">
-            <Download className="h-3.5 w-3.5" />
-            {resource.fileName}
-          </span>
-        )}
         {resource.topic && (
           <Badge
             variant="outline"
