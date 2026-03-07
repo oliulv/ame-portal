@@ -135,7 +135,7 @@ export default function InvoiceDetailPage() {
 
       <div className="grid gap-6 md:grid-cols-3">
         {/* Main Content */}
-        <div className="md:col-span-2 space-y-6">
+        <div className="md:col-span-2 flex flex-col gap-6">
           {/* Invoice Details */}
           <Card>
             <CardHeader>
@@ -252,7 +252,7 @@ export default function InvoiceDetailPage() {
 
           {/* Funding Impact */}
           {fundingSummary && (
-            <Card>
+            <Card className="flex-1">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle>Funding Impact</CardTitle>
                 <TrendingDown className="h-4 w-4 text-muted-foreground" />
@@ -356,7 +356,7 @@ export default function InvoiceDetailPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           {/* Startup Info */}
           <Card>
             <CardHeader>
@@ -445,7 +445,11 @@ export default function InvoiceDetailPage() {
 
           {/* Actions */}
           {(canApprove || canMarkPaid) && (
-            <InvoiceActions invoiceId={invoice._id} currentStatus={invoice.status} />
+            <InvoiceActions
+              invoiceId={invoice._id}
+              currentStatus={invoice.status}
+              className="flex-1"
+            />
           )}
         </div>
       </div>

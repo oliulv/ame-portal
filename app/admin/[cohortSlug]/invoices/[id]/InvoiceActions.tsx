@@ -14,9 +14,10 @@ import { toast } from 'sonner'
 interface InvoiceActionsProps {
   invoiceId: Id<'invoices'>
   currentStatus: string
+  className?: string
 }
 
-export function InvoiceActions({ invoiceId, currentStatus }: InvoiceActionsProps) {
+export function InvoiceActions({ invoiceId, currentStatus, className }: InvoiceActionsProps) {
   const updateStatus = useMutation(api.invoices.updateStatus)
   const [comment, setComment] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -55,7 +56,7 @@ export function InvoiceActions({ invoiceId, currentStatus }: InvoiceActionsProps
   }
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle>Actions</CardTitle>
         <CardDescription>Review and take action on this invoice</CardDescription>
