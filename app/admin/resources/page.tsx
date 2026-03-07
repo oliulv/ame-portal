@@ -240,7 +240,7 @@ export default function AdminResourcesPage() {
             {editingResource ? 'Update resource details.' : 'Add a new resource for founders.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+        <div className="space-y-4 py-4 px-1 -mx-1 max-h-[60vh] overflow-y-auto">
           <div className="space-y-2">
             <Label htmlFor="resource-title">Title</Label>
             <Input
