@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireAuth } from './auth'
+import { requireAdmin } from './auth'
 
 /**
  * List all resources with event title (admin).
@@ -34,7 +34,8 @@ export const list = query({
 export const listForFounder = query({
   args: {},
   handler: async (ctx) => {
-    await requireAuth(ctx)
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return []
 
     const resources = await ctx.db.query('resources').collect()
     const active = resources.filter((r) => r.isActive).sort((a, b) => a.sortOrder - b.sortOrder)
