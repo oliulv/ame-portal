@@ -27,7 +27,7 @@ import { toast } from 'sonner'
 export default function NewInvoicePage() {
   const router = useRouter()
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
-  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [receiptFiles, setReceiptFiles] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
@@ -64,30 +64,30 @@ export default function NewInvoicePage() {
     return null
   })()
 
-  const receiptNameError = (() => {
-    if (!receiptFile) return null
-    if (!receiptFile.name.toLowerCase().endsWith('.pdf')) return 'Must be a PDF file'
+  const receiptNameErrors: (string | null)[] = receiptFiles.map((file, i) => {
+    if (!file.name.toLowerCase().endsWith('.pdf')) return 'Must be a PDF file'
     if (!startupName) return null
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    const expectedLetter = letters[i] ?? '?'
+    const escapedName = startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const pattern = new RegExp(
-      `^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Receipt \\d+\\.pdf$`,
+      `^${escapedName} Receipt ${expectedNumber}-${expectedLetter}\\.pdf$`,
       'i'
     )
-    if (!pattern.test(receiptFile.name))
-      return `Must be named "${startupName} Receipt ${expectedNumber}.pdf"`
-    const num = receiptFile.name.match(/Receipt (\d+)\.pdf$/i)?.[1]
-    if (num && parseInt(num, 10) !== expectedNumber)
-      return `Receipt number must be ${expectedNumber} to match the invoice. Please name your file "${startupName} Receipt ${expectedNumber}.pdf".`
+    if (!pattern.test(file.name))
+      return `Must be named "${startupName} Receipt ${expectedNumber}-${expectedLetter}.pdf"`
     return null
-  })()
+  })
+  const hasReceiptErrors = receiptNameErrors.some((e) => e !== null)
 
   const amountValue = form.watch('amount_gbp')
   const amountExceedsBalance = typeof amountValue === 'number' && amountValue > available
 
   const canSubmit =
     !!invoiceFile &&
-    !!receiptFile &&
+    receiptFiles.length > 0 &&
     !invoiceNameError &&
-    !receiptNameError &&
+    !hasReceiptErrors &&
     !amountExceedsBalance
 
   const onSubmit = async (data: FounderInvoiceUploadFormData) => {
@@ -96,8 +96,8 @@ export default function NewInvoicePage() {
       return
     }
 
-    if (!receiptFile) {
-      toast.error('Please select a receipt file to upload')
+    if (receiptFiles.length === 0) {
+      toast.error('Please select at least one receipt file')
       return
     }
 
@@ -106,8 +106,8 @@ export default function NewInvoicePage() {
       return
     }
 
-    if (receiptNameError) {
-      toast.error(receiptNameError)
+    if (hasReceiptErrors) {
+      toast.error('One or more receipt files have naming errors')
       return
     }
 
@@ -129,15 +129,21 @@ export default function NewInvoicePage() {
       if (!invoiceUploadResult.ok) throw new Error('Failed to upload invoice file')
       const { storageId: invoiceStorageId } = await invoiceUploadResult.json()
 
-      // Upload receipt file (required)
-      const receiptUploadUrl = await generateUploadUrl()
-      const receiptUploadResult = await fetch(receiptUploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': receiptFile.type },
-        body: receiptFile,
-      })
-      if (!receiptUploadResult.ok) throw new Error('Failed to upload receipt file')
-      const { storageId: receiptStorageId } = await receiptUploadResult.json()
+      // Upload all receipt files sequentially
+      const receiptStorageIds: string[] = []
+      const receiptFileNames: string[] = []
+      for (const file of receiptFiles) {
+        const uploadUrl = await generateUploadUrl()
+        const result = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        })
+        if (!result.ok) throw new Error(`Failed to upload receipt: ${file.name}`)
+        const { storageId } = await result.json()
+        receiptStorageIds.push(storageId)
+        receiptFileNames.push(file.name)
+      }
 
       await createInvoice({
         storageId: invoiceStorageId,
@@ -146,8 +152,8 @@ export default function NewInvoicePage() {
         invoiceDate: data.invoice_date,
         amountGbp: data.amount_gbp,
         description: data.description || undefined,
-        receiptStorageId: receiptStorageId as never,
-        receiptFileName: receiptFile.name,
+        receiptStorageIds: receiptStorageIds as any,
+        receiptFileNames,
       })
 
       toast.success('Invoice uploaded successfully')
@@ -191,14 +197,19 @@ export default function NewInvoicePage() {
                 </code>
               </li>
               <li>
-                Receipt:{' '}
+                Receipts:{' '}
                 <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
-                  {startupName ?? 'YourStartup'} Receipt {expectedNumber}.pdf
+                  {startupName ?? 'YourStartup'} Receipt {expectedNumber}-A.pdf
                 </code>
+                {', '}
+                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
+                  ...{expectedNumber}-B.pdf
+                </code>
+                {' etc.'}
               </li>
               <li>
                 PDF only. Your next invoice number is <strong>{expectedNumber}</strong>. Numbers
-                must be sequential.
+                must be sequential. Use letters (A, B, C...) for multiple receipts.
               </li>
             </ul>
           </div>
@@ -335,7 +346,7 @@ export default function NewInvoicePage() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
                     <label className="text-sm font-medium leading-none">
-                      Receipt File (Required — PDF only)
+                      Receipt Files (Required — PDF only, multiple allowed)
                     </label>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -343,8 +354,8 @@ export default function NewInvoicePage() {
                       </TooltipTrigger>
                       <TooltipContent side="right" className="max-w-[280px]">
                         <p>
-                          The actual proof-of-purchase receipt from the vendor or supplier. Collate
-                          all receipts for this invoice into a single PDF.
+                          The actual proof-of-purchase receipts from the vendor or supplier. You can
+                          upload multiple receipt PDFs — name them with letters (A, B, C...).
                         </p>
                       </TooltipContent>
                     </Tooltip>
@@ -352,16 +363,26 @@ export default function NewInvoicePage() {
                   <Input
                     type="file"
                     accept="application/pdf"
-                    onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                    multiple
+                    onChange={(e) => {
+                      const files = e.target.files
+                      if (files) setReceiptFiles(Array.from(files))
+                    }}
                     className="cursor-pointer"
                   />
-                  {receiptFile && (
-                    <p className="text-sm text-muted-foreground">
-                      Selected: {receiptFile.name} ({(receiptFile.size / 1024).toFixed(1)} KB)
-                    </p>
-                  )}
-                  {receiptNameError && (
-                    <p className="text-sm text-destructive">{receiptNameError}</p>
+                  {receiptFiles.length > 0 && (
+                    <div className="space-y-1">
+                      {receiptFiles.map((file, i) => (
+                        <div key={i}>
+                          <p className="text-sm text-muted-foreground">
+                            {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                          </p>
+                          {receiptNameErrors[i] && (
+                            <p className="text-sm text-destructive">{receiptNameErrors[i]}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </TooltipProvider>

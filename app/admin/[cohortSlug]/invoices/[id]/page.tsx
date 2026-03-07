@@ -26,6 +26,23 @@ import {
   type InvoiceStatus,
 } from '@/lib/invoice-status'
 
+function ReceiptLink({ storageId, fileName }: { storageId: string; fileName: string }) {
+  const url = useQuery(api.invoices.getFileUrl, { storageId: storageId as any })
+  if (!url) return <span className="text-sm text-muted-foreground">Loading file...</span>
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline"
+    >
+      <FileText className="h-4 w-4" />
+      {fileName}
+      <ExternalLink className="h-3 w-3" />
+    </a>
+  )
+}
+
 export default function InvoiceDetailPage() {
   const params = useParams<{ cohortSlug: string; id: string }>()
   const router = useRouter()
@@ -42,10 +59,11 @@ export default function InvoiceDetailPage() {
     api.invoices.getFileUrl,
     invoice?.storageId ? { storageId: invoice.storageId } : 'skip'
   )
-  const receiptUrl = useQuery(
-    api.invoices.getFileUrl,
-    invoice?.receiptStorageId ? { storageId: invoice.receiptStorageId } : 'skip'
-  )
+  // For backward compat: use array fields if available, else fall back to single
+  const receiptStorageIds: string[] =
+    invoice?.receiptStorageIds ?? (invoice?.receiptStorageId ? [invoice.receiptStorageId] : [])
+  const receiptFileNames: string[] =
+    invoice?.receiptFileNames ?? (invoice?.receiptFileName ? [invoice.receiptFileName] : [])
   const founderProfile = useQuery(
     api.founderProfile.getByUserId,
     invoice?.uploadedByUserId ? { userId: invoice.uploadedByUserId } : 'skip'
@@ -213,26 +231,21 @@ export default function InvoiceDetailPage() {
                 )}
               </div>
 
-              {/* Receipt File */}
-              {invoice.receiptStorageId && (
+              {/* Receipt Files */}
+              {receiptStorageIds.length > 0 && (
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Receipt File
+                    Receipt File{receiptStorageIds.length > 1 ? 's' : ''}
                   </label>
-                  {receiptUrl ? (
-                    <a
-                      href={receiptUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline"
-                    >
-                      <FileText className="h-4 w-4" />
-                      {invoice.receiptFileName || 'View Receipt'}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">Loading file...</span>
-                  )}
+                  <div className="space-y-1">
+                    {receiptStorageIds.map((sid, i) => (
+                      <ReceiptLink
+                        key={sid}
+                        storageId={sid}
+                        fileName={receiptFileNames[i] || `Receipt ${i + 1}`}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
             </CardContent>
