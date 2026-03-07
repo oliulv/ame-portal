@@ -322,12 +322,15 @@ export default function AdminResourcesPage() {
                 </SelectContent>
               </Select>
             )}
-            <Select value={formEventId} onValueChange={setFormEventId}>
+            <Select
+              value={formEventId || 'none'}
+              onValueChange={(v) => setFormEventId(v === 'none' ? '' : v)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="No event linked" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No event linked</SelectItem>
+                <SelectItem value="none">No event linked</SelectItem>
                 {filteredEvents.map((event) => (
                   <SelectItem key={event._id} value={event._id}>
                     {event.title} ({event.cohortName})
