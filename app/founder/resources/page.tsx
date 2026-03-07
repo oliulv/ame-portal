@@ -76,10 +76,12 @@ function ResourceEntry({ resource }: { resource: ResourceItem }) {
 
 const sections: { category: MediaType; title: string }[] = [
   { category: 'video', title: 'Video' },
-  { category: 'podcast', title: 'Podcasts' },
-  { category: 'book', title: 'Books' },
   { category: 'other_reading', title: 'Other Reading & Materials' },
+  { category: 'book', title: 'Books' },
+  { category: 'podcast', title: 'Podcasts' },
 ]
+
+const MAX_VISIBLE = 5
 
 export default function FounderResourcesPage() {
   const resources = useQuery(api.resources.listForFounder) as ResourceItem[] | undefined
@@ -179,7 +181,13 @@ export default function FounderResourcesPage() {
                   <CardTitle className="text-base">{title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="divide-y">
+                  <div
+                    className={
+                      items.length > MAX_VISIBLE
+                        ? 'divide-y overflow-y-auto max-h-[280px] -mr-3 pr-3'
+                        : 'divide-y'
+                    }
+                  >
                     {items.map((r) => (
                       <ResourceEntry key={r._id} resource={r} />
                     ))}
