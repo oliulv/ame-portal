@@ -234,7 +234,7 @@ export default function AdminFundingPage() {
           <h1 className="text-3xl font-bold tracking-tight font-display">Funding</h1>
           <p className="text-muted-foreground">Aggregate funding overview for {cohort.label}</p>
         </div>
-        <Link href={`/admin/${cohortSlug}/funding/templates`}>
+        <Link href={`/admin/${cohortSlug}/milestones?tab=templates`}>
           <Button variant="outline">
             <Settings className="mr-2 h-4 w-4" />
             Milestone Templates
@@ -559,7 +559,7 @@ export default function AdminFundingPage() {
         <CardHeader>
           <CardTitle>Per Startup Funding</CardTitle>
           <CardDescription>
-            Click any startup row to open its detailed funding page.
+            Click any startup row to open its detail page.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -587,7 +587,7 @@ export default function AdminFundingPage() {
                       key={startup._id}
                       className="cursor-pointer transition-colors hover:bg-muted/50"
                       onClick={() =>
-                        router.push(`/admin/${cohortSlug}/funding/${startup.slug || startup._id}`)
+                        router.push(`/admin/${cohortSlug}/startups/${startup.slug || startup._id}`)
                       }
                     >
                       <TableCell className="font-medium">{startup.name}</TableCell>
