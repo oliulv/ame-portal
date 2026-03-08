@@ -116,6 +116,39 @@ export const getForAdmin = query({
 })
 
 /**
+ * List all milestones across a cohort (admin), with startup name/slug joined.
+ */
+export const listByCohort = query({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const startups = await ctx.db
+      .query('startups')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    const results = []
+    for (const startup of startups) {
+      const milestones = await ctx.db
+        .query('milestones')
+        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+        .collect()
+
+      for (const m of milestones) {
+        results.push({
+          ...m,
+          startupName: startup.name,
+          startupSlug: startup.slug,
+        })
+      }
+    }
+
+    return results.sort((a, b) => a.sortOrder - b.sortOrder)
+  },
+})
+
+/**
  * List all submitted milestones across a cohort (admin inbox).
  */
 export const listSubmittedByCohort = query({

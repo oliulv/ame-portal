@@ -22,6 +22,7 @@ import {
   Gift,
   Calendar,
   BookOpen,
+  ListChecks,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -61,6 +62,7 @@ const iconMap: Record<string, LucideIcon> = {
   Gift,
   Calendar,
   BookOpen,
+  ListChecks,
 }
 
 /**
