@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,24 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   ArrowLeft,
   Edit,
@@ -42,8 +61,79 @@ import {
   Send,
   Clock,
   CheckCircle,
+  Plus,
+  GripVertical,
+  FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import type { Id, Doc } from '@/convex/_generated/dataModel'
+
+type Milestone = Doc<'milestones'>
+
+function SortableMilestoneCard({
+  milestone,
+  cohortSlug,
+}: {
+  milestone: Milestone
+  cohortSlug: string
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: milestone._id,
+  })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-3 border px-3 py-2.5">
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing touch-none p-1 hover:bg-muted rounded flex-shrink-0"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </button>
+      <div className="flex-shrink-0">
+        {milestone.status === 'approved' ? (
+          <CheckCircle className="h-4 w-4 text-green-600" />
+        ) : milestone.status === 'submitted' ? (
+          <Clock className="h-4 w-4 text-amber-600" />
+        ) : milestone.status === 'changes_requested' ? (
+          <RotateCw className="h-4 w-4 text-orange-600" />
+        ) : (
+          <Send className="h-4 w-4 text-muted-foreground" />
+        )}
+      </div>
+      <Link
+        href={`/admin/${cohortSlug}/milestones/${milestone._id}`}
+        className="flex-1 min-w-0 hover:underline"
+      >
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium truncate">{milestone.title}</p>
+          <Badge
+            variant={
+              milestone.status === 'approved'
+                ? 'success'
+                : milestone.status === 'submitted' ||
+                    milestone.status === 'changes_requested'
+                  ? 'warning'
+                  : 'secondary'
+            }
+            className="shrink-0 text-[10px] px-1.5 py-0"
+          >
+            {milestone.status === 'changes_requested' ? 'changes requested' : milestone.status}
+          </Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {'\u00A3'}
+          {milestone.amount.toLocaleString('en-GB')}
+        </p>
+      </Link>
+    </div>
+  )
+}
 
 export default function StartupDetailPage() {
   const params = useParams()
@@ -54,6 +144,10 @@ export default function StartupDetailPage() {
   const startup = useQuery(api.startups.getBySlug, { slug })
   const milestones = useQuery(
     api.milestones.listByStartup,
+    startup ? { startupId: startup._id } : 'skip'
+  )
+  const invoicesData = useQuery(
+    api.invoices.listForAdmin,
     startup ? { startupId: startup._id } : 'skip'
   )
   const teamData = useQuery(
@@ -73,6 +167,7 @@ export default function StartupDetailPage() {
   const resendInvitation = useMutation(api.invitations.resend)
   const removeFounder = useMutation(api.invitations.removeFounder)
   const removeTeamMember = useMutation(api.invitations.removeTeamMember)
+  const reorderMilestones = useMutation(api.milestones.reorder)
 
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [inviteFullName, setInviteFullName] = useState('')
@@ -81,6 +176,32 @@ export default function StartupDetailPage() {
   const [isInviting, setIsInviting] = useState(false)
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  // Funding calculations
+  const milestoneList = useMemo(() => milestones ?? [], [milestones])
+  const potential = milestoneList
+    .filter((m) => m.status === 'waiting' || m.status === 'submitted')
+    .reduce((sum, m) => sum + m.amount, 0)
+  const unlocked = milestoneList
+    .filter((m) => m.status === 'approved')
+    .reduce((sum, m) => sum + m.amount, 0)
+  const deployed = (invoicesData ?? [])
+    .filter((i) => i.status === 'paid')
+    .reduce((sum, i) => sum + i.amountGbp, 0)
+  const available = Math.max(0, unlocked - deployed)
+  const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
+  const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
+
+  // Quick stats
+  const pendingInvoices = (invoicesData ?? []).filter(
+    (i) => i.status === 'submitted' || i.status === 'under_review'
+  ).length
+  const approvedMilestones = milestoneList.filter((m) => m.status === 'approved').length
 
   async function handleInvite() {
     if (!inviteFullName.trim() || !inviteEmail.trim() || !startup) return
@@ -149,6 +270,22 @@ export default function StartupDetailPage() {
     }
   }
 
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id || !milestones) return
+    const oldIndex = milestones.findIndex((m) => m._id === active.id)
+    const newIndex = milestones.findIndex((m) => m._id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const newOrder = arrayMove(milestones, oldIndex, newIndex)
+    try {
+      await reorderMilestones({ milestoneIds: newOrder.map((m) => m._id) })
+      toast.success('Milestones reordered')
+    } catch (error) {
+      logClientError('Failed to reorder:', error)
+      toast.error('Failed to reorder milestones')
+    }
+  }
+
   // Loading state
   if (startup === undefined || cohort === undefined) {
     return (
@@ -167,15 +304,11 @@ export default function StartupDetailPage() {
             </div>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid gap-4 md:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
             <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-4" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-12" />
+              <CardContent className="pt-6">
+                <Skeleton className="h-8 w-24" />
               </CardContent>
             </Card>
           ))}
@@ -201,10 +334,6 @@ export default function StartupDetailPage() {
       </div>
     )
   }
-
-  const potential = milestones?.reduce((sum, m) => sum + m.amount, 0) ?? 0
-  const unlocked =
-    milestones?.filter((m) => m.status === 'approved').reduce((sum, m) => sum + m.amount, 0) ?? 0
 
   return (
     <div className="space-y-6">
@@ -244,34 +373,131 @@ export default function StartupDetailPage() {
         </div>
       </div>
 
-      {/* Overview Cards */}
+      {/* Funding metrics row */}
+      <div className="grid gap-4 md:grid-cols-5">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Baseline Left
+              <InfoTooltip text="Cohort baseline not yet allocated to any milestone." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display text-muted-foreground">
+              {'\u00A3'}
+              {Math.max(0, (cohort?.baseFunding ?? 0) - potential - unlocked).toLocaleString(
+                'en-GB'
+              )}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Potential
+              <InfoTooltip text="Total value of pending and waiting milestones still to be unlocked." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display">
+              {'\u00A3'}
+              {potential.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Unlocked
+              <InfoTooltip text="Total funding unlocked from approved milestones." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display">
+              {'\u00A3'}
+              {unlocked.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Deployed
+              <InfoTooltip text="Sum of all paid invoices for this startup." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display text-blue-600">
+              {'\u00A3'}
+              {deployed.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Available
+              <InfoTooltip text="Unlocked minus deployed. How much the startup can still claim." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display text-green-600">
+              {'\u00A3'}
+              {available.toLocaleString('en-GB')}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Funding utilization bar */}
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">Funding utilization</p>
+            <p className="text-xs text-muted-foreground">
+              Deployed {'\u00A3'}
+              {deployed.toLocaleString('en-GB')} of {'\u00A3'}
+              {unlocked.toLocaleString('en-GB')} unlocked
+            </p>
+          </div>
+          <div
+            className={`relative h-3 overflow-hidden rounded-full ${unlocked > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
+          >
+            {unlocked > 0 && (
+              <div
+                className="absolute inset-y-0 left-0 bg-blue-600"
+                style={{ width: `${deployedPct}%` }}
+              />
+            )}
+          </div>
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-blue-600" />
+              Deployed {'\u00A3'}
+              {deployed.toLocaleString('en-GB')}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
+              Available {'\u00A3'}
+              {available.toLocaleString('en-GB')}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick stats row */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Potential Funding</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending Invoices</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-display">{pendingInvoices}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Milestones</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-display">
-              {'\u00A3'}
-              {potential.toLocaleString('en-GB')}
+              {approvedMilestones}/{milestoneList.length}
             </div>
+            <p className="text-xs text-muted-foreground">approved</p>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unlocked</CardTitle>
-            <Target className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-display text-green-600">
-              {'\u00A3'}
-              {unlocked.toLocaleString('en-GB')}
-            </div>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Founders</CardTitle>
@@ -283,7 +509,6 @@ export default function StartupDetailPage() {
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Invitations</CardTitle>
@@ -297,81 +522,56 @@ export default function StartupDetailPage() {
         </Card>
       </div>
 
-      {/* Milestones summary */}
+      {/* Milestones section with DnD */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Milestones</CardTitle>
-          <Target className="h-4 w-4 text-muted-foreground" />
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Milestones</CardTitle>
+              <CardDescription>Drag to reorder. Click to view details.</CardDescription>
+            </div>
+            <Link href={`/admin/${cohortSlug}/milestones/new?startup=${slug}`}>
+              <Button size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Milestone
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           {milestones && milestones.length > 0 ? (
-            <>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
               <div className="space-y-2">
-                {[...milestones].reverse().map((milestone) => (
-                  <div key={milestone._id} className="flex items-center gap-3  border px-3 py-2.5">
-                    <div className="flex-shrink-0">
-                      {milestone.status === 'approved' ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : milestone.status === 'submitted' ? (
-                        <Clock className="h-4 w-4 text-amber-600" />
-                      ) : milestone.status === 'changes_requested' ? (
-                        <RotateCw className="h-4 w-4 text-orange-600" />
-                      ) : (
-                        <Send className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium truncate">{milestone.title}</p>
-                        <Badge
-                          variant={
-                            milestone.status === 'approved'
-                              ? 'success'
-                              : milestone.status === 'submitted' ||
-                                  milestone.status === 'changes_requested'
-                                ? 'warning'
-                                : 'secondary'
-                          }
-                          className="shrink-0 text-[10px] px-1.5 py-0"
-                        >
-                          {milestone.status === 'changes_requested'
-                            ? 'changes requested'
-                            : milestone.status}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {'\u00A3'}
-                        {milestone.amount.toLocaleString('en-GB')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                <SortableContext
+                  items={milestones.map((m) => m._id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {milestones.map((milestone) => (
+                    <SortableMilestoneCard
+                      key={milestone._id}
+                      milestone={milestone}
+                      cohortSlug={cohortSlug}
+                    />
+                  ))}
+                </SortableContext>
               </div>
-              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
-                <Button variant="link" size="sm" className="h-auto p-0">
-                  Manage milestones →
-                </Button>
-              </Link>
-            </>
+            </DndContext>
           ) : (
-            <>
-              <div className="space-y-2">
-                <div className="flex items-center gap-3  border px-3 py-2.5">
-                  <div className="flex-shrink-0">
-                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">No milestones</p>
-                    <p className="text-xs text-muted-foreground">No milestones assigned yet.</p>
-                  </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 border px-3 py-2.5">
+                <div className="flex-shrink-0">
+                  <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">No milestones</p>
+                  <p className="text-xs text-muted-foreground">No milestones assigned yet.</p>
                 </div>
               </div>
-              <Link href={`/admin/${cohortSlug}/funding/${slug}`} className="mt-3 inline-block">
-                <Button variant="link" size="sm" className="h-auto p-0">
-                  Manage milestones →
-                </Button>
-              </Link>
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
