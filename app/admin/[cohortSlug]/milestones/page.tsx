@@ -72,7 +72,7 @@ import type { Id, Doc } from '@/convex/_generated/dataModel'
 
 type MilestoneWithStartup = Doc<'milestones'> & {
   startupName: string
-  startupSlug: string
+  startupSlug: string | undefined
 }
 type MilestoneTemplate = Doc<'milestoneTemplates'>
 type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved' | 'changes_requested'
@@ -188,7 +188,7 @@ export default function MilestonesAggregatePage() {
     if (!allMilestones) return []
     return allMilestones.filter((m) => {
       const matchesStatus = statusFilter === 'all' || m.status === statusFilter
-      const matchesStartup = startupFilter === 'all' || m.startupSlug === startupFilter
+      const matchesStartup = startupFilter === 'all' || (m.startupSlug ?? '') === startupFilter
       const matchesSearch =
         normalizedQuery.length === 0 ||
         m.title.toLowerCase().includes(normalizedQuery) ||
@@ -428,10 +428,7 @@ export default function MilestonesAggregatePage() {
         </TableHeader>
         <TableBody>
           {enableDnd ? (
-            <SortableContext
-              items={items.map((m) => m._id)}
-              strategy={verticalListSortingStrategy}
-            >
+            <SortableContext items={items.map((m) => m._id)} strategy={verticalListSortingStrategy}>
               {items.map((m) => (
                 <SortableMilestoneRow
                   key={m._id}
@@ -584,7 +581,7 @@ export default function MilestonesAggregatePage() {
               <SelectContent>
                 <SelectItem value="all">All startups</SelectItem>
                 {startups?.map((s) => (
-                  <SelectItem key={s._id} value={s.slug}>
+                  <SelectItem key={s._id} value={s.slug ?? s._id}>
                     {s.name}
                   </SelectItem>
                 ))}
@@ -722,10 +719,7 @@ export default function MilestonesAggregatePage() {
                           {waveData.customMilestones.length > 0 &&
                             (() => {
                               // Group custom milestones by startup
-                              const byStartup = new Map<
-                                string,
-                                MilestoneWithStartup[]
-                              >()
+                              const byStartup = new Map<string, MilestoneWithStartup[]>()
                               for (const m of waveData.customMilestones) {
                                 const list = byStartup.get(m.startupId) ?? []
                                 list.push(m)
@@ -903,7 +897,11 @@ export default function MilestonesAggregatePage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Switch id="tpl-active" checked={tplFormIsActive} onCheckedChange={setTplFormIsActive} />
+              <Switch
+                id="tpl-active"
+                checked={tplFormIsActive}
+                onCheckedChange={setTplFormIsActive}
+              />
               <Label htmlFor="tpl-active">Active (auto-assign to all startups in cohort)</Label>
             </div>
             <div className="space-y-3">

@@ -66,7 +66,7 @@ import {
   FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Id, Doc } from '@/convex/_generated/dataModel'
+import type { Doc } from '@/convex/_generated/dataModel'
 
 type Milestone = Doc<'milestones'>
 
@@ -116,8 +116,7 @@ function SortableMilestoneCard({
             variant={
               milestone.status === 'approved'
                 ? 'success'
-                : milestone.status === 'submitted' ||
-                    milestone.status === 'changes_requested'
+                : milestone.status === 'submitted' || milestone.status === 'changes_requested'
                   ? 'warning'
                   : 'secondary'
             }

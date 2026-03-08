@@ -558,9 +558,7 @@ export default function AdminFundingPage() {
       <Card>
         <CardHeader>
           <CardTitle>Per Startup Funding</CardTitle>
-          <CardDescription>
-            Click any startup row to open its detail page.
-          </CardDescription>
+          <CardDescription>Click any startup row to open its detail page.</CardDescription>
         </CardHeader>
         <CardContent>
           {includedStartups.length > 0 ? (

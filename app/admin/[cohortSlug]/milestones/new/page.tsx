@@ -78,7 +78,7 @@ export default function CreateMilestonePage() {
     )
   }
 
-  const selectedStartup = startups?.find((s) => s.slug === selectedStartupSlug)
+  const selectedStartup = startups?.find((s) => (s.slug ?? s._id) === selectedStartupSlug)
 
   async function handleSave() {
     const amount = parseFloat(formAmount)
@@ -180,7 +180,7 @@ export default function CreateMilestonePage() {
                 </SelectTrigger>
                 <SelectContent>
                   {startups?.map((s) => (
-                    <SelectItem key={s._id} value={s.slug}>
+                    <SelectItem key={s._id} value={s.slug ?? s._id}>
                       {s.name}
                     </SelectItem>
                   ))}
