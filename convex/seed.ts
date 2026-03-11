@@ -407,7 +407,6 @@ export const default_ = internalMutation({
           sortCode: `${String(10 + i).padStart(2, '0')}-00-00`,
           accountNumber: `${String(10000000 + i)}`,
           bankName: 'Test Bank',
-          verified: true,
         })
       }
 

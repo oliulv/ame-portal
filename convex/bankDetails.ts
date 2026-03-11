@@ -69,7 +69,6 @@ export const upsert = mutation({
       sortCode: args.sortCode,
       accountNumber: args.accountNumber,
       bankName: args.bankName,
-      verified: false, // Reset on update
     }
 
     if (existing) {

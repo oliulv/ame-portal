@@ -983,11 +983,6 @@ export default function StartupDetailPage() {
                   <p className="mt-1 font-mono">{bankDetails.accountNumber}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 pt-2 border-t">
-                <Badge variant={bankDetails.verified ? 'success' : 'warning'}>
-                  {bankDetails.verified ? 'Verified' : 'Unverified'}
-                </Badge>
-              </div>
             </div>
           )}
           <DialogFooter>
