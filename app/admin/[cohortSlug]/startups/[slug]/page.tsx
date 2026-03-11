@@ -64,6 +64,7 @@ import {
   Plus,
   GripVertical,
   FileText,
+  Landmark,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Doc } from '@/convex/_generated/dataModel'
@@ -206,6 +207,10 @@ export default function StartupDetailPage() {
     api.startups.getFounderProfilesByStartupId,
     startup ? { startupId: startup._id } : 'skip'
   )
+  const bankDetails = useQuery(
+    api.bankDetails.getByStartupId,
+    startup ? { startupId: startup._id } : 'skip'
+  )
 
   const createInvitation = useMutation(api.invitations.create)
   const resendInvitation = useMutation(api.invitations.resend)
@@ -213,6 +218,7 @@ export default function StartupDetailPage() {
   const removeTeamMember = useMutation(api.invitations.removeTeamMember)
   const reorderMilestones = useMutation(api.milestones.reorder)
 
+  const [showBankDetailsDialog, setShowBankDetailsDialog] = useState(false)
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [inviteFullName, setInviteFullName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
@@ -397,6 +403,10 @@ export default function StartupDetailPage() {
             <p className="text-muted-foreground">{cohort?.label || 'No cohort'}</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowBankDetailsDialog(true)}>
+              <Landmark className="mr-2 h-4 w-4" />
+              Bank Details
+            </Button>
             <Link href={`/admin/${cohortSlug}/startups/${slug}/analytics`}>
               <Button variant="outline">
                 <Plug className="mr-2 h-4 w-4" />
@@ -933,6 +943,60 @@ export default function StartupDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Bank Details Dialog */}
+      <Dialog open={showBankDetailsDialog} onOpenChange={setShowBankDetailsDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bank Details</DialogTitle>
+            <DialogDescription>Bank account details for {startup.name}.</DialogDescription>
+          </DialogHeader>
+          {bankDetails === undefined ? (
+            <div className="space-y-3 py-4">
+              <Skeleton className="h-5 w-full" />
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-5 w-1/2" />
+            </div>
+          ) : bankDetails === null ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No bank details have been submitted yet.
+            </p>
+          ) : (
+            <div className="space-y-4 py-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Account Holder</p>
+                  <p className="mt-1">{bankDetails.accountHolderName}</p>
+                </div>
+                {bankDetails.bankName && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Bank Name</p>
+                    <p className="mt-1">{bankDetails.bankName}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Sort Code</p>
+                  <p className="mt-1 font-mono">{bankDetails.sortCode}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Account Number</p>
+                  <p className="mt-1 font-mono">{bankDetails.accountNumber}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <Badge variant={bankDetails.verified ? 'success' : 'warning'}>
+                  {bankDetails.verified ? 'Verified' : 'Unverified'}
+                </Badge>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBankDetailsDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Invite Founder Dialog */}
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
