@@ -365,6 +365,26 @@ export const updateStatus = mutation({
 })
 
 /**
+ * Batch mark multiple approved invoices as paid (admin).
+ */
+export const batchMarkPaid = mutation({
+  args: { ids: v.array(v.id('invoices')) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+    for (const id of args.ids) {
+      const invoice = await ctx.db.get(id)
+      if (!invoice) throw new Error(`Invoice ${id} not found`)
+      if (invoice.status !== 'approved')
+        throw new Error(`Invoice ${id} is not approved`)
+      await ctx.db.patch(id, {
+        status: 'paid',
+        paidAt: new Date().toISOString(),
+      })
+    }
+  },
+})
+
+/**
  * Internal query: get invoice data + startup name for the Xero action.
  */
 export const getInvoiceForXero = internalQuery({

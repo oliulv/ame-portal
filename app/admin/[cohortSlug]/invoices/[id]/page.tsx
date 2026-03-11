@@ -5,9 +5,16 @@ import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import Link from 'next/link'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -18,6 +25,7 @@ import {
   Building2,
   User,
   TrendingDown,
+  Eye,
 } from 'lucide-react'
 import { InvoiceActions } from './InvoiceActions'
 import {
@@ -26,20 +34,37 @@ import {
   type InvoiceStatus,
 } from '@/lib/invoice-status'
 
-function ReceiptLink({ storageId, fileName }: { storageId: string; fileName: string }) {
+function ReceiptLink({
+  storageId,
+  fileName,
+  onPreview,
+}: {
+  storageId: string
+  fileName: string
+  onPreview: (url: string, title: string) => void
+}) {
   const url = useQuery(api.invoices.getFileUrl, { storageId: storageId as any })
   if (!url) return <span className="text-sm text-muted-foreground">Loading file...</span>
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline"
-    >
-      <FileText className="h-4 w-4" />
-      {fileName}
-      <ExternalLink className="h-3 w-3" />
-    </a>
+    <div className="inline-flex items-center gap-2">
+      <button
+        onClick={() => onPreview(url, fileName)}
+        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+      >
+        <FileText className="h-4 w-4" />
+        {fileName}
+        <Eye className="h-3 w-3" />
+      </button>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-muted-foreground hover:text-foreground"
+        title="Open in new tab"
+      >
+        <ExternalLink className="h-3 w-3" />
+      </a>
+    </div>
   )
 }
 
@@ -48,6 +73,9 @@ export default function InvoiceDetailPage() {
   const router = useRouter()
   const cohortSlug = params.cohortSlug ?? ''
   const invoiceId = params.id as Id<'invoices'>
+
+  const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null)
+  const [pdfViewerTitle, setPdfViewerTitle] = useState('')
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const invoice = useQuery(api.invoices.getById, { id: invoiceId })
@@ -72,6 +100,11 @@ export default function InvoiceDetailPage() {
     api.milestones.fundingSummaryForAdmin,
     invoice?.startupId ? { startupId: invoice.startupId } : 'skip'
   )
+
+  function openPdfViewer(url: string, title: string) {
+    setPdfViewerUrl(url)
+    setPdfViewerTitle(title)
+  }
 
   // Loading state
   if (cohort === undefined || invoice === undefined) {
@@ -214,16 +247,25 @@ export default function InvoiceDetailPage() {
                   Invoice File
                 </label>
                 {fileUrl ? (
-                  <a
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline"
-                  >
-                    <FileText className="h-4 w-4" />
-                    {invoice.fileName || 'View Invoice Document'}
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+                  <div className="inline-flex items-center gap-2">
+                    <button
+                      onClick={() => openPdfViewer(fileUrl, invoice.fileName || 'Invoice')}
+                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                    >
+                      <FileText className="h-4 w-4" />
+                      {invoice.fileName || 'View Invoice Document'}
+                      <Eye className="h-3 w-3" />
+                    </button>
+                    <a
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-foreground"
+                      title="Open in new tab"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
                 ) : (
                   <span className="text-sm text-muted-foreground">Loading file...</span>
                 )}
@@ -241,6 +283,7 @@ export default function InvoiceDetailPage() {
                         key={sid}
                         storageId={sid}
                         fileName={receiptFileNames[i] || `Receipt ${i + 1}`}
+                        onPreview={openPdfViewer}
                       />
                     ))}
                   </div>
@@ -272,14 +315,22 @@ export default function InvoiceDetailPage() {
                 {(() => {
                   const invoiceAmount = invoice.amountGbp
                   const currentAvailable = fundingSummary.available
+                  const committed = fundingSummary.committed ?? 0
                   const afterAvailable = Math.max(0, currentAvailable - invoiceAmount)
                   const barTotal = fundingSummary.unlocked || 1
                   const deployedPct = Math.min(100, (fundingSummary.deployed / barTotal) * 100)
-                  const thisPct = Math.min(100 - deployedPct, (invoiceAmount / barTotal) * 100)
+                  const committedPct = Math.min(
+                    100 - deployedPct,
+                    (committed / barTotal) * 100
+                  )
+                  const thisPct = Math.min(
+                    100 - deployedPct - committedPct,
+                    (invoiceAmount / barTotal) * 100
+                  )
 
                   return (
                     <>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="grid grid-cols-4 gap-2 text-xs">
                         <div className="border bg-muted/40 px-2 py-1.5">
                           <p className="text-muted-foreground">Unlocked</p>
                           <p className="font-medium">
@@ -290,6 +341,12 @@ export default function InvoiceDetailPage() {
                           <p className="text-muted-foreground">Deployed</p>
                           <p className="font-medium text-blue-600">
                             £{fundingSummary.deployed.toLocaleString('en-GB')}
+                          </p>
+                        </div>
+                        <div className="border bg-muted/40 px-2 py-1.5">
+                          <p className="text-muted-foreground">Committed</p>
+                          <p className="font-medium text-violet-600">
+                            £{committed.toLocaleString('en-GB')}
                           </p>
                         </div>
                         <div className="border bg-muted/40 px-2 py-1.5">
@@ -312,9 +369,16 @@ export default function InvoiceDetailPage() {
                             style={{ width: `${deployedPct}%` }}
                           />
                           <div
-                            className="absolute inset-y-0 bg-amber-500 transition-all"
+                            className="absolute inset-y-0 bg-violet-500 transition-all"
                             style={{
                               left: `${deployedPct}%`,
+                              width: `${committedPct}%`,
+                            }}
+                          />
+                          <div
+                            className="absolute inset-y-0 bg-amber-500 transition-all"
+                            style={{
+                              left: `${deployedPct + committedPct}%`,
                               width: `${thisPct}%`,
                             }}
                           />
@@ -323,6 +387,10 @@ export default function InvoiceDetailPage() {
                           <span className="flex items-center gap-1">
                             <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
                             Deployed
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block h-2 w-2 rounded-full bg-violet-500" />
+                            Approved (not paid)
                           </span>
                           <span className="flex items-center gap-1">
                             <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
@@ -351,6 +419,11 @@ export default function InvoiceDetailPage() {
                             </span>
                           </span>
                         </div>
+                        {committed > 0 && (
+                          <p className="mt-1 text-xs text-violet-600">
+                            £{committed.toLocaleString('en-GB')} committed (approved, not yet paid)
+                          </p>
+                        )}
                         {invoiceAmount > currentAvailable && (
                           <p className="mt-1.5 text-xs text-red-600">
                             This invoice exceeds available funding by £
@@ -464,6 +537,18 @@ export default function InvoiceDetailPage() {
           )}
         </div>
       </div>
+
+      {/* PDF Viewer Modal */}
+      <Dialog open={!!pdfViewerUrl} onOpenChange={(open) => { if (!open) setPdfViewerUrl(null) }}>
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{pdfViewerTitle}</DialogTitle>
+          </DialogHeader>
+          {pdfViewerUrl && (
+            <iframe src={pdfViewerUrl} className="flex-1 w-full rounded border" />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

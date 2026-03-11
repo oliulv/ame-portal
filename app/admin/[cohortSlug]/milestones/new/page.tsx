@@ -18,10 +18,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ArrowLeft, Target } from 'lucide-react'
+import { ArrowLeft, Target, Check, ChevronsUpDown } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 export default function CreateMilestonePage() {
@@ -41,6 +51,7 @@ export default function CreateMilestonePage() {
 
   const [isTemplate, setIsTemplate] = useState(isTemplateMode)
   const [selectedStartupSlug, setSelectedStartupSlug] = useState(preselectedStartupSlug)
+  const [startupSelectorOpen, setStartupSelectorOpen] = useState(false)
   const [formTitle, setFormTitle] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formAmount, setFormAmount] = useState('')
@@ -174,18 +185,53 @@ export default function CreateMilestonePage() {
           {!isTemplate && (
             <div className="space-y-2">
               <Label htmlFor="ms-startup">Startup</Label>
-              <Select value={selectedStartupSlug} onValueChange={setSelectedStartupSlug}>
-                <SelectTrigger id="ms-startup">
-                  <SelectValue placeholder="Select a startup" />
-                </SelectTrigger>
-                <SelectContent>
-                  {startups?.map((s) => (
-                    <SelectItem key={s._id} value={s.slug ?? s._id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={startupSelectorOpen} onOpenChange={setStartupSelectorOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="ms-startup"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={startupSelectorOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {selectedStartupSlug
+                      ? (startups?.find((s) => (s.slug ?? s._id) === selectedStartupSlug)?.name ??
+                          'Select a startup')
+                      : 'Select a startup'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search startup..." />
+                    <CommandList>
+                      <CommandEmpty>No startup found.</CommandEmpty>
+                      <CommandGroup>
+                        {startups?.map((s) => (
+                          <CommandItem
+                            key={s._id}
+                            value={s.name}
+                            onSelect={() => {
+                              setSelectedStartupSlug(s.slug ?? s._id)
+                              setStartupSelectorOpen(false)
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                'mr-2 h-4 w-4',
+                                selectedStartupSlug === (s.slug ?? s._id)
+                                  ? 'opacity-100'
+                                  : 'opacity-0'
+                              )}
+                            />
+                            {s.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 

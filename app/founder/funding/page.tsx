@@ -48,11 +48,13 @@ export default function FounderFundingPage() {
     .filter((m) => m.status === 'approved')
     .reduce((sum, m) => sum + m.amount, 0)
   const deployed = fundingSummary?.deployed ?? 0
+  const committed = fundingSummary?.committed ?? 0
   const available = Math.max(0, unlocked - deployed)
   const baseline = fundingSummary?.baseline ?? 0
   const baselineLeft = Math.max(0, baseline - potential - unlocked)
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
+  const committedPct = unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const filteredMilestones = useMemo(() => {
@@ -163,10 +165,18 @@ export default function FounderFundingPage() {
             className={`relative h-3 overflow-hidden rounded-full ${unlocked > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
           >
             {unlocked > 0 && (
-              <div
-                className="absolute inset-y-0 left-0 bg-blue-600"
-                style={{ width: `${deployedPct}%` }}
-              />
+              <>
+                <div
+                  className="absolute inset-y-0 left-0 bg-blue-600"
+                  style={{ width: `${deployedPct}%` }}
+                />
+                {committed > 0 && (
+                  <div
+                    className="absolute inset-y-0 bg-violet-500"
+                    style={{ left: `${deployedPct}%`, width: `${committedPct}%` }}
+                  />
+                )}
+              </>
             )}
           </div>
           <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -174,6 +184,12 @@ export default function FounderFundingPage() {
               <span className="h-2 w-2 rounded-full bg-blue-600" />
               Deployed £{deployed.toLocaleString('en-GB')}
             </span>
+            {committed > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-violet-500" />
+                Committed £{committed.toLocaleString('en-GB')}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
               Available £{available.toLocaleString('en-GB')}

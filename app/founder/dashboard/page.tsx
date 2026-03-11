@@ -67,11 +67,13 @@ export default function FounderDashboard() {
 
   const unlocked = fundingSummary?.unlocked ?? 0
   const deployed = fundingSummary?.deployed ?? 0
+  const committed = fundingSummary?.committed ?? 0
   const available = fundingSummary?.available ?? 0
   const baseline = fundingSummary?.baseline ?? 0
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const unlockedPct = baseline > 0 ? (unlocked / baseline) * 100 : 0
   const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
+  const committedPct = unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
   const unlockedPctRounded = Math.round(unlockedPct)
   const pendingInvoices = invoicesData?.pendingCount ?? 0
 
@@ -160,10 +162,18 @@ export default function FounderDashboard() {
               className={`relative h-2.5 overflow-hidden rounded-full ${unlocked > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
             >
               {unlocked > 0 && (
-                <div
-                  className="absolute inset-y-0 left-0 bg-blue-600 transition-all"
-                  style={{ width: `${deployedPct}%` }}
-                />
+                <>
+                  <div
+                    className="absolute inset-y-0 left-0 bg-blue-600 transition-all"
+                    style={{ width: `${deployedPct}%` }}
+                  />
+                  {committed > 0 && (
+                    <div
+                      className="absolute inset-y-0 bg-violet-500 transition-all"
+                      style={{ left: `${deployedPct}%`, width: `${committedPct}%` }}
+                    />
+                  )}
+                </>
               )}
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">

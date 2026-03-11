@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -46,9 +47,11 @@ import {
   ChevronRight,
   Check,
   ChevronsUpDown,
+  DollarSign,
+  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getInvoiceStatusLabel,
   getInvoiceStatusVariant,
@@ -56,6 +59,8 @@ import {
   type InvoiceStatus,
   type InvoiceStatusFilter,
 } from '@/lib/invoice-status'
+import { toast } from 'sonner'
+import type { Id } from '@/convex/_generated/dataModel'
 
 export default function AdminInvoicesPage() {
   const params = useParams()
@@ -65,8 +70,18 @@ export default function AdminInvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all')
   const [startupFilter, setStartupFilter] = useState<string>('all')
   const [startupFilterOpen, setStartupFilterOpen] = useState(false)
+  const [showPending, setShowPending] = useState(true)
+  const [showPaid, setShowPaid] = useState(true)
   const [showApproved, setShowApproved] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
+
+  // Inline mark paid state
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null)
+  const [selectedApprovedIds, setSelectedApprovedIds] = useState<Set<string>>(new Set())
+  const [isBatchMarking, setIsBatchMarking] = useState(false)
+
+  const updateStatus = useMutation(api.invoices.updateStatus)
+  const batchMarkPaid = useMutation(api.invoices.batchMarkPaid)
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
@@ -131,6 +146,45 @@ export default function AdminInvoicesPage() {
     return { pending, paid, approved, rejected }
   }, [filteredInvoices])
 
+  // Auto-collapse/expand based on count transitions
+  const prevPendingCount = useRef<number | null>(null)
+  const prevApprovedCount = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!groupedInvoices) return
+
+    const pendingCount = groupedInvoices.pending.length
+    const approvedCount = groupedInvoices.approved.length
+
+    if (prevPendingCount.current !== null && prevPendingCount.current > 0 && pendingCount === 0) {
+      setShowPending(false)
+      setShowApproved(true)
+    }
+
+    if (prevApprovedCount.current !== null && prevApprovedCount.current > 0 && approvedCount === 0) {
+      if (groupedInvoices.pending.length === 0) {
+        setShowApproved(false)
+        setShowPaid(true)
+      }
+    }
+
+    prevPendingCount.current = pendingCount
+    prevApprovedCount.current = approvedCount
+  }, [groupedInvoices])
+
+  // Clear selected approved IDs when approved list changes
+  useEffect(() => {
+    if (!groupedInvoices) return
+    const approvedIds = new Set(groupedInvoices.approved.map((i) => i._id))
+    setSelectedApprovedIds((prev) => {
+      const next = new Set<string>()
+      prev.forEach((id) => {
+        if (approvedIds.has(id as Id<'invoices'>)) next.add(id)
+      })
+      return next.size === prev.size ? prev : next
+    })
+  }, [groupedInvoices])
+
   const isLoading = cohort === undefined || startups === undefined || allInvoices === undefined
 
   // Redirect if cohort not found (returned null)
@@ -179,6 +233,56 @@ export default function AdminInvoicesPage() {
   }
 
   const pendingCount = groupedInvoices?.pending.length ?? 0
+
+  async function handleMarkPaid(invoiceId: string) {
+    setMarkingPaidId(invoiceId)
+    try {
+      await updateStatus({ id: invoiceId as Id<'invoices'>, status: 'paid' })
+      toast.success('Invoice marked as paid')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to mark as paid')
+    } finally {
+      setMarkingPaidId(null)
+    }
+  }
+
+  async function handleBatchMarkPaid() {
+    if (selectedApprovedIds.size === 0) return
+    setIsBatchMarking(true)
+    try {
+      await batchMarkPaid({
+        ids: Array.from(selectedApprovedIds) as Id<'invoices'>[],
+      })
+      toast.success(`${selectedApprovedIds.size} invoice${selectedApprovedIds.size !== 1 ? 's' : ''} marked as paid`)
+      setSelectedApprovedIds(new Set())
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to mark invoices as paid')
+    } finally {
+      setIsBatchMarking(false)
+    }
+  }
+
+  function toggleApprovedSelection(id: string) {
+    setSelectedApprovedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  function toggleAllApproved() {
+    if (!groupedInvoices) return
+    const allIds = groupedInvoices.approved.map((i) => i._id)
+    if (selectedApprovedIds.size === allIds.length) {
+      setSelectedApprovedIds(new Set())
+    } else {
+      setSelectedApprovedIds(new Set(allIds))
+    }
+  }
 
   function renderInvoiceTable(invoices: typeof filteredInvoices) {
     if (!invoices || invoices.length === 0) return null
@@ -237,6 +341,120 @@ export default function AdminInvoicesPage() {
           ))}
         </TableBody>
       </Table>
+    )
+  }
+
+  function renderApprovedInvoiceTable(invoices: typeof filteredInvoices) {
+    if (!invoices || invoices.length === 0) return null
+    const allSelected = invoices.length > 0 && selectedApprovedIds.size === invoices.length
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-10">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={toggleAllApproved}
+                aria-label="Select all"
+              />
+            </TableHead>
+            <TableHead>Startup</TableHead>
+            <TableHead>Vendor</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="w-28"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {invoices.map((invoice) => (
+            <TableRow
+              key={invoice._id}
+              className="cursor-pointer transition-colors hover:bg-muted/50"
+              onClick={() => router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)}
+            >
+              <TableCell onClick={(e) => e.stopPropagation()}>
+                <Checkbox
+                  checked={selectedApprovedIds.has(invoice._id)}
+                  onCheckedChange={() => toggleApprovedSelection(invoice._id)}
+                  aria-label={`Select ${invoice.vendorName}`}
+                />
+              </TableCell>
+              <TableCell className="font-medium">
+                {startupNameMap.get(invoice.startupId) || 'Unknown'}
+              </TableCell>
+              <TableCell>{invoice.vendorName}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                £{Number(invoice.amountGbp).toFixed(2)}
+              </TableCell>
+              <TableCell>
+                <Badge variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}>
+                  {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={markingPaidId === invoice._id}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleMarkPaid(invoice._id)
+                  }}
+                >
+                  {markingPaidId === invoice._id ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <DollarSign className="mr-1 h-3 w-3" />
+                  )}
+                  Mark Paid
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    )
+  }
+
+  function renderCollapsibleSection(
+    label: string,
+    invoices: NonNullable<typeof filteredInvoices>,
+    show: boolean,
+    setShow: (v: boolean) => void,
+    badgeVariant: 'warning' | 'success' | 'secondary' | 'destructive',
+    renderFn: (invoices: typeof filteredInvoices) => React.ReactNode,
+    headerExtra?: React.ReactNode
+  ) {
+    if (invoices.length === 0) return null
+    return (
+      <Card>
+        <CardHeader className={show ? 'pb-3' : 'py-4'}>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShow(!show)}
+              className="flex items-center gap-2 flex-1 text-left cursor-pointer"
+            >
+              {show ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+              <CardTitle className="text-base">{label}</CardTitle>
+              <Badge variant={badgeVariant}>{invoices.length}</Badge>
+            </button>
+            {headerExtra}
+          </div>
+        </CardHeader>
+        {show && <CardContent>{renderFn(invoices)}</CardContent>}
+      </Card>
     )
   }
 
@@ -380,76 +598,61 @@ export default function AdminInvoicesPage() {
         groupedInvoices.approved.length > 0 ||
         groupedInvoices.rejected.length > 0) ? (
         <div className="space-y-6">
-          {/* Pending Review - shown first, prominently */}
-          {groupedInvoices.pending.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-base">Pending Review</CardTitle>
-                  <Badge variant="warning">{groupedInvoices.pending.length}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>{renderInvoiceTable(groupedInvoices.pending)}</CardContent>
-            </Card>
+          {/* Pending Review */}
+          {renderCollapsibleSection(
+            'Pending Review',
+            groupedInvoices.pending,
+            showPending,
+            setShowPending,
+            'warning',
+            renderInvoiceTable
           )}
 
           {/* Paid */}
-          {groupedInvoices.paid.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-base">Paid</CardTitle>
-                  <Badge variant="success">{groupedInvoices.paid.length}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>{renderInvoiceTable(groupedInvoices.paid)}</CardContent>
-            </Card>
+          {renderCollapsibleSection(
+            'Paid',
+            groupedInvoices.paid,
+            showPaid,
+            setShowPaid,
+            'success',
+            renderInvoiceTable
           )}
 
-          {/* Approved - collapsed */}
-          {groupedInvoices.approved.length > 0 && (
-            <Card>
-              <CardHeader className={showApproved ? 'pb-3' : 'py-4'}>
-                <button
-                  onClick={() => setShowApproved(!showApproved)}
-                  className="flex items-center gap-2 w-full text-left cursor-pointer"
-                >
-                  {showApproved ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <CardTitle className="text-base">Approved</CardTitle>
-                  <Badge variant="secondary">{groupedInvoices.approved.length}</Badge>
-                </button>
-              </CardHeader>
-              {showApproved && (
-                <CardContent>{renderInvoiceTable(groupedInvoices.approved)}</CardContent>
-              )}
-            </Card>
+          {/* Approved - with checkboxes and mark paid */}
+          {renderCollapsibleSection(
+            'Approved',
+            groupedInvoices.approved,
+            showApproved,
+            setShowApproved,
+            'secondary',
+            renderApprovedInvoiceTable,
+            selectedApprovedIds.size > 0 ? (
+              <Button
+                size="sm"
+                disabled={isBatchMarking}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleBatchMarkPaid()
+                }}
+              >
+                {isBatchMarking ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <DollarSign className="mr-1 h-3 w-3" />
+                )}
+                Mark {selectedApprovedIds.size} Paid
+              </Button>
+            ) : undefined
           )}
 
-          {/* Rejected - collapsed */}
-          {groupedInvoices.rejected.length > 0 && (
-            <Card>
-              <CardHeader className={showRejected ? 'pb-3' : 'py-4'}>
-                <button
-                  onClick={() => setShowRejected(!showRejected)}
-                  className="flex items-center gap-2 w-full text-left cursor-pointer"
-                >
-                  {showRejected ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <CardTitle className="text-base">Rejected</CardTitle>
-                  <Badge variant="destructive">{groupedInvoices.rejected.length}</Badge>
-                </button>
-              </CardHeader>
-              {showRejected && (
-                <CardContent>{renderInvoiceTable(groupedInvoices.rejected)}</CardContent>
-              )}
-            </Card>
+          {/* Rejected */}
+          {renderCollapsibleSection(
+            'Rejected',
+            groupedInvoices.rejected,
+            showRejected,
+            setShowRejected,
+            'destructive',
+            renderInvoiceTable
           )}
         </div>
       ) : (
