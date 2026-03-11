@@ -153,18 +153,10 @@ export default function AdminMilestoneDetailPage() {
     <div className="space-y-6">
       <div className="space-y-4">
         <div>
-          <Link
-            href={
-              milestone.startupSlug
-                ? `/admin/${cohortSlug}/startups/${milestone.startupSlug}`
-                : `/admin/${cohortSlug}/milestones`
-            }
-          >
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to {milestone.startupName || 'Milestones'}
-            </Button>
-          </Link>
+          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
         </div>
         <div className="flex items-center justify-between">
           <div>
