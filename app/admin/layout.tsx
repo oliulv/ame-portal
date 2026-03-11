@@ -102,6 +102,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
     { title: 'Startups', href: '/admin/startups', icon: 'Building2' },
     { title: 'Funding', href: '/admin/funding', icon: 'Target' },
+    { title: 'Milestones', href: '/admin/milestones', icon: 'ListChecks' },
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },
     { title: 'Perks', href: '/admin/perks', icon: 'Gift' },
     { title: 'Events', href: '/admin/events', icon: 'Calendar' },

@@ -26,7 +26,28 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { HowItWorks } from '@/components/ui/how-it-works'
-import { FileText, AlertCircle, ExternalLink, Users, Plus, Search } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import {
+  FileText,
+  AlertCircle,
+  ExternalLink,
+  Users,
+  Plus,
+  Search,
+  ChevronDown,
+  ChevronRight,
+  Check,
+  ChevronsUpDown,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useMemo, useState } from 'react'
 import {
   getInvoiceStatusLabel,
@@ -42,6 +63,10 @@ export default function AdminInvoicesPage() {
   const cohortSlug = params.cohortSlug as string
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all')
+  const [startupFilter, setStartupFilter] = useState<string>('all')
+  const [startupFilterOpen, setStartupFilterOpen] = useState(false)
+  const [showApproved, setShowApproved] = useState(false)
+  const [showRejected, setShowRejected] = useState(false)
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
@@ -61,20 +86,13 @@ export default function AdminInvoicesPage() {
   // Filter invoices to only those belonging to startups in this cohort
   const cohortInvoices = useMemo(() => {
     if (!allInvoices || !startups) return undefined
-    const filtered = allInvoices.filter((invoice) => startupIdSet.has(invoice.startupId))
-    // Sort: submitted/under_review first, then by creation time desc
-    filtered.sort((a, b) => {
-      const aPending = a.status === 'submitted' || a.status === 'under_review' ? 0 : 1
-      const bPending = b.status === 'submitted' || b.status === 'under_review' ? 0 : 1
-      if (aPending !== bPending) return aPending - bPending
-      return b._creationTime - a._creationTime
-    })
-    return filtered.slice(0, 50)
+    return allInvoices.filter((invoice) => startupIdSet.has(invoice.startupId))
   }, [allInvoices, startups, startupIdSet])
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
 
-  const invoices = useMemo(() => {
+  // Apply search, status, and startup filters
+  const filteredInvoices = useMemo(() => {
     if (!cohortInvoices) return undefined
     return cohortInvoices.filter((invoice) => {
       const status = invoice.status as InvoiceStatus
@@ -85,9 +103,33 @@ export default function AdminInvoicesPage() {
         (invoice.fileName || '').toLowerCase().includes(normalizedQuery) ||
         startupName.toLowerCase().includes(normalizedQuery)
       const matchesStatus = matchesInvoiceStatusFilter(status, statusFilter)
-      return matchesSearch && matchesStatus
+      const matchesStartup = startupFilter === 'all' || invoice.startupId === startupFilter
+      return matchesSearch && matchesStatus && matchesStartup
     })
-  }, [cohortInvoices, normalizedQuery, startupNameMap, statusFilter])
+  }, [cohortInvoices, normalizedQuery, startupNameMap, statusFilter, startupFilter])
+
+  // Group invoices by status
+  const groupedInvoices = useMemo(() => {
+    if (!filteredInvoices) return null
+
+    const pending = filteredInvoices
+      .filter((i) => i.status === 'submitted' || i.status === 'under_review')
+      .sort((a, b) => b._creationTime - a._creationTime)
+
+    const paid = filteredInvoices
+      .filter((i) => i.status === 'paid')
+      .sort((a, b) => b._creationTime - a._creationTime)
+
+    const approved = filteredInvoices
+      .filter((i) => i.status === 'approved')
+      .sort((a, b) => b._creationTime - a._creationTime)
+
+    const rejected = filteredInvoices
+      .filter((i) => i.status === 'rejected')
+      .sort((a, b) => b._creationTime - a._creationTime)
+
+    return { pending, paid, approved, rejected }
+  }, [filteredInvoices])
 
   const isLoading = cohort === undefined || startups === undefined || allInvoices === undefined
 
@@ -113,15 +155,12 @@ export default function AdminInvoicesPage() {
   if (startups.length === 0) {
     return (
       <div className="space-y-6">
-        {/* Header */}
         <div>
           <h1 className="text-3xl font-bold tracking-tight font-display">Invoice Review</h1>
           <p className="text-muted-foreground">
             Review and approve startup expense reimbursements for {cohort.label}
           </p>
         </div>
-
-        {/* Empty State */}
         <EmptyState
           icon={<Users className="h-6 w-6" />}
           title="No startups enrolled"
@@ -139,9 +178,67 @@ export default function AdminInvoicesPage() {
     )
   }
 
-  const pendingCount =
-    cohortInvoices?.filter((i) => i.status === 'submitted' || i.status === 'under_review').length ||
-    0
+  const pendingCount = groupedInvoices?.pending.length ?? 0
+
+  function renderInvoiceTable(invoices: typeof filteredInvoices) {
+    if (!invoices || invoices.length === 0) return null
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Startup</TableHead>
+            <TableHead>Vendor</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="w-12"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {invoices.map((invoice) => (
+            <TableRow
+              key={invoice._id}
+              className="cursor-pointer transition-colors hover:bg-muted/50"
+              onClick={() => router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)}
+            >
+              <TableCell className="font-medium">
+                {startupNameMap.get(invoice.startupId) || 'Unknown'}
+              </TableCell>
+              <TableCell>{invoice.vendorName}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                £{Number(invoice.amountGbp).toFixed(2)}
+              </TableCell>
+              <TableCell>
+                <Badge variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}>
+                  {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)
+                  }}
+                >
+                  Review
+                  <ExternalLink className="ml-2 h-3 w-3" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -191,8 +288,8 @@ export default function AdminInvoicesPage() {
         </Card>
       )}
 
-      {/* Search + Filter */}
-      <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+      {/* Search + Filters */}
+      <div className="grid gap-3 md:grid-cols-[1fr_220px_220px]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -217,73 +314,144 @@ export default function AdminInvoicesPage() {
             <SelectItem value="paid">Paid</SelectItem>
           </SelectContent>
         </Select>
+        <Popover open={startupFilterOpen} onOpenChange={setStartupFilterOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={startupFilterOpen}
+              className="justify-between font-normal"
+            >
+              {startupFilter === 'all'
+                ? 'All startups'
+                : (startups?.find((s) => s._id === startupFilter)?.name ?? 'All startups')}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent>
+            <Command>
+              <CommandInput placeholder="Search startup..." />
+              <CommandList>
+                <CommandEmpty>No startup found.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    value="all"
+                    onSelect={() => {
+                      setStartupFilter('all')
+                      setStartupFilterOpen(false)
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        'mr-2 h-4 w-4',
+                        startupFilter === 'all' ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                    All startups
+                  </CommandItem>
+                  {startups?.map((s) => (
+                    <CommandItem
+                      key={s._id}
+                      value={s.name}
+                      onSelect={() => {
+                        setStartupFilter(s._id)
+                        setStartupFilterOpen(false)
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          'mr-2 h-4 w-4',
+                          startupFilter === s._id ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      {s.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
-      {/* Table */}
-      {invoices && invoices.length > 0 ? (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Showing {invoices.length} of {cohortInvoices?.length ?? 0} invoices
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Startup</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invoices.map((invoice) => (
-                  <TableRow
-                    key={invoice._id}
-                    className="cursor-pointer transition-colors hover:bg-muted/50"
-                    onClick={() => router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)}
-                  >
-                    <TableCell className="font-medium">
-                      {startupNameMap.get(invoice.startupId) || 'Unknown'}
-                    </TableCell>
-                    <TableCell>{invoice.vendorName}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      £{Number(invoice.amountGbp).toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}>
-                        {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          router.push(`/admin/${cohortSlug}/invoices/${invoice._id}`)
-                        }}
-                      >
-                        Review
-                        <ExternalLink className="ml-2 h-3 w-3" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      {groupedInvoices &&
+      (groupedInvoices.pending.length > 0 ||
+        groupedInvoices.paid.length > 0 ||
+        groupedInvoices.approved.length > 0 ||
+        groupedInvoices.rejected.length > 0) ? (
+        <div className="space-y-6">
+          {/* Pending Review - shown first, prominently */}
+          {groupedInvoices.pending.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base">Pending Review</CardTitle>
+                  <Badge variant="warning">{groupedInvoices.pending.length}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>{renderInvoiceTable(groupedInvoices.pending)}</CardContent>
+            </Card>
+          )}
+
+          {/* Paid */}
+          {groupedInvoices.paid.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base">Paid</CardTitle>
+                  <Badge variant="success">{groupedInvoices.paid.length}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>{renderInvoiceTable(groupedInvoices.paid)}</CardContent>
+            </Card>
+          )}
+
+          {/* Approved - collapsed */}
+          {groupedInvoices.approved.length > 0 && (
+            <Card>
+              <CardHeader className={showApproved ? 'pb-3' : 'py-4'}>
+                <button
+                  onClick={() => setShowApproved(!showApproved)}
+                  className="flex items-center gap-2 w-full text-left cursor-pointer"
+                >
+                  {showApproved ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <CardTitle className="text-base">Approved</CardTitle>
+                  <Badge variant="secondary">{groupedInvoices.approved.length}</Badge>
+                </button>
+              </CardHeader>
+              {showApproved && (
+                <CardContent>{renderInvoiceTable(groupedInvoices.approved)}</CardContent>
+              )}
+            </Card>
+          )}
+
+          {/* Rejected - collapsed */}
+          {groupedInvoices.rejected.length > 0 && (
+            <Card>
+              <CardHeader className={showRejected ? 'pb-3' : 'py-4'}>
+                <button
+                  onClick={() => setShowRejected(!showRejected)}
+                  className="flex items-center gap-2 w-full text-left cursor-pointer"
+                >
+                  {showRejected ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <CardTitle className="text-base">Rejected</CardTitle>
+                  <Badge variant="destructive">{groupedInvoices.rejected.length}</Badge>
+                </button>
+              </CardHeader>
+              {showRejected && (
+                <CardContent>{renderInvoiceTable(groupedInvoices.rejected)}</CardContent>
+              )}
+            </Card>
+          )}
+        </div>
       ) : (
         <EmptyState
           icon={<FileText className="h-6 w-6" />}

@@ -52,11 +52,13 @@ export default function NewInvoicePage() {
     if (!invoiceFile) return null
     if (!invoiceFile.name.toLowerCase().endsWith('.pdf')) return 'Must be a PDF file'
     if (!startupName) return null
+    const normalizedName = startupName.normalize('NFC')
+    const normalizedFileName = invoiceFile.name.normalize('NFC')
     const pattern = new RegExp(
-      `^${startupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Invoice \\d+\\.pdf$`,
+      `^${normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Invoice \\d+\\.pdf$`,
       'i'
     )
-    if (!pattern.test(invoiceFile.name))
+    if (!pattern.test(normalizedFileName))
       return `Must be named "${startupName} Invoice ${expectedNumber}.pdf"`
     const num = invoiceFile.name.match(/Invoice (\d+)\.pdf$/i)?.[1]
     if (num && parseInt(num, 10) !== expectedNumber)

@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { logClientError } from '@/lib/logging'
 import type { Id } from '@/convex/_generated/dataModel'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -18,16 +19,19 @@ import {
   ArrowLeft,
   Check,
   Clock,
+  Edit,
   ExternalLink,
   FileText,
   RotateCw,
   Send,
   Target,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function AdminMilestoneDetailPage() {
   const params = useParams<{ cohortSlug: string; id: string }>()
+  const router = useRouter()
   const cohortSlug = params.cohortSlug
   const milestoneId = params.id as Id<'milestones'>
 
@@ -40,6 +44,7 @@ export default function AdminMilestoneDetailPage() {
   )
   const approveMilestone = useMutation(api.milestones.approve)
   const requestChangesMutation = useMutation(api.milestones.requestChanges)
+  const removeMilestone = useMutation(api.milestones.remove)
 
   const [isApproving, setIsApproving] = useState(false)
   const [isRequestingChanges, setIsRequestingChanges] = useState(false)
@@ -65,8 +70,8 @@ export default function AdminMilestoneDetailPage() {
         title="Milestone not found"
         description="This milestone does not exist or you do not have access to it."
         action={
-          <Link href={`/admin/${cohortSlug}/funding`}>
-            <Button variant="outline">Back to Funding</Button>
+          <Link href={`/admin/${cohortSlug}/milestones`}>
+            <Button variant="outline">Back to Milestones</Button>
           </Link>
         }
       />
@@ -101,6 +106,19 @@ export default function AdminMilestoneDetailPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!confirm('Are you sure you want to delete this milestone? This action cannot be undone.'))
+      return
+    try {
+      await removeMilestone({ id: milestoneId })
+      toast.success('Milestone deleted')
+      router.push(`/admin/${cohortSlug}/milestones`)
+    } catch (error) {
+      logClientError('Failed to delete milestone:', error)
+      toast.error('Failed to delete milestone')
+    }
+  }
+
   const statusIcon =
     milestone.status === 'approved' ? (
       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100">
@@ -131,27 +149,44 @@ export default function AdminMilestoneDetailPage() {
       <Badge variant="secondary">Waiting</Badge>
     )
 
-  const backHref = milestone.startupSlug
-    ? `/admin/${cohortSlug}/funding/${milestone.startupSlug}`
-    : `/admin/${cohortSlug}/funding`
-
   return (
     <div className="space-y-6">
       <div className="space-y-4">
         <div>
-          <Link href={backHref}>
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to {milestone.startupName || 'Funding'}
-            </Button>
-          </Link>
+          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
         </div>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight font-display">{milestone.title}</h1>
-            <p className="text-muted-foreground">{milestone.startupName}</p>
+            <p className="text-muted-foreground">
+              {milestone.startupSlug ? (
+                <Link
+                  href={`/admin/${cohortSlug}/startups/${milestone.startupSlug}`}
+                  className="hover:underline"
+                >
+                  {milestone.startupName}
+                </Link>
+              ) : (
+                milestone.startupName
+              )}
+            </p>
           </div>
-          {statusBadge}
+          <div className="flex items-center gap-2">
+            {statusBadge}
+            <Link href={`/admin/${cohortSlug}/milestones/${milestoneId}/edit`}>
+              <Button variant="outline" size="sm">
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+            <Button variant="outline" size="sm" onClick={handleDelete}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </div>
         </div>
       </div>
 

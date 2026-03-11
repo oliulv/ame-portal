@@ -128,12 +128,10 @@ export default function InvoiceDetailPage() {
       {/* Header */}
       <div className="space-y-4">
         <div>
-          <Link href={`/admin/${cohortSlug}/invoices`}>
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Invoices
-            </Button>
-          </Link>
+          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
         </div>
         <div className="flex items-center justify-between">
           <div>

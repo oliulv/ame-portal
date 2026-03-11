@@ -21,7 +21,7 @@ export const listByStartup = query({
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
       .collect()
 
-    return milestones.sort((a, b) => a.sortOrder - b.sortOrder)
+    return milestones.sort((a, b) => b.sortOrder - a.sortOrder)
   },
 })
 
@@ -41,7 +41,7 @@ export const listForFounder = query({
       .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
       .collect()
 
-    return milestones.sort((a, b) => a.sortOrder - b.sortOrder)
+    return milestones.sort((a, b) => b.sortOrder - a.sortOrder)
   },
 })
 
@@ -112,6 +112,39 @@ export const getForAdmin = query({
       startupSlug: startup?.slug,
       cohortId: startup?.cohortId,
     }
+  },
+})
+
+/**
+ * List all milestones across a cohort (admin), with startup name/slug joined.
+ */
+export const listByCohort = query({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const startups = await ctx.db
+      .query('startups')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    const results = []
+    for (const startup of startups) {
+      const milestones = await ctx.db
+        .query('milestones')
+        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+        .collect()
+
+      for (const m of milestones) {
+        results.push({
+          ...m,
+          startupName: startup.name,
+          startupSlug: startup.slug,
+        })
+      }
+    }
+
+    return results.sort((a, b) => b.sortOrder - a.sortOrder)
   },
 })
 
@@ -609,8 +642,9 @@ export const reorder = mutation({
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
 
+    const last = args.milestoneIds.length - 1
     for (let i = 0; i < args.milestoneIds.length; i++) {
-      await ctx.db.patch(args.milestoneIds[i], { sortOrder: i })
+      await ctx.db.patch(args.milestoneIds[i], { sortOrder: last - i })
     }
   },
 })

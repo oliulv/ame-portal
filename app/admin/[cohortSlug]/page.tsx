@@ -385,7 +385,7 @@ export default function AdminDashboard() {
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href={`/admin/${cohortSlug}/funding/templates`}>
+          <Link href={`/admin/${cohortSlug}/milestones?tab=templates`}>
             <Button variant="outline" className="w-full justify-between">
               Milestone Templates
               <ArrowRight className="h-4 w-4" />
