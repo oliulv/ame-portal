@@ -69,6 +69,51 @@ import { toast } from 'sonner'
 import type { Doc } from '@/convex/_generated/dataModel'
 
 type Milestone = Doc<'milestones'>
+type Invoice = Doc<'invoices'>
+
+function InvoiceCard({ invoice, cohortSlug }: { invoice: Invoice; cohortSlug: string }) {
+  return (
+    <Link
+      href={`/admin/${cohortSlug}/invoices/${invoice._id}`}
+      className="flex items-center gap-3 border px-3 py-2.5 hover:bg-muted/50"
+    >
+      <div className="flex-shrink-0">
+        {invoice.status === 'paid' ? (
+          <CheckCircle className="h-4 w-4 text-green-600" />
+        ) : invoice.status === 'approved' ? (
+          <CheckCircle className="h-4 w-4 text-blue-600" />
+        ) : invoice.status === 'rejected' ? (
+          <FileText className="h-4 w-4 text-red-600" />
+        ) : (
+          <Clock className="h-4 w-4 text-amber-600" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium truncate">{invoice.vendorName}</p>
+          <Badge
+            variant={
+              invoice.status === 'paid'
+                ? 'success'
+                : invoice.status === 'approved'
+                  ? 'secondary'
+                  : invoice.status === 'rejected'
+                    ? 'destructive'
+                    : 'warning'
+            }
+            className="shrink-0 text-[10px] px-1.5 py-0"
+          >
+            {invoice.status === 'under_review' ? 'under review' : invoice.status}
+          </Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {'\u00A3'}
+          {invoice.amountGbp.toLocaleString('en-GB')}
+        </p>
+      </div>
+    </Link>
+  )
+}
 
 function SortableMilestoneCard({
   milestone,
@@ -521,46 +566,49 @@ export default function StartupDetailPage() {
         </Card>
       </div>
 
-      {/* Milestones section with DnD */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Milestones</CardTitle>
-              <CardDescription>Drag to reorder. Click to view details.</CardDescription>
-            </div>
-            <Link href={`/admin/${cohortSlug}/milestones/new?startup=${slug}`}>
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Create Milestone
-              </Button>
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {milestones && milestones.length > 0 ? (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <div className="space-y-2">
-                <SortableContext
-                  items={milestones.map((m) => m._id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {milestones.map((milestone) => (
-                    <SortableMilestoneCard
-                      key={milestone._id}
-                      milestone={milestone}
-                      cohortSlug={cohortSlug}
-                    />
-                  ))}
-                </SortableContext>
+      {/* Milestones & Invoices 50/50 */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Milestones */}
+        <Card className="flex flex-col">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Milestones</CardTitle>
+                <CardDescription>Drag to reorder. Click to view details.</CardDescription>
               </div>
-            </DndContext>
-          ) : (
-            <div className="space-y-2">
+              <Link href={`/admin/${cohortSlug}/milestones/new?startup=${slug}`}>
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Milestone
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1">
+            {milestones && milestones.length > 0 ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <div className="max-h-[13rem] overflow-y-auto">
+                  <div className="space-y-2">
+                    <SortableContext
+                      items={milestones.map((m) => m._id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {milestones.map((milestone) => (
+                        <SortableMilestoneCard
+                          key={milestone._id}
+                          milestone={milestone}
+                          cohortSlug={cohortSlug}
+                        />
+                      ))}
+                    </SortableContext>
+                  </div>
+                </div>
+              </DndContext>
+            ) : (
               <div className="flex items-center gap-3 border px-3 py-2.5">
                 <div className="flex-shrink-0">
                   <CheckCircle className="h-4 w-4 text-muted-foreground" />
@@ -570,10 +618,50 @@ export default function StartupDetailPage() {
                   <p className="text-xs text-muted-foreground">No milestones assigned yet.</p>
                 </div>
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Invoices */}
+        <Card className="flex flex-col">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Invoices</CardTitle>
+                <CardDescription>Click to review invoice details.</CardDescription>
+              </div>
+              <Link href={`/admin/${cohortSlug}/invoices`}>
+                <Button size="sm" variant="outline">
+                  View All
+                </Button>
+              </Link>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="flex-1">
+            {invoicesData && invoicesData.filter((i) => i.status !== 'rejected').length > 0 ? (
+              <div className="max-h-[13rem] overflow-y-auto">
+                <div className="space-y-2">
+                  {invoicesData
+                    .filter((i) => i.status !== 'rejected')
+                    .map((invoice) => (
+                      <InvoiceCard key={invoice._id} invoice={invoice} cohortSlug={cohortSlug} />
+                    ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 border px-3 py-2.5">
+                <div className="flex-shrink-0">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">No invoices</p>
+                  <p className="text-xs text-muted-foreground">No invoices submitted yet.</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Startup Details */}
       <Card>
