@@ -26,6 +26,15 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { HowItWorks } from '@/components/ui/how-it-works'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import {
   FileText,
   AlertCircle,
@@ -35,7 +44,10 @@ import {
   Search,
   ChevronDown,
   ChevronRight,
+  Check,
+  ChevronsUpDown,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useMemo, useState } from 'react'
 import {
   getInvoiceStatusLabel,
@@ -51,6 +63,8 @@ export default function AdminInvoicesPage() {
   const cohortSlug = params.cohortSlug as string
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all')
+  const [startupFilter, setStartupFilter] = useState<string>('all')
+  const [startupFilterOpen, setStartupFilterOpen] = useState(false)
   const [showApproved, setShowApproved] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
 
@@ -77,7 +91,7 @@ export default function AdminInvoicesPage() {
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
 
-  // Apply search and status filters
+  // Apply search, status, and startup filters
   const filteredInvoices = useMemo(() => {
     if (!cohortInvoices) return undefined
     return cohortInvoices.filter((invoice) => {
@@ -89,9 +103,10 @@ export default function AdminInvoicesPage() {
         (invoice.fileName || '').toLowerCase().includes(normalizedQuery) ||
         startupName.toLowerCase().includes(normalizedQuery)
       const matchesStatus = matchesInvoiceStatusFilter(status, statusFilter)
-      return matchesSearch && matchesStatus
+      const matchesStartup = startupFilter === 'all' || invoice.startupId === startupFilter
+      return matchesSearch && matchesStatus && matchesStartup
     })
-  }, [cohortInvoices, normalizedQuery, startupNameMap, statusFilter])
+  }, [cohortInvoices, normalizedQuery, startupNameMap, statusFilter, startupFilter])
 
   // Group invoices by status
   const groupedInvoices = useMemo(() => {
@@ -273,8 +288,8 @@ export default function AdminInvoicesPage() {
         </Card>
       )}
 
-      {/* Search + Filter */}
-      <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+      {/* Search + Filters */}
+      <div className="grid gap-3 md:grid-cols-[1fr_220px_220px]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -299,6 +314,64 @@ export default function AdminInvoicesPage() {
             <SelectItem value="paid">Paid</SelectItem>
           </SelectContent>
         </Select>
+        <Popover open={startupFilterOpen} onOpenChange={setStartupFilterOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={startupFilterOpen}
+              className="justify-between font-normal"
+            >
+              {startupFilter === 'all'
+                ? 'All startups'
+                : (startups?.find((s) => s._id === startupFilter)?.name ?? 'All startups')}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent>
+            <Command>
+              <CommandInput placeholder="Search startup..." />
+              <CommandList>
+                <CommandEmpty>No startup found.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    value="all"
+                    onSelect={() => {
+                      setStartupFilter('all')
+                      setStartupFilterOpen(false)
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        'mr-2 h-4 w-4',
+                        startupFilter === 'all' ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                    All startups
+                  </CommandItem>
+                  {startups?.map((s) => (
+                    <CommandItem
+                      key={s._id}
+                      value={s.name}
+                      onSelect={() => {
+                        setStartupFilter(s._id)
+                        setStartupFilterOpen(false)
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          'mr-2 h-4 w-4',
+                          startupFilter === s._id ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      {s.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {groupedInvoices &&
@@ -336,10 +409,10 @@ export default function AdminInvoicesPage() {
           {/* Approved - collapsed */}
           {groupedInvoices.approved.length > 0 && (
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className={showApproved ? 'pb-3' : 'py-4'}>
                 <button
                   onClick={() => setShowApproved(!showApproved)}
-                  className="flex items-center gap-2 w-full text-left"
+                  className="flex items-center gap-2 w-full text-left cursor-pointer"
                 >
                   {showApproved ? (
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -359,10 +432,10 @@ export default function AdminInvoicesPage() {
           {/* Rejected - collapsed */}
           {groupedInvoices.rejected.length > 0 && (
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className={showRejected ? 'pb-3' : 'py-4'}>
                 <button
                   onClick={() => setShowRejected(!showRejected)}
-                  className="flex items-center gap-2 w-full text-left"
+                  className="flex items-center gap-2 w-full text-left cursor-pointer"
                 >
                   {showRejected ? (
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
