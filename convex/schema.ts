@@ -106,7 +106,6 @@ export default defineSchema({
     sortCode: v.string(),
     accountNumber: v.string(),
     bankName: v.optional(v.string()),
-    verified: v.boolean(),
   }).index('by_startupId', ['startupId']),
 
   // ── Milestone Templates ────────────────────────────────────────────

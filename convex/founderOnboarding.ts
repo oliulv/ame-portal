@@ -114,7 +114,6 @@ export const complete = mutation({
         sortCode: args.bankDetails.sortCode,
         accountNumber: args.bankDetails.accountNumber,
         bankName: args.bankDetails.bankName,
-        verified: false,
       }
 
       if (existingBank) {
