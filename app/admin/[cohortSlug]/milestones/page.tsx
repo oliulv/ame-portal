@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { logClientError } from '@/lib/logging'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -55,6 +55,16 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import { cn } from '@/lib/utils'
 import {
   Plus,
   Edit,
@@ -66,6 +76,7 @@ import {
   LayoutGrid,
   List,
   Check,
+  ChevronsUpDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id, Doc } from '@/convex/_generated/dataModel'
@@ -164,6 +175,7 @@ export default function MilestonesAggregatePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<MilestoneFilter>('all')
   const [startupFilter, setStartupFilter] = useState<string>('all')
+  const [startupFilterOpen, setStartupFilterOpen] = useState(false)
   const [viewMode, setViewMode] = useState<MilestoneViewMode>('list')
 
   // Template form state
@@ -574,19 +586,67 @@ export default function MilestonesAggregatePage() {
                 <SelectItem value="changes_requested">Changes Requested</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={startupFilter} onValueChange={setStartupFilter}>
-              <SelectTrigger className="w-[170px]">
-                <SelectValue placeholder="Filter by startup" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All startups</SelectItem>
-                {startups?.map((s) => (
-                  <SelectItem key={s._id} value={s.slug ?? s._id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={startupFilterOpen} onOpenChange={setStartupFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={startupFilterOpen}
+                  className="w-[170px] justify-between font-normal"
+                >
+                  <span className="truncate">
+                    {startupFilter === 'all'
+                      ? 'All startups'
+                      : (startups?.find((s) => (s.slug ?? s._id) === startupFilter)?.name ??
+                        'All startups')}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <Command>
+                  <CommandInput placeholder="Search startup..." />
+                  <CommandList>
+                    <CommandEmpty>No startup found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all"
+                        onSelect={() => {
+                          setStartupFilter('all')
+                          setStartupFilterOpen(false)
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            'mr-2 h-4 w-4',
+                            startupFilter === 'all' ? 'opacity-100' : 'opacity-0'
+                          )}
+                        />
+                        All startups
+                      </CommandItem>
+                      {startups?.map((s) => (
+                        <CommandItem
+                          key={s._id}
+                          value={s.name}
+                          onSelect={() => {
+                            setStartupFilter(s.slug ?? s._id)
+                            setStartupFilterOpen(false)
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              'mr-2 h-4 w-4',
+                              startupFilter === (s.slug ?? s._id) ? 'opacity-100' : 'opacity-0'
+                            )}
+                          />
+                          {s.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             <div className="flex gap-1 border rounded-md p-0.5">
               <Button
                 variant={viewMode === 'list' ? 'secondary' : 'ghost'}
@@ -959,9 +1019,18 @@ function MilestoneRow({
   cohortSlug: string
   onApprove: (id: Id<'milestones'>) => void
 }) {
+  const router = useRouter()
   return (
-    <TableRow>
-      <TableCell className="font-medium">
+    <TableRow
+      className="cursor-pointer transition-colors hover:bg-muted/50"
+      onClick={() => router.push(`/admin/${cohortSlug}/milestones/${milestone._id}`)}
+    >
+      <TableCell
+        className="font-medium"
+        onClick={(e) => {
+          e.stopPropagation()
+        }}
+      >
         <Link
           href={`/admin/${cohortSlug}/startups/${milestone.startupSlug}`}
           className="hover:underline"
@@ -969,14 +1038,7 @@ function MilestoneRow({
           {milestone.startupName}
         </Link>
       </TableCell>
-      <TableCell>
-        <Link
-          href={`/admin/${cohortSlug}/milestones/${milestone._id}`}
-          className="hover:underline font-medium"
-        >
-          {milestone.title}
-        </Link>
-      </TableCell>
+      <TableCell className="font-medium">{milestone.title}</TableCell>
       <TableCell className="text-right">
         {'\u00A3'}
         {milestone.amount.toLocaleString('en-GB')}
@@ -1003,7 +1065,7 @@ function MilestoneRow({
             })
           : '-'}
       </TableCell>
-      <TableCell className="text-right">
+      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         {milestone.status === 'submitted' && (
           <Button
             variant="ghost"
