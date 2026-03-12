@@ -1,4 +1,5 @@
 import { internalMutation } from './functions'
+import type { Id } from './_generated/dataModel'
 
 // ── Test User Clerk IDs (dev Clerk instance) ─────────────────────────
 // TODO: Fill in actual Clerk IDs
@@ -205,6 +206,50 @@ const COHORT_EVENTS = [
     sortOrder: 4,
   },
 ]
+
+// ── Invoice definitions (per startup, varied statuses) ───────────────
+const INVOICE_VENDORS = [
+  'Amazon Web Services',
+  'Google Cloud Platform',
+  'Figma Inc.',
+  'Notion Labs',
+  'DigitalOcean',
+  'Vercel Inc.',
+  'Adobe Systems',
+  'Slack Technologies',
+  'GitHub Inc.',
+  'Intercom',
+]
+
+const INVOICE_CATEGORIES = [
+  'Cloud Infrastructure',
+  'Software Subscriptions',
+  'Design Tools',
+  'Marketing',
+  'Office Supplies',
+  'Professional Services',
+]
+
+/**
+ * Create a minimal valid PDF as a Blob for storage seeding.
+ */
+function makeDummyPdfBlob(): Blob {
+  const pdf = `%PDF-1.0
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj
+xref
+0 4
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+trailer<</Size 4/Root 1 0 R>>
+startxref
+190
+%%EOF`
+  return new Blob([pdf], { type: 'application/pdf' })
+}
 
 function slugify(name: string): string {
   return name
@@ -526,6 +571,71 @@ export const default_ = internalMutation({
       })
     }
 
-    console.log('Seed complete: created cohort with 12 startups and related data.')
+    // ── 13. Create invoices for startups with completed onboarding ───
+    // Only create invoices for the first 6 startups (completed onboarding)
+    const invoiceStatuses: Array<'submitted' | 'under_review' | 'approved' | 'rejected' | 'paid'> =
+      ['paid', 'paid', 'approved', 'approved', 'submitted', 'under_review', 'rejected']
+
+    let invoiceCount = 0
+    for (let i = 0; i < 6; i++) {
+      const startupId = startupIds[i] as Id<'startups'>
+      const startupName = STARTUPS[i].name
+      // Each startup gets 2-4 invoices
+      const numInvoices = 2 + (i % 3)
+
+      for (let j = 0; j < numInvoices; j++) {
+        invoiceCount++
+        const status = invoiceStatuses[(i * 3 + j) % invoiceStatuses.length]
+        const vendor = INVOICE_VENDORS[(i + j) % INVOICE_VENDORS.length]
+        const category = INVOICE_CATEGORIES[(i + j) % INVOICE_CATEGORIES.length]
+        const amount = [250, 499.99, 750, 1200, 1500, 2000, 3500][(i * 2 + j) % 7]
+        const invoiceNum = j + 1
+        const invoiceFileName = `${startupName} Invoice ${invoiceNum}.pdf`
+        const month = String(9 + (j % 4)).padStart(2, '0') // Sep-Dec 2025
+        const day = String(5 + i + j * 3).padStart(2, '0')
+        const invoiceDate = `2025-${month}-${day}`
+
+        // Store dummy PDFs for invoice and receipt
+        const invoiceBlob = makeDummyPdfBlob()
+        const invoiceStorageId = await ctx.storage.store(invoiceBlob)
+
+        const receiptBlob = makeDummyPdfBlob()
+        const receiptStorageId = await ctx.storage.store(receiptBlob)
+
+        const receiptFileName = `${startupName} Invoice ${invoiceNum} Receipt 1.pdf`
+
+        await ctx.db.insert('invoices', {
+          startupId,
+          uploadedByUserId: founderId,
+          vendorName: vendor,
+          invoiceDate,
+          amountGbp: amount,
+          category,
+          description: `${vendor} - ${category} expense for ${startupName}`,
+          storageId: invoiceStorageId,
+          fileName: invoiceFileName,
+          receiptStorageIds: [receiptStorageId],
+          receiptFileNames: [receiptFileName],
+          status,
+          approvedByAdminId: status === 'approved' || status === 'paid' ? superAdminId : undefined,
+          approvedAt:
+            status === 'approved' || status === 'paid'
+              ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+              : undefined,
+          paidAt:
+            status === 'paid'
+              ? new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+              : undefined,
+          adminComment:
+            status === 'rejected'
+              ? 'This expense does not appear to be related to the startup. Please provide additional context.'
+              : undefined,
+        })
+      }
+    }
+
+    console.log(
+      `Seed complete: created cohort with 12 startups, ${invoiceCount} invoices, and related data.`
+    )
   },
 })
