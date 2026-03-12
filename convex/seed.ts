@@ -1,5 +1,7 @@
-import { internalMutation } from './functions'
+import { internalMutation, internalAction } from './functions'
+import { internal } from './_generated/api'
 import type { Id } from './_generated/dataModel'
+import { v } from 'convex/values'
 
 // ── Test User Clerk IDs (dev Clerk instance) ─────────────────────────
 // TODO: Fill in actual Clerk IDs
@@ -571,16 +573,38 @@ export const default_ = internalMutation({
       })
     }
 
-    // ── 13. Create invoices for startups with completed onboarding ───
-    // Only create invoices for the first 6 startups (completed onboarding)
+    // ── 13. Schedule invoice seeding (needs action for storage.store) ──
+    // Pass the first 6 startup IDs (completed onboarding) and the admin ID
+    await ctx.scheduler.runAfter(0, internal.seed.seedInvoicesAction, {
+      startupIds: startupIds.slice(0, 6),
+      startupNames: STARTUPS.slice(0, 6).map((s) => s.name),
+      adminUserId: superAdminId,
+      founderUserId: founderId,
+    })
+
+    console.log('Seed complete: created cohort with 12 startups and related data.')
+  },
+})
+
+/**
+ * Internal action to seed invoices with dummy PDF files in storage.
+ * Scheduled by the main seed mutation because mutations cannot call storage.store().
+ */
+export const seedInvoicesAction = internalAction({
+  args: {
+    startupIds: v.array(v.string()),
+    startupNames: v.array(v.string()),
+    adminUserId: v.string(),
+    founderUserId: v.string(),
+  },
+  handler: async (ctx, args) => {
     const invoiceStatuses: Array<'submitted' | 'under_review' | 'approved' | 'rejected' | 'paid'> =
       ['paid', 'paid', 'approved', 'approved', 'submitted', 'under_review', 'rejected']
 
     let invoiceCount = 0
-    for (let i = 0; i < 6; i++) {
-      const startupId = startupIds[i] as Id<'startups'>
-      const startupName = STARTUPS[i].name
-      // Each startup gets 2-4 invoices
+    for (let i = 0; i < args.startupIds.length; i++) {
+      const startupId = args.startupIds[i] as Id<'startups'>
+      const startupName = args.startupNames[i]
       const numInvoices = 2 + (i % 3)
 
       for (let j = 0; j < numInvoices; j++) {
@@ -591,22 +615,17 @@ export const default_ = internalMutation({
         const amount = [250, 499.99, 750, 1200, 1500, 2000, 3500][(i * 2 + j) % 7]
         const invoiceNum = j + 1
         const invoiceFileName = `${startupName} Invoice ${invoiceNum}.pdf`
-        const month = String(9 + (j % 4)).padStart(2, '0') // Sep-Dec 2025
+        const month = String(9 + (j % 4)).padStart(2, '0')
         const day = String(5 + i + j * 3).padStart(2, '0')
         const invoiceDate = `2025-${month}-${day}`
 
-        // Store dummy PDFs for invoice and receipt
-        const invoiceBlob = makeDummyPdfBlob()
-        const invoiceStorageId = await ctx.storage.store(invoiceBlob)
-
-        const receiptBlob = makeDummyPdfBlob()
-        const receiptStorageId = await ctx.storage.store(receiptBlob)
-
+        const invoiceStorageId = await ctx.storage.store(makeDummyPdfBlob())
+        const receiptStorageId = await ctx.storage.store(makeDummyPdfBlob())
         const receiptFileName = `${startupName} Invoice ${invoiceNum} Receipt 1.pdf`
 
-        await ctx.db.insert('invoices', {
+        await ctx.runMutation(internal.seed.insertInvoice, {
           startupId,
-          uploadedByUserId: founderId,
+          uploadedByUserId: args.founderUserId,
           vendorName: vendor,
           invoiceDate,
           amountGbp: amount,
@@ -617,7 +636,8 @@ export const default_ = internalMutation({
           receiptStorageIds: [receiptStorageId],
           receiptFileNames: [receiptFileName],
           status,
-          approvedByAdminId: status === 'approved' || status === 'paid' ? superAdminId : undefined,
+          approvedByAdminId:
+            status === 'approved' || status === 'paid' ? args.adminUserId : undefined,
           approvedAt:
             status === 'approved' || status === 'paid'
               ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -634,8 +654,52 @@ export const default_ = internalMutation({
       }
     }
 
-    console.log(
-      `Seed complete: created cohort with 12 startups, ${invoiceCount} invoices, and related data.`
-    )
+    console.log(`Seed invoices: created ${invoiceCount} invoices.`)
+  },
+})
+
+/**
+ * Internal mutation to insert a single invoice record (called from seedInvoicesAction).
+ */
+export const insertInvoice = internalMutation({
+  args: {
+    startupId: v.string(),
+    uploadedByUserId: v.string(),
+    vendorName: v.string(),
+    invoiceDate: v.string(),
+    amountGbp: v.number(),
+    category: v.optional(v.string()),
+    description: v.optional(v.string()),
+    storageId: v.string(),
+    fileName: v.string(),
+    receiptStorageIds: v.array(v.string()),
+    receiptFileNames: v.array(v.string()),
+    status: v.string(),
+    approvedByAdminId: v.optional(v.string()),
+    approvedAt: v.optional(v.string()),
+    paidAt: v.optional(v.string()),
+    adminComment: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert('invoices', {
+      startupId: args.startupId as Id<'startups'>,
+      uploadedByUserId: args.uploadedByUserId as Id<'users'>,
+      vendorName: args.vendorName,
+      invoiceDate: args.invoiceDate,
+      amountGbp: args.amountGbp,
+      category: args.category,
+      description: args.description,
+      storageId: args.storageId as Id<'_storage'>,
+      fileName: args.fileName,
+      receiptStorageIds: args.receiptStorageIds as Id<'_storage'>[],
+      receiptFileNames: args.receiptFileNames,
+      status: args.status as 'submitted' | 'under_review' | 'approved' | 'rejected' | 'paid',
+      approvedByAdminId: args.approvedByAdminId
+        ? (args.approvedByAdminId as Id<'users'>)
+        : undefined,
+      approvedAt: args.approvedAt,
+      paidAt: args.paidAt,
+      adminComment: args.adminComment,
+    })
   },
 })
