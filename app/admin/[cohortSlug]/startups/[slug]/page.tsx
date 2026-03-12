@@ -243,9 +243,14 @@ export default function StartupDetailPage() {
   const deployed = (invoicesData ?? [])
     .filter((i) => i.status === 'paid')
     .reduce((sum, i) => sum + i.amountGbp, 0)
+  const committed = (invoicesData ?? [])
+    .filter((i) => i.status === 'approved')
+    .reduce((sum, i) => sum + i.amountGbp, 0)
   const available = Math.max(0, unlocked - deployed)
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
+  const committedPct =
+    unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
 
   // Quick stats
   const pendingInvoices = (invoicesData ?? []).filter(
@@ -508,10 +513,18 @@ export default function StartupDetailPage() {
             className={`relative h-3 overflow-hidden rounded-full ${unlocked > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
           >
             {unlocked > 0 && (
-              <div
-                className="absolute inset-y-0 left-0 bg-blue-600"
-                style={{ width: `${deployedPct}%` }}
-              />
+              <>
+                <div
+                  className="absolute inset-y-0 left-0 bg-blue-600"
+                  style={{ width: `${deployedPct}%` }}
+                />
+                {committed > 0 && (
+                  <div
+                    className="absolute inset-y-0 bg-violet-500"
+                    style={{ left: `${deployedPct}%`, width: `${committedPct}%` }}
+                  />
+                )}
+              </>
             )}
           </div>
           <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -520,6 +533,13 @@ export default function StartupDetailPage() {
               Deployed {'\u00A3'}
               {deployed.toLocaleString('en-GB')}
             </span>
+            {committed > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-violet-500" />
+                Committed {'\u00A3'}
+                {committed.toLocaleString('en-GB')}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
               Available {'\u00A3'}

@@ -19,7 +19,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { founderInvoiceUploadSchema, type FounderInvoiceUploadFormData } from '@/lib/schemas'
-import { Upload, ArrowLeft, AlertTriangle, Info, X } from 'lucide-react'
+import { Upload, ArrowLeft, AlertTriangle, Info, X, Plus } from 'lucide-react'
+import { useRef } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -29,6 +30,7 @@ export default function NewInvoicePage() {
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
   const [receiptFiles, setReceiptFiles] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const receiptInputRef = useRef<HTMLInputElement>(null)
 
   const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
   const createInvoice = useMutation(api.invoices.create)
@@ -337,7 +339,8 @@ export default function NewInvoicePage() {
                       </TooltipContent>
                     </Tooltip>
                   </div>
-                  <Input
+                  <input
+                    ref={receiptInputRef}
                     type="file"
                     accept="application/pdf"
                     multiple
@@ -346,11 +349,18 @@ export default function NewInvoicePage() {
                       if (files && files.length > 0) {
                         setReceiptFiles((prev) => [...prev, ...Array.from(files)])
                       }
-                      // Reset input so the same file can be re-added if removed
                       e.target.value = ''
                     }}
-                    className="cursor-pointer"
+                    className="hidden"
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => receiptInputRef.current?.click()}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    {receiptFiles.length === 0 ? 'Choose receipt files' : 'Upload more files'}
+                  </Button>
                   {receiptFiles.length > 0 && (
                     <div className="space-y-1">
                       {receiptFiles.map((file, i) => (

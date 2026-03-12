@@ -498,10 +498,10 @@ export default function MilestonesAggregatePage() {
       <div className="flex gap-1 border-b">
         <button
           onClick={() => setActiveTab('milestones')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
             activeTab === 'milestones'
               ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
           }`}
         >
           <ListChecks className="mr-2 h-4 w-4 inline" />
@@ -509,10 +509,10 @@ export default function MilestonesAggregatePage() {
         </button>
         <button
           onClick={() => setActiveTab('templates')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
             activeTab === 'templates'
               ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
           }`}
         >
           <Target className="mr-2 h-4 w-4 inline" />

@@ -220,12 +220,15 @@ export const fundingSummaryForFounder = query({
       .filter((m) => m.status === 'approved')
       .reduce((sum, m) => sum + m.amount, 0)
 
-    const paidInvoices = await ctx.db
+    const allInvoices = await ctx.db
       .query('invoices')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
-    const deployed = paidInvoices
+    const deployed = allInvoices
       .filter((i) => i.status === 'paid')
+      .reduce((sum, i) => sum + i.amountGbp, 0)
+    const committed = allInvoices
+      .filter((i) => i.status === 'approved')
       .reduce((sum, i) => sum + i.amountGbp, 0)
 
     const available = Math.max(0, unlocked - deployed)
@@ -233,6 +236,7 @@ export const fundingSummaryForFounder = query({
     return {
       unlocked,
       deployed,
+      committed,
       available,
       potential,
       baseline: cohort?.baseFunding ?? 0,
@@ -269,12 +273,16 @@ export const fundingSummaryForAdmin = query({
     const deployed = invoices
       .filter((i) => i.status === 'paid')
       .reduce((sum, i) => sum + i.amountGbp, 0)
+    const committed = invoices
+      .filter((i) => i.status === 'approved')
+      .reduce((sum, i) => sum + i.amountGbp, 0)
 
     const available = Math.max(0, unlocked - deployed)
 
     return {
       unlocked,
       deployed,
+      committed,
       available,
       potential,
       baseline: cohort?.baseFunding ?? 0,
@@ -300,6 +308,7 @@ export const fundingOverview = query({
     let totalPotential = 0
     let totalUnlocked = 0
     let totalDeployed = 0
+    let totalCommitted = 0
 
     const rows = await Promise.all(
       startups.map(async (startup) => {
@@ -313,12 +322,15 @@ export const fundingOverview = query({
           .filter((m) => m.status === 'approved')
           .reduce((sum, m) => sum + m.amount, 0)
 
-        const paidInvoices = await ctx.db
+        const allInvoices = await ctx.db
           .query('invoices')
           .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
           .collect()
-        const deployed = paidInvoices
+        const deployed = allInvoices
           .filter((i) => i.status === 'paid')
+          .reduce((sum, i) => sum + i.amountGbp, 0)
+        const committed = allInvoices
+          .filter((i) => i.status === 'approved')
           .reduce((sum, i) => sum + i.amountGbp, 0)
 
         const available = Math.max(0, unlocked - deployed)
@@ -328,6 +340,7 @@ export const fundingOverview = query({
           totalPotential += potential
           totalUnlocked += unlocked
           totalDeployed += deployed
+          totalCommitted += committed
         }
 
         return {
@@ -337,6 +350,7 @@ export const fundingOverview = query({
           potential,
           unlocked,
           deployed,
+          committed,
           available,
           milestoneCount: milestones.length,
           excludeFromMetrics: excluded,
@@ -352,6 +366,7 @@ export const fundingOverview = query({
         potential: totalPotential,
         unlocked: totalUnlocked,
         deployed: totalDeployed,
+        committed: totalCommitted,
         available: Math.max(0, totalUnlocked - totalDeployed),
       },
       cohort: {
