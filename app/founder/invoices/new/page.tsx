@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -38,6 +38,8 @@ import {
   FileText,
   Eye,
   Replace,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
@@ -50,6 +52,18 @@ export default function NewInvoicePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [amountMismatchWarning, setAmountMismatchWarning] = useState<string | null>(null)
+  const [extractionStep, setExtractionStep] = useState(0) // 0=idle, 1=upload, 2=analyze, 3=convert, 4=done
+  const [extractionResult, setExtractionResult] = useState<{
+    invoiceCurrency: string
+    totalAmountOriginal: number
+    receiptCurrencies: string[]
+    receiptAmountsOriginal: number[]
+    totalAmountGbp: number
+    receiptAmountsGbp: number[]
+    receiptTotalGbp: number
+    currencyConverted: boolean
+    unconvertedCurrencies: string[]
+  } | null>(null)
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
   const [pdfPreviewTitle, setPdfPreviewTitle] = useState('')
   const invoiceInputRef = useRef<HTMLInputElement>(null)
@@ -105,6 +119,8 @@ export default function NewInvoicePage() {
     async function runExtraction() {
       setIsExtracting(true)
       setAmountMismatchWarning(null)
+      setExtractionStep(1)
+      setExtractionResult(null)
 
       // Clean up any previous extraction files first
       await cleanupExtractionFiles()
@@ -135,25 +151,48 @@ export default function NewInvoicePage() {
           extractionStorageIds.current.push(storageId)
         }
 
+        setExtractionStep(2)
+
         const extracted = await extractInvoiceData({
           invoiceStorageId,
           receiptStorageIds: receiptStorageIds as any,
         })
 
+        // Show currency conversion step briefly if applicable
+        setExtractionStep(3)
+        if (extracted.currencyConverted) {
+          await new Promise((resolve) => setTimeout(resolve, 600))
+        }
+
         // Populate form fields
         if (extracted.vendorNames) form.setValue('vendor_name', extracted.vendorNames)
         if (extracted.description) form.setValue('description', extracted.description)
         if (extracted.invoiceDate) form.setValue('invoice_date', extracted.invoiceDate)
-        if (extracted.totalAmount > 0) form.setValue('amount_gbp', extracted.totalAmount)
+        if (extracted.totalAmountGbp > 0) form.setValue('amount_gbp', extracted.totalAmountGbp)
+
+        setExtractionStep(4)
+        setExtractionResult({
+          invoiceCurrency: extracted.invoiceCurrency,
+          totalAmountOriginal: extracted.totalAmountOriginal,
+          receiptCurrencies: extracted.receiptCurrencies,
+          receiptAmountsOriginal: extracted.receiptAmountsOriginal,
+          totalAmountGbp: extracted.totalAmountGbp,
+          receiptAmountsGbp: extracted.receiptAmountsGbp,
+          receiptTotalGbp: extracted.receiptTotalGbp,
+          currencyConverted: extracted.currencyConverted,
+          unconvertedCurrencies: extracted.unconvertedCurrencies,
+        })
 
         if (extracted.amountMismatch) {
           setAmountMismatchWarning(
-            `Invoice total (\u00A3${extracted.totalAmount.toFixed(2)}) doesn\u2019t match receipt total (\u00A3${extracted.receiptTotal.toFixed(2)})`
+            `Invoice total (£${extracted.totalAmountGbp.toFixed(2)}) doesn\u2019t match receipt total (£${extracted.receiptTotalGbp.toFixed(2)})`
           )
         }
 
         toast.success('Invoice details extracted automatically')
       } catch {
+        setExtractionStep(0)
+        setExtractionResult(null)
         toast.error('Could not extract invoice details. Please fill in manually.')
       } finally {
         setIsExtracting(false)
@@ -334,17 +373,91 @@ export default function NewInvoicePage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {isExtracting && (
-                <div className="flex items-center gap-3 border border-blue-200 bg-blue-50/50 p-4 rounded-lg">
-                  <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
-                  <div>
+              {(extractionStep > 0 || extractionResult) && (
+                <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    {extractionStep > 0 && extractionStep < 4 ? (
+                      <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    )}
                     <p className="text-sm font-medium text-blue-900">
-                      Extracting invoice details...
-                    </p>
-                    <p className="text-xs text-blue-700">
-                      AI is reading your documents to auto-fill the form
+                      {extractionStep === 4
+                        ? 'Extraction complete'
+                        : 'Extracting invoice details...'}
                     </p>
                   </div>
+
+                  <div className="flex items-center">
+                    {[
+                      { label: 'Upload', step: 1 },
+                      { label: 'Analyze', step: 2 },
+                      { label: 'Convert', step: 3 },
+                      { label: 'Populate', step: 4 },
+                    ].map(({ label, step }, i) => (
+                      <Fragment key={step}>
+                        {i > 0 && (
+                          <div
+                            className={`flex-1 h-px mx-1 ${
+                              extractionStep >= step ? 'bg-green-300' : 'bg-muted-foreground/20'
+                            }`}
+                          />
+                        )}
+                        <div
+                          className={`flex items-center gap-1 text-xs whitespace-nowrap px-2 py-1 rounded-full ${
+                            extractionStep > step
+                              ? 'text-green-700 bg-green-50'
+                              : extractionStep === step
+                                ? 'text-blue-700 bg-blue-100 font-medium'
+                                : 'text-muted-foreground'
+                          }`}
+                        >
+                          {extractionStep > step ? (
+                            <CheckCircle2 className="h-3 w-3" />
+                          ) : extractionStep === step ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Circle className="h-3 w-3" />
+                          )}
+                          {label}
+                        </div>
+                      </Fragment>
+                    ))}
+                  </div>
+
+                  {extractionResult?.currencyConverted && (
+                    <div className="border-t border-blue-200 pt-2 text-xs text-blue-800 space-y-0.5">
+                      <p className="font-medium">Currency conversion applied (live rates)</p>
+                      {extractionResult.invoiceCurrency !== 'GBP' && (
+                        <p>
+                          Invoice: {extractionResult.totalAmountOriginal.toFixed(2)}{' '}
+                          {extractionResult.invoiceCurrency} &rarr; &pound;
+                          {extractionResult.totalAmountGbp.toFixed(2)} GBP
+                        </p>
+                      )}
+                      {extractionResult.receiptCurrencies.map(
+                        (curr, i) =>
+                          curr !== 'GBP' && (
+                            <p key={i}>
+                              Receipt {i + 1}:{' '}
+                              {extractionResult.receiptAmountsOriginal[i]?.toFixed(2)} {curr} &rarr;
+                              &pound;
+                              {extractionResult.receiptAmountsGbp[i]?.toFixed(2)} GBP
+                            </p>
+                          )
+                      )}
+                    </div>
+                  )}
+
+                  {extractionResult && extractionResult.unconvertedCurrencies.length > 0 && (
+                    <div className="border-t border-amber-200 pt-2 flex items-start gap-1.5 text-xs text-amber-800">
+                      <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                      <p>
+                        Could not convert: {extractionResult.unconvertedCurrencies.join(', ')}.
+                        Amounts shown as-is — please verify.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 

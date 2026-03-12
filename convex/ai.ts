@@ -3,6 +3,7 @@ import { v } from 'convex/values'
 
 /**
  * Extract structured invoice data from uploaded PDFs using Gemini Flash 3 via OpenRouter.
+ * Handles multi-currency invoices and converts everything to GBP.
  */
 export const extractInvoiceData = action({
   args: {
@@ -45,12 +46,18 @@ export const extractInvoiceData = action({
   "vendorNames": "comma-separated vendor name(s) from the invoice and receipts",
   "description": "brief description of what was purchased",
   "invoiceDate": "YYYY-MM-DD format, the date on the invoice",
-  "totalAmount": <number - the total amount from the invoice PDF>,
-  "receiptAmounts": [<number for each receipt PDF, the amount on that receipt>]
+  "invoiceCurrency": "ISO 4217 currency code found on the invoice (e.g. GBP, USD, EUR, NOK)",
+  "totalAmountOriginal": <number - the total amount in the ORIGINAL currency as shown on the invoice>,
+  "receiptCurrencies": ["ISO 4217 currency code for each receipt"],
+  "receiptAmountsOriginal": [<number for each receipt PDF, the amount in its ORIGINAL currency>]
 }
 
-The first PDF is the invoice. The remaining PDFs are receipts.
-Extract amounts as numbers (no currency symbols). If you cannot determine a value, use null.`,
+IMPORTANT:
+- The first PDF is the invoice. The remaining PDFs are receipts.
+- Extract amounts as numbers (no currency symbols).
+- Identify the currency from each document. Look for currency symbols (£, $, €, kr), ISO codes, or context clues.
+- If the currency is ambiguous, default to GBP.
+- If you cannot determine a value, use null.`,
       },
       {
         type: 'image_url',
@@ -105,8 +112,10 @@ Extract amounts as numbers (no currency symbols). If you cannot determine a valu
       vendorNames: string | null
       description: string | null
       invoiceDate: string | null
-      totalAmount: number | null
-      receiptAmounts: (number | null)[]
+      invoiceCurrency: string | null
+      totalAmountOriginal: number | null
+      receiptCurrencies: (string | null)[]
+      receiptAmountsOriginal: (number | null)[]
     }
 
     try {
@@ -115,19 +124,78 @@ Extract amounts as numbers (no currency symbols). If you cannot determine a valu
       throw new Error(`Failed to parse AI response as JSON: ${jsonStr.slice(0, 200)}`)
     }
 
-    // Programmatic math: sum receipt amounts (not AI-computed)
-    const receiptAmounts = (parsed.receiptAmounts ?? []).map((a) => (typeof a === 'number' ? a : 0))
-    const receiptTotal = receiptAmounts.reduce((sum, a) => sum + a, 0)
-    const totalAmount = typeof parsed.totalAmount === 'number' ? parsed.totalAmount : 0
+    const invoiceCurrency = (parsed.invoiceCurrency ?? 'GBP').toUpperCase()
+    const totalOriginal =
+      typeof parsed.totalAmountOriginal === 'number' ? parsed.totalAmountOriginal : 0
+
+    const receiptCurrencies = (parsed.receiptCurrencies ?? []).map((c) =>
+      c ? c.toUpperCase() : 'GBP'
+    )
+    const receiptAmountsOriginal = (parsed.receiptAmountsOriginal ?? []).map((a) =>
+      typeof a === 'number' ? a : 0
+    )
+
+    // Determine if any currency conversion is needed
+    const allCurrencies = [invoiceCurrency, ...receiptCurrencies]
+    const hasNonGbp = allCurrencies.some((c) => c !== 'GBP')
+
+    // Fetch exchange rates if needed (using exchangerate.host free API)
+    const rates: Record<string, number> = { GBP: 1 }
+    if (hasNonGbp) {
+      const uniqueCurrencies = [...new Set(allCurrencies.filter((c) => c !== 'GBP'))]
+      try {
+        // Use frankfurter.dev (free, no key required, ECB rates)
+        const rateRes = await fetch(
+          `https://api.frankfurter.dev/v1/latest?base=GBP&symbols=${uniqueCurrencies.join(',')}`
+        )
+        if (rateRes.ok) {
+          const rateData = await rateRes.json()
+          // frankfurter returns rates FROM base, so GBP->USD = X means 1 GBP = X USD
+          // We need the inverse: to convert USD -> GBP, divide by the rate
+          for (const [currency, rate] of Object.entries(rateData.rates ?? {})) {
+            rates[currency] = rate as number
+          }
+        }
+      } catch {
+        // If rate fetch fails, we'll flag it and let the user convert manually
+      }
+    }
+
+    function toGbp(amount: number, currency: string): number {
+      if (currency === 'GBP') return amount
+      const rate = rates[currency]
+      if (!rate) return amount // Can't convert, return as-is
+      return Math.round((amount / rate) * 100) / 100
+    }
+
+    const totalAmountGbp = toGbp(totalOriginal, invoiceCurrency)
+    const receiptAmountsGbp = receiptAmountsOriginal.map((amount, i) =>
+      toGbp(amount, receiptCurrencies[i] ?? 'GBP')
+    )
+
+    // Programmatic math: sum receipt amounts in GBP
+    const receiptTotalGbp = receiptAmountsGbp.reduce((sum, a) => sum + a, 0)
+
+    // Check if any currencies couldn't be converted
+    const unconvertedCurrencies = allCurrencies.filter((c) => c !== 'GBP' && !rates[c])
 
     return {
       vendorNames: parsed.vendorNames ?? '',
       description: parsed.description ?? '',
       invoiceDate: parsed.invoiceDate ?? '',
-      totalAmount,
-      receiptAmounts,
-      receiptTotal,
-      amountMismatch: Math.abs(totalAmount - receiptTotal) > 0.01,
+      // Original currency info
+      invoiceCurrency,
+      totalAmountOriginal: totalOriginal,
+      receiptCurrencies,
+      receiptAmountsOriginal,
+      // GBP converted amounts
+      totalAmountGbp,
+      receiptAmountsGbp,
+      receiptTotalGbp,
+      // Flags
+      amountMismatch: Math.abs(totalAmountGbp - receiptTotalGbp) > 0.01,
+      currencyConverted: hasNonGbp && unconvertedCurrencies.length === 0,
+      unconvertedCurrencies,
     }
   },
 })
