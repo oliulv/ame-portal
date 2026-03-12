@@ -453,8 +453,8 @@ export default function AdminInvoicesPage() {
               ) : (
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               )}
-              <CardTitle className="text-base">{label}</CardTitle>
               <Badge variant={badgeVariant}>{invoices.length}</Badge>
+              <CardTitle className="text-base">{label}</CardTitle>
             </button>
             {headerExtra}
           </div>
@@ -614,16 +614,6 @@ export default function AdminInvoicesPage() {
             renderInvoiceTable
           )}
 
-          {/* Paid */}
-          {renderCollapsibleSection(
-            'Paid',
-            groupedInvoices.paid,
-            showPaid,
-            setShowPaid,
-            'success',
-            renderInvoiceTable
-          )}
-
           {/* Approved - with checkboxes and mark paid */}
           {renderCollapsibleSection(
             'Approved',
@@ -649,6 +639,16 @@ export default function AdminInvoicesPage() {
                 Mark {selectedApprovedIds.size} Paid
               </Button>
             ) : undefined
+          )}
+
+          {/* Paid */}
+          {renderCollapsibleSection(
+            'Paid',
+            groupedInvoices.paid,
+            showPaid,
+            setShowPaid,
+            'success',
+            renderInvoiceTable
           )}
 
           {/* Rejected */}
