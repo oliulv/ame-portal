@@ -1,13 +1,21 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import type { Id } from '@/convex/_generated/dataModel'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Form,
   FormControl,
@@ -19,7 +27,18 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { founderInvoiceUploadSchema, type FounderInvoiceUploadFormData } from '@/lib/schemas'
-import { Upload, ArrowLeft, AlertTriangle, Info, X, Plus, Loader2 } from 'lucide-react'
+import {
+  Upload,
+  ArrowLeft,
+  AlertTriangle,
+  Info,
+  X,
+  Plus,
+  Loader2,
+  FileText,
+  Eye,
+  Replace,
+} from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -31,11 +50,17 @@ export default function NewInvoicePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [amountMismatchWarning, setAmountMismatchWarning] = useState<string | null>(null)
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  const [pdfPreviewTitle, setPdfPreviewTitle] = useState('')
+  const invoiceInputRef = useRef<HTMLInputElement>(null)
   const receiptInputRef = useRef<HTMLInputElement>(null)
   const extractionTriggered = useRef(false)
+  // Track storage IDs from extraction uploads for cleanup
+  const extractionStorageIds = useRef<string[]>([])
 
   const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
   const createInvoice = useMutation(api.invoices.create)
+  const deleteStorageFile = useMutation(api.invoices.deleteStorageFile)
   const extractInvoiceData = useAction(api.ai.extractInvoiceData)
   const invoiceInfo = useQuery(api.invoices.getFounderInvoiceInfo)
   const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
@@ -53,6 +78,24 @@ export default function NewInvoicePage() {
     },
   })
 
+  // Cleanup extraction storage files on unmount (if user navigates away without submitting)
+  const cleanupExtractionFiles = useCallback(async () => {
+    for (const id of extractionStorageIds.current) {
+      try {
+        await deleteStorageFile({ storageId: id as Id<'_storage'> })
+      } catch {
+        // Ignore errors — file may already be deleted or used
+      }
+    }
+    extractionStorageIds.current = []
+  }, [deleteStorageFile])
+
+  useEffect(() => {
+    return () => {
+      cleanupExtractionFiles()
+    }
+  }, [cleanupExtractionFiles])
+
   // Auto-extract invoice data when both invoice + receipt files are available
   useEffect(() => {
     if (!invoiceFile || receiptFiles.length === 0 || extractionTriggered.current || isExtracting)
@@ -62,6 +105,10 @@ export default function NewInvoicePage() {
     async function runExtraction() {
       setIsExtracting(true)
       setAmountMismatchWarning(null)
+
+      // Clean up any previous extraction files first
+      await cleanupExtractionFiles()
+
       try {
         // Upload files to get storage IDs
         const invoiceUploadUrl = await generateUploadUrl()
@@ -72,6 +119,7 @@ export default function NewInvoicePage() {
         })
         if (!invoiceResult.ok) throw new Error('Failed to upload invoice for extraction')
         const { storageId: invoiceStorageId } = await invoiceResult.json()
+        extractionStorageIds.current.push(invoiceStorageId)
 
         const receiptStorageIds: string[] = []
         for (const file of receiptFiles) {
@@ -84,6 +132,7 @@ export default function NewInvoicePage() {
           if (!result.ok) throw new Error(`Failed to upload receipt for extraction`)
           const { storageId } = await result.json()
           receiptStorageIds.push(storageId)
+          extractionStorageIds.current.push(storageId)
         }
 
         const extracted = await extractInvoiceData({
@@ -104,7 +153,7 @@ export default function NewInvoicePage() {
         }
 
         toast.success('Invoice details extracted automatically')
-      } catch (error) {
+      } catch {
         toast.error('Could not extract invoice details. Please fill in manually.')
       } finally {
         setIsExtracting(false)
@@ -152,6 +201,12 @@ export default function NewInvoicePage() {
     !receiptPdfError &&
     !amountExceedsBalance
 
+  function previewFile(file: File) {
+    const url = URL.createObjectURL(file)
+    setPdfPreviewUrl(url)
+    setPdfPreviewTitle(file.name)
+  }
+
   const onSubmit = async (data: FounderInvoiceUploadFormData) => {
     if (!invoiceFile) {
       toast.error('Please select an invoice file to upload')
@@ -181,6 +236,9 @@ export default function NewInvoicePage() {
     setIsSubmitting(true)
 
     try {
+      // Clean up extraction files before final upload (they were just for AI)
+      await cleanupExtractionFiles()
+
       // Upload invoice file
       const invoiceUploadUrl = await generateUploadUrl()
       const invoiceUploadResult = await fetch(invoiceUploadUrl, {
@@ -399,16 +457,55 @@ export default function NewInvoicePage() {
                       </TooltipContent>
                     </Tooltip>
                   </div>
-                  <Input
+                  <input
+                    ref={invoiceInputRef}
                     type="file"
                     accept="application/pdf"
-                    onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
-                    className="cursor-pointer"
+                    onChange={(e) => {
+                      setInvoiceFile(e.target.files?.[0] ?? null)
+                      e.target.value = ''
+                    }}
+                    className="hidden"
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => invoiceInputRef.current?.click()}
+                  >
+                    {invoiceFile ? (
+                      <>
+                        <Replace className="mr-2 h-4 w-4" />
+                        Replace invoice file
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Choose invoice file
+                      </>
+                    )}
+                  </Button>
                   {invoiceFile && (
-                    <p className="text-sm text-muted-foreground">
-                      Selected: {invoiceFile.name} ({(invoiceFile.size / 1024).toFixed(1)} KB)
-                    </p>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <button
+                        type="button"
+                        onClick={() => previewFile(invoiceFile)}
+                        className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        {invoiceFile.name}
+                        <Eye className="h-3 w-3" />
+                      </button>
+                      <span className="text-muted-foreground">
+                        ({(invoiceFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setInvoiceFile(null)}
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   )}
                   {invoiceNameError && (
                     <p className="text-sm text-destructive">{invoiceNameError}</p>
@@ -453,7 +550,7 @@ export default function NewInvoicePage() {
                     onClick={() => receiptInputRef.current?.click()}
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    {receiptFiles.length === 0 ? 'Choose receipt files' : 'Upload more files'}
+                    {receiptFiles.length === 0 ? 'Choose receipt files' : 'Add more receipts'}
                   </Button>
                   {receiptFiles.length > 0 && (
                     <div className="space-y-1">
@@ -462,8 +559,17 @@ export default function NewInvoicePage() {
                           key={i}
                           className="flex items-center gap-2 text-sm text-muted-foreground"
                         >
-                          <span>
-                            {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                          <button
+                            type="button"
+                            onClick={() => previewFile(file)}
+                            className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 hover:underline"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            {file.name}
+                            <Eye className="h-3 w-3" />
+                          </button>
+                          <span className="text-muted-foreground">
+                            ({(file.size / 1024).toFixed(1)} KB)
                           </span>
                           <button
                             type="button"
@@ -505,6 +611,25 @@ export default function NewInvoicePage() {
           </Form>
         </CardContent>
       </Card>
+
+      {/* PDF Preview Modal */}
+      <Dialog
+        open={!!pdfPreviewUrl}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl)
+            setPdfPreviewUrl(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{pdfPreviewTitle}</DialogTitle>
+            <DialogDescription>Preview of the selected PDF file</DialogDescription>
+          </DialogHeader>
+          {pdfPreviewUrl && <iframe src={pdfPreviewUrl} className="flex-1 w-full rounded border" />}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

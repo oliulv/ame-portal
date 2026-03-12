@@ -21,6 +21,17 @@ export const generateUploadUrl = mutation({
 })
 
 /**
+ * Delete a stored file (cleanup for cancelled uploads).
+ */
+export const deleteStorageFile = mutation({
+  args: { storageId: v.id('_storage') },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx)
+    await ctx.storage.delete(args.storageId)
+  },
+})
+
+/**
  * Get a URL for a stored file.
  */
 export const getFileUrl = query({
