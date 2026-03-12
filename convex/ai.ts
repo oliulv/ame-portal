@@ -78,7 +78,7 @@ Extract amounts as numbers (no currency symbols). If you cannot determine a valu
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-flash-2.0',
+        model: 'google/gemini-3-flash-preview',
         messages: [
           {
             role: 'user',
