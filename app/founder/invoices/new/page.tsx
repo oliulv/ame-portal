@@ -482,9 +482,9 @@ export default function NewInvoicePage() {
                 </div>
               </TooltipProvider>
 
-              <div className="border border-blue-200 bg-blue-50/50 p-3 rounded-lg">
+              <div className="flex items-center gap-2 border border-blue-200 bg-blue-50/50 p-3 rounded-lg">
+                <Info className="h-3.5 w-3.5 shrink-0 text-blue-600" />
                 <p className="text-xs text-blue-700">
-                  <Info className="inline h-3 w-3 mr-1" />
                   Your invoices will be automatically combined for easier processing. You can
                   continue uploading — they&apos;ll be batched within 5 minutes.
                 </p>
