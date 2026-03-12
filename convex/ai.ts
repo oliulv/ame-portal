@@ -35,7 +35,7 @@ export const extractInvoiceData = action({
       args.receiptStorageIds.map((id) => fetchAsBase64(id as string))
     )
 
-    // Build content parts for the API call
+    // Build content parts using inline base64 data URIs (OpenAI vision format)
     const contentParts: Array<Record<string, unknown>> = [
       {
         type: 'text',
@@ -53,20 +53,18 @@ The first PDF is the invoice. The remaining PDFs are receipts.
 Extract amounts as numbers (no currency symbols). If you cannot determine a value, use null.`,
       },
       {
-        type: 'file',
-        file: {
-          filename: 'invoice.pdf',
-          data: invoiceBase64,
+        type: 'image_url',
+        image_url: {
+          url: `data:application/pdf;base64,${invoiceBase64}`,
         },
       },
     ]
 
-    receiptBase64s.forEach((b64, i) => {
+    receiptBase64s.forEach((b64) => {
       contentParts.push({
-        type: 'file',
-        file: {
-          filename: `receipt_${i + 1}.pdf`,
-          data: b64,
+        type: 'image_url',
+        image_url: {
+          url: `data:application/pdf;base64,${b64}`,
         },
       })
     })
