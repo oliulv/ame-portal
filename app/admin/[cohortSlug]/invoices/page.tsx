@@ -161,7 +161,11 @@ export default function AdminInvoicesPage() {
       setShowApproved(true)
     }
 
-    if (prevApprovedCount.current !== null && prevApprovedCount.current > 0 && approvedCount === 0) {
+    if (
+      prevApprovedCount.current !== null &&
+      prevApprovedCount.current > 0 &&
+      approvedCount === 0
+    ) {
       if (groupedInvoices.pending.length === 0) {
         setShowApproved(false)
         setShowPaid(true)
@@ -253,7 +257,9 @@ export default function AdminInvoicesPage() {
       await batchMarkPaid({
         ids: Array.from(selectedApprovedIds) as Id<'invoices'>[],
       })
-      toast.success(`${selectedApprovedIds.size} invoice${selectedApprovedIds.size !== 1 ? 's' : ''} marked as paid`)
+      toast.success(
+        `${selectedApprovedIds.size} invoice${selectedApprovedIds.size !== 1 ? 's' : ''} marked as paid`
+      )
       setSelectedApprovedIds(new Set())
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to mark invoices as paid')

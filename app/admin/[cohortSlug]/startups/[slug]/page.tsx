@@ -249,7 +249,8 @@ export default function StartupDetailPage() {
   const available = Math.max(0, unlocked - deployed)
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
-  const committedPct = unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
+  const committedPct =
+    unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
 
   // Quick stats
   const pendingInvoices = (invoicesData ?? []).filter(

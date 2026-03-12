@@ -9,12 +9,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -319,10 +314,7 @@ export default function InvoiceDetailPage() {
                   const afterAvailable = Math.max(0, currentAvailable - invoiceAmount)
                   const barTotal = fundingSummary.unlocked || 1
                   const deployedPct = Math.min(100, (fundingSummary.deployed / barTotal) * 100)
-                  const committedPct = Math.min(
-                    100 - deployedPct,
-                    (committed / barTotal) * 100
-                  )
+                  const committedPct = Math.min(100 - deployedPct, (committed / barTotal) * 100)
                   const thisPct = Math.min(
                     100 - deployedPct - committedPct,
                     (invoiceAmount / barTotal) * 100
@@ -539,14 +531,17 @@ export default function InvoiceDetailPage() {
       </div>
 
       {/* PDF Viewer Modal */}
-      <Dialog open={!!pdfViewerUrl} onOpenChange={(open) => { if (!open) setPdfViewerUrl(null) }}>
+      <Dialog
+        open={!!pdfViewerUrl}
+        onOpenChange={(open) => {
+          if (!open) setPdfViewerUrl(null)
+        }}
+      >
         <DialogContent className="max-w-5xl h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{pdfViewerTitle}</DialogTitle>
           </DialogHeader>
-          {pdfViewerUrl && (
-            <iframe src={pdfViewerUrl} className="flex-1 w-full rounded border" />
-          )}
+          {pdfViewerUrl && <iframe src={pdfViewerUrl} className="flex-1 w-full rounded border" />}
         </DialogContent>
       </Dialog>
     </div>

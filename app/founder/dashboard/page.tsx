@@ -73,7 +73,8 @@ export default function FounderDashboard() {
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const unlockedPct = baseline > 0 ? (unlocked / baseline) * 100 : 0
   const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
-  const committedPct = unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
+  const committedPct =
+    unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
   const unlockedPctRounded = Math.round(unlockedPct)
   const pendingInvoices = invoicesData?.pendingCount ?? 0
 

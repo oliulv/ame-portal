@@ -54,7 +54,8 @@ export default function FounderFundingPage() {
   const baselineLeft = Math.max(0, baseline - potential - unlocked)
   const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
   const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
-  const committedPct = unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
+  const committedPct =
+    unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const filteredMilestones = useMemo(() => {

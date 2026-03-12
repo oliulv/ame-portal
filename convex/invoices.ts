@@ -374,8 +374,7 @@ export const batchMarkPaid = mutation({
     for (const id of args.ids) {
       const invoice = await ctx.db.get(id)
       if (!invoice) throw new Error(`Invoice ${id} not found`)
-      if (invoice.status !== 'approved')
-        throw new Error(`Invoice ${id} is not approved`)
+      if (invoice.status !== 'approved') throw new Error(`Invoice ${id} is not approved`)
       await ctx.db.patch(id, {
         status: 'paid',
         paidAt: new Date().toISOString(),

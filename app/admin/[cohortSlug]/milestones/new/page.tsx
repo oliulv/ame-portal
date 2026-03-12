@@ -196,7 +196,7 @@ export default function CreateMilestonePage() {
                   >
                     {selectedStartupSlug
                       ? (startups?.find((s) => (s.slug ?? s._id) === selectedStartupSlug)?.name ??
-                          'Select a startup')
+                        'Select a startup')
                       : 'Select a startup'}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
