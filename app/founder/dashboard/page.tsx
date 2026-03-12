@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
 export default function FounderDashboard() {
+  const user = useQuery(api.users.current)
   const startup = useQuery(api.founderStartup.get)
   const milestones = useQuery(api.milestones.listForFounder)
   const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
@@ -52,6 +53,7 @@ export default function FounderDashboard() {
   )
 
   const isLoading =
+    user === undefined ||
     startup === undefined ||
     milestones === undefined ||
     fundingSummary === undefined ||
@@ -137,8 +139,13 @@ export default function FounderDashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight font-display">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here's your startup progress</p>
+        <h1 className="text-3xl font-bold tracking-tight font-display">
+          Dashboard: {startup?.startup?.name ?? 'Your Startup'}
+        </h1>
+        <p className="text-muted-foreground">
+          Welcome back{user?.fullName ? `, ${user.fullName.split(' ')[0]}` : ''}. Here&apos;s how{' '}
+          {startup?.startup?.name ?? 'your startup'} is tracking.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

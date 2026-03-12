@@ -75,14 +75,14 @@ export const create = mutation({
       )
     }
 
-    // Enforce sequential invoice numbering (rejected invoices don't count)
+    // Enforce sequential invoice numbering (rejected and batched-into invoices don't count)
     const existingInvoices = await ctx.db
       .query('invoices')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
 
     const existingNumbers = existingInvoices
-      .filter((inv) => inv.status !== 'rejected')
+      .filter((inv) => inv.status !== 'rejected' && !inv.batchedIntoId)
       .map((inv) => {
         const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
         return match ? parseInt(match[1], 10) : 0
@@ -107,7 +107,7 @@ export const create = mutation({
             (_, i) => `${startup.name} Receipt ${expectedNext}-${letters[i]}.pdf`
           )
 
-    // Validate amount against available balance
+    // Validate amount against available balance (exclude batched-into invoices to avoid double-counting)
     const milestones = await ctx.db
       .query('milestones')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
@@ -116,7 +116,7 @@ export const create = mutation({
       .filter((m) => m.status === 'approved')
       .reduce((sum, m) => sum + m.amount, 0)
     const deployed = existingInvoices
-      .filter((i) => i.status === 'paid')
+      .filter((i) => i.status === 'paid' && !i.batchedIntoId)
       .reduce((sum, i) => sum + i.amountGbp, 0)
     const available = Math.max(0, unlocked - deployed)
 
@@ -131,7 +131,7 @@ export const create = mutation({
       )
     }
 
-    return await ctx.db.insert('invoices', {
+    const invoiceId = await ctx.db.insert('invoices', {
       startupId,
       uploadedByUserId: user._id,
       vendorName: args.vendorName,
@@ -148,6 +148,11 @@ export const create = mutation({
       receiptFileName: receiptFileNames[0],
       status: 'submitted',
     })
+
+    // Schedule auto-batching (5-min debounce)
+    await ctx.scheduler.runAfter(0, internal.invoiceBatching.scheduleBatching, { startupId })
+
+    return invoiceId
   },
 })
 
@@ -169,7 +174,7 @@ export const getFounderInvoiceInfo = query({
       .collect()
 
     const existingNumbers = invoices
-      .filter((inv) => inv.status !== 'rejected')
+      .filter((inv) => inv.status !== 'rejected' && !inv.batchedIntoId)
       .map((inv) => {
         const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
         return match ? parseInt(match[1], 10) : 0
@@ -221,14 +226,17 @@ export const listForFounder = query({
       allInvoices.push(...invoices)
     }
 
-    // Sort newest first
-    allInvoices.sort((a, b) => b._creationTime - a._creationTime)
+    // Filter out invoices that have been absorbed into a batch
+    const visibleInvoices = allInvoices.filter((i) => !i.batchedIntoId)
 
-    const pendingCount = allInvoices.filter(
+    // Sort newest first
+    visibleInvoices.sort((a, b) => b._creationTime - a._creationTime)
+
+    const pendingCount = visibleInvoices.filter(
       (i) => i.status === 'submitted' || i.status === 'under_review'
     ).length
 
-    return { invoices: allInvoices, pendingCount }
+    return { invoices: visibleInvoices, pendingCount }
   },
 })
 
@@ -272,6 +280,9 @@ export const listForAdmin = query({
       invoices = invoices.filter((i) => i.status === args.status)
     }
 
+    // Filter out invoices absorbed into a batch
+    invoices = invoices.filter((i) => !i.batchedIntoId)
+
     invoices.sort((a, b) => b._creationTime - a._creationTime)
 
     const enriched = await Promise.all(
@@ -281,6 +292,53 @@ export const listForAdmin = query({
       })
     )
     return enriched
+  },
+})
+
+/**
+ * Get the next submitted invoice (for auto-navigation after approval).
+ * If startupId is provided, looks within that startup first.
+ * Otherwise finds the next submitted invoice across all startups in the cohort.
+ */
+export const getNextSubmitted = query({
+  args: {
+    cohortId: v.id('cohorts'),
+    excludeId: v.id('invoices'),
+    startupId: v.optional(v.id('startups')),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    if (args.startupId) {
+      // Find next submitted invoice for this specific startup
+      const invoices = await ctx.db
+        .query('invoices')
+        .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId!))
+        .collect()
+      const next = invoices
+        .filter((i) => i.status === 'submitted' && i._id !== args.excludeId)
+        .sort((a, b) => a._creationTime - b._creationTime)
+      if (next.length > 0) return next[0]._id
+    }
+
+    // Find next submitted invoice across all startups in the cohort
+    const startups = await ctx.db
+      .query('startups')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    const candidates = []
+    for (const startup of startups) {
+      const invoices = await ctx.db
+        .query('invoices')
+        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+        .collect()
+      candidates.push(
+        ...invoices.filter((i) => i.status === 'submitted' && i._id !== args.excludeId)
+      )
+    }
+    candidates.sort((a, b) => a._creationTime - b._creationTime)
+    return candidates.length > 0 ? candidates[0]._id : null
   },
 })
 

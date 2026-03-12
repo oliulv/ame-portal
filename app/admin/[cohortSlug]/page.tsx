@@ -92,7 +92,8 @@ export default function AdminDashboard() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight font-display">Dashboard</h1>
         <p className="text-muted-foreground">
-          {cohort ? `Overview for ${cohort.label}` : 'Overview of your accelerator program'}
+          Welcome back{currentUser?.fullName ? `, ${currentUser.fullName.split(' ')[0]}` : ''}.{' '}
+          {cohort ? `${cohort.label} overview.` : 'Overview of your accelerator program.'}
         </p>
       </div>
 

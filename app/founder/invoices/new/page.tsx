@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation, useQuery, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -19,8 +19,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { founderInvoiceUploadSchema, type FounderInvoiceUploadFormData } from '@/lib/schemas'
-import { Upload, ArrowLeft, AlertTriangle, Info, X, Plus } from 'lucide-react'
-import { useRef } from 'react'
+import { Upload, ArrowLeft, AlertTriangle, Info, X, Plus, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -30,10 +29,14 @@ export default function NewInvoicePage() {
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
   const [receiptFiles, setReceiptFiles] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isExtracting, setIsExtracting] = useState(false)
+  const [amountMismatchWarning, setAmountMismatchWarning] = useState<string | null>(null)
   const receiptInputRef = useRef<HTMLInputElement>(null)
+  const extractionTriggered = useRef(false)
 
   const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
   const createInvoice = useMutation(api.invoices.create)
+  const extractInvoiceData = useAction(api.ai.extractInvoiceData)
   const invoiceInfo = useQuery(api.invoices.getFounderInvoiceInfo)
   const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
 
@@ -49,6 +52,73 @@ export default function NewInvoicePage() {
       description: '',
     },
   })
+
+  // Auto-extract invoice data when both invoice + receipt files are available
+  useEffect(() => {
+    if (!invoiceFile || receiptFiles.length === 0 || extractionTriggered.current || isExtracting)
+      return
+    extractionTriggered.current = true
+
+    async function runExtraction() {
+      setIsExtracting(true)
+      setAmountMismatchWarning(null)
+      try {
+        // Upload files to get storage IDs
+        const invoiceUploadUrl = await generateUploadUrl()
+        const invoiceResult = await fetch(invoiceUploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': invoiceFile!.type },
+          body: invoiceFile,
+        })
+        if (!invoiceResult.ok) throw new Error('Failed to upload invoice for extraction')
+        const { storageId: invoiceStorageId } = await invoiceResult.json()
+
+        const receiptStorageIds: string[] = []
+        for (const file of receiptFiles) {
+          const uploadUrl = await generateUploadUrl()
+          const result = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': file.type },
+            body: file,
+          })
+          if (!result.ok) throw new Error(`Failed to upload receipt for extraction`)
+          const { storageId } = await result.json()
+          receiptStorageIds.push(storageId)
+        }
+
+        const extracted = await extractInvoiceData({
+          invoiceStorageId,
+          receiptStorageIds: receiptStorageIds as any,
+        })
+
+        // Populate form fields
+        if (extracted.vendorNames) form.setValue('vendor_name', extracted.vendorNames)
+        if (extracted.description) form.setValue('description', extracted.description)
+        if (extracted.invoiceDate) form.setValue('invoice_date', extracted.invoiceDate)
+        if (extracted.totalAmount > 0) form.setValue('amount_gbp', extracted.totalAmount)
+
+        if (extracted.amountMismatch) {
+          setAmountMismatchWarning(
+            `Invoice total (\u00A3${extracted.totalAmount.toFixed(2)}) doesn\u2019t match receipt total (\u00A3${extracted.receiptTotal.toFixed(2)})`
+          )
+        }
+
+        toast.success('Invoice details extracted automatically')
+      } catch (error) {
+        toast.error('Could not extract invoice details. Please fill in manually.')
+      } finally {
+        setIsExtracting(false)
+      }
+    }
+
+    runExtraction()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceFile, receiptFiles.length])
+
+  // Reset extraction trigger when files change
+  useEffect(() => {
+    extractionTriggered.current = false
+  }, [invoiceFile, receiptFiles])
 
   const invoiceNameError = (() => {
     if (!invoiceFile) return null
@@ -206,12 +276,36 @@ export default function NewInvoicePage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {isExtracting && (
+                <div className="flex items-center gap-3 border border-blue-200 bg-blue-50/50 p-4 rounded-lg">
+                  <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">
+                      Extracting invoice details...
+                    </p>
+                    <p className="text-xs text-blue-700">
+                      AI is reading your documents to auto-fill the form
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {amountMismatchWarning && (
+                <div className="flex items-start gap-3 border border-amber-200 bg-amber-50/50 p-4 rounded-lg">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-900">Amount mismatch</p>
+                    <p className="text-sm text-amber-700">{amountMismatchWarning}</p>
+                  </div>
+                </div>
+              )}
+
               <FormField
                 control={form.control}
                 name="vendor_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Vendor Name</FormLabel>
+                    <FormLabel>Vendor Name(s)</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Amazon, Office Supplies Ltd" {...field} />
                     </FormControl>
@@ -387,6 +481,14 @@ export default function NewInvoicePage() {
                   {receiptPdfError && <p className="text-sm text-destructive">{receiptPdfError}</p>}
                 </div>
               </TooltipProvider>
+
+              <div className="border border-blue-200 bg-blue-50/50 p-3 rounded-lg">
+                <p className="text-xs text-blue-700">
+                  <Info className="inline h-3 w-3 mr-1" />
+                  Your invoices will be automatically combined for easier processing. You can
+                  continue uploading — they&apos;ll be batched within 5 minutes.
+                </p>
+              </div>
 
               <div className="flex justify-end gap-4">
                 <Link href="/founder/invoices">

@@ -15,9 +15,15 @@ interface InvoiceActionsProps {
   invoiceId: Id<'invoices'>
   currentStatus: string
   className?: string
+  onApproved?: () => void
 }
 
-export function InvoiceActions({ invoiceId, currentStatus, className }: InvoiceActionsProps) {
+export function InvoiceActions({
+  invoiceId,
+  currentStatus,
+  className,
+  onApproved,
+}: InvoiceActionsProps) {
   const updateStatus = useMutation(api.invoices.updateStatus)
   const [comment, setComment] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -46,6 +52,10 @@ export function InvoiceActions({ invoiceId, currentStatus, className }: InvoiceA
             ? 'Invoice rejected'
             : 'Invoice marked as paid'
       )
+
+      if (action === 'approve' && onApproved) {
+        onApproved()
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update invoice')
     } finally {

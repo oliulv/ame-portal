@@ -10,7 +10,7 @@ export function useWaitForUser() {
 
   useEffect(() => {
     if (user === undefined || user) return
-    if (waitCount < 10) {
+    if (waitCount < 20) {
       const timer = setTimeout(() => setWaitCount((c) => c + 1), 500)
       return () => clearTimeout(timer)
     }
@@ -18,7 +18,7 @@ export function useWaitForUser() {
 
   return {
     user,
-    isLoading: user === undefined || (!user && waitCount < 10),
-    timedOut: !user && waitCount >= 10,
+    isLoading: user === undefined || (!user && waitCount < 20),
+    timedOut: !user && waitCount >= 20,
   }
 }

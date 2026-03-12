@@ -10,6 +10,13 @@ import { logClientError } from '@/lib/logging'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -19,6 +26,7 @@ import {
   Check,
   Clock,
   ExternalLink,
+  Eye,
   FileText,
   RotateCw,
   Send,
@@ -39,6 +47,8 @@ export default function FounderMilestoneDetailPage() {
   const [planFile, setPlanFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isWithdrawing, setIsWithdrawing] = useState(false)
+  const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null)
+  const [pdfViewerTitle, setPdfViewerTitle] = useState('')
 
   const fileUrl = useQuery(
     api.milestones.getFileUrl,
@@ -77,6 +87,11 @@ export default function FounderMilestoneDetailPage() {
   async function handleSubmit() {
     if (!planLink && !planFile) {
       toast.error('Please provide a plan link or upload a plan file')
+      return
+    }
+
+    if (planFile && !planFile.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Only PDF files are accepted. Please upload a PDF document.')
       return
     }
 
@@ -241,17 +256,42 @@ export default function FounderMilestoneDetailPage() {
                       </a>
                     )}
                     {milestone.planStorageId && fileUrl && (
-                      <div>
-                        <a
-                          href={fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-primary hover:underline"
-                        >
-                          <FileText className="h-4 w-4" />
-                          {milestone.planFileName || 'View uploaded file'}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+                      <div className="inline-flex items-center gap-2">
+                        {milestone.planFileName?.toLowerCase().endsWith('.pdf') ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                setPdfViewerUrl(fileUrl)
+                                setPdfViewerTitle(milestone.planFileName || 'Document')
+                              }}
+                              className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                            >
+                              <FileText className="h-4 w-4" />
+                              {milestone.planFileName || 'View uploaded file'}
+                              <Eye className="h-3 w-3" />
+                            </button>
+                            <a
+                              href={fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-muted-foreground hover:text-foreground"
+                              title="Open in new tab"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </>
+                        ) : (
+                          <a
+                            href={fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-primary hover:underline"
+                          >
+                            <FileText className="h-4 w-4" />
+                            {milestone.planFileName || 'View uploaded file'}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
                       </div>
                     )}
                   </div>
@@ -288,11 +328,13 @@ export default function FounderMilestoneDetailPage() {
                 )}
                 {requiresFile && (
                   <div className="space-y-2">
-                    <Label htmlFor="plan-file">Plan Document{onlyFile ? '' : ' (Optional)'}</Label>
+                    <Label htmlFor="plan-file">
+                      Plan Document (PDF only){onlyFile ? '' : ' (Optional)'}
+                    </Label>
                     <Input
                       id="plan-file"
                       type="file"
-                      accept="application/pdf,image/*,.doc,.docx"
+                      accept="application/pdf"
                       onChange={(e) => setPlanFile(e.target.files?.[0] ?? null)}
                       className="cursor-pointer"
                     />
@@ -383,6 +425,22 @@ export default function FounderMilestoneDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* PDF Viewer Modal */}
+      <Dialog
+        open={!!pdfViewerUrl}
+        onOpenChange={(open) => {
+          if (!open) setPdfViewerUrl(null)
+        }}
+      >
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{pdfViewerTitle}</DialogTitle>
+            <DialogDescription>Preview of the uploaded PDF document</DialogDescription>
+          </DialogHeader>
+          {pdfViewerUrl && <iframe src={pdfViewerUrl} className="flex-1 w-full rounded border" />}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

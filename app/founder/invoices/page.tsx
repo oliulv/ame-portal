@@ -241,7 +241,16 @@ export default function FounderInvoicesPage() {
                           className="cursor-pointer transition-colors hover:bg-muted/50"
                           onClick={() => router.push(`/founder/invoices/${invoice._id}`)}
                         >
-                          <TableCell className="font-medium">{invoice.vendorName}</TableCell>
+                          <TableCell className="font-medium">
+                            <span className="flex items-center gap-1.5">
+                              {invoice.vendorName}
+                              {invoice.isBatched && (
+                                <Badge variant="info" className="text-[10px] px-1.5 py-0">
+                                  Batched
+                                </Badge>
+                              )}
+                            </span>
+                          </TableCell>
                           <TableCell className="text-muted-foreground">
                             {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
                               day: 'numeric',

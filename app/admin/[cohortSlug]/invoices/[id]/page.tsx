@@ -1,11 +1,11 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -72,8 +72,11 @@ function ReceiptLink({
 export default function InvoiceDetailPage() {
   const params = useParams<{ cohortSlug: string; id: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const cohortSlug = params.cohortSlug ?? ''
   const invoiceId = params.id as Id<'invoices'>
+
+  const fromStartupId = searchParams.get('startupId') as Id<'startups'> | null
 
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null)
   const [pdfViewerTitle, setPdfViewerTitle] = useState('')
@@ -101,6 +104,27 @@ export default function InvoiceDetailPage() {
     api.milestones.fundingSummaryForAdmin,
     invoice?.startupId ? { startupId: invoice.startupId } : 'skip'
   )
+
+  // Auto-navigate: find the next submitted invoice
+  const nextSubmittedId = useQuery(
+    api.invoices.getNextSubmitted,
+    cohort
+      ? {
+          cohortId: cohort._id,
+          excludeId: invoiceId,
+          ...(fromStartupId ? { startupId: fromStartupId } : {}),
+        }
+      : 'skip'
+  )
+
+  const handleApproved = useCallback(() => {
+    if (nextSubmittedId) {
+      const nextUrl = `/admin/${cohortSlug}/invoices/${nextSubmittedId}${fromStartupId ? `?startupId=${fromStartupId}` : ''}`
+      router.push(nextUrl)
+    } else {
+      router.push(`/admin/${cohortSlug}/invoices`)
+    }
+  }, [nextSubmittedId, cohortSlug, fromStartupId, router])
 
   function openPdfViewer(url: string, title: string) {
     setPdfViewerUrl(url)
@@ -156,6 +180,32 @@ export default function InvoiceDetailPage() {
 
   const canApprove = invoice.status === 'submitted' || invoice.status === 'under_review'
   const canMarkPaid = invoice.status === 'approved'
+
+  // If this invoice has been batched into another, show redirect
+  if (invoice.batchedIntoId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </div>
+        <Card className="border-blue-200 bg-blue-50/50">
+          <CardContent className="pt-6">
+            <p className="text-sm text-blue-900">
+              This invoice has been combined into a batch invoice for easier processing.
+            </p>
+            <Link href={`/admin/${cohortSlug}/invoices/${invoice.batchedIntoId}`}>
+              <Button variant="link" className="px-0 mt-2">
+                View batch invoice →
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -293,6 +343,32 @@ export default function InvoiceDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Batched Invoice Details */}
+          {invoice.isBatched && invoice.batchedFromIds && invoice.batchedFromIds.length > 0 && (
+            <Card className="border-blue-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Batched Invoice
+                  <Badge variant="info">{invoice.batchedFromIds.length} invoices combined</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1">
+                  {invoice.batchedFromIds.map((componentId) => (
+                    <Link
+                      key={componentId}
+                      href={`/admin/${cohortSlug}/invoices/${componentId}`}
+                      className="flex items-center justify-between gap-4 border px-3 py-2 text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <span className="text-blue-600 hover:underline truncate">{componentId}</span>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Admin Comments */}
           {invoice.adminComment && (
             <Card>
@@ -305,8 +381,8 @@ export default function InvoiceDetailPage() {
             </Card>
           )}
 
-          {/* Funding Impact */}
-          {fundingSummary && (
+          {/* Funding Impact — hidden for rejected invoices */}
+          {fundingSummary && invoice.status !== 'rejected' && (
             <Card className="flex-1">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle>Funding Impact</CardTitle>
@@ -317,14 +393,17 @@ export default function InvoiceDetailPage() {
                   const invoiceAmount = invoice.amountGbp
                   const currentAvailable = fundingSummary.available
                   const committed = fundingSummary.committed ?? 0
-                  const afterAvailable = Math.max(0, currentAvailable - invoiceAmount)
                   const barTotal = fundingSummary.unlocked || 1
                   const deployedPct = Math.min(100, (fundingSummary.deployed / barTotal) * 100)
                   const committedPct = Math.min(100 - deployedPct, (committed / barTotal) * 100)
-                  const thisPct = Math.min(
-                    100 - deployedPct - committedPct,
-                    (invoiceAmount / barTotal) * 100
-                  )
+
+                  // Only show the amber "This invoice" segment for submitted/under_review
+                  const showThisInvoice =
+                    invoice.status === 'submitted' || invoice.status === 'under_review'
+                  const thisPct = showThisInvoice
+                    ? Math.min(100 - deployedPct - committedPct, (invoiceAmount / barTotal) * 100)
+                    : 0
+                  const afterAvailable = Math.max(0, currentAvailable - invoiceAmount)
 
                   return (
                     <>
@@ -373,13 +452,15 @@ export default function InvoiceDetailPage() {
                               width: `${committedPct}%`,
                             }}
                           />
-                          <div
-                            className="absolute inset-y-0 bg-amber-500 transition-all"
-                            style={{
-                              left: `${deployedPct + committedPct}%`,
-                              width: `${thisPct}%`,
-                            }}
-                          />
+                          {showThisInvoice && (
+                            <div
+                              className="absolute inset-y-0 bg-amber-500 transition-all"
+                              style={{
+                                left: `${deployedPct + committedPct}%`,
+                                width: `${thisPct}%`,
+                              }}
+                            />
+                          )}
                         </div>
                         <div className="flex items-center gap-4 mt-1.5 text-[10px] text-muted-foreground">
                           <span className="flex items-center gap-1">
@@ -390,10 +471,12 @@ export default function InvoiceDetailPage() {
                             <span className="inline-block h-2 w-2 rounded-full bg-violet-500" />
                             Approved (not paid)
                           </span>
-                          <span className="flex items-center gap-1">
-                            <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
-                            This invoice
-                          </span>
+                          {showThisInvoice && (
+                            <span className="flex items-center gap-1">
+                              <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                              This invoice
+                            </span>
+                          )}
                           <span className="flex items-center gap-1">
                             <span className="inline-block h-2 w-2 rounded-full bg-muted" />
                             Remaining
@@ -401,31 +484,50 @@ export default function InvoiceDetailPage() {
                         </div>
                       </div>
 
-                      {/* Before / After */}
+                      {/* Status-specific info line */}
                       <div className="border-t pt-3">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Available after reimbursement
-                          </span>
-                          <span className="font-mono font-semibold">
-                            £{currentAvailable.toLocaleString('en-GB')}
-                            {' → '}
-                            <span
-                              className={afterAvailable === 0 ? 'text-red-600' : 'text-green-600'}
-                            >
-                              £{afterAvailable.toLocaleString('en-GB')}
-                            </span>
-                          </span>
-                        </div>
-                        {committed > 0 && (
-                          <p className="mt-1 text-xs text-violet-600">
-                            £{committed.toLocaleString('en-GB')} committed (approved, not yet paid)
+                        {showThisInvoice && (
+                          <>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Available after reimbursement
+                              </span>
+                              <span className="font-mono font-semibold">
+                                £{currentAvailable.toLocaleString('en-GB')}
+                                {' → '}
+                                <span
+                                  className={
+                                    afterAvailable === 0 ? 'text-red-600' : 'text-green-600'
+                                  }
+                                >
+                                  £{afterAvailable.toLocaleString('en-GB')}
+                                </span>
+                              </span>
+                            </div>
+                            {committed > 0 && (
+                              <p className="mt-1 text-xs text-violet-600">
+                                £{committed.toLocaleString('en-GB')} committed (approved, not yet
+                                paid)
+                              </p>
+                            )}
+                            {invoiceAmount > currentAvailable && (
+                              <p className="mt-1.5 text-xs text-red-600">
+                                This invoice exceeds available funding by £
+                                {(invoiceAmount - currentAvailable).toLocaleString('en-GB')}
+                              </p>
+                            )}
+                          </>
+                        )}
+                        {invoice.status === 'approved' && (
+                          <p className="text-sm text-violet-600">
+                            This invoice is approved — £{invoiceAmount.toLocaleString('en-GB')}{' '}
+                            committed, awaiting payment.
                           </p>
                         )}
-                        {invoiceAmount > currentAvailable && (
-                          <p className="mt-1.5 text-xs text-red-600">
-                            This invoice exceeds available funding by £
-                            {(invoiceAmount - currentAvailable).toLocaleString('en-GB')}
+                        {invoice.status === 'paid' && (
+                          <p className="text-sm text-blue-600">
+                            This invoice has been paid — £{invoiceAmount.toLocaleString('en-GB')}{' '}
+                            deployed.
                           </p>
                         )}
                       </div>
@@ -531,6 +633,7 @@ export default function InvoiceDetailPage() {
               invoiceId={invoice._id}
               currentStatus={invoice.status}
               className="flex-1"
+              onApproved={handleApproved}
             />
           )}
         </div>
