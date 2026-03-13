@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -66,6 +66,7 @@ import {
   FileText,
   Landmark,
   Zap,
+  Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Doc } from '@/convex/_generated/dataModel'
@@ -223,6 +224,15 @@ export default function StartupDetailPage() {
   const removeFounder = useMutation(api.invitations.removeFounder)
   const removeTeamMember = useMutation(api.invitations.removeTeamMember)
   const reorderMilestones = useMutation(api.milestones.reorder)
+
+  const [isBatchingNow, setIsBatchingNow] = useState(false)
+
+  // Clear batching state when a new batched invoice appears
+  useEffect(() => {
+    if (!isBatchingNow || !invoicesData) return
+    const hasBatched = invoicesData.some((i) => i.isBatched && i.status === 'submitted')
+    if (hasBatched) setIsBatchingNow(false)
+  }, [isBatchingNow, invoicesData])
 
   const [showBankDetailsDialog, setShowBankDetailsDialog] = useState(false)
   const [showInviteDialog, setShowInviteDialog] = useState(false)
@@ -674,35 +684,53 @@ export default function StartupDetailPage() {
             </div>
           </CardHeader>
           <CardContent className="flex-1 space-y-3">
-            {pendingBatch && pendingBatch.scheduledTime && startup && (
+            {(isBatchingNow || (pendingBatch && pendingBatch.scheduledTime)) && startup && (
               <div className="flex items-center justify-between gap-2 border border-amber-200 bg-amber-50/50 rounded px-3 py-2">
                 <div className="flex items-center gap-2 text-sm text-amber-900">
-                  <Clock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  {isBatchingNow ? (
+                    <Loader2 className="h-3.5 w-3.5 text-amber-600 animate-spin shrink-0" />
+                  ) : (
+                    <Clock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  )}
                   <span>
-                    Batch in{' '}
-                    <span className="font-mono">
-                      {Math.max(0, Math.ceil((pendingBatch.scheduledTime - Date.now()) / 60000))}m
-                    </span>
+                    {isBatchingNow ? (
+                      'Combining invoices...'
+                    ) : (
+                      <>
+                        Batch in{' '}
+                        <span className="font-mono">
+                          {Math.max(
+                            0,
+                            Math.ceil(((pendingBatch?.scheduledTime ?? 0) - Date.now()) / 60000)
+                          )}
+                          m
+                        </span>
+                      </>
+                    )}
                   </span>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  onClick={async () => {
-                    try {
-                      await triggerBatchNow({ startupId: startup._id })
-                      toast.success('Batch triggered')
-                    } catch (error) {
-                      toast.error(
-                        error instanceof Error ? error.message : 'Failed to trigger batch'
-                      )
-                    }
-                  }}
-                >
-                  <Zap className="mr-1 h-3 w-3" />
-                  Batch now
-                </Button>
+                {!isBatchingNow && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={async () => {
+                      setIsBatchingNow(true)
+                      try {
+                        await triggerBatchNow({ startupId: startup._id })
+                        toast.success('Batching in progress...')
+                      } catch (error) {
+                        setIsBatchingNow(false)
+                        toast.error(
+                          error instanceof Error ? error.message : 'Failed to trigger batch'
+                        )
+                      }
+                    }}
+                  >
+                    <Zap className="mr-1 h-3 w-3" />
+                    Batch now
+                  </Button>
+                )}
               </div>
             )}
             {invoicesData && invoicesData.filter((i) => i.status !== 'rejected').length > 0 ? (

@@ -71,6 +71,7 @@ export default function NewInvoicePage() {
   const [pdfPreviewTitle, setPdfPreviewTitle] = useState('')
   const invoiceInputRef = useRef<HTMLInputElement>(null)
   const receiptInputRef = useRef<HTMLInputElement>(null)
+  const formCardRef = useRef<HTMLDivElement>(null)
   const extractionTriggered = useRef(false)
   // Track storage IDs from extraction uploads for cleanup
   const extractionStorageIds = useRef<string[]>([])
@@ -233,6 +234,11 @@ export default function NewInvoicePage() {
         }
 
         toast.success('Invoice details extracted automatically')
+
+        // Brief pause to let them see the pipeline complete, then scroll to form
+        setTimeout(() => {
+          formCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 400)
       } catch {
         if (!controller.signal.aborted) {
           setExtractionStep(0)
@@ -682,7 +688,7 @@ export default function NewInvoicePage() {
       )}
 
       {/* Step 2: Review details */}
-      <Card>
+      <Card ref={formCardRef}>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">2. Review details</CardTitle>
           <CardDescription>
