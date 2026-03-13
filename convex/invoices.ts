@@ -83,9 +83,12 @@ export const create = mutation({
     }
 
     // Validate naming convention: "{StartupName} Invoice {N}.pdf"
-    const escapedName = startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // Normalize Unicode to NFC — macOS filenames use NFD (decomposed é = e + ́)
+    // while the DB stores NFC (composed é), causing false mismatches.
+    const normalizedFileName = args.fileName.normalize('NFC')
+    const escapedName = startup.name.normalize('NFC').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const namePattern = new RegExp(`^${escapedName} Invoice \\d+\\.pdf$`, 'i')
-    if (!namePattern.test(args.fileName)) {
+    if (!namePattern.test(normalizedFileName)) {
       throw new ConvexError(
         `Invoice must be named "${startup.name} Invoice {number}.pdf" (e.g. "${startup.name} Invoice 1.pdf")`
       )
@@ -107,7 +110,7 @@ export const create = mutation({
     const maxExisting = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
     const expectedNext = maxExisting + 1
 
-    const invoiceNum = args.fileName.match(/Invoice (\d+)\.pdf$/i)?.[1]
+    const invoiceNum = normalizedFileName.match(/Invoice (\d+)\.pdf$/i)?.[1]
     if (!invoiceNum || parseInt(invoiceNum, 10) !== expectedNext) {
       throw new ConvexError(
         `Invoice number must be ${expectedNext}. Please name your file "${startup.name} Invoice ${expectedNext}.pdf".`
