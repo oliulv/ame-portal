@@ -246,7 +246,7 @@ export default function FounderInvoicesPage() {
                               {invoice.vendorName}
                               {invoice.isBatched && (
                                 <Badge variant="info" className="text-[10px] px-1.5 py-0">
-                                  Batched
+                                  Batched ({invoice.batchedFromIds?.length ?? 0})
                                 </Badge>
                               )}
                             </span>

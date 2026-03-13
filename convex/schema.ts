@@ -223,6 +223,9 @@ export default defineSchema({
     batchedIntoId: v.optional(v.id('invoices')),
     isBatched: v.optional(v.boolean()),
     batchedFromIds: v.optional(v.array(v.id('invoices'))),
+    // Original invoice files from component invoices (separate from receipts)
+    originalInvoiceStorageIds: v.optional(v.array(v.id('_storage'))),
+    originalInvoiceFileNames: v.optional(v.array(v.string())),
   })
     .index('by_startupId', ['startupId'])
     .index('by_status', ['status']),

@@ -327,7 +327,7 @@ export const getNextSubmitted = query({
         .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId!))
         .collect()
       const next = invoices
-        .filter((i) => i.status === 'submitted' && i._id !== args.excludeId)
+        .filter((i) => i.status === 'submitted' && i._id !== args.excludeId && !i.batchedIntoId)
         .sort((a, b) => a._creationTime - b._creationTime)
       if (next.length > 0) return next[0]._id
     }
@@ -345,7 +345,9 @@ export const getNextSubmitted = query({
         .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
         .collect()
       candidates.push(
-        ...invoices.filter((i) => i.status === 'submitted' && i._id !== args.excludeId)
+        ...invoices.filter(
+          (i) => i.status === 'submitted' && i._id !== args.excludeId && !i.batchedIntoId
+        )
       )
     }
     candidates.sort((a, b) => a._creationTime - b._creationTime)
@@ -429,6 +431,11 @@ export const updateStatus = mutation({
     // Send to Xero on approval
     if (args.status === 'approved') {
       await ctx.scheduler.runAfter(0, internal.invoices.sendToXero, { invoiceId: args.id })
+      // Cancel pending batch if this approval empties the queue
+      await ctx.scheduler.runAfter(0, internal.invoiceBatching.cancelBatchIfEmpty, {
+        startupId: invoice.startupId,
+        excludeInvoiceId: args.id,
+      })
     }
   },
 })
@@ -512,10 +519,18 @@ export const sendToXero = internalAction({
     }
 
     // Collect receipt storage IDs (handle both old single and new array format)
-    const receiptIds: string[] =
-      invoice.receiptStorageIds ?? (invoice.receiptStorageId ? [invoice.receiptStorageId] : [])
-    const receiptNames: string[] =
-      invoice.receiptFileNames ?? (invoice.receiptFileName ? [invoice.receiptFileName] : [])
+    // For batch invoices, merge original invoice files + receipts for Xero
+    const originalIds: string[] = invoice.originalInvoiceStorageIds ?? []
+    const originalNames: string[] = invoice.originalInvoiceFileNames ?? []
+    const receiptIds: string[] = [
+      ...originalIds,
+      ...(invoice.receiptStorageIds ??
+        (invoice.receiptStorageId ? [invoice.receiptStorageId] : [])),
+    ]
+    const receiptNames: string[] = [
+      ...originalNames,
+      ...(invoice.receiptFileNames ?? (invoice.receiptFileName ? [invoice.receiptFileName] : [])),
+    ]
 
     // Send all receipts in a single email — Resend fetches each via URL
     const receiptAttachments = []
@@ -540,5 +555,31 @@ export const sendToXero = internalAction({
         throw new Error(`Failed to send receipts to Xero: ${receiptError.message}`)
       }
     }
+  },
+})
+
+/**
+ * Get component invoices for a batch invoice.
+ */
+export const getComponentInvoices = query({
+  args: { ids: v.array(v.id('invoices')) },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx)
+    const results = []
+    for (const id of args.ids) {
+      const inv = await ctx.db.get(id)
+      if (inv) {
+        results.push({
+          _id: inv._id,
+          vendorName: inv.vendorName,
+          amountGbp: inv.amountGbp,
+          invoiceDate: inv.invoiceDate,
+          fileName: inv.fileName,
+          storageId: inv.storageId,
+          description: inv.description,
+        })
+      }
+    }
+    return results
   },
 })

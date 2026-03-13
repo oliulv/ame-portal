@@ -314,7 +314,16 @@ export default function AdminInvoicesPage() {
               <TableCell className="font-medium">
                 {startupNameMap.get(invoice.startupId) || 'Unknown'}
               </TableCell>
-              <TableCell>{invoice.vendorName}</TableCell>
+              <TableCell>
+                <span className="flex items-center gap-1.5">
+                  {invoice.vendorName}
+                  {invoice.isBatched && invoice.batchedFromIds && (
+                    <Badge variant="info" className="text-[10px] px-1.5 py-0">
+                      Batched ({invoice.batchedFromIds.length})
+                    </Badge>
+                  )}
+                </span>
+              </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
                   day: 'numeric',
@@ -389,7 +398,16 @@ export default function AdminInvoicesPage() {
               <TableCell className="font-medium">
                 {startupNameMap.get(invoice.startupId) || 'Unknown'}
               </TableCell>
-              <TableCell>{invoice.vendorName}</TableCell>
+              <TableCell>
+                <span className="flex items-center gap-1.5">
+                  {invoice.vendorName}
+                  {invoice.isBatched && invoice.batchedFromIds && (
+                    <Badge variant="info" className="text-[10px] px-1.5 py-0">
+                      Batched ({invoice.batchedFromIds.length})
+                    </Badge>
+                  )}
+                </span>
+              </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {
                   day: 'numeric',

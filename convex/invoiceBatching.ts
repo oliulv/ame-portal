@@ -1,7 +1,8 @@
-import { internalMutation, internalAction, internalQuery } from './functions'
+import { internalMutation, internalAction, internalQuery, query, mutation } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import type { Id } from './_generated/dataModel'
+import { requireAdmin } from './auth'
 
 /**
  * Schedule (or reschedule) a batch for a startup.
@@ -32,6 +33,92 @@ export const scheduleBatching = internalMutation({
       startupId: args.startupId,
       scheduledFnId,
     })
+  },
+})
+
+/**
+ * Cancel pending batch if approval empties the submitted queue.
+ */
+export const cancelBatchIfEmpty = internalMutation({
+  args: {
+    startupId: v.id('startups'),
+    excludeInvoiceId: v.id('invoices'),
+  },
+  handler: async (ctx, args) => {
+    const invoices = await ctx.db
+      .query('invoices')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+
+    const remaining = invoices.filter(
+      (i) => i.status === 'submitted' && i._id !== args.excludeInvoiceId && !i.batchedIntoId
+    )
+
+    if (remaining.length <= 1) {
+      const pending = await ctx.db
+        .query('pendingBatches')
+        .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+        .first()
+      if (pending) {
+        await ctx.scheduler.cancel(pending.scheduledFnId)
+        await ctx.db.delete(pending._id)
+      }
+    }
+  },
+})
+
+/**
+ * Get pending batch info for admin UI.
+ */
+export const getPendingBatch = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+    const pending = await ctx.db
+      .query('pendingBatches')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .first()
+    if (!pending) return null
+    const scheduledFn = await ctx.db.system.get(pending.scheduledFnId)
+    return { scheduledTime: scheduledFn?.scheduledTime ?? null }
+  },
+})
+
+/**
+ * Trigger batch execution immediately (admin action).
+ */
+export const triggerBatchNow = mutation({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+    const pending = await ctx.db
+      .query('pendingBatches')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .first()
+    if (!pending) throw new Error('No pending batch found')
+    await ctx.scheduler.cancel(pending.scheduledFnId)
+    await ctx.db.delete(pending._id)
+    await ctx.scheduler.runAfter(0, internal.invoiceBatching.executeBatch, {
+      startupId: args.startupId,
+    })
+  },
+})
+
+/**
+ * Fallback context for batch PDF when AI extraction fails.
+ */
+export const getBatchContext = internalQuery({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    const bankDetails = await ctx.db
+      .query('bankDetails')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .first()
+    const founderProfile = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .first()
+    return { bankDetails, founderProfile }
   },
 })
 
@@ -76,16 +163,18 @@ export const executeBatch = internalAction({
 
     if (componentInvoices.length <= 1) return
 
-    // Collect all receipt storage IDs and filenames
+    // Separate original invoice files from actual receipts
+    const allOriginalInvoiceStorageIds: string[] = []
+    const allOriginalInvoiceFileNames: string[] = []
     const allReceiptStorageIds: string[] = []
     const allReceiptFileNames: string[] = []
 
     for (const inv of componentInvoices) {
-      // Include the original invoice files as receipts too
-      allReceiptStorageIds.push(inv.storageId)
-      allReceiptFileNames.push(inv.fileName)
+      // Original invoice files go in their own array
+      allOriginalInvoiceStorageIds.push(inv.storageId)
+      allOriginalInvoiceFileNames.push(inv.fileName)
 
-      // Include actual receipts
+      // Actual receipts stay separate
       const rIds = inv.receiptStorageIds ?? (inv.receiptStorageId ? [inv.receiptStorageId] : [])
       const rNames = inv.receiptFileNames ?? (inv.receiptFileName ? [inv.receiptFileName] : [])
       allReceiptStorageIds.push(...rIds)
@@ -110,71 +199,235 @@ export const executeBatch = internalAction({
       .map((inv) => `${inv.vendorName}: ${inv.description || 'N/A'} (£${inv.amountGbp.toFixed(2)})`)
       .join('\n')
 
+    // Try AI extraction for company metadata from first component invoice
+    let metadata: {
+      companyName: string
+      addressLines: string[]
+      email: string | null
+      phone: string | null
+      bankDetails: {
+        accountHolder: string
+        sortCode: string
+        accountNumber: string
+        bankName: string | null
+      } | null
+      billTo: { name: string; addressLines: string[] } | null
+    } | null = null
+
+    try {
+      metadata = await ctx.runAction(internal.ai.extractInvoiceMetadata, {
+        invoiceStorageId: componentInvoices[0].storageId,
+      })
+    } catch {
+      // AI extraction failed, will use DB fallback
+    }
+
+    // DB fallback data
+    const batchContext = await ctx.runQuery(internal.invoiceBatching.getBatchContext, {
+      startupId: args.startupId,
+    })
+
     // Generate batch invoice PDF using pdf-lib
     const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
     const pdfDoc = await PDFDocument.create()
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-    const page = pdfDoc.addPage([595, 842]) // A4
-    const { height } = page.getSize()
 
-    let y = height - 50
+    const pageWidth = 595
+    const pageHeight = 842
+    let currentPage = pdfDoc.addPage([pageWidth, pageHeight])
+    let y = pageHeight - 50
 
-    // Header
-    page.drawText(startup.name, { x: 50, y, font: boldFont, size: 18, color: rgb(0, 0, 0) })
-    y -= 25
-    page.drawText(`Combined Invoice ${batchNumber}`, {
+    function ensureSpace(needed: number) {
+      if (y < needed) {
+        currentPage = pdfDoc.addPage([pageWidth, pageHeight])
+        y = pageHeight - 50
+      }
+    }
+
+    // Header: Company name
+    const companyName = metadata?.companyName || startup.name
+    currentPage.drawText(companyName, {
       x: 50,
       y,
       font: boldFont,
-      size: 14,
-      color: rgb(0.3, 0.3, 0.3),
+      size: 18,
+      color: rgb(0, 0, 0),
     })
     y -= 20
-    page.drawText(`Date: ${new Date().toISOString().split('T')[0]}`, {
-      x: 50,
+
+    // Address lines
+    const addressLines =
+      metadata?.addressLines ??
+      [
+        batchContext.founderProfile?.addressLine1,
+        batchContext.founderProfile?.addressLine2,
+        [batchContext.founderProfile?.city, batchContext.founderProfile?.postcode]
+          .filter(Boolean)
+          .join(' '),
+        batchContext.founderProfile?.country,
+      ].filter(Boolean)
+
+    for (const line of addressLines) {
+      if (!line) continue
+      currentPage.drawText(line, { x: 50, y, font, size: 9, color: rgb(0.3, 0.3, 0.3) })
+      y -= 13
+    }
+
+    // Contact info
+    if (metadata?.email || metadata?.phone) {
+      y -= 2
+      const contactParts = [metadata.email, metadata.phone].filter(Boolean)
+      currentPage.drawText(contactParts.join(' | '), {
+        x: 50,
+        y,
+        font,
+        size: 8,
+        color: rgb(0.4, 0.4, 0.4),
+      })
+      y -= 18
+    } else {
+      y -= 10
+    }
+
+    // Invoice title — right-aligned
+    const invoiceTitle = `COMBINED INVOICE ${batchNumber}`
+    const titleWidth = boldFont.widthOfTextAtSize(invoiceTitle, 14)
+    currentPage.drawText(invoiceTitle, {
+      x: pageWidth - 50 - titleWidth,
+      y,
+      font: boldFont,
+      size: 14,
+      color: rgb(0.2, 0.2, 0.2),
+    })
+    y -= 18
+
+    // Date — right-aligned
+    const dateStr = `Date: ${new Date().toISOString().split('T')[0]}`
+    const dateWidth = font.widthOfTextAtSize(dateStr, 10)
+    currentPage.drawText(dateStr, {
+      x: pageWidth - 50 - dateWidth,
       y,
       font,
       size: 10,
       color: rgb(0.4, 0.4, 0.4),
     })
-    y -= 30
+    y -= 25
+
+    // Bill To
+    const billToName = metadata?.billTo?.name ?? 'Accelerate ME'
+    const billToAddress = metadata?.billTo?.addressLines ?? []
+    currentPage.drawText('Bill To:', { x: 50, y, font: boldFont, size: 10, color: rgb(0, 0, 0) })
+    y -= 14
+    currentPage.drawText(billToName, { x: 50, y, font, size: 10, color: rgb(0.2, 0.2, 0.2) })
+    y -= 13
+    for (const line of billToAddress) {
+      currentPage.drawText(line, { x: 50, y, font, size: 9, color: rgb(0.3, 0.3, 0.3) })
+      y -= 13
+    }
+    y -= 15
 
     // Line items header
-    page.drawText('Vendor', { x: 50, y, font: boldFont, size: 10 })
-    page.drawText('Description', { x: 200, y, font: boldFont, size: 10 })
-    page.drawText('Amount', { x: 480, y, font: boldFont, size: 10 })
+    currentPage.drawText('Vendor', { x: 50, y, font: boldFont, size: 10 })
+    currentPage.drawText('Description', { x: 200, y, font: boldFont, size: 10 })
+    currentPage.drawText('Amount', { x: 480, y, font: boldFont, size: 10 })
     y -= 5
-    page.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 0.5 })
+    currentPage.drawLine({
+      start: { x: 50, y },
+      end: { x: 545, y },
+      thickness: 0.5,
+      color: rgb(0.3, 0.3, 0.3),
+    })
     y -= 15
 
     // Line items
     for (const inv of componentInvoices) {
-      if (y < 80) {
-        // Add a new page if needed
-        const newPage = pdfDoc.addPage([595, 842])
-        y = newPage.getSize().height - 50
-        // Draw on new page would need a reference; for simplicity, keep on one page
-        break
-      }
+      ensureSpace(80)
       const vendorText =
         inv.vendorName.length > 20 ? inv.vendorName.slice(0, 20) + '...' : inv.vendorName
       const descText =
         (inv.description || 'N/A').length > 35
           ? (inv.description || 'N/A').slice(0, 35) + '...'
           : inv.description || 'N/A'
-      page.drawText(vendorText, { x: 50, y, font, size: 9 })
-      page.drawText(descText, { x: 200, y, font, size: 9 })
-      page.drawText(`£${inv.amountGbp.toFixed(2)}`, { x: 480, y, font, size: 9 })
+      currentPage.drawText(vendorText, { x: 50, y, font, size: 9 })
+      currentPage.drawText(descText, { x: 200, y, font, size: 9 })
+      currentPage.drawText(`£${inv.amountGbp.toFixed(2)}`, { x: 480, y, font, size: 9 })
       y -= 18
     }
 
     // Total
+    ensureSpace(60)
     y -= 5
-    page.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 0.5 })
-    y -= 15
-    page.drawText('TOTAL', { x: 50, y, font: boldFont, size: 11 })
-    page.drawText(`£${totalAmount.toFixed(2)}`, { x: 480, y, font: boldFont, size: 11 })
+    currentPage.drawLine({
+      start: { x: 50, y },
+      end: { x: 545, y },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    })
+    y -= 18
+    currentPage.drawText('TOTAL', { x: 50, y, font: boldFont, size: 11 })
+    currentPage.drawText(`£${totalAmount.toFixed(2)}`, { x: 480, y, font: boldFont, size: 11 })
+
+    // Bank details section
+    const bankInfo =
+      (metadata?.bankDetails ?? batchContext.bankDetails)
+        ? {
+            accountHolder:
+              metadata?.bankDetails?.accountHolder ??
+              batchContext.bankDetails?.accountHolderName ??
+              '',
+            sortCode: metadata?.bankDetails?.sortCode ?? batchContext.bankDetails?.sortCode ?? '',
+            accountNumber:
+              metadata?.bankDetails?.accountNumber ?? batchContext.bankDetails?.accountNumber ?? '',
+            bankName: metadata?.bankDetails?.bankName ?? batchContext.bankDetails?.bankName ?? null,
+          }
+        : null
+
+    if (bankInfo && bankInfo.accountHolder) {
+      ensureSpace(100)
+      y -= 30
+      currentPage.drawText('Bank Details', {
+        x: 50,
+        y,
+        font: boldFont,
+        size: 10,
+        color: rgb(0, 0, 0),
+      })
+      y -= 15
+      currentPage.drawText(`Account Holder: ${bankInfo.accountHolder}`, {
+        x: 50,
+        y,
+        font,
+        size: 9,
+        color: rgb(0.3, 0.3, 0.3),
+      })
+      y -= 13
+      currentPage.drawText(`Sort Code: ${bankInfo.sortCode}`, {
+        x: 50,
+        y,
+        font,
+        size: 9,
+        color: rgb(0.3, 0.3, 0.3),
+      })
+      y -= 13
+      currentPage.drawText(`Account Number: ${bankInfo.accountNumber}`, {
+        x: 50,
+        y,
+        font,
+        size: 9,
+        color: rgb(0.3, 0.3, 0.3),
+      })
+      if (bankInfo.bankName) {
+        y -= 13
+        currentPage.drawText(`Bank: ${bankInfo.bankName}`, {
+          x: 50,
+          y,
+          font,
+          size: 9,
+          color: rgb(0.3, 0.3, 0.3),
+        })
+      }
+    }
 
     const pdfBytes = await pdfDoc.save()
 
@@ -202,6 +455,8 @@ export const executeBatch = internalAction({
       fileName: batchFileName,
       receiptStorageIds: allReceiptStorageIds,
       receiptFileNames: allReceiptFileNames,
+      originalInvoiceStorageIds: allOriginalInvoiceStorageIds,
+      originalInvoiceFileNames: allOriginalInvoiceFileNames,
       componentIds: componentInvoices.map((inv) => inv._id),
       batchInvoicesToDelete,
     })
@@ -274,6 +529,8 @@ export const updateBatchedInvoice = internalMutation({
     fileName: v.string(),
     receiptStorageIds: v.array(v.string()),
     receiptFileNames: v.array(v.string()),
+    originalInvoiceStorageIds: v.array(v.string()),
+    originalInvoiceFileNames: v.array(v.string()),
     componentIds: v.array(v.id('invoices')),
     batchInvoicesToDelete: v.array(v.id('invoices')),
   },
@@ -297,6 +554,8 @@ export const updateBatchedInvoice = internalMutation({
       receiptFileNames: args.receiptFileNames,
       receiptStorageId: args.receiptStorageIds[0] as Id<'_storage'>,
       receiptFileName: args.receiptFileNames[0],
+      originalInvoiceStorageIds: args.originalInvoiceStorageIds as Id<'_storage'>[],
+      originalInvoiceFileNames: args.originalInvoiceFileNames,
       status: 'submitted',
       isBatched: true,
       batchedFromIds: args.componentIds,

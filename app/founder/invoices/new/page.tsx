@@ -40,6 +40,7 @@ import {
   Replace,
   CheckCircle2,
   Circle,
+  RefreshCw,
 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
@@ -52,7 +53,8 @@ export default function NewInvoicePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [amountMismatchWarning, setAmountMismatchWarning] = useState<string | null>(null)
-  const [extractionStep, setExtractionStep] = useState(0) // 0=idle, 1=upload, 2=analyze, 3=convert, 4=done
+  const [extractionStep, setExtractionStep] = useState(0) // 0=idle, 1=upload, 2=analyze, 3=convert, 4=populate, 5=done
+  const [needsConfirmation, setNeedsConfirmation] = useState(false)
   const [extractionResult, setExtractionResult] = useState<{
     invoiceCurrency: string
     totalAmountOriginal: number
@@ -71,6 +73,7 @@ export default function NewInvoicePage() {
   const extractionTriggered = useRef(false)
   // Track storage IDs from extraction uploads for cleanup
   const extractionStorageIds = useRef<string[]>([])
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
   const createInvoice = useMutation(api.invoices.create)
@@ -112,7 +115,13 @@ export default function NewInvoicePage() {
 
   // Auto-extract invoice data when both invoice + receipt files are available
   useEffect(() => {
-    if (!invoiceFile || receiptFiles.length === 0 || extractionTriggered.current || isExtracting)
+    if (
+      !invoiceFile ||
+      receiptFiles.length === 0 ||
+      extractionTriggered.current ||
+      isExtracting ||
+      needsConfirmation
+    )
       return
     extractionTriggered.current = true
 
@@ -122,23 +131,34 @@ export default function NewInvoicePage() {
       setExtractionStep(1)
       setExtractionResult(null)
 
+      // Create abort controller for this extraction
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+
       // Clean up any previous extraction files first
       await cleanupExtractionFiles()
 
       try {
+        if (controller.signal.aborted) return
+
         // Upload files to get storage IDs
         const invoiceUploadUrl = await generateUploadUrl()
+        if (controller.signal.aborted) return
+
         const invoiceResult = await fetch(invoiceUploadUrl, {
           method: 'POST',
           headers: { 'Content-Type': invoiceFile!.type },
           body: invoiceFile,
         })
         if (!invoiceResult.ok) throw new Error('Failed to upload invoice for extraction')
+        if (controller.signal.aborted) return
+
         const { storageId: invoiceStorageId } = await invoiceResult.json()
         extractionStorageIds.current.push(invoiceStorageId)
 
         const receiptStorageIds: string[] = []
         for (const file of receiptFiles) {
+          if (controller.signal.aborted) return
           const uploadUrl = await generateUploadUrl()
           const result = await fetch(uploadUrl, {
             method: 'POST',
@@ -151,6 +171,7 @@ export default function NewInvoicePage() {
           extractionStorageIds.current.push(storageId)
         }
 
+        if (controller.signal.aborted) return
         setExtractionStep(2)
 
         const extracted = await extractInvoiceData({
@@ -158,11 +179,15 @@ export default function NewInvoicePage() {
           receiptStorageIds: receiptStorageIds as any,
         })
 
+        if (controller.signal.aborted) return
+
         // Show currency conversion step briefly if applicable
         setExtractionStep(3)
         if (extracted.currencyConverted) {
           await new Promise((resolve) => setTimeout(resolve, 600))
         }
+
+        if (controller.signal.aborted) return
 
         // Populate form fields
         if (extracted.vendorNames) form.setValue('vendor_name', extracted.vendorNames)
@@ -170,7 +195,7 @@ export default function NewInvoicePage() {
         if (extracted.invoiceDate) form.setValue('invoice_date', extracted.invoiceDate)
         if (extracted.totalAmountGbp > 0) form.setValue('amount_gbp', extracted.totalAmountGbp)
 
-        setExtractionStep(4)
+        setExtractionStep(5)
         setExtractionResult({
           invoiceCurrency: extracted.invoiceCurrency,
           totalAmountOriginal: extracted.totalAmountOriginal,
@@ -185,15 +210,17 @@ export default function NewInvoicePage() {
 
         if (extracted.amountMismatch) {
           setAmountMismatchWarning(
-            `Invoice total (£${extracted.totalAmountGbp.toFixed(2)}) doesn\u2019t match receipt total (£${extracted.receiptTotalGbp.toFixed(2)})`
+            `Invoice total (\u00A3${extracted.totalAmountGbp.toFixed(2)}) doesn\u2019t match receipt total (\u00A3${extracted.receiptTotalGbp.toFixed(2)})`
           )
         }
 
         toast.success('Invoice details extracted automatically')
       } catch {
-        setExtractionStep(0)
-        setExtractionResult(null)
-        toast.error('Could not extract invoice details. Please fill in manually.')
+        if (!controller.signal.aborted) {
+          setExtractionStep(0)
+          setExtractionResult(null)
+          toast.error('Could not extract invoice details. Please fill in manually.')
+        }
       } finally {
         setIsExtracting(false)
       }
@@ -201,11 +228,30 @@ export default function NewInvoicePage() {
 
     runExtraction()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoiceFile, receiptFiles.length])
+  }, [invoiceFile, receiptFiles.length, needsConfirmation])
 
-  // Reset extraction trigger when files change
+  // Reset extraction when files change after extraction has completed
   useEffect(() => {
-    extractionTriggered.current = false
+    if (extractionStep === 5) {
+      // Extraction already completed — files changed, require confirmation
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+        abortControllerRef.current = null
+      }
+      setExtractionStep(0)
+      setExtractionResult(null)
+      setAmountMismatchWarning(null)
+      form.setValue('vendor_name', '')
+      form.setValue('description', '')
+      form.setValue('invoice_date', '')
+      form.setValue('amount_gbp', undefined as any)
+      extractionTriggered.current = true // prevent auto-trigger
+      setNeedsConfirmation(true)
+    } else if (extractionStep === 0 && !needsConfirmation) {
+      // No extraction yet — allow auto-trigger
+      extractionTriggered.current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceFile, receiptFiles])
 
   const invoiceNameError = (() => {
@@ -268,7 +314,7 @@ export default function NewInvoicePage() {
     }
 
     if (amountExceedsBalance) {
-      toast.error(`Amount exceeds available balance of £${available.toFixed(2)}`)
+      toast.error(`Amount exceeds available balance of \u00A3${available.toFixed(2)}`)
       return
     }
 
@@ -335,132 +381,289 @@ export default function NewInvoicePage() {
         </div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight font-display">Upload Invoice</h1>
-          <p className="text-muted-foreground">Submit a new invoice for review and reimbursement</p>
+          <p className="text-muted-foreground">
+            Upload your documents and AI will extract the details automatically
+          </p>
         </div>
       </div>
 
-      {/* Naming rules */}
-      <Card className="border-amber-200 bg-amber-50/50">
-        <CardContent className="flex items-start gap-3 pt-4 pb-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="text-sm">
-            <p className="font-medium text-amber-900">Invoice naming</p>
-            <ul className="mt-1 space-y-0.5 text-amber-800">
-              <li>
-                Invoice must be named:{' '}
-                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs font-mono">
-                  {startupName ?? 'YourStartup'} Invoice {expectedNumber}.pdf
-                </code>
-              </li>
-              <li>Receipts: any PDF filename is fine — we rename them automatically.</li>
-              <li>
-                Your next invoice number is <strong>{expectedNumber}</strong>. Numbers must be
-                sequential.
-              </li>
-            </ul>
-          </div>
+      {/* Step 1: Upload documents */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">1. Upload your documents</CardTitle>
+          <CardDescription>
+            Drop in your invoice and receipts — we&apos;ll handle the rest. Your invoice must be
+            named{' '}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">
+              {startupName ?? 'YourStartup'} Invoice {expectedNumber}.pdf
+            </code>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TooltipProvider>
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Invoice File Upload */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-sm font-medium leading-none">Invoice PDF</label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-amber-500 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[280px]">
+                      <p>
+                        A PDF document from your company addressed to Accelerate ME, requesting
+                        reimbursement for expenses.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <input
+                  ref={invoiceInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => {
+                    setInvoiceFile(e.target.files?.[0] ?? null)
+                    e.target.value = ''
+                  }}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => invoiceInputRef.current?.click()}
+                >
+                  {invoiceFile ? (
+                    <>
+                      <Replace className="mr-2 h-4 w-4" />
+                      Replace invoice
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Choose invoice
+                    </>
+                  )}
+                </Button>
+                {invoiceFile && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <button
+                      type="button"
+                      onClick={() => previewFile(invoiceFile)}
+                      className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 hover:underline truncate"
+                    >
+                      <FileText className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{invoiceFile.name}</span>
+                      <Eye className="h-3 w-3 shrink-0" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceFile(null)}
+                      className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+                {invoiceNameError && <p className="text-sm text-destructive">{invoiceNameError}</p>}
+              </div>
+
+              {/* Receipt File Upload */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-sm font-medium leading-none">Receipt PDFs</label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-amber-500 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[280px]">
+                      <p>
+                        Proof-of-purchase receipts from vendors. Upload multiple — filenames
+                        don&apos;t matter, we rename them automatically.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <input
+                  ref={receiptInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  multiple
+                  onChange={(e) => {
+                    const files = e.target.files
+                    if (files && files.length > 0) {
+                      setReceiptFiles((prev) => [...prev, ...Array.from(files)])
+                    }
+                    e.target.value = ''
+                  }}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => receiptInputRef.current?.click()}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {receiptFiles.length === 0 ? 'Choose receipts' : 'Add more receipts'}
+                </Button>
+                {receiptFiles.length > 0 && (
+                  <div className="space-y-1">
+                    {receiptFiles.map((file, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 text-sm text-muted-foreground"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => previewFile(file)}
+                          className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 hover:underline truncate"
+                        >
+                          <FileText className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{file.name}</span>
+                          <Eye className="h-3 w-3 shrink-0" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReceiptFiles((prev) => prev.filter((_, j) => j !== i))}
+                          className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {receiptPdfError && <p className="text-sm text-destructive">{receiptPdfError}</p>}
+              </div>
+            </div>
+          </TooltipProvider>
         </CardContent>
       </Card>
 
-      {/* Form */}
+      {/* Confirmation banner when files changed after extraction */}
+      {needsConfirmation && invoiceFile && receiptFiles.length > 0 && (
+        <div className="border border-amber-200 bg-amber-50/50 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-amber-600" />
+            <p className="text-sm font-medium text-amber-900">
+              Files changed. Re-extract invoice details?
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setNeedsConfirmation(false)
+              extractionTriggered.current = false
+            }}
+          >
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Re-extract
+          </Button>
+        </div>
+      )}
+
+      {/* Extraction pipeline */}
+      {!needsConfirmation && (extractionStep > 0 || extractionResult) && (
+        <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            {extractionStep > 0 && extractionStep < 5 ? (
+              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+            )}
+            <p className="text-sm font-medium text-blue-900">
+              {extractionStep === 5 ? 'Extraction complete' : 'Extracting invoice details...'}
+            </p>
+          </div>
+
+          <div className="flex items-center">
+            {[
+              { label: 'Upload', step: 1 },
+              { label: 'Analyze', step: 2 },
+              { label: 'Convert', step: 3 },
+              { label: 'Populate', step: 4 },
+            ].map(({ label, step }, i) => (
+              <Fragment key={step}>
+                {i > 0 && (
+                  <div
+                    className={`flex-1 h-px mx-1 ${
+                      extractionStep >= step ? 'bg-green-300' : 'bg-muted-foreground/20'
+                    }`}
+                  />
+                )}
+                <div
+                  className={`flex items-center gap-1 text-xs whitespace-nowrap px-2 py-1 rounded-full ${
+                    extractionStep > step
+                      ? 'text-green-700 bg-green-50'
+                      : extractionStep === step
+                        ? 'text-blue-700 bg-blue-100 font-medium'
+                        : 'text-muted-foreground'
+                  }`}
+                >
+                  {extractionStep > step ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : extractionStep === step ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Circle className="h-3 w-3" />
+                  )}
+                  {label}
+                </div>
+              </Fragment>
+            ))}
+          </div>
+
+          {extractionResult?.currencyConverted && (
+            <div className="border-t border-blue-200 pt-2 text-xs text-blue-800 space-y-0.5">
+              <p className="font-medium">Currency conversion applied (live rates)</p>
+              {extractionResult.invoiceCurrency !== 'GBP' && (
+                <p>
+                  Invoice: {extractionResult.totalAmountOriginal.toFixed(2)}{' '}
+                  {extractionResult.invoiceCurrency} &rarr; &pound;
+                  {extractionResult.totalAmountGbp.toFixed(2)} GBP
+                </p>
+              )}
+              {extractionResult.receiptCurrencies.map(
+                (curr, i) =>
+                  curr !== 'GBP' && (
+                    <p key={i}>
+                      Receipt {i + 1}: {extractionResult.receiptAmountsOriginal[i]?.toFixed(2)}{' '}
+                      {curr} &rarr; &pound;
+                      {extractionResult.receiptAmountsGbp[i]?.toFixed(2)} GBP
+                    </p>
+                  )
+              )}
+            </div>
+          )}
+
+          {extractionResult && extractionResult.unconvertedCurrencies.length > 0 && (
+            <div className="border-t border-amber-200 pt-2 flex items-start gap-1.5 text-xs text-amber-800">
+              <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+              <p>
+                Could not convert: {extractionResult.unconvertedCurrencies.join(', ')}. Amounts
+                shown as-is — please verify.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 2: Review details */}
       <Card>
-        <CardHeader>
-          <CardTitle>Invoice Details</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">2. Review details</CardTitle>
           <CardDescription>
-            Fill in the invoice information and upload the invoice and receipt documents
+            {extractionResult
+              ? 'AI-extracted details — review and adjust if needed'
+              : 'These fields will be auto-filled once you upload your documents'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {(extractionStep > 0 || extractionResult) && (
-                <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    {extractionStep > 0 && extractionStep < 4 ? (
-                      <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    )}
-                    <p className="text-sm font-medium text-blue-900">
-                      {extractionStep === 4
-                        ? 'Extraction complete'
-                        : 'Extracting invoice details...'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center">
-                    {[
-                      { label: 'Upload', step: 1 },
-                      { label: 'Analyze', step: 2 },
-                      { label: 'Convert', step: 3 },
-                      { label: 'Populate', step: 4 },
-                    ].map(({ label, step }, i) => (
-                      <Fragment key={step}>
-                        {i > 0 && (
-                          <div
-                            className={`flex-1 h-px mx-1 ${
-                              extractionStep >= step ? 'bg-green-300' : 'bg-muted-foreground/20'
-                            }`}
-                          />
-                        )}
-                        <div
-                          className={`flex items-center gap-1 text-xs whitespace-nowrap px-2 py-1 rounded-full ${
-                            extractionStep > step
-                              ? 'text-green-700 bg-green-50'
-                              : extractionStep === step
-                                ? 'text-blue-700 bg-blue-100 font-medium'
-                                : 'text-muted-foreground'
-                          }`}
-                        >
-                          {extractionStep > step ? (
-                            <CheckCircle2 className="h-3 w-3" />
-                          ) : extractionStep === step ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Circle className="h-3 w-3" />
-                          )}
-                          {label}
-                        </div>
-                      </Fragment>
-                    ))}
-                  </div>
-
-                  {extractionResult?.currencyConverted && (
-                    <div className="border-t border-blue-200 pt-2 text-xs text-blue-800 space-y-0.5">
-                      <p className="font-medium">Currency conversion applied (live rates)</p>
-                      {extractionResult.invoiceCurrency !== 'GBP' && (
-                        <p>
-                          Invoice: {extractionResult.totalAmountOriginal.toFixed(2)}{' '}
-                          {extractionResult.invoiceCurrency} &rarr; &pound;
-                          {extractionResult.totalAmountGbp.toFixed(2)} GBP
-                        </p>
-                      )}
-                      {extractionResult.receiptCurrencies.map(
-                        (curr, i) =>
-                          curr !== 'GBP' && (
-                            <p key={i}>
-                              Receipt {i + 1}:{' '}
-                              {extractionResult.receiptAmountsOriginal[i]?.toFixed(2)} {curr} &rarr;
-                              &pound;
-                              {extractionResult.receiptAmountsGbp[i]?.toFixed(2)} GBP
-                            </p>
-                          )
-                      )}
-                    </div>
-                  )}
-
-                  {extractionResult && extractionResult.unconvertedCurrencies.length > 0 && (
-                    <div className="border-t border-amber-200 pt-2 flex items-start gap-1.5 text-xs text-amber-800">
-                      <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                      <p>
-                        Could not convert: {extractionResult.unconvertedCurrencies.join(', ')}.
-                        Amounts shown as-is — please verify.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {amountMismatchWarning && (
                 <div className="flex items-start gap-3 border border-amber-200 bg-amber-50/50 p-4 rounded-lg">
                   <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
@@ -505,7 +708,7 @@ export default function NewInvoicePage() {
                   name="amount_gbp"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Amount (£)</FormLabel>
+                      <FormLabel>Amount ({'\u00A3'})</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -524,7 +727,8 @@ export default function NewInvoicePage() {
                       </FormControl>
                       {amountExceedsBalance && (
                         <p className="text-sm text-destructive">
-                          Exceeds available balance of £{available.toFixed(2)}
+                          Exceeds available balance of {'\u00A3'}
+                          {available.toFixed(2)}
                         </p>
                       )}
                       <FormMessage />
@@ -551,156 +755,6 @@ export default function NewInvoicePage() {
                 )}
               />
 
-              {/* Invoice File Upload */}
-              <TooltipProvider>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-sm font-medium leading-none">
-                      Invoice File (Required — PDF only)
-                    </label>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-3.5 w-3.5 text-amber-500 cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[280px]">
-                        <p>
-                          A PDF document from your company or you as a founder, addressed to
-                          Accelerate ME, requesting reimbursement for expenses.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <input
-                    ref={invoiceInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    onChange={(e) => {
-                      setInvoiceFile(e.target.files?.[0] ?? null)
-                      e.target.value = ''
-                    }}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => invoiceInputRef.current?.click()}
-                  >
-                    {invoiceFile ? (
-                      <>
-                        <Replace className="mr-2 h-4 w-4" />
-                        Replace invoice file
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Choose invoice file
-                      </>
-                    )}
-                  </Button>
-                  {invoiceFile && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <button
-                        type="button"
-                        onClick={() => previewFile(invoiceFile)}
-                        className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 hover:underline"
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                        {invoiceFile.name}
-                        <Eye className="h-3 w-3" />
-                      </button>
-                      <span className="text-muted-foreground">
-                        ({(invoiceFile.size / 1024).toFixed(1)} KB)
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setInvoiceFile(null)}
-                        className="text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                  {invoiceNameError && (
-                    <p className="text-sm text-destructive">{invoiceNameError}</p>
-                  )}
-                </div>
-
-                {/* Receipt File Upload */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-sm font-medium leading-none">
-                      Receipt Files (Required — PDF only, multiple allowed)
-                    </label>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-3.5 w-3.5 text-amber-500 cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[280px]">
-                        <p>
-                          The actual proof-of-purchase receipts from the vendor or supplier. You can
-                          upload multiple receipt PDFs — we rename them automatically.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <input
-                    ref={receiptInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    multiple
-                    onChange={(e) => {
-                      const files = e.target.files
-                      if (files && files.length > 0) {
-                        setReceiptFiles((prev) => [...prev, ...Array.from(files)])
-                      }
-                      e.target.value = ''
-                    }}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => receiptInputRef.current?.click()}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    {receiptFiles.length === 0 ? 'Choose receipt files' : 'Add more receipts'}
-                  </Button>
-                  {receiptFiles.length > 0 && (
-                    <div className="space-y-1">
-                      {receiptFiles.map((file, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center gap-2 text-sm text-muted-foreground"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => previewFile(file)}
-                            className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 hover:underline"
-                          >
-                            <FileText className="h-3.5 w-3.5" />
-                            {file.name}
-                            <Eye className="h-3 w-3" />
-                          </button>
-                          <span className="text-muted-foreground">
-                            ({(file.size / 1024).toFixed(1)} KB)
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setReceiptFiles((prev) => prev.filter((_, j) => j !== i))
-                            }
-                            className="text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {receiptPdfError && <p className="text-sm text-destructive">{receiptPdfError}</p>}
-                </div>
-              </TooltipProvider>
-
               <div className="flex items-center gap-2 border border-blue-200 bg-blue-50/50 p-3 rounded-lg">
                 <Info className="h-3.5 w-3.5 shrink-0 text-blue-600" />
                 <p className="text-xs text-blue-700">
@@ -717,7 +771,7 @@ export default function NewInvoicePage() {
                 </Link>
                 <Button type="submit" disabled={isSubmitting || !canSubmit}>
                   <Upload className="mr-2 h-4 w-4" />
-                  {isSubmitting ? 'Uploading...' : 'Upload Invoice'}
+                  {isSubmitting ? 'Uploading...' : 'Submit Invoice'}
                 </Button>
               </div>
             </form>

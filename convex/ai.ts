@@ -1,4 +1,4 @@
-import { action } from './functions'
+import { action, internalAction } from './functions'
 import { v } from 'convex/values'
 
 /**
@@ -43,8 +43,8 @@ export const extractInvoiceData = action({
         text: `You are an invoice data extraction assistant. Extract the following from the provided PDF documents and respond ONLY with valid JSON (no markdown, no explanation):
 
 {
-  "vendorNames": "comma-separated vendor name(s) from the invoice and receipts",
-  "description": "brief description of what was purchased",
+  "vendorNames": "comma-separated vendor name(s) extracted ONLY from the receipt PDFs (NOT the invoice)",
+  "description": "brief description of what was purchased, based on the receipts",
   "invoiceDate": "YYYY-MM-DD format, the date on the invoice",
   "invoiceCurrency": "ISO 4217 currency code found on the invoice (e.g. GBP, USD, EUR, NOK)",
   "totalAmountOriginal": <number - the total amount in the ORIGINAL currency as shown on the invoice>,
@@ -53,7 +53,8 @@ export const extractInvoiceData = action({
 }
 
 IMPORTANT:
-- The first PDF is the invoice. The remaining PDFs are receipts.
+- The first PDF is the INVOICE — a reimbursement request from a startup to an accelerator. It is NOT from a vendor. Do NOT extract vendor names from it.
+- The remaining PDFs are RECEIPTS — these are proof-of-purchase documents from vendors/suppliers. Extract vendor names and descriptions from these.
 - Extract amounts as numbers (no currency symbols).
 - Identify the currency from each document. Look for currency symbols (£, $, €, kr), ISO codes, or context clues.
 - If the currency is ambiguous, default to GBP.
@@ -196,6 +197,98 @@ IMPORTANT:
       amountMismatch: Math.abs(totalAmountGbp - receiptTotalGbp) > 0.01,
       currencyConverted: hasNonGbp && unconvertedCurrencies.length === 0,
       unconvertedCurrencies,
+    }
+  },
+})
+
+/**
+ * Extract company/sender metadata from an invoice PDF for batch PDF generation.
+ */
+export const extractInvoiceMetadata = internalAction({
+  args: { invoiceStorageId: v.id('_storage') },
+  handler: async (ctx, args) => {
+    const apiKey = process.env.OPENROUTER_API_KEY
+    if (!apiKey) return null
+
+    const url = await ctx.storage.getUrl(args.invoiceStorageId)
+    if (!url) return null
+
+    const response = await fetch(url)
+    if (!response.ok) return null
+    const buffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i])
+    }
+    const base64 = btoa(binary)
+
+    const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Extract the company/sender details from this invoice PDF. Return JSON only:
+{
+  "companyName": "...",
+  "addressLines": ["line1", "line2", ...],
+  "email": "..." or null,
+  "phone": "..." or null,
+  "bankDetails": {
+    "accountHolder": "...",
+    "sortCode": "...",
+    "accountNumber": "...",
+    "bankName": "..." or null
+  } or null,
+  "billTo": { "name": "...", "addressLines": ["..."] } or null
+}`,
+              },
+              {
+                type: 'image_url',
+                image_url: { url: `data:application/pdf;base64,${base64}` },
+              },
+            ],
+          },
+        ],
+        temperature: 0,
+      }),
+    })
+
+    if (!aiResponse.ok) return null
+
+    const data = await aiResponse.json()
+    const rawContent = data.choices?.[0]?.message?.content ?? ''
+
+    let jsonStr = rawContent.trim()
+    if (jsonStr.startsWith('```')) {
+      jsonStr = jsonStr.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')
+    }
+
+    try {
+      return JSON.parse(jsonStr) as {
+        companyName: string
+        addressLines: string[]
+        email: string | null
+        phone: string | null
+        bankDetails: {
+          accountHolder: string
+          sortCode: string
+          accountNumber: string
+          bankName: string | null
+        } | null
+        billTo: { name: string; addressLines: string[] } | null
+      }
+    } catch {
+      return null
     }
   },
 })
