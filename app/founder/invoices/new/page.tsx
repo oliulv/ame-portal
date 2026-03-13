@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
+import { ConvexError } from 'convex/values'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
@@ -361,7 +362,13 @@ export default function NewInvoicePage() {
       toast.success('Invoice uploaded successfully')
       router.push('/founder/invoices')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to upload invoice')
+      const message =
+        error instanceof ConvexError
+          ? (error.data as string)
+          : error instanceof Error
+            ? error.message
+            : 'Failed to upload invoice'
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }

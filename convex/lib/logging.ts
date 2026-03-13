@@ -1,5 +1,4 @@
 type ConvexLogLevel = 'info' | 'warn' | 'error'
-type ConvexFunctionKind = 'query' | 'mutation' | 'action'
 
 type ConvexLogContext = Record<string, unknown>
 
@@ -116,23 +115,29 @@ export function logConvexError(event: string, error?: unknown, context?: ConvexL
   emit('error', event, context, error)
 }
 
-export function logConvexFunctionSuccess(params: {
-  kind: ConvexFunctionKind
-  args: Record<string, unknown>
-  result: unknown
-  durationMs: number
-}) {
-  const baseContext: ConvexLogContext = {
-    kind: params.kind,
-    durationMs: params.durationMs,
-    argKeys: Object.keys(params.args),
-    result: summarizeResult(params.result),
+/**
+ * Emit a single wide event for a Convex function execution (success or error).
+ * Follows the wide-event pattern: one rich log line per function call,
+ * emitted in `finally` so errors are never missed.
+ */
+export function logConvexFunctionComplete(event: Record<string, unknown>) {
+  const context: ConvexLogContext = { ...event }
+
+  // Summarize result to avoid logging full payloads
+  if (context.result !== undefined) {
+    context.result = summarizeResult(context.result)
   }
 
-  if (params.durationMs >= SLOW_FUNCTION_THRESHOLD_MS) {
-    logConvexWarn('convex.function.slow_success', baseContext)
+  if (event.outcome === 'error') {
+    emit('error', 'convex.function.error', context)
     return
   }
 
-  logConvexInfo('convex.function.success', baseContext)
+  const durationMs = (event.durationMs as number) ?? 0
+  if (durationMs >= SLOW_FUNCTION_THRESHOLD_MS) {
+    emit('warn', 'convex.function.slow_success', context)
+    return
+  }
+
+  emit('info', 'convex.function.success', context)
 }

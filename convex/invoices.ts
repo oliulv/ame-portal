@@ -1,6 +1,6 @@
-import { query, mutation, internalAction, internalQuery } from './functions'
+import { query, mutation, internalAction, internalQuery, enrichEvent } from './functions'
 import { internal } from './_generated/api'
-import { v } from 'convex/values'
+import { v, ConvexError } from 'convex/values'
 import {
   requireAdmin,
   requireAdminWithPermission,
@@ -59,29 +59,34 @@ export const create = mutation({
     const user = await requireFounder(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
 
+    // Enrich wide event with business context
+    enrichEvent(ctx, { userId: user._id, fileName: args.fileName, amountGbp: args.amountGbp })
+
     if (startupIds.length === 0) {
-      throw new Error('No startup associated with your account')
+      throw new ConvexError('No startup associated with your account')
     }
 
     const startupId = startupIds[0]
     const startup = await ctx.db.get(startupId)
-    if (!startup) throw new Error('Startup not found')
+    if (!startup) throw new ConvexError('Startup not found')
+
+    enrichEvent(ctx, { startupId, startupName: startup.name })
 
     // Validate at least one receipt
     if (args.receiptStorageIds.length === 0) {
-      throw new Error('At least one receipt is required')
+      throw new ConvexError('At least one receipt is required')
     }
 
     // Validate PDF extension
     if (!args.fileName.toLowerCase().endsWith('.pdf')) {
-      throw new Error('Invoice must be a PDF file')
+      throw new ConvexError('Invoice must be a PDF file')
     }
 
     // Validate naming convention: "{StartupName} Invoice {N}.pdf"
     const escapedName = startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const namePattern = new RegExp(`^${escapedName} Invoice \\d+\\.pdf$`, 'i')
     if (!namePattern.test(args.fileName)) {
-      throw new Error(
+      throw new ConvexError(
         `Invoice must be named "${startup.name} Invoice {number}.pdf" (e.g. "${startup.name} Invoice 1.pdf")`
       )
     }
@@ -104,7 +109,7 @@ export const create = mutation({
 
     const invoiceNum = args.fileName.match(/Invoice (\d+)\.pdf$/i)?.[1]
     if (!invoiceNum || parseInt(invoiceNum, 10) !== expectedNext) {
-      throw new Error(
+      throw new ConvexError(
         `Invoice number must be ${expectedNext}. Please name your file "${startup.name} Invoice ${expectedNext}.pdf".`
       )
     }
@@ -132,12 +137,12 @@ export const create = mutation({
     const available = Math.max(0, unlocked - deployed)
 
     if (available <= 0) {
-      throw new Error(
+      throw new ConvexError(
         'No available funding. Complete milestones to unlock funding before submitting invoices.'
       )
     }
     if (args.amountGbp > available) {
-      throw new Error(
+      throw new ConvexError(
         `Amount exceeds available balance. You have £${available.toFixed(2)} available.`
       )
     }
