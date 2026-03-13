@@ -571,6 +571,11 @@ export const submit = mutation({
       throw new Error('Only waiting or changes-requested milestones can be submitted')
     }
 
+    // Enforce PDF-only for file uploads
+    if (args.planFileName && !args.planFileName.toLowerCase().endsWith('.pdf')) {
+      throw new Error('Only PDF files are accepted for milestone evidence.')
+    }
+
     const needsLink = milestone.requireLink !== false
     const needsFile = milestone.requireFile !== false
 

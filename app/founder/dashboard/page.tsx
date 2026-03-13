@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
 export default function FounderDashboard() {
+  const user = useQuery(api.users.current)
   const startup = useQuery(api.founderStartup.get)
   const milestones = useQuery(api.milestones.listForFounder)
   const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
@@ -52,6 +53,7 @@ export default function FounderDashboard() {
   )
 
   const isLoading =
+    user === undefined ||
     startup === undefined ||
     milestones === undefined ||
     fundingSummary === undefined ||
@@ -137,8 +139,13 @@ export default function FounderDashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight font-display">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here's your startup progress</p>
+        <h1 className="text-3xl font-bold tracking-tight font-display">
+          Dashboard: {startup?.startup?.name ?? 'Your Startup'}
+        </h1>
+        <p className="text-muted-foreground">
+          Welcome back{user?.fullName ? `, ${user.fullName.split(' ')[0]}` : ''}. Here&apos;s how{' '}
+          {startup?.startup?.name ?? 'your startup'} is tracking.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -177,16 +184,20 @@ export default function FounderDashboard() {
                 </>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className=" border bg-muted/40 px-2 py-1.5">
+            <div className="grid grid-cols-4 gap-2 text-xs">
+              <div className="border bg-muted/40 px-2 py-1.5">
                 <p className="text-muted-foreground">Unlocked</p>
                 <p className="font-medium">£{unlocked.toLocaleString('en-GB')}</p>
               </div>
-              <div className=" border bg-muted/40 px-2 py-1.5">
+              <div className="border bg-muted/40 px-2 py-1.5">
                 <p className="text-muted-foreground">Deployed</p>
                 <p className="font-medium text-blue-600">£{deployed.toLocaleString('en-GB')}</p>
               </div>
-              <div className=" border bg-muted/40 px-2 py-1.5">
+              <div className="border bg-muted/40 px-2 py-1.5">
+                <p className="text-muted-foreground">Committed</p>
+                <p className="font-medium text-violet-600">£{committed.toLocaleString('en-GB')}</p>
+              </div>
+              <div className="border bg-muted/40 px-2 py-1.5">
                 <p className="text-muted-foreground">Available</p>
                 <p className="font-medium text-green-600">£{available.toLocaleString('en-GB')}</p>
               </div>

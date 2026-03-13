@@ -41,6 +41,7 @@
     "google-auth-library": "^10.5.0",
     "lucide-react": "^0.554.0",
     "next": "16.1.1",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.16.3",
     "posthog-js": "^1.359.1",
     "posthog-node": "^5.28.0",

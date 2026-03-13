@@ -1,6 +1,6 @@
-import { query, mutation, internalAction, internalQuery } from './functions'
+import { query, mutation, internalAction, internalQuery, enrichEvent } from './functions'
 import { internal } from './_generated/api'
-import { v } from 'convex/values'
+import { v, ConvexError } from 'convex/values'
 import {
   requireAdmin,
   requireAdminWithPermission,
@@ -17,6 +17,17 @@ export const generateUploadUrl = mutation({
   handler: async (ctx) => {
     await requireAuth(ctx)
     return await ctx.storage.generateUploadUrl()
+  },
+})
+
+/**
+ * Delete a stored file (cleanup for cancelled uploads).
+ */
+export const deleteStorageFile = mutation({
+  args: { storageId: v.id('_storage') },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx)
+    await ctx.storage.delete(args.storageId)
   },
 })
 
@@ -48,41 +59,46 @@ export const create = mutation({
     const user = await requireFounder(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
 
+    // Enrich wide event with business context
+    enrichEvent(ctx, { userId: user._id, fileName: args.fileName, amountGbp: args.amountGbp })
+
     if (startupIds.length === 0) {
-      throw new Error('No startup associated with your account')
+      throw new ConvexError('No startup associated with your account')
     }
 
     const startupId = startupIds[0]
     const startup = await ctx.db.get(startupId)
-    if (!startup) throw new Error('Startup not found')
+    if (!startup) throw new ConvexError('Startup not found')
+
+    enrichEvent(ctx, { startupId, startupName: startup.name })
 
     // Validate at least one receipt
     if (args.receiptStorageIds.length === 0) {
-      throw new Error('At least one receipt is required')
+      throw new ConvexError('At least one receipt is required')
     }
 
     // Validate PDF extension
     if (!args.fileName.toLowerCase().endsWith('.pdf')) {
-      throw new Error('Invoice must be a PDF file')
+      throw new ConvexError('Invoice must be a PDF file')
     }
 
     // Validate naming convention: "{StartupName} Invoice {N}.pdf"
     const escapedName = startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const namePattern = new RegExp(`^${escapedName} Invoice \\d+\\.pdf$`, 'i')
     if (!namePattern.test(args.fileName)) {
-      throw new Error(
+      throw new ConvexError(
         `Invoice must be named "${startup.name} Invoice {number}.pdf" (e.g. "${startup.name} Invoice 1.pdf")`
       )
     }
 
-    // Enforce sequential invoice numbering (rejected invoices don't count)
+    // Enforce sequential invoice numbering (rejected and batched-into invoices don't count)
     const existingInvoices = await ctx.db
       .query('invoices')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
 
     const existingNumbers = existingInvoices
-      .filter((inv) => inv.status !== 'rejected')
+      .filter((inv) => inv.status !== 'rejected' && !inv.batchedIntoId)
       .map((inv) => {
         const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
         return match ? parseInt(match[1], 10) : 0
@@ -93,7 +109,7 @@ export const create = mutation({
 
     const invoiceNum = args.fileName.match(/Invoice (\d+)\.pdf$/i)?.[1]
     if (!invoiceNum || parseInt(invoiceNum, 10) !== expectedNext) {
-      throw new Error(
+      throw new ConvexError(
         `Invoice number must be ${expectedNext}. Please name your file "${startup.name} Invoice ${expectedNext}.pdf".`
       )
     }
@@ -107,7 +123,7 @@ export const create = mutation({
             (_, i) => `${startup.name} Receipt ${expectedNext}-${letters[i]}.pdf`
           )
 
-    // Validate amount against available balance
+    // Validate amount against available balance (exclude batched-into invoices to avoid double-counting)
     const milestones = await ctx.db
       .query('milestones')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
@@ -116,22 +132,22 @@ export const create = mutation({
       .filter((m) => m.status === 'approved')
       .reduce((sum, m) => sum + m.amount, 0)
     const deployed = existingInvoices
-      .filter((i) => i.status === 'paid')
+      .filter((i) => i.status === 'paid' && !i.batchedIntoId)
       .reduce((sum, i) => sum + i.amountGbp, 0)
     const available = Math.max(0, unlocked - deployed)
 
     if (available <= 0) {
-      throw new Error(
+      throw new ConvexError(
         'No available funding. Complete milestones to unlock funding before submitting invoices.'
       )
     }
     if (args.amountGbp > available) {
-      throw new Error(
+      throw new ConvexError(
         `Amount exceeds available balance. You have £${available.toFixed(2)} available.`
       )
     }
 
-    return await ctx.db.insert('invoices', {
+    const invoiceId = await ctx.db.insert('invoices', {
       startupId,
       uploadedByUserId: user._id,
       vendorName: args.vendorName,
@@ -148,6 +164,11 @@ export const create = mutation({
       receiptFileName: receiptFileNames[0],
       status: 'submitted',
     })
+
+    // Schedule auto-batching (5-min debounce)
+    await ctx.scheduler.runAfter(0, internal.invoiceBatching.scheduleBatching, { startupId })
+
+    return invoiceId
   },
 })
 
@@ -169,7 +190,7 @@ export const getFounderInvoiceInfo = query({
       .collect()
 
     const existingNumbers = invoices
-      .filter((inv) => inv.status !== 'rejected')
+      .filter((inv) => inv.status !== 'rejected' && !inv.batchedIntoId)
       .map((inv) => {
         const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
         return match ? parseInt(match[1], 10) : 0
@@ -221,14 +242,17 @@ export const listForFounder = query({
       allInvoices.push(...invoices)
     }
 
-    // Sort newest first
-    allInvoices.sort((a, b) => b._creationTime - a._creationTime)
+    // Filter out invoices that have been absorbed into a batch
+    const visibleInvoices = allInvoices.filter((i) => !i.batchedIntoId)
 
-    const pendingCount = allInvoices.filter(
+    // Sort newest first
+    visibleInvoices.sort((a, b) => b._creationTime - a._creationTime)
+
+    const pendingCount = visibleInvoices.filter(
       (i) => i.status === 'submitted' || i.status === 'under_review'
     ).length
 
-    return { invoices: allInvoices, pendingCount }
+    return { invoices: visibleInvoices, pendingCount }
   },
 })
 
@@ -272,6 +296,9 @@ export const listForAdmin = query({
       invoices = invoices.filter((i) => i.status === args.status)
     }
 
+    // Filter out invoices absorbed into a batch
+    invoices = invoices.filter((i) => !i.batchedIntoId)
+
     invoices.sort((a, b) => b._creationTime - a._creationTime)
 
     const enriched = await Promise.all(
@@ -281,6 +308,55 @@ export const listForAdmin = query({
       })
     )
     return enriched
+  },
+})
+
+/**
+ * Get the next submitted invoice (for auto-navigation after approval).
+ * If startupId is provided, looks within that startup first.
+ * Otherwise finds the next submitted invoice across all startups in the cohort.
+ */
+export const getNextSubmitted = query({
+  args: {
+    cohortId: v.id('cohorts'),
+    excludeId: v.id('invoices'),
+    startupId: v.optional(v.id('startups')),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    if (args.startupId) {
+      // Find next submitted invoice for this specific startup
+      const invoices = await ctx.db
+        .query('invoices')
+        .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId!))
+        .collect()
+      const next = invoices
+        .filter((i) => i.status === 'submitted' && i._id !== args.excludeId && !i.batchedIntoId)
+        .sort((a, b) => a._creationTime - b._creationTime)
+      if (next.length > 0) return next[0]._id
+    }
+
+    // Find next submitted invoice across all startups in the cohort
+    const startups = await ctx.db
+      .query('startups')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    const candidates = []
+    for (const startup of startups) {
+      const invoices = await ctx.db
+        .query('invoices')
+        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+        .collect()
+      candidates.push(
+        ...invoices.filter(
+          (i) => i.status === 'submitted' && i._id !== args.excludeId && !i.batchedIntoId
+        )
+      )
+    }
+    candidates.sort((a, b) => a._creationTime - b._creationTime)
+    return candidates.length > 0 ? candidates[0]._id : null
   },
 })
 
@@ -360,6 +436,11 @@ export const updateStatus = mutation({
     // Send to Xero on approval
     if (args.status === 'approved') {
       await ctx.scheduler.runAfter(0, internal.invoices.sendToXero, { invoiceId: args.id })
+      // Cancel pending batch if this approval empties the queue
+      await ctx.scheduler.runAfter(0, internal.invoiceBatching.cancelBatchIfEmpty, {
+        startupId: invoice.startupId,
+        excludeInvoiceId: args.id,
+      })
     }
   },
 })
@@ -443,10 +524,18 @@ export const sendToXero = internalAction({
     }
 
     // Collect receipt storage IDs (handle both old single and new array format)
-    const receiptIds: string[] =
-      invoice.receiptStorageIds ?? (invoice.receiptStorageId ? [invoice.receiptStorageId] : [])
-    const receiptNames: string[] =
-      invoice.receiptFileNames ?? (invoice.receiptFileName ? [invoice.receiptFileName] : [])
+    // For batch invoices, merge original invoice files + receipts for Xero
+    const originalIds: string[] = invoice.originalInvoiceStorageIds ?? []
+    const originalNames: string[] = invoice.originalInvoiceFileNames ?? []
+    const receiptIds: string[] = [
+      ...originalIds,
+      ...(invoice.receiptStorageIds ??
+        (invoice.receiptStorageId ? [invoice.receiptStorageId] : [])),
+    ]
+    const receiptNames: string[] = [
+      ...originalNames,
+      ...(invoice.receiptFileNames ?? (invoice.receiptFileName ? [invoice.receiptFileName] : [])),
+    ]
 
     // Send all receipts in a single email — Resend fetches each via URL
     const receiptAttachments = []
@@ -471,5 +560,31 @@ export const sendToXero = internalAction({
         throw new Error(`Failed to send receipts to Xero: ${receiptError.message}`)
       }
     }
+  },
+})
+
+/**
+ * Get component invoices for a batch invoice.
+ */
+export const getComponentInvoices = query({
+  args: { ids: v.array(v.id('invoices')) },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx)
+    const results = []
+    for (const id of args.ids) {
+      const inv = await ctx.db.get(id)
+      if (inv) {
+        results.push({
+          _id: inv._id,
+          vendorName: inv.vendorName,
+          amountGbp: inv.amountGbp,
+          invoiceDate: inv.invoiceDate,
+          fileName: inv.fileName,
+          storageId: inv.storageId,
+          description: inv.description,
+        })
+      }
+    }
+    return results
   },
 })

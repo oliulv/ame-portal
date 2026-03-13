@@ -219,9 +219,22 @@ export default defineSchema({
     approvedAt: v.optional(v.string()),
     paidAt: v.optional(v.string()),
     adminComment: v.optional(v.string()),
+    // Batching fields
+    batchedIntoId: v.optional(v.id('invoices')),
+    isBatched: v.optional(v.boolean()),
+    batchedFromIds: v.optional(v.array(v.id('invoices'))),
+    // Original invoice files from component invoices (separate from receipts)
+    originalInvoiceStorageIds: v.optional(v.array(v.id('_storage'))),
+    originalInvoiceFileNames: v.optional(v.array(v.string())),
   })
     .index('by_startupId', ['startupId'])
     .index('by_status', ['status']),
+
+  // ── Pending Batches (debounce scheduling) ────────────────────────
+  pendingBatches: defineTable({
+    startupId: v.id('startups'),
+    scheduledFnId: v.id('_scheduled_functions'),
+  }).index('by_startupId', ['startupId']),
 
   // ── Integration Connections ────────────────────────────────────────
   integrationConnections: defineTable({
