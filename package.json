@@ -11,6 +11,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "check": "bun run lint && bun run format:check && bun run typecheck",
     "clone:prod": "bun scripts/clone-prod-to-dev.ts"
   },

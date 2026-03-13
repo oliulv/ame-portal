@@ -28,6 +28,7 @@ import type * as http from "../http.js";
 import type * as integrations from "../integrations.js";
 import type * as invitations from "../invitations.js";
 import type * as invoiceBatching from "../invoiceBatching.js";
+import type * as invoiceValidation from "../invoiceValidation.js";
 import type * as invoices from "../invoices.js";
 import type * as lib_logging from "../lib/logging.js";
 import type * as lib_slugify from "../lib/slugify.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   integrations: typeof integrations;
   invitations: typeof invitations;
   invoiceBatching: typeof invoiceBatching;
+  invoiceValidation: typeof invoiceValidation;
   invoices: typeof invoices;
   "lib/logging": typeof lib_logging;
   "lib/slugify": typeof lib_slugify;

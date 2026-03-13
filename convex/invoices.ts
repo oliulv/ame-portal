@@ -8,6 +8,7 @@ import {
   requireAuth,
   getFounderStartupIds,
 } from './auth'
+import { validateInvoiceFileName, extractInvoiceNumber } from './invoiceValidation'
 
 /**
  * Generate a pre-signed upload URL for invoice files.
@@ -77,18 +78,10 @@ export const create = mutation({
       throw new ConvexError('At least one receipt is required')
     }
 
-    // Validate PDF extension
-    if (!args.fileName.toLowerCase().endsWith('.pdf')) {
-      throw new ConvexError('Invoice must be a PDF file')
-    }
-
-    // Validate naming convention: "{StartupName} Invoice {N}.pdf"
-    const escapedName = startup.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const namePattern = new RegExp(`^${escapedName} Invoice \\d+\\.pdf$`, 'i')
-    if (!namePattern.test(args.fileName)) {
-      throw new ConvexError(
-        `Invoice must be named "${startup.name} Invoice {number}.pdf" (e.g. "${startup.name} Invoice 1.pdf")`
-      )
+    // Validate filename format and naming convention
+    const nameValidation = validateInvoiceFileName(args.fileName, startup.name)
+    if (!nameValidation.valid) {
+      throw new ConvexError(nameValidation.error)
     }
 
     // Enforce sequential invoice numbering (rejected and batched-into invoices don't count)
@@ -107,8 +100,8 @@ export const create = mutation({
     const maxExisting = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
     const expectedNext = maxExisting + 1
 
-    const invoiceNum = args.fileName.match(/Invoice (\d+)\.pdf$/i)?.[1]
-    if (!invoiceNum || parseInt(invoiceNum, 10) !== expectedNext) {
+    const invoiceNum = extractInvoiceNumber(args.fileName)
+    if (!invoiceNum || invoiceNum !== expectedNext) {
       throw new ConvexError(
         `Invoice number must be ${expectedNext}. Please name your file "${startup.name} Invoice ${expectedNext}.pdf".`
       )
