@@ -96,6 +96,23 @@ export default function NewInvoicePage() {
     },
   })
 
+  const resetExtractionIfNeeded = useCallback(() => {
+    if (extractionStep === 0 && !isExtracting) return
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setExtractionStep(0)
+    setExtractionResult(null)
+    setAmountMismatchWarning(null)
+    form.setValue('vendor_name', '')
+    form.setValue('description', '')
+    form.setValue('invoice_date', '')
+    form.setValue('amount_gbp', undefined as any)
+    extractionTriggered.current = true
+    setNeedsConfirmation(true)
+  }, [extractionStep, isExtracting, form])
+
   // Cleanup extraction storage files on unmount (if user navigates away without submitting)
   const cleanupExtractionFiles = useCallback(async () => {
     for (const id of extractionStorageIds.current) {
@@ -466,7 +483,10 @@ export default function NewInvoicePage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setInvoiceFile(null)}
+                      onClick={() => {
+                        setInvoiceFile(null)
+                        resetExtractionIfNeeded()
+                      }}
                       className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -533,7 +553,10 @@ export default function NewInvoicePage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setReceiptFiles((prev) => prev.filter((_, j) => j !== i))}
+                          onClick={() => {
+                            setReceiptFiles((prev) => prev.filter((_, j) => j !== i))
+                            resetExtractionIfNeeded()
+                          }}
                           className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
                         >
                           <X className="h-3.5 w-3.5" />

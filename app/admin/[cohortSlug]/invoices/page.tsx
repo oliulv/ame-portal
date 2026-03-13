@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -49,6 +49,8 @@ import {
   ChevronsUpDown,
   DollarSign,
   Loader2,
+  Clock,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -62,9 +64,27 @@ import {
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
+function BatchCountdown({ scheduledTime }: { scheduledTime: number }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    setNow(Date.now())
+    const interval = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [])
+  const remaining = Math.max(0, Math.ceil((scheduledTime - now) / 1000))
+  const minutes = Math.floor(remaining / 60)
+  const seconds = remaining % 60
+  return (
+    <span className="font-mono">
+      {minutes}:{seconds.toString().padStart(2, '0')}
+    </span>
+  )
+}
+
 export default function AdminInvoicesPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const cohortSlug = params.cohortSlug as string
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all')
@@ -72,7 +92,7 @@ export default function AdminInvoicesPage() {
   const [startupFilterOpen, setStartupFilterOpen] = useState(false)
   const [showPending, setShowPending] = useState(true)
   const [showPaid, setShowPaid] = useState(true)
-  const [showApproved, setShowApproved] = useState(false)
+  const [showApproved, setShowApproved] = useState(searchParams.get('showApproved') === '1')
   const [showRejected, setShowRejected] = useState(false)
 
   // Inline mark paid state
@@ -82,10 +102,15 @@ export default function AdminInvoicesPage() {
 
   const updateStatus = useMutation(api.invoices.updateStatus)
   const batchMarkPaid = useMutation(api.invoices.batchMarkPaid)
+  const triggerBatchNow = useMutation(api.invoiceBatching.triggerBatchNow)
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
   const allInvoices = useQuery(api.invoices.listForAdmin, {})
+  const pendingBatches = useQuery(
+    api.invoiceBatching.listPendingBatches,
+    cohort ? { cohortId: cohort._id } : 'skip'
+  )
 
   // Build a startup ID set and name lookup for this cohort
   const startupIdSet = useMemo(() => {
@@ -155,6 +180,11 @@ export default function AdminInvoicesPage() {
 
     const pendingCount = groupedInvoices.pending.length
     const approvedCount = groupedInvoices.approved.length
+
+    // On first data load, if no pending but has approved, auto-expand approved
+    if (prevPendingCount.current === null && pendingCount === 0 && approvedCount > 0) {
+      setShowApproved(true)
+    }
 
     if (prevPendingCount.current !== null && prevPendingCount.current > 0 && pendingCount === 0) {
       setShowPending(false)
@@ -247,6 +277,15 @@ export default function AdminInvoicesPage() {
       toast.error(error instanceof Error ? error.message : 'Failed to mark as paid')
     } finally {
       setMarkingPaidId(null)
+    }
+  }
+
+  async function handleBatchNow(startupId: Id<'startups'>) {
+    try {
+      await triggerBatchNow({ startupId })
+      toast.success('Batch triggered')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to trigger batch')
     }
   }
 
@@ -622,6 +661,34 @@ export default function AdminInvoicesPage() {
         groupedInvoices.approved.length > 0 ||
         groupedInvoices.rejected.length > 0) ? (
         <div className="space-y-6">
+          {/* Pending Batch Timers */}
+          {pendingBatches && pendingBatches.length > 0 && (
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardContent className="pt-4 pb-4 space-y-2">
+                {pendingBatches.map((batch) => (
+                  <div key={batch.startupId} className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                      <p className="text-sm text-amber-900">
+                        <span className="font-medium">{batch.startupName}</span>
+                        {' \u2014 batch in '}
+                        <BatchCountdown scheduledTime={batch.scheduledTime} />
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleBatchNow(batch.startupId as Id<'startups'>)}
+                    >
+                      <Zap className="mr-1.5 h-3.5 w-3.5" />
+                      Batch now
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Pending Review */}
           {renderCollapsibleSection(
             'Pending Review',

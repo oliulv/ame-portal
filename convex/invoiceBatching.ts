@@ -85,6 +85,39 @@ export const getPendingBatch = query({
 })
 
 /**
+ * List all pending batches for startups in a cohort.
+ */
+export const listPendingBatches = query({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+    const startups = await ctx.db
+      .query('startups')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    const results = []
+    for (const startup of startups) {
+      const pending = await ctx.db
+        .query('pendingBatches')
+        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+        .first()
+      if (pending) {
+        const scheduledFn = await ctx.db.system.get(pending.scheduledFnId)
+        if (scheduledFn?.scheduledTime) {
+          results.push({
+            startupId: startup._id,
+            startupName: startup.name,
+            scheduledTime: scheduledFn.scheduledTime,
+          })
+        }
+      }
+    }
+    return results
+  },
+})
+
+/**
  * Trigger batch execution immediately (admin action).
  */
 export const triggerBatchNow = mutation({
@@ -167,7 +200,7 @@ export const executeBatch = internalAction({
     const allOriginalInvoiceStorageIds: string[] = []
     const allOriginalInvoiceFileNames: string[] = []
     const allReceiptStorageIds: string[] = []
-    const allReceiptFileNames: string[] = []
+    let allReceiptFileNames: string[] = []
 
     for (const inv of componentInvoices) {
       // Original invoice files go in their own array
@@ -192,6 +225,14 @@ export const executeBatch = internalAction({
       })
       .sort((a, b) => a - b)
     const batchNumber = invoiceNumbers[0]
+
+    // Rename all receipts to use the batch number for cleaner management
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    allReceiptFileNames = allReceiptStorageIds.map((_, i) =>
+      allReceiptStorageIds.length === 1
+        ? `${startup.name} Receipt ${batchNumber}.pdf`
+        : `${startup.name} Receipt ${batchNumber}-${letters[i] ?? String(i + 1)}.pdf`
+    )
 
     // Build combined vendor names and description
     const vendorNames = [...new Set(componentInvoices.map((inv) => inv.vendorName))].join(', ')

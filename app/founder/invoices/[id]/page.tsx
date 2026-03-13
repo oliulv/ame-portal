@@ -173,8 +173,14 @@ export default function FounderInvoiceDetailPage() {
                       key={comp._id}
                       className="flex items-center justify-between border border-blue-200 bg-white rounded px-3 py-2"
                     >
-                      <span className="text-sm font-medium">{comp.vendorName}</span>
-                      <span className="text-sm font-mono">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <PdfFileLink
+                          storageId={comp.storageId}
+                          fileName={comp.fileName}
+                          onPreview={openPreview}
+                        />
+                      </div>
+                      <span className="text-sm font-mono shrink-0 ml-3">
                         {'\u00A3'}
                         {Number(comp.amountGbp).toFixed(2)}
                       </span>
@@ -248,25 +254,6 @@ export default function FounderInvoiceDetailPage() {
                   <span className="text-sm text-muted-foreground">Loading file...</span>
                 )}
               </div>
-
-              {/* Original Invoice Files (batch invoices only) */}
-              {invoice.isBatched && originalInvoiceStorageIds.length > 0 && (
-                <div>
-                  <p className="mb-1 text-sm text-muted-foreground">
-                    Original Invoices ({originalInvoiceStorageIds.length})
-                  </p>
-                  <div className="space-y-1">
-                    {originalInvoiceStorageIds.map((sid, i) => (
-                      <PdfFileLink
-                        key={sid}
-                        storageId={sid}
-                        fileName={originalInvoiceFileNames[i] || `Invoice ${i + 1}`}
-                        onPreview={openPreview}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Receipt Files */}
               {receiptStorageIds.length > 0 && (

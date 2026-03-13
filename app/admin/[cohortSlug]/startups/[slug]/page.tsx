@@ -65,6 +65,7 @@ import {
   GripVertical,
   FileText,
   Landmark,
+  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Doc } from '@/convex/_generated/dataModel'
@@ -211,6 +212,11 @@ export default function StartupDetailPage() {
     api.bankDetails.getByStartupId,
     startup ? { startupId: startup._id } : 'skip'
   )
+  const pendingBatch = useQuery(
+    api.invoiceBatching.getPendingBatch,
+    startup ? { startupId: startup._id } : 'skip'
+  )
+  const triggerBatchNow = useMutation(api.invoiceBatching.triggerBatchNow)
 
   const createInvitation = useMutation(api.invitations.create)
   const resendInvitation = useMutation(api.invitations.resend)
@@ -667,7 +673,38 @@ export default function StartupDetailPage() {
               </Link>
             </div>
           </CardHeader>
-          <CardContent className="flex-1">
+          <CardContent className="flex-1 space-y-3">
+            {pendingBatch && pendingBatch.scheduledTime && startup && (
+              <div className="flex items-center justify-between gap-2 border border-amber-200 bg-amber-50/50 rounded px-3 py-2">
+                <div className="flex items-center gap-2 text-sm text-amber-900">
+                  <Clock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                  <span>
+                    Batch in{' '}
+                    <span className="font-mono">
+                      {Math.max(0, Math.ceil((pendingBatch.scheduledTime - Date.now()) / 60000))}m
+                    </span>
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={async () => {
+                    try {
+                      await triggerBatchNow({ startupId: startup._id })
+                      toast.success('Batch triggered')
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error ? error.message : 'Failed to trigger batch'
+                      )
+                    }
+                  }}
+                >
+                  <Zap className="mr-1 h-3 w-3" />
+                  Batch now
+                </Button>
+              </div>
+            )}
             {invoicesData && invoicesData.filter((i) => i.status !== 'rejected').length > 0 ? (
               <div className="max-h-[13rem] overflow-y-auto">
                 <div className="space-y-2">

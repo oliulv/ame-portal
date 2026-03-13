@@ -108,6 +108,7 @@ export default function InvoiceDetailPage() {
 
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null)
   const [pdfViewerTitle, setPdfViewerTitle] = useState('')
+  const [batchTriggered, setBatchTriggered] = useState(false)
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const invoice = useQuery(api.invoices.getById, { id: invoiceId })
@@ -152,14 +153,14 @@ export default function InvoiceDetailPage() {
   )
   const triggerBatchNow = useMutation(api.invoiceBatching.triggerBatchNow)
 
-  // Auto-navigate: find the next submitted invoice
+  // Auto-navigate: find the next submitted invoice (same startup first)
   const nextSubmittedId = useQuery(
     api.invoices.getNextSubmitted,
-    cohort
+    cohort && invoice?.startupId
       ? {
           cohortId: cohort._id,
           excludeId: invoiceId,
-          ...(fromStartupId ? { startupId: fromStartupId } : {}),
+          startupId: invoice.startupId,
         }
       : 'skip'
   )
@@ -177,7 +178,7 @@ export default function InvoiceDetailPage() {
       const nextUrl = `/admin/${cohortSlug}/invoices/${nextSubmittedId}${fromStartupId ? `?startupId=${fromStartupId}` : ''}`
       router.push(nextUrl)
     } else {
-      router.push(`/admin/${cohortSlug}/invoices`)
+      router.push(`/admin/${cohortSlug}/invoices?showApproved=1`)
     }
   }, [nextSubmittedId, cohortSlug, fromStartupId, router])
 
@@ -186,12 +187,21 @@ export default function InvoiceDetailPage() {
     setPdfViewerTitle(title)
   }
 
+  // Auto-redirect to batch invoice after triggering "Batch now"
+  useEffect(() => {
+    if (batchTriggered && invoice?.batchedIntoId) {
+      router.push(`/admin/${cohortSlug}/invoices/${invoice.batchedIntoId}`)
+    }
+  }, [batchTriggered, invoice?.batchedIntoId, cohortSlug, router])
+
   async function handleTriggerBatchNow() {
     if (!invoice?.startupId) return
     try {
+      setBatchTriggered(true)
       await triggerBatchNow({ startupId: invoice.startupId })
-      toast.success('Batch triggered')
+      toast.success('Batch triggered — redirecting...')
     } catch (error) {
+      setBatchTriggered(false)
       toast.error(error instanceof Error ? error.message : 'Failed to trigger batch')
     }
   }
@@ -417,25 +427,6 @@ export default function InvoiceDetailPage() {
                   <span className="text-sm text-muted-foreground">Loading file...</span>
                 )}
               </div>
-
-              {/* Original Invoice Files (batch invoices only) */}
-              {invoice.isBatched && originalInvoiceStorageIds.length > 0 && (
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Original Invoices ({originalInvoiceStorageIds.length})
-                  </label>
-                  <div className="space-y-1">
-                    {originalInvoiceStorageIds.map((sid, i) => (
-                      <ReceiptLink
-                        key={sid}
-                        storageId={sid}
-                        fileName={originalInvoiceFileNames[i] || `Invoice ${i + 1}`}
-                        onPreview={openPdfViewer}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Receipt Files */}
               {receiptStorageIds.length > 0 && (

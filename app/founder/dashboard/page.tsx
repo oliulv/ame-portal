@@ -184,16 +184,20 @@ export default function FounderDashboard() {
                 </>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className=" border bg-muted/40 px-2 py-1.5">
+            <div className="grid grid-cols-4 gap-2 text-xs">
+              <div className="border bg-muted/40 px-2 py-1.5">
                 <p className="text-muted-foreground">Unlocked</p>
                 <p className="font-medium">£{unlocked.toLocaleString('en-GB')}</p>
               </div>
-              <div className=" border bg-muted/40 px-2 py-1.5">
+              <div className="border bg-muted/40 px-2 py-1.5">
                 <p className="text-muted-foreground">Deployed</p>
                 <p className="font-medium text-blue-600">£{deployed.toLocaleString('en-GB')}</p>
               </div>
-              <div className=" border bg-muted/40 px-2 py-1.5">
+              <div className="border bg-muted/40 px-2 py-1.5">
+                <p className="text-muted-foreground">Committed</p>
+                <p className="font-medium text-violet-600">£{committed.toLocaleString('en-GB')}</p>
+              </div>
+              <div className="border bg-muted/40 px-2 py-1.5">
                 <p className="text-muted-foreground">Available</p>
                 <p className="font-medium text-green-600">£{available.toLocaleString('en-GB')}</p>
               </div>
