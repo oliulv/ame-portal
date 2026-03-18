@@ -697,6 +697,29 @@ export const sendDailyEventReminders = internalAction({
 })
 
 /**
+ * Internal query: get all admin user IDs for a cohort (assigned + super admins).
+ */
+export const getAdminUserIdsForCohort = internalQuery({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    // Admins assigned to this cohort
+    const cohortAssignments = await ctx.db
+      .query('adminCohorts')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+    const assignedIds = new Set(cohortAssignments.map((a) => a.userId))
+
+    // All super admins (they see all cohorts)
+    const allUsers = await ctx.db.query('users').collect()
+    for (const user of allUsers) {
+      if (user.role === 'super_admin') assignedIds.add(user._id)
+    }
+
+    return [...assignedIds]
+  },
+})
+
+/**
  * Internal query: get events for a specific date.
  */
 export const getEventsForDate = internalQuery({
@@ -708,7 +731,7 @@ export const getEventsForDate = internalQuery({
 })
 
 /**
- * Send announcement to all founders in a cohort.
+ * Send announcement to all founders and admins in a cohort.
  */
 export const sendAnnouncementNotification = internalAction({
   args: {
@@ -717,12 +740,21 @@ export const sendAnnouncementNotification = internalAction({
     body: v.string(),
   },
   handler: async (ctx, args) => {
+    // Get founders in cohort
     const founderIds = await ctx.runQuery(internal.whatsapp.getFounderUserIdsInCohort, {
       cohortId: args.cohortId,
     })
 
+    // Get all admins for this cohort (assigned admins + super admins)
+    const adminIds = await ctx.runQuery(internal.whatsapp.getAdminUserIdsForCohort, {
+      cohortId: args.cohortId,
+    })
+
+    // Deduplicate (in case an admin is also a founder)
+    const allUserIds = [...new Set([...founderIds, ...adminIds])]
+
     const recipients = await ctx.runQuery(internal.whatsapp.resolveRecipients, {
-      userIds: founderIds,
+      userIds: allUserIds,
       notificationType: 'announcements',
     })
 

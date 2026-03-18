@@ -411,13 +411,13 @@ export default function FounderDashboard() {
 
       {/* Recent Announcements */}
       {recentAnnouncements && recentAnnouncements.length > 0 && (
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Announcements</CardTitle>
             <Megaphone className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <CardContent className="flex flex-1 flex-col">
+            <div className="flex-1 space-y-2 overflow-y-auto max-h-[220px]">
               {recentAnnouncements.map((a) => (
                 <div key={a._id} className="border px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
@@ -433,6 +433,11 @@ export default function FounderDashboard() {
                 </div>
               ))}
             </div>
+            <Link href="/founder/announcements" className="mt-auto pt-3 inline-block">
+              <Button variant="link" size="sm" className="h-auto p-0">
+                View all →
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       )}

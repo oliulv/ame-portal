@@ -88,6 +88,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
 
   const navItems = [
     { title: 'Dashboard', href: '/founder/dashboard', icon: 'LayoutDashboard' },
+    { title: 'Announcements', href: '/founder/announcements', icon: 'Megaphone' },
     { title: 'Funding', href: '/founder/funding', icon: 'Target' },
     { title: 'Analytics', href: '/founder/analytics', icon: 'TrendingUp' },
     { title: 'Invoices', href: '/founder/invoices', icon: 'FileText' },
