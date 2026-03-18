@@ -61,7 +61,8 @@ export const requestVerification = mutation({
     if (existing?.lastOtpRequestedAt) {
       const elapsed = Date.now() - new Date(existing.lastOtpRequestedAt).getTime()
       if (elapsed < 60_000) {
-        throw new Error('Please wait before requesting another code')
+        const remaining = Math.ceil((60_000 - elapsed) / 1000)
+        throw new Error(`Please wait ${remaining}s before requesting another code`)
       }
     }
 
@@ -225,11 +226,15 @@ function twilioAuth() {
  */
 export const sendVerificationCode = internalAction({
   args: { phone: v.string(), userId: v.id('users') },
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
     const auth = twilioAuth()
     const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID
     if (!auth || !serviceSid) {
-      console.log('Twilio credentials not configured, skipping verification send')
+      // Dev mode: auto-verify when Twilio is not configured
+      console.log('Twilio not configured — auto-verifying number for development')
+      await ctx.runMutation(internal.whatsapp.markVerified, {
+        userId: args.userId,
+      })
       return
     }
 
@@ -261,7 +266,11 @@ export const checkVerificationCode = internalAction({
     const auth = twilioAuth()
     const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID
     if (!auth || !serviceSid) {
-      console.log('Twilio credentials not configured, skipping verification check')
+      // Dev mode: auto-approve any code when Twilio is not configured
+      console.log('Twilio not configured — auto-approving verification for development')
+      await ctx.runMutation(internal.whatsapp.markVerified, {
+        userId: args.userId,
+      })
       return
     }
 
