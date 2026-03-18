@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Eye,
   CheckCircle,
+  Megaphone,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +35,7 @@ export default function FounderDashboard() {
   const nextEvent = useQuery(api.cohortEvents.nextForFounder)
   const integrationStatus = useQuery(api.integrations.status)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
+  const recentAnnouncements = useQuery(api.announcements.recentForFounder)
   const registerEvent = useMutation(api.cohortEvents.register)
   const [isRegistering, setIsRegistering] = useState(false)
 
@@ -406,6 +408,34 @@ export default function FounderDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Announcements */}
+      {recentAnnouncements && recentAnnouncements.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Announcements</CardTitle>
+            <Megaphone className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {recentAnnouncements.map((a) => (
+                <div key={a._id} className="border px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{a.title}</p>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {new Date(a.sentAt).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.body}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Integration setup / waiting prompt */}
       {integrationsLoaded && !hasAnyIntegration && (

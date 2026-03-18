@@ -13,6 +13,7 @@ import type * as adminInvitations from "../adminInvitations.js";
 import type * as adminPermissions from "../adminPermissions.js";
 import type * as adminUsers from "../adminUsers.js";
 import type * as ai from "../ai.js";
+import type * as announcements from "../announcements.js";
 import type * as auth from "../auth.js";
 import type * as bankDetails from "../bankDetails.js";
 import type * as cohortEvents from "../cohortEvents.js";
@@ -46,6 +47,7 @@ import type * as seed from "../seed.js";
 import type * as startups from "../startups.js";
 import type * as trackerWebsites from "../trackerWebsites.js";
 import type * as users from "../users.js";
+import type * as whatsapp from "../whatsapp.js";
 
 import type {
   ApiFromModules,
@@ -59,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   adminPermissions: typeof adminPermissions;
   adminUsers: typeof adminUsers;
   ai: typeof ai;
+  announcements: typeof announcements;
   auth: typeof auth;
   bankDetails: typeof bankDetails;
   cohortEvents: typeof cohortEvents;
@@ -92,6 +95,7 @@ declare const fullApi: ApiFromModules<{
   startups: typeof startups;
   trackerWebsites: typeof trackerWebsites;
   users: typeof users;
+  whatsapp: typeof whatsapp;
 }>;
 
 /**
