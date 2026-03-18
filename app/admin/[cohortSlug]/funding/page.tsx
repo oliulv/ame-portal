@@ -72,7 +72,7 @@ export default function AdminFundingPage() {
   const baseFundingValue = overview?.cohort.baseFunding
 
   // Initialize inputs from server data; track last-seen server values to detect changes
-  const lastServerValues = useRef<{ budget?: number; base?: number }>({})
+  const lastServerValues = useRef<{ budget?: number | null; base?: number | null }>({})
   const [allocationInput, setAllocationInput] = useState('')
   const [baselineInput, setBaselineInput] = useState('')
   const [isSavingFundingConfig, setIsSavingFundingConfig] = useState(false)

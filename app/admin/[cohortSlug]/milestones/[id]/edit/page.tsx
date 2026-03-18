@@ -68,7 +68,12 @@ export default function EditMilestonePage() {
 
   return (
     <MilestoneEditForm
-      milestone={milestone}
+      milestone={{
+        ...milestone,
+        startupName: milestone.startupName ?? '',
+        requireLink: milestone.requireLink ?? true,
+        requireFile: milestone.requireFile ?? true,
+      }}
       milestoneId={milestoneId}
       cohortSlug={cohortSlug}
       isSaving={isSaving}
@@ -88,12 +93,30 @@ function MilestoneEditForm({
   updateMilestone,
   router,
 }: {
-  milestone: { title: string; description: string; amount: number; status: MilestoneStatus; dueDate?: string; requireLink: boolean; requireFile: boolean; startupName: string }
+  milestone: {
+    title: string
+    description: string
+    amount: number
+    status: MilestoneStatus
+    dueDate?: string
+    requireLink: boolean
+    requireFile: boolean
+    startupName: string
+  }
   milestoneId: Id<'milestones'>
   cohortSlug: string
   isSaving: boolean
   setIsSaving: (v: boolean) => void
-  updateMilestone: (args: { id: Id<'milestones'>; title: string; description: string; amount: number; status: MilestoneStatus; dueDate?: string; requireLink: boolean; requireFile: boolean }) => Promise<null>
+  updateMilestone: (args: {
+    id: Id<'milestones'>
+    title: string
+    description: string
+    amount: number
+    status: MilestoneStatus
+    dueDate?: string
+    requireLink: boolean
+    requireFile: boolean
+  }) => Promise<null>
   router: ReturnType<typeof useRouter>
 }) {
   const [formTitle, setFormTitle] = useState(milestone.title)
@@ -194,10 +217,7 @@ function MilestoneEditForm({
             </div>
             <div className="space-y-2">
               <Label htmlFor="ms-status">Status</Label>
-              <Select
-                value={formStatus}
-                onValueChange={(v) => setFormStatus(v as MilestoneStatus)}
-              >
+              <Select value={formStatus} onValueChange={(v) => setFormStatus(v as MilestoneStatus)}>
                 <SelectTrigger id="ms-status">
                   <SelectValue />
                 </SelectTrigger>
