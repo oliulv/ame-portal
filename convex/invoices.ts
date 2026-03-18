@@ -161,6 +161,14 @@ export const create = mutation({
     // Schedule auto-batching (5-min debounce)
     await ctx.scheduler.runAfter(0, internal.invoiceBatching.scheduleBatching, { startupId })
 
+    // Notify admins about new invoice submission
+    await ctx.scheduler.runAfter(0, internal.whatsapp.notifyInvoiceSubmitted, {
+      cohortId: startup.cohortId,
+      startupName: startup.name,
+      vendorName: args.vendorName,
+      amountGbp: args.amountGbp,
+    })
+
     return invoiceId
   },
 })
@@ -433,6 +441,15 @@ export const updateStatus = mutation({
       await ctx.scheduler.runAfter(0, internal.invoiceBatching.cancelBatchIfEmpty, {
         startupId: invoice.startupId,
         excludeInvoiceId: args.id,
+      })
+    }
+
+    // Notify founder about invoice status change
+    if (args.status === 'approved' || args.status === 'rejected') {
+      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyInvoiceStatusChanged, {
+        userId: invoice.uploadedByUserId,
+        fileName: invoice.fileName,
+        status: args.status,
       })
     }
   },

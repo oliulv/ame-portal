@@ -41,12 +41,21 @@ import {
   XCircle,
   Loader2,
   Users,
+  Bell,
 } from 'lucide-react'
 import { TeamTab } from './_components/team-tab'
+import { NotificationsTab } from './_components/notifications-tab'
 
-type SettingsTab = 'personal' | 'startup' | 'bank' | 'team' | 'integrations'
+type SettingsTab = 'personal' | 'startup' | 'bank' | 'team' | 'integrations' | 'notifications'
 
-const validSettingsTabs: SettingsTab[] = ['personal', 'startup', 'bank', 'team', 'integrations']
+const validSettingsTabs: SettingsTab[] = [
+  'personal',
+  'startup',
+  'bank',
+  'team',
+  'integrations',
+  'notifications',
+]
 
 export default function SettingsPage() {
   return (
@@ -278,6 +287,7 @@ function SettingsPageInner() {
     { key: 'bank', title: 'Bank Details', icon: CreditCard },
     { key: 'team', title: 'Team', icon: Users },
     { key: 'integrations', title: 'Integrations', icon: Plug },
+    { key: 'notifications', title: 'Notifications', icon: Bell },
   ]
 
   if (isLoading) {
@@ -798,6 +808,11 @@ function SettingsPageInner() {
 
       {/* Team Tab */}
       {activeTab === 'team' && <TeamTab />}
+
+      {/* Notifications Tab */}
+      {activeTab === 'notifications' && (
+        <NotificationsTab prefillPhone={profileData?.founderProfile?.phone} />
+      )}
 
       {/* Integrations Tab */}
       {activeTab === 'integrations' && (

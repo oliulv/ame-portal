@@ -2,7 +2,11 @@ import { query, mutation } from './functions'
 import { v } from 'convex/values'
 import { requireAdmin, requireSuperAdmin, hasPermission } from './auth'
 
-const permissionValue = v.union(v.literal('approve_milestones'), v.literal('approve_invoices'))
+const permissionValue = v.union(
+  v.literal('approve_milestones'),
+  v.literal('approve_invoices'),
+  v.literal('send_announcements')
+)
 
 /**
  * Check if the current user has a specific permission for a cohort.

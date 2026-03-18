@@ -36,7 +36,11 @@ export default defineSchema({
   adminPermissions: defineTable({
     userId: v.id('users'),
     cohortId: v.id('cohorts'),
-    permission: v.union(v.literal('approve_milestones'), v.literal('approve_invoices')),
+    permission: v.union(
+      v.literal('approve_milestones'),
+      v.literal('approve_invoices'),
+      v.literal('send_announcements')
+    ),
   })
     .index('by_userId_cohortId', ['userId', 'cohortId'])
     .index('by_userId_cohortId_permission', ['userId', 'cohortId', 'permission']),
@@ -375,6 +379,53 @@ export default defineSchema({
     submittedBy: v.id('users'),
     status: v.union(v.literal('pending'), v.literal('approved'), v.literal('rejected')),
   }),
+
+  // ── WhatsApp Numbers ──────────────────────────────────────────
+  whatsappNumbers: defineTable({
+    userId: v.id('users'),
+    phone: v.string(), // E.164 format
+    isVerified: v.boolean(),
+    verifiedAt: v.optional(v.string()),
+    notificationsEnabled: v.boolean(),
+    lastOtpRequestedAt: v.optional(v.string()),
+    otpCode: v.optional(v.string()),
+    otpExpiresAt: v.optional(v.string()),
+  })
+    .index('by_userId', ['userId'])
+    .index('by_phone', ['phone']),
+
+  // ── Notification Preferences ─────────────────────────────────
+  notificationPreferences: defineTable({
+    userId: v.id('users'),
+    invoiceSubmitted: v.boolean(),
+    invoiceStatusChanged: v.boolean(),
+    milestoneSubmitted: v.boolean(),
+    milestoneStatusChanged: v.boolean(),
+    announcements: v.boolean(),
+    eventReminders: v.boolean(),
+  }).index('by_userId', ['userId']),
+
+  // ── Announcements ────────────────────────────────────────────
+  announcements: defineTable({
+    cohortId: v.id('cohorts'),
+    title: v.string(),
+    body: v.string(),
+    sentByUserId: v.id('users'),
+    sentAt: v.string(),
+    recipientCount: v.number(),
+  }).index('by_cohortId', ['cohortId']),
+
+  // ── Notification Log ─────────────────────────────────────────
+  notificationLog: defineTable({
+    userId: v.id('users'),
+    type: v.string(),
+    twilioMessageSid: v.optional(v.string()),
+    status: v.union(v.literal('sent'), v.literal('failed'), v.literal('skipped')),
+    error: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+  })
+    .index('by_userId', ['userId'])
+    .index('by_type', ['type']),
 
   // ── Perk Claims ────────────────────────────────────────────────
   perkClaims: defineTable({

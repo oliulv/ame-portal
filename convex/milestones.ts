@@ -1,4 +1,5 @@
 import { query, mutation } from './functions'
+import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import {
   requireAdmin,
@@ -504,6 +505,19 @@ export const approve = mutation({
       action: 'approved',
       userId: admin._id,
     })
+
+    // Notify founders of this startup about approval
+    const founderProfiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', milestone.startupId))
+      .collect()
+    for (const fp of founderProfiles) {
+      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyMilestoneStatusChanged, {
+        userId: fp.userId,
+        milestoneTitle: milestone.title,
+        status: 'approved',
+      })
+    }
   },
 })
 
@@ -544,6 +558,19 @@ export const requestChanges = mutation({
       planStorageId: milestone.planStorageId,
       planFileName: milestone.planFileName,
     })
+
+    // Notify founders of this startup about changes requested
+    const founderProfiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', milestone.startupId))
+      .collect()
+    for (const fp of founderProfiles) {
+      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyMilestoneStatusChanged, {
+        userId: fp.userId,
+        milestoneTitle: milestone.title,
+        status: 'changes_requested',
+      })
+    }
   },
 })
 
@@ -613,6 +640,16 @@ export const submit = mutation({
       planStorageId: args.planStorageId,
       planFileName: args.planFileName,
     })
+
+    // Notify admins about milestone submission
+    const startup = await ctx.db.get(milestone.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyMilestoneSubmitted, {
+        cohortId: startup.cohortId,
+        startupName: startup.name,
+        milestoneTitle: milestone.title,
+      })
+    }
   },
 })
 

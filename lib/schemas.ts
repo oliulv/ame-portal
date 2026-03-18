@@ -180,3 +180,48 @@ export const metricsDataSchema = z.object({
 })
 
 export type MetricsDataFormData = z.infer<typeof metricsDataSchema>
+
+/**
+ * Validation schema for WhatsApp number
+ */
+export const whatsappNumberSchema = z.object({
+  phone: z
+    .string()
+    .min(1, 'Phone number is required')
+    .regex(/^\+[1-9]\d{6,14}$/, 'Must be in international format (e.g. +447700900000)'),
+})
+
+export type WhatsAppNumberFormData = z.infer<typeof whatsappNumberSchema>
+
+/**
+ * Validation schema for OTP verification code
+ */
+export const whatsappVerificationSchema = z.object({
+  code: z.string().length(6, 'Code must be 6 digits').regex(/^\d+$/, 'Code must be numeric'),
+})
+
+export type WhatsAppVerificationFormData = z.infer<typeof whatsappVerificationSchema>
+
+/**
+ * Validation schema for notification preferences
+ */
+export const notificationPreferencesSchema = z.object({
+  invoiceSubmitted: z.boolean(),
+  invoiceStatusChanged: z.boolean(),
+  milestoneSubmitted: z.boolean(),
+  milestoneStatusChanged: z.boolean(),
+  announcements: z.boolean(),
+  eventReminders: z.boolean(),
+})
+
+export type NotificationPreferencesFormData = z.infer<typeof notificationPreferencesSchema>
+
+/**
+ * Validation schema for announcements
+ */
+export const announcementSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(100, 'Maximum 100 characters'),
+  body: z.string().min(1, 'Body is required').max(500, 'Maximum 500 characters'),
+})
+
+export type AnnouncementFormData = z.infer<typeof announcementSchema>

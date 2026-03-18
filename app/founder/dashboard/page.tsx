@@ -16,8 +16,10 @@ import {
   ExternalLink,
   Eye,
   CheckCircle,
+  Megaphone,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -34,6 +36,7 @@ export default function FounderDashboard() {
   const nextEvent = useQuery(api.cohortEvents.nextForFounder)
   const integrationStatus = useQuery(api.integrations.status)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
+  const recentAnnouncements = useQuery(api.announcements.recentForFounder)
   const registerEvent = useMutation(api.cohortEvents.register)
   const [isRegistering, setIsRegistering] = useState(false)
 
@@ -406,6 +409,52 @@ export default function FounderDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Announcements */}
+      {recentAnnouncements && recentAnnouncements.length > 0 && (
+        <Card className="flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Announcements</CardTitle>
+            <Megaphone className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col">
+            <div className="flex-1 space-y-2 overflow-y-auto max-h-[220px]">
+              {recentAnnouncements.map((a) => (
+                <div key={a._id} className="flex items-start gap-2.5 border px-3 py-2.5">
+                  <Avatar className="h-6 w-6 shrink-0 mt-0.5">
+                    <AvatarImage src={a.senderImageUrl ?? undefined} />
+                    <AvatarFallback className="text-[10px]">
+                      {(a.senderName ?? '?')
+                        .split(' ')
+                        .map((n: string) => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium truncate">{a.title}</p>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {new Date(a.sentAt).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Link href="/founder/announcements" className="mt-auto pt-3 inline-block">
+              <Button variant="link" size="sm" className="h-auto p-0">
+                View all →
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Integration setup / waiting prompt */}
       {integrationsLoaded && !hasAnyIntegration && (
