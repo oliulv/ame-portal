@@ -60,15 +60,6 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
     }
   }, [prefillPhone, whatsapp, phoneForm])
 
-  // Auto-dismiss verification form when verified (reactive update from Convex)
-  useEffect(() => {
-    if (whatsapp?.isVerified && showVerification) {
-      setShowVerification(false)
-      codeForm.reset()
-      toast.success('WhatsApp number verified successfully')
-    }
-  }, [whatsapp?.isVerified, showVerification, codeForm])
-
   if (whatsappData === undefined) {
     return (
       <Card>
@@ -101,9 +92,9 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
     setIsVerifying(true)
     try {
       await confirmVerification({ code: data.code })
-      // The verification is checked asynchronously — show a pending message.
-      // The Convex reactive query (whatsappData) will auto-update when isVerified flips to true.
-      toast.info('Verifying your code...')
+      setShowVerification(false)
+      codeForm.reset()
+      toast.success('WhatsApp number verified successfully')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Verification failed')
     } finally {

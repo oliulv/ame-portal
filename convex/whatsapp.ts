@@ -66,12 +66,18 @@ export const requestVerification = mutation({
       }
     }
 
+    // Generate 6-digit OTP
+    const otpCode = String(Math.floor(100000 + Math.random() * 900000))
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 min
+
     if (existing) {
       await ctx.db.patch(existing._id, {
         phone: args.phone,
         isVerified: false,
         verifiedAt: undefined,
         lastOtpRequestedAt: new Date().toISOString(),
+        otpCode,
+        otpExpiresAt,
       })
     } else {
       await ctx.db.insert('whatsappNumbers', {
@@ -80,19 +86,21 @@ export const requestVerification = mutation({
         isVerified: false,
         notificationsEnabled: true,
         lastOtpRequestedAt: new Date().toISOString(),
+        otpCode,
+        otpExpiresAt,
       })
     }
 
-    // Schedule the Twilio Verify send
-    await ctx.scheduler.runAfter(0, internal.whatsapp.sendVerificationCode, {
+    // Send OTP via WhatsApp message
+    await ctx.scheduler.runAfter(0, internal.whatsapp.sendOtpMessage, {
       phone: args.phone,
-      userId: user._id,
+      code: otpCode,
     })
   },
 })
 
 /**
- * Confirm OTP verification code.
+ * Confirm OTP verification code — checked synchronously in this mutation.
  */
 export const confirmVerification = mutation({
   args: { code: v.string() },
@@ -112,12 +120,43 @@ export const confirmVerification = mutation({
       throw new Error('Number is already verified.')
     }
 
-    // Schedule the Twilio Verify check
-    await ctx.scheduler.runAfter(0, internal.whatsapp.checkVerificationCode, {
-      phone: whatsapp.phone,
-      code: args.code,
-      userId: user._id,
+    if (!whatsapp.otpCode || !whatsapp.otpExpiresAt) {
+      throw new Error('No verification code pending. Please request a new one.')
+    }
+
+    if (new Date(whatsapp.otpExpiresAt) < new Date()) {
+      throw new Error('Verification code has expired. Please request a new one.')
+    }
+
+    if (whatsapp.otpCode !== args.code) {
+      throw new Error('Incorrect verification code.')
+    }
+
+    // Code is correct — mark as verified
+    await ctx.db.patch(whatsapp._id, {
+      isVerified: true,
+      verifiedAt: new Date().toISOString(),
+      otpCode: undefined,
+      otpExpiresAt: undefined,
     })
+
+    // Create default notification preferences if they don't exist
+    const prefs = await ctx.db
+      .query('notificationPreferences')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .first()
+
+    if (!prefs) {
+      await ctx.db.insert('notificationPreferences', {
+        userId: user._id,
+        invoiceSubmitted: true,
+        invoiceStatusChanged: true,
+        milestoneSubmitted: true,
+        milestoneStatusChanged: true,
+        announcements: true,
+        eventReminders: true,
+      })
+    }
   },
 })
 
@@ -222,60 +261,20 @@ function twilioAuth() {
 // ── Internal Actions (Twilio REST API) ─────────────────────────
 
 /**
- * Send OTP via Twilio Verify (WhatsApp channel).
+ * Send OTP code via WhatsApp Messages API (works with sandbox).
  */
-export const sendVerificationCode = internalAction({
-  args: { phone: v.string(), userId: v.id('users') },
-  handler: async (ctx, args) => {
+export const sendOtpMessage = internalAction({
+  args: { phone: v.string(), code: v.string() },
+  handler: async (_ctx, args) => {
     const auth = twilioAuth()
-    const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID
-    if (!auth || !serviceSid) {
-      // Dev mode: auto-verify when Twilio is not configured
-      console.log('Twilio not configured — auto-verifying number for development')
-      await ctx.runMutation(internal.whatsapp.markVerified, {
-        userId: args.userId,
-      })
-      return
-    }
-
-    const resp = await fetch(`https://verify.twilio.com/v2/Services/${serviceSid}/Verifications`, {
-      method: 'POST',
-      headers: {
-        Authorization: auth.basicAuth,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        To: args.phone,
-        Channel: 'whatsapp',
-      }),
-    })
-
-    if (!resp.ok) {
-      const error = await resp.text()
-      throw new Error(`Twilio Verify send failed: ${error}`)
-    }
-  },
-})
-
-/**
- * Check OTP via Twilio Verify and mark as verified if correct.
- */
-export const checkVerificationCode = internalAction({
-  args: { phone: v.string(), code: v.string(), userId: v.id('users') },
-  handler: async (ctx, args) => {
-    const auth = twilioAuth()
-    const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID
-    if (!auth || !serviceSid) {
-      // Dev mode: auto-approve any code when Twilio is not configured
-      console.log('Twilio not configured — auto-approving verification for development')
-      await ctx.runMutation(internal.whatsapp.markVerified, {
-        userId: args.userId,
-      })
+    const from = process.env.TWILIO_WHATSAPP_FROM
+    if (!auth || !from) {
+      console.log('Twilio credentials not configured, skipping OTP send')
       return
     }
 
     const resp = await fetch(
-      `https://verify.twilio.com/v2/Services/${serviceSid}/VerificationChecks`,
+      `https://api.twilio.com/2010-04-01/Accounts/${auth.accountSid}/Messages.json`,
       {
         method: 'POST',
         headers: {
@@ -283,60 +282,16 @@ export const checkVerificationCode = internalAction({
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
-          To: args.phone,
-          Code: args.code,
+          Body: `Your verification code is: ${args.code}`,
+          From: `whatsapp:${from}`,
+          To: `whatsapp:${args.phone}`,
         }),
       }
     )
 
     if (!resp.ok) {
-      const error = await resp.text()
-      throw new Error(`Twilio Verify check failed: ${error}`)
-    }
-
-    const data = await resp.json()
-    if (data.status === 'approved') {
-      await ctx.runMutation(internal.whatsapp.markVerified, {
-        userId: args.userId,
-      })
-    }
-  },
-})
-
-/**
- * Internal mutation to mark a number as verified.
- */
-export const markVerified = internalMutation({
-  args: { userId: v.id('users') },
-  handler: async (ctx, args) => {
-    const whatsapp = await ctx.db
-      .query('whatsappNumbers')
-      .withIndex('by_userId', (q) => q.eq('userId', args.userId))
-      .first()
-
-    if (whatsapp) {
-      await ctx.db.patch(whatsapp._id, {
-        isVerified: true,
-        verifiedAt: new Date().toISOString(),
-      })
-    }
-
-    // Create default notification preferences if they don't exist
-    const prefs = await ctx.db
-      .query('notificationPreferences')
-      .withIndex('by_userId', (q) => q.eq('userId', args.userId))
-      .first()
-
-    if (!prefs) {
-      await ctx.db.insert('notificationPreferences', {
-        userId: args.userId,
-        invoiceSubmitted: true,
-        invoiceStatusChanged: true,
-        milestoneSubmitted: true,
-        milestoneStatusChanged: true,
-        announcements: true,
-        eventReminders: true,
-      })
+      const data = await resp.json()
+      throw new Error(`WhatsApp OTP send failed: ${data.message || resp.status}`)
     }
   },
 })

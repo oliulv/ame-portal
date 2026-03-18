@@ -384,6 +384,8 @@ export default defineSchema({
     verifiedAt: v.optional(v.string()),
     notificationsEnabled: v.boolean(),
     lastOtpRequestedAt: v.optional(v.string()),
+    otpCode: v.optional(v.string()),
+    otpExpiresAt: v.optional(v.string()),
   })
     .index('by_userId', ['userId'])
     .index('by_phone', ['phone']),
