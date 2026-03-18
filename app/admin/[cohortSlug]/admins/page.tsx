@@ -190,14 +190,14 @@ export default function AdminsPage() {
 
   function hasUserPermission(
     userId: string,
-    permission: 'approve_milestones' | 'approve_invoices'
+    permission: 'approve_milestones' | 'approve_invoices' | 'send_announcements'
   ) {
     return permissions?.some((p) => p.userId === userId && p.permission === permission) ?? false
   }
 
   async function handleTogglePermission(
     userId: string,
-    permission: 'approve_milestones' | 'approve_invoices',
+    permission: 'approve_milestones' | 'approve_invoices' | 'send_announcements',
     currentlyGranted: boolean
   ) {
     if (!cohort) return
@@ -342,6 +342,21 @@ export default function AdminsPage() {
                                     className="h-3.5 w-3.5 rounded border-gray-300"
                                   />
                                   Approve invoices
+                                </label>
+                                <label className="flex items-center gap-2 text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={hasUserPermission(user._id, 'send_announcements')}
+                                    onChange={() =>
+                                      handleTogglePermission(
+                                        user._id,
+                                        'send_announcements',
+                                        hasUserPermission(user._id, 'send_announcements')
+                                      )
+                                    }
+                                    className="h-3.5 w-3.5 rounded border-gray-300"
+                                  />
+                                  Send announcements
                                 </label>
                               </div>
                             )}
