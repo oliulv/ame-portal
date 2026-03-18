@@ -36,7 +36,11 @@ export default defineSchema({
   adminPermissions: defineTable({
     userId: v.id('users'),
     cohortId: v.id('cohorts'),
-    permission: v.union(v.literal('approve_milestones'), v.literal('approve_invoices')),
+    permission: v.union(
+      v.literal('approve_milestones'),
+      v.literal('approve_invoices'),
+      v.literal('send_announcements')
+    ),
   })
     .index('by_userId_cohortId', ['userId', 'cohortId'])
     .index('by_userId_cohortId_permission', ['userId', 'cohortId', 'permission']),

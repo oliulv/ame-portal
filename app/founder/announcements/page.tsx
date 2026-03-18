@@ -5,7 +5,17 @@ import { api } from '@/convex/_generated/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Megaphone } from 'lucide-react'
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
 
 export default function FounderAnnouncementsPage() {
   const announcements = useQuery(api.announcements.listForFounder)
@@ -44,20 +54,29 @@ export default function FounderAnnouncementsPage() {
           {announcements.map((a) => (
             <Card key={a._id}>
               <CardContent className="pt-6">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <Avatar className="h-8 w-8 shrink-0 mt-0.5">
+                    <AvatarImage src={a.senderImageUrl ?? undefined} />
+                    <AvatarFallback className="text-xs">{getInitials(a.senderName)}</AvatarFallback>
+                  </Avatar>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold">{a.title}</h3>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">{a.title}</h3>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {new Date(a.sentAt).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </div>
                     <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
                       {a.body}
                     </p>
+                    <p className="text-xs text-muted-foreground mt-2">{a.senderName}</p>
                   </div>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {new Date(a.sentAt).toLocaleDateString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </span>
                 </div>
               </CardContent>
             </Card>

@@ -1,7 +1,25 @@
 import { query, mutation } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
-import { requireAdmin, requireFounder, getFounderStartupIds } from './auth'
+import {
+  requireAdmin,
+  requireAdminWithPermission,
+  requireFounder,
+  getFounderStartupIds,
+  hasPermission,
+} from './auth'
+
+/**
+ * Check if the current admin can send announcements for a cohort.
+ */
+export const canSend = query({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    const user = await requireAdmin(ctx)
+    if (user.role === 'super_admin') return true
+    return hasPermission(ctx, user._id, args.cohortId, 'send_announcements')
+  },
+})
 
 /**
  * Create and send an announcement to all founders in a cohort.
@@ -13,7 +31,7 @@ export const send = mutation({
     body: v.string(),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx)
+    const admin = await requireAdminWithPermission(ctx, args.cohortId, 'send_announcements')
 
     const title = args.title.trim()
     const body = args.body.trim()
@@ -44,8 +62,8 @@ export const send = mutation({
 
     const announcementId = await ctx.db.insert('announcements', {
       cohortId: args.cohortId,
-      title: args.title.trim(),
-      body: args.body.trim(),
+      title,
+      body,
       sentByUserId: admin._id,
       sentAt: new Date().toISOString(),
       recipientCount: founderCount,
@@ -54,13 +72,26 @@ export const send = mutation({
     // Schedule WhatsApp notification
     await ctx.scheduler.runAfter(0, internal.whatsapp.sendAnnouncementNotification, {
       cohortId: args.cohortId,
-      title: args.title.trim(),
-      body: args.body.trim(),
+      title,
+      body,
     })
 
     return announcementId
   },
 })
+
+/** Helper to enrich an announcement with sender info. */
+async function enrichWithSender(
+  ctx: { db: { get: (id: any) => Promise<any> } },
+  announcement: any
+) {
+  const sender = await ctx.db.get(announcement.sentByUserId)
+  return {
+    ...announcement,
+    senderName: sender?.fullName ?? sender?.email ?? 'Unknown',
+    senderImageUrl: sender?.imageUrl ?? null,
+  }
+}
 
 /**
  * List announcements for a cohort (admin view).
@@ -75,16 +106,7 @@ export const listForAdmin = query({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
       .collect()
 
-    const enriched = await Promise.all(
-      announcements.map(async (a) => {
-        const sender = await ctx.db.get(a.sentByUserId)
-        return {
-          ...a,
-          senderName: sender?.fullName ?? sender?.email ?? 'Unknown',
-        }
-      })
-    )
-
+    const enriched = await Promise.all(announcements.map((a) => enrichWithSender(ctx, a)))
     return enriched.sort((a, b) => b.sentAt.localeCompare(a.sentAt))
   },
 })
@@ -107,7 +129,8 @@ export const listForFounder = query({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
       .collect()
 
-    return announcements.sort((a, b) => b.sentAt.localeCompare(a.sentAt))
+    const enriched = await Promise.all(announcements.map((a) => enrichWithSender(ctx, a)))
+    return enriched.sort((a, b) => b.sentAt.localeCompare(a.sentAt))
   },
 })
 
@@ -129,6 +152,7 @@ export const recentForFounder = query({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
       .collect()
 
-    return announcements.sort((a, b) => b.sentAt.localeCompare(a.sentAt)).slice(0, 3)
+    const enriched = await Promise.all(announcements.map((a) => enrichWithSender(ctx, a)))
+    return enriched.sort((a, b) => b.sentAt.localeCompare(a.sentAt)).slice(0, 3)
   },
 })

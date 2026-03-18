@@ -19,6 +19,7 @@ import {
   Megaphone,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -419,17 +420,30 @@ export default function FounderDashboard() {
           <CardContent className="flex flex-1 flex-col">
             <div className="flex-1 space-y-2 overflow-y-auto max-h-[220px]">
               {recentAnnouncements.map((a) => (
-                <div key={a._id} className="border px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium">{a.title}</p>
-                    <span className="text-[10px] text-muted-foreground shrink-0">
-                      {new Date(a.sentAt).toLocaleDateString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                    </span>
+                <div key={a._id} className="flex items-start gap-2.5 border px-3 py-2.5">
+                  <Avatar className="h-6 w-6 shrink-0 mt-0.5">
+                    <AvatarImage src={a.senderImageUrl ?? undefined} />
+                    <AvatarFallback className="text-[10px]">
+                      {(a.senderName ?? '?')
+                        .split(' ')
+                        .map((n: string) => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium truncate">{a.title}</p>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {new Date(a.sentAt).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.body}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.body}</p>
                 </div>
               ))}
             </div>

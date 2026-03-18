@@ -50,6 +50,7 @@ export default function AnnouncementsPage() {
     api.announcements.listForAdmin,
     cohort ? { cohortId: cohort._id } : 'skip'
   )
+  const canSend = useQuery(api.announcements.canSend, cohort ? { cohortId: cohort._id } : 'skip')
   const sendAnnouncement = useMutation(api.announcements.send)
 
   const [showCompose, setShowCompose] = useState(false)
@@ -109,13 +110,17 @@ export default function AnnouncementsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight font-display">Announcements</h1>
           <p className="text-muted-foreground">
-            Send announcements to all founders in {cohort.label}
+            {canSend
+              ? `Send announcements to all founders in ${cohort.label}`
+              : `Announcements for ${cohort.label}`}
           </p>
         </div>
-        <Button onClick={() => setShowCompose(true)}>
-          <Megaphone className="mr-2 h-4 w-4" />
-          New Announcement
-        </Button>
+        {canSend && (
+          <Button onClick={() => setShowCompose(true)}>
+            <Megaphone className="mr-2 h-4 w-4" />
+            New Announcement
+          </Button>
+        )}
       </div>
 
       {/* Compose Dialog */}
