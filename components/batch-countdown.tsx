@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react'
 export function BatchCountdown({ scheduledTime }: { scheduledTime: number }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    setNow(Date.now())
     const interval = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(interval)
   }, [])

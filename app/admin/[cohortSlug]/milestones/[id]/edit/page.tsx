@@ -36,8 +36,6 @@ export default function EditMilestonePage() {
   const milestone = useQuery(api.milestones.getForAdmin, { id: milestoneId })
   const updateMilestone = useMutation(api.milestones.update)
 
-  const [isSaving, setIsSaving] = useState(false)
-
   if (milestone === undefined) {
     return (
       <div className="space-y-6">
@@ -76,8 +74,6 @@ export default function EditMilestonePage() {
       }}
       milestoneId={milestoneId}
       cohortSlug={cohortSlug}
-      isSaving={isSaving}
-      setIsSaving={setIsSaving}
       updateMilestone={updateMilestone}
       router={router}
     />
@@ -88,8 +84,6 @@ function MilestoneEditForm({
   milestone,
   milestoneId,
   cohortSlug,
-  isSaving,
-  setIsSaving,
   updateMilestone,
   router,
 }: {
@@ -105,8 +99,6 @@ function MilestoneEditForm({
   }
   milestoneId: Id<'milestones'>
   cohortSlug: string
-  isSaving: boolean
-  setIsSaving: (v: boolean) => void
   updateMilestone: (args: {
     id: Id<'milestones'>
     title: string
@@ -119,6 +111,7 @@ function MilestoneEditForm({
   }) => Promise<null>
   router: ReturnType<typeof useRouter>
 }) {
+  const [isSaving, setIsSaving] = useState(false)
   const [formTitle, setFormTitle] = useState(milestone.title)
   const [formDescription, setFormDescription] = useState(milestone.description)
   const [formAmount, setFormAmount] = useState(String(milestone.amount))
