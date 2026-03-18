@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+import { ConvexError } from 'convex/values'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -27,6 +28,12 @@ import {
   type WhatsAppVerificationFormData,
 } from '@/lib/schemas'
 import { CheckCircle2, MessageSquare, Shield, Loader2 } from 'lucide-react'
+
+function errorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ConvexError) return err.data as string
+  if (err instanceof Error) return err.message
+  return fallback
+}
 
 export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
   const whatsappData = useQuery(api.whatsapp.getMyWhatsApp)
@@ -82,7 +89,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
       setShowVerification(true)
       toast.success('Verification code sent to your WhatsApp')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send verification code')
+      toast.error(errorMessage(err, 'Failed to send verification code'))
     } finally {
       setIsRequestingCode(false)
     }
@@ -96,7 +103,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
       codeForm.reset()
       toast.success('WhatsApp number verified successfully')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Verification failed')
+      toast.error(errorMessage(err, 'Verification failed'))
     } finally {
       setIsVerifying(false)
     }
@@ -107,7 +114,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
       await toggleNotifications({ enabled })
       toast.success(enabled ? 'Notifications enabled' : 'Notifications paused')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update')
+      toast.error(errorMessage(err, 'Failed to update'))
     }
   }
 
@@ -115,7 +122,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
     try {
       await updatePreferences({ [key]: value })
     } catch (err) {
-      toast.error('Failed to update preference')
+      toast.error(errorMessage(err, 'Failed to update preference'))
     }
   }
 
@@ -126,7 +133,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
       phoneForm.reset({ phone: '' })
       toast.success('WhatsApp number removed')
     } catch (err) {
-      toast.error('Failed to remove number')
+      toast.error(errorMessage(err, 'Failed to remove number'))
     }
   }
 

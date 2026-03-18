@@ -1,6 +1,6 @@
 import { query, mutation, internalAction, internalQuery, internalMutation } from './functions'
 import { internal } from './_generated/api'
-import { v } from 'convex/values'
+import { v, ConvexError } from 'convex/values'
 import { requireAuth } from './auth'
 import type { Id } from './_generated/dataModel'
 
@@ -39,7 +39,7 @@ export const requestVerification = mutation({
 
     // Validate E.164 format
     if (!/^\+[1-9]\d{6,14}$/.test(args.phone)) {
-      throw new Error('Phone number must be in E.164 format (e.g. +447700900000)')
+      throw new ConvexError('Phone number must be in international format (e.g. +447700900000)')
     }
 
     // Check if phone is already verified by another user
@@ -48,7 +48,7 @@ export const requestVerification = mutation({
       .withIndex('by_phone', (q) => q.eq('phone', args.phone))
       .first()
     if (existingForPhone && existingForPhone.userId !== user._id && existingForPhone.isVerified) {
-      throw new Error('This phone number is already registered to another account')
+      throw new ConvexError('This phone number is already linked to another account')
     }
 
     // Upsert whatsapp number record (unverified)
@@ -62,7 +62,7 @@ export const requestVerification = mutation({
       const elapsed = Date.now() - new Date(existing.lastOtpRequestedAt).getTime()
       if (elapsed < 60_000) {
         const remaining = Math.ceil((60_000 - elapsed) / 1000)
-        throw new Error(`Please wait ${remaining}s before requesting another code`)
+        throw new ConvexError(`Please wait ${remaining}s before requesting another code`)
       }
     }
 
@@ -113,23 +113,23 @@ export const confirmVerification = mutation({
       .first()
 
     if (!whatsapp) {
-      throw new Error('No WhatsApp number found. Please enter your number first.')
+      throw new ConvexError('No WhatsApp number found. Please enter your number first.')
     }
 
     if (whatsapp.isVerified) {
-      throw new Error('Number is already verified.')
+      throw new ConvexError('Number is already verified.')
     }
 
     if (!whatsapp.otpCode || !whatsapp.otpExpiresAt) {
-      throw new Error('No verification code pending. Please request a new one.')
+      throw new ConvexError('No verification code pending. Please request a new one.')
     }
 
     if (new Date(whatsapp.otpExpiresAt) < new Date()) {
-      throw new Error('Verification code has expired. Please request a new one.')
+      throw new ConvexError('Verification code has expired. Please request a new one.')
     }
 
     if (whatsapp.otpCode !== args.code) {
-      throw new Error('Incorrect verification code.')
+      throw new ConvexError('Incorrect verification code.')
     }
 
     // Code is correct — mark as verified
