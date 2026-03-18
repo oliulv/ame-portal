@@ -603,26 +603,17 @@ export const submit = mutation({
       throw new Error('Only PDF files are accepted for milestone evidence.')
     }
 
-    const needsLink = milestone.requireLink !== false
-    const needsFile = milestone.requireFile !== false
+    const acceptsLink = milestone.requireLink !== false
+    const acceptsFile = milestone.requireFile !== false
+    const hasLink = !!args.planLink
+    const hasFile = !!args.planStorageId
 
-    if (needsLink && needsFile) {
-      if (!args.planLink && !args.planStorageId) {
-        throw new Error('Please provide a plan link or upload a plan file')
-      }
-    } else if (needsLink && !needsFile) {
-      if (!args.planLink) {
-        throw new Error('Please provide a plan link')
-      }
-    } else if (!needsLink && needsFile) {
-      if (!args.planStorageId) {
-        throw new Error('Please upload a plan file')
-      }
-    } else {
-      // Both false — still require at least one
-      if (!args.planLink && !args.planStorageId) {
-        throw new Error('Please provide a plan link or upload a plan file')
-      }
+    if (acceptsLink && !acceptsFile && !hasLink) {
+      throw new Error('Please provide a plan link')
+    } else if (!acceptsLink && acceptsFile && !hasFile) {
+      throw new Error('Please upload a plan file')
+    } else if (!hasLink && !hasFile) {
+      throw new Error('Please provide a plan link or upload a plan file')
     }
 
     await ctx.db.patch(args.id, {
