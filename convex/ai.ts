@@ -1,5 +1,24 @@
 import { action, internalAction } from './functions'
 import { v } from 'convex/values'
+import type { Id } from './_generated/dataModel'
+import type { ActionCtx } from './_generated/server'
+
+async function fetchStorageAsBase64(
+  ctx: { storage: ActionCtx['storage'] },
+  storageId: Id<'_storage'>
+): Promise<string> {
+  const url = await ctx.storage.getUrl(storageId)
+  if (!url) throw new Error(`Could not get URL for storage ID ${storageId}`)
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Failed to fetch file from storage`)
+  const buffer = await response.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
+}
 
 /**
  * Extract structured invoice data from uploaded PDFs using Gemini Flash 3 via OpenRouter.
@@ -16,24 +35,9 @@ export const extractInvoiceData = action({
       throw new Error('OPENROUTER_API_KEY is not configured')
     }
 
-    // Fetch PDFs from Convex storage as base64
-    async function fetchAsBase64(storageId: string): Promise<string> {
-      const url = await ctx.storage.getUrl(storageId as any)
-      if (!url) throw new Error(`Could not get URL for storage ID ${storageId}`)
-      const response = await fetch(url)
-      if (!response.ok) throw new Error(`Failed to fetch file from storage`)
-      const buffer = await response.arrayBuffer()
-      const bytes = new Uint8Array(buffer)
-      let binary = ''
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i])
-      }
-      return btoa(binary)
-    }
-
-    const invoiceBase64 = await fetchAsBase64(args.invoiceStorageId as string)
+    const invoiceBase64 = await fetchStorageAsBase64(ctx, args.invoiceStorageId)
     const receiptBase64s = await Promise.all(
-      args.receiptStorageIds.map((id) => fetchAsBase64(id as string))
+      args.receiptStorageIds.map((id) => fetchStorageAsBase64(ctx, id))
     )
 
     // Build content parts using inline base64 data URIs (OpenAI vision format)
@@ -210,18 +214,12 @@ export const extractInvoiceMetadata = internalAction({
     const apiKey = process.env.OPENROUTER_API_KEY
     if (!apiKey) return null
 
-    const url = await ctx.storage.getUrl(args.invoiceStorageId)
-    if (!url) return null
-
-    const response = await fetch(url)
-    if (!response.ok) return null
-    const buffer = await response.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    let binary = ''
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i])
+    let base64: string
+    try {
+      base64 = await fetchStorageAsBase64(ctx, args.invoiceStorageId)
+    } catch {
+      return null
     }
-    const base64 = btoa(binary)
 
     const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',

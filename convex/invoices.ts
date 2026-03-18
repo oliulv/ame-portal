@@ -1,6 +1,7 @@
 import { query, mutation, internalAction, internalQuery, enrichEvent } from './functions'
 import { internal } from './_generated/api'
 import { v, ConvexError } from 'convex/values'
+import type { Id } from './_generated/dataModel'
 import {
   requireAdmin,
   requireAdminWithPermission,
@@ -195,21 +196,6 @@ export const getFounderInvoiceInfo = query({
       startupName: startup.name,
       nextInvoiceNumber: maxExisting + 1,
     }
-  },
-})
-
-/**
- * Get the founder's startup name (for invoice naming validation).
- * @deprecated Use getFounderInvoiceInfo instead.
- */
-export const getFounderStartupName = query({
-  args: {},
-  handler: async (ctx) => {
-    const user = await requireFounder(ctx)
-    const startupIds = await getFounderStartupIds(ctx, user._id)
-    if (startupIds.length === 0) return null
-    const startup = await ctx.db.get(startupIds[0])
-    return startup?.name ?? null
   },
 })
 
@@ -533,7 +519,7 @@ export const sendToXero = internalAction({
     // Send all receipts in a single email — Resend fetches each via URL
     const receiptAttachments = []
     for (let i = 0; i < receiptIds.length; i++) {
-      const receiptFileUrl = await ctx.storage.getUrl(receiptIds[i] as any)
+      const receiptFileUrl = await ctx.storage.getUrl(receiptIds[i] as Id<'_storage'>)
       if (!receiptFileUrl) continue
       receiptAttachments.push({
         filename: receiptNames[i] || `Receipt ${i + 1}.pdf`,
