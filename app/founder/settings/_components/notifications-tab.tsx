@@ -87,7 +87,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
     try {
       await requestVerification({ phone: data.phone })
       setShowVerification(true)
-      toast.success('Verification code sent to your WhatsApp')
+      toast.success('Verification code sent via SMS')
     } catch (err) {
       toast.error(errorMessage(err, 'Failed to send verification code'))
     } finally {
@@ -101,7 +101,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
       await confirmVerification({ code: data.code })
       setShowVerification(false)
       codeForm.reset()
-      toast.success('WhatsApp number verified successfully')
+      toast.success('Phone number verified successfully')
     } catch (err) {
       toast.error(errorMessage(err, 'Verification failed'))
     } finally {
@@ -131,7 +131,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
       await removeNumber()
       setShowVerification(false)
       phoneForm.reset({ phone: '' })
-      toast.success('WhatsApp number removed')
+      toast.success('Phone number removed')
     } catch (err) {
       toast.error(errorMessage(err, 'Failed to remove number'))
     }
@@ -144,11 +144,10 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
-            WhatsApp Notifications
+            SMS Notifications
           </CardTitle>
           <CardDescription>
-            Receive real-time updates about invoices, milestones, events, and announcements via
-            WhatsApp
+            Receive real-time updates about invoices, milestones, events, and announcements via SMS
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -194,7 +193,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
                       name="phone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>WhatsApp Number</FormLabel>
+                          <FormLabel>Phone Number</FormLabel>
                           <FormControl>
                             <Input placeholder="+447700900000" {...field} />
                           </FormControl>
@@ -217,8 +216,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
                     <Shield className="h-4 w-4 shrink-0" />
                     <span>
                       A 6-digit code has been sent to{' '}
-                      <strong>{whatsapp?.phone || phoneForm.getValues('phone')}</strong> via
-                      WhatsApp
+                      <strong>{whatsapp?.phone || phoneForm.getValues('phone')}</strong> via SMS
                     </span>
                   </div>
                   <Form {...codeForm}>

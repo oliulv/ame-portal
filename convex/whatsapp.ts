@@ -258,48 +258,21 @@ function twilioAuth() {
   }
 }
 
-// ── Internal Actions (Twilio REST API) ─────────────────────────
+// ── Internal Actions (Twilio SMS) ──────────────────────────────
 
 /**
- * Build URLSearchParams for a Twilio message.
- * Uses ContentSid + ContentVariables when a template SID is provided,
- * otherwise falls back to freeform Body (sandbox mode).
- */
-function buildMessageParams(
-  from: string,
-  to: string,
-  body: string,
-  contentSid?: string,
-  contentVariables?: Record<string, string>
-): URLSearchParams {
-  const params: Record<string, string> = {
-    From: `whatsapp:${from}`,
-    To: `whatsapp:${to}`,
-  }
-  if (contentSid && contentVariables) {
-    params.ContentSid = contentSid
-    params.ContentVariables = JSON.stringify(contentVariables)
-  } else {
-    params.Body = body
-  }
-  return new URLSearchParams(params)
-}
-
-/**
- * Send OTP code via WhatsApp Messages API.
- * Uses TWILIO_TEMPLATE_OTP content template if configured, otherwise freeform.
+ * Send OTP code via SMS.
  */
 export const sendOtpMessage = internalAction({
   args: { phone: v.string(), code: v.string() },
   handler: async (_ctx, args) => {
     const auth = twilioAuth()
-    const from = process.env.TWILIO_WHATSAPP_FROM
+    const from = process.env.TWILIO_SMS_FROM
     if (!auth || !from) {
       console.log('Twilio credentials not configured, skipping OTP send')
       return
     }
 
-    const templateSid = process.env.TWILIO_TEMPLATE_OTP
     const resp = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${auth.accountSid}/Messages.json`,
       {
@@ -308,19 +281,17 @@ export const sendOtpMessage = internalAction({
           Authorization: auth.basicAuth,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: buildMessageParams(
-          from,
-          args.phone,
-          `Your verification code is: ${args.code}`,
-          templateSid,
-          templateSid ? { '1': args.code } : undefined
-        ),
+        body: new URLSearchParams({
+          Body: `Your Accelerate ME verification code is: ${args.code}`,
+          From: from,
+          To: args.phone,
+        }),
       }
     )
 
     if (!resp.ok) {
       const data = await resp.json()
-      throw new Error(`WhatsApp OTP send failed: ${data.message || resp.status}`)
+      throw new Error(`SMS send failed: ${data.message || resp.status}`)
     }
   },
 })
@@ -447,24 +418,22 @@ export const getFounderUserIdsInCohort = internalQuery({
 })
 
 /**
- * Internal action: send a WhatsApp message and log the result.
+ * Internal action: send an SMS notification and log the result.
  */
-export const sendWhatsAppMessage = internalAction({
+export const sendSmsMessage = internalAction({
   args: {
     userId: v.id('users'),
     phone: v.string(),
     message: v.string(),
     type: v.string(),
-    contentSid: v.optional(v.string()),
-    contentVariables: v.optional(v.any()),
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
     const auth = twilioAuth()
-    const from = process.env.TWILIO_WHATSAPP_FROM
+    const from = process.env.TWILIO_SMS_FROM
 
     if (!auth || !from) {
-      console.log('Twilio credentials not configured, skipping WhatsApp send')
+      console.log('Twilio credentials not configured, skipping SMS send')
       await ctx.runMutation(internal.whatsapp.logNotification, {
         userId: args.userId,
         type: args.type,
@@ -484,13 +453,11 @@ export const sendWhatsAppMessage = internalAction({
             Authorization: auth.basicAuth,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: buildMessageParams(
-            from,
-            args.phone,
-            args.message,
-            args.contentSid,
-            args.contentVariables
-          ),
+          body: new URLSearchParams({
+            Body: args.message,
+            From: from,
+            To: args.phone,
+          }),
         }
       )
 
@@ -547,20 +514,6 @@ export const logNotification = internalMutation({
 })
 
 // ── Notification Trigger Actions ───────────────────────────────
-//
-// Template env vars (set these when using a registered WhatsApp sender):
-//   TWILIO_TEMPLATE_NOTIFICATION — single {{1}} variable for the full message
-//   TWILIO_TEMPLATE_ANNOUNCEMENT — {{1}} = title, {{2}} = body
-//   TWILIO_TEMPLATE_OTP          — {{1}} = code
-//
-// If not set, falls back to freeform Body (works with sandbox only).
-
-/** Get the notification template SID and build variables, or undefined for freeform. */
-function notificationTemplate(message: string) {
-  const sid = process.env.TWILIO_TEMPLATE_NOTIFICATION
-  if (!sid) return {}
-  return { contentSid: sid, contentVariables: { '1': message } }
-}
 
 /**
  * Notify admins when a new invoice is submitted.
@@ -586,12 +539,12 @@ export const notifyInvoiceSubmitted = internalAction({
     const message = `New invoice from ${args.startupName}: ${args.vendorName} — £${args.amountGbp.toFixed(2)}`
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendWhatsAppMessage, {
+      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,
         type: 'invoiceSubmitted',
-        ...notificationTemplate(message),
+
         metadata: {
           startupName: args.startupName,
           vendorName: args.vendorName,
@@ -622,12 +575,12 @@ export const notifyInvoiceStatusChanged = internalAction({
     const message = `Your invoice ${args.fileName} has been ${args.status}`
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendWhatsAppMessage, {
+      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,
         type: 'invoiceStatusChanged',
-        ...notificationTemplate(message),
+
         metadata: { fileName: args.fileName, status: args.status },
       })
     }
@@ -657,12 +610,12 @@ export const notifyMilestoneSubmitted = internalAction({
     const message = `New milestone submitted: ${args.milestoneTitle} from ${args.startupName}`
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendWhatsAppMessage, {
+      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,
         type: 'milestoneSubmitted',
-        ...notificationTemplate(message),
+
         metadata: {
           startupName: args.startupName,
           milestoneTitle: args.milestoneTitle,
@@ -693,12 +646,12 @@ export const notifyMilestoneStatusChanged = internalAction({
     const message = `Your milestone "${args.milestoneTitle}" has been ${statusLabel}`
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendWhatsAppMessage, {
+      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,
         type: 'milestoneStatusChanged',
-        ...notificationTemplate(message),
+
         metadata: {
           milestoneTitle: args.milestoneTitle,
           status: args.status,
@@ -732,12 +685,12 @@ export const sendDailyEventReminders = internalAction({
       const message = `Reminder: ${event.title} is today`
 
       for (const r of recipients) {
-        await ctx.scheduler.runAfter(0, internal.whatsapp.sendWhatsAppMessage, {
+        await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
           userId: r.userId,
           phone: r.phone,
           message,
           type: 'eventReminder',
-          ...notificationTemplate(message),
+
           metadata: {
             eventTitle: event.title,
             date: today,
@@ -811,20 +764,13 @@ export const sendAnnouncementNotification = internalAction({
     })
 
     const message = `${args.title}: ${args.body}`
-    const announcementSid = process.env.TWILIO_TEMPLATE_ANNOUNCEMENT
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendWhatsAppMessage, {
+      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,
         type: 'announcement',
-        ...(announcementSid
-          ? {
-              contentSid: announcementSid,
-              contentVariables: { '1': args.title, '2': args.body },
-            }
-          : {}),
         metadata: { title: args.title },
       })
     }

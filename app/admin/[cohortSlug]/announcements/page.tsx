@@ -129,7 +129,7 @@ export default function AnnouncementsPage() {
           <DialogHeader>
             <DialogTitle>New Announcement</DialogTitle>
             <DialogDescription>
-              This will be sent to all founders in {cohort.label} via WhatsApp and shown in their
+              This will be sent to all founders in {cohort.label} via SMS and shown in their
               dashboard.
             </DialogDescription>
           </DialogHeader>
@@ -188,8 +188,8 @@ export default function AnnouncementsPage() {
           <DialogHeader>
             <DialogTitle>Confirm Send</DialogTitle>
             <DialogDescription>
-              This announcement will be sent to all founders in {cohort.label} via WhatsApp. This
-              action cannot be undone.
+              This announcement will be sent to all founders in {cohort.label} via SMS. This action
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           {pendingData && (
