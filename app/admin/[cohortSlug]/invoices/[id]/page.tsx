@@ -6,6 +6,7 @@ import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import Link from 'next/link'
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { BatchCountdown } from '@/components/batch-countdown'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -77,23 +78,6 @@ function ReceiptLink({
         <ExternalLink className="h-3 w-3" />
       </a>
     </div>
-  )
-}
-
-function BatchCountdown({ scheduledTime }: { scheduledTime: number }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    setNow(Date.now())
-    const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
-  }, [])
-  const remaining = Math.max(0, Math.ceil((scheduledTime - now) / 1000))
-  const minutes = Math.floor(remaining / 60)
-  const seconds = remaining % 60
-  return (
-    <span className="font-mono">
-      {minutes}:{seconds.toString().padStart(2, '0')}
-    </span>
   )
 }
 

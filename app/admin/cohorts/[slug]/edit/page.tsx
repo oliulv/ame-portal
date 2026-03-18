@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -37,26 +37,16 @@ export default function CohortEditPage() {
 
   const form = useForm<CohortFormData>({
     resolver: zodResolver(cohortSchema),
-    defaultValues: {
-      name: '',
-      label: '',
-      year_start: new Date().getFullYear(),
-      year_end: new Date().getFullYear() + 1,
-      is_active: true,
-    },
+    values: cohort
+      ? {
+          name: cohort.name,
+          label: cohort.label,
+          year_start: cohort.yearStart,
+          year_end: cohort.yearEnd,
+          is_active: cohort.isActive,
+        }
+      : undefined,
   })
-
-  useEffect(() => {
-    if (cohort) {
-      form.reset({
-        name: cohort.name,
-        label: cohort.label,
-        year_start: cohort.yearStart,
-        year_end: cohort.yearEnd,
-        is_active: cohort.isActive,
-      })
-    }
-  }, [cohort, form])
 
   async function onSubmit(data: CohortFormData) {
     if (!cohort) return

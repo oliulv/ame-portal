@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useParams, useRouter } from 'next/navigation'
@@ -68,17 +68,25 @@ export default function AdminFundingPage() {
   )
   const updateFundingConfig = useMutation(api.cohorts.updateFundingConfig)
 
-  const [allocationInput, setAllocationInput] = useState('')
-  const [baselineInput, setBaselineInput] = useState('')
-  const [isSavingFundingConfig, setIsSavingFundingConfig] = useState(false)
   const fundingBudgetValue = overview?.cohort.fundingBudget
   const baseFundingValue = overview?.cohort.baseFunding
 
-  useEffect(() => {
-    if (fundingBudgetValue === undefined && baseFundingValue === undefined) return
+  // Initialize inputs from server data; track last-seen server values to detect changes
+  const lastServerValues = useRef<{ budget?: number; base?: number }>({})
+  const [allocationInput, setAllocationInput] = useState('')
+  const [baselineInput, setBaselineInput] = useState('')
+  const [isSavingFundingConfig, setIsSavingFundingConfig] = useState(false)
+
+  if (
+    fundingBudgetValue !== undefined &&
+    baseFundingValue !== undefined &&
+    (lastServerValues.current.budget !== fundingBudgetValue ||
+      lastServerValues.current.base !== baseFundingValue)
+  ) {
+    lastServerValues.current = { budget: fundingBudgetValue, base: baseFundingValue }
     setAllocationInput(String(fundingBudgetValue ?? 0))
     setBaselineInput(String(baseFundingValue ?? 0))
-  }, [baseFundingValue, fundingBudgetValue])
+  }
 
   const isLoading = cohort === undefined || overview === undefined
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -56,28 +56,17 @@ export default function EditStartupPage() {
 
   const form = useForm<StartupFormData>({
     resolver: zodResolver(startupSchema),
-    defaultValues: {
-      name: '',
-      logo_url: '',
-      sector: '',
-      stage: '',
-      website_url: '',
-      notes: '',
-    },
+    values: startup
+      ? {
+          name: startup.name,
+          logo_url: startup.logoUrl || '',
+          sector: startup.sector || '',
+          stage: startup.stage || '',
+          website_url: startup.websiteUrl || '',
+          notes: startup.notes || '',
+        }
+      : undefined,
   })
-
-  useEffect(() => {
-    if (startup) {
-      form.reset({
-        name: startup.name,
-        logo_url: startup.logoUrl || '',
-        sector: startup.sector || '',
-        stage: startup.stage || '',
-        website_url: startup.websiteUrl || '',
-        notes: startup.notes || '',
-      })
-    }
-  }, [startup, form])
 
   async function onSubmit(data: StartupFormData) {
     if (!startup) return

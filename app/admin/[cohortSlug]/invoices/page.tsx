@@ -54,6 +54,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { BatchCountdown } from '@/components/batch-countdown'
 import {
   getInvoiceStatusLabel,
   getInvoiceStatusVariant,
@@ -63,23 +64,6 @@ import {
 } from '@/lib/invoice-status'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
-
-function BatchCountdown({ scheduledTime }: { scheduledTime: number }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    setNow(Date.now())
-    const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
-  }, [])
-  const remaining = Math.max(0, Math.ceil((scheduledTime - now) / 1000))
-  const minutes = Math.floor(remaining / 60)
-  const seconds = remaining % 60
-  return (
-    <span className="font-mono">
-      {minutes}:{seconds.toString().padStart(2, '0')}
-    </span>
-  )
-}
 
 export default function AdminInvoicesPage() {
   const params = useParams()
@@ -225,18 +209,16 @@ export default function AdminInvoicesPage() {
     })
   }, [cohortInvoices, batchingStartupIds])
 
-  // Clear selected approved IDs when approved list changes
-  useEffect(() => {
-    if (!groupedInvoices) return
+  // Derive valid selected IDs — only keep IDs that are still in the approved list
+  const validSelectedApprovedIds = useMemo(() => {
+    if (!groupedInvoices) return selectedApprovedIds
     const approvedIds = new Set(groupedInvoices.approved.map((i) => i._id))
-    setSelectedApprovedIds((prev) => {
-      const next = new Set<string>()
-      prev.forEach((id) => {
-        if (approvedIds.has(id as Id<'invoices'>)) next.add(id)
-      })
-      return next.size === prev.size ? prev : next
+    const filtered = new Set<string>()
+    selectedApprovedIds.forEach((id) => {
+      if (approvedIds.has(id as Id<'invoices'>)) filtered.add(id)
     })
-  }, [groupedInvoices])
+    return filtered.size === selectedApprovedIds.size ? selectedApprovedIds : filtered
+  }, [groupedInvoices, selectedApprovedIds])
 
   const isLoading = cohort === undefined || startups === undefined || allInvoices === undefined
 
@@ -315,14 +297,14 @@ export default function AdminInvoicesPage() {
   }
 
   async function handleBatchMarkPaid() {
-    if (selectedApprovedIds.size === 0) return
+    if (validSelectedApprovedIds.size === 0) return
     setIsBatchMarking(true)
     try {
       await batchMarkPaid({
-        ids: Array.from(selectedApprovedIds) as Id<'invoices'>[],
+        ids: Array.from(validSelectedApprovedIds) as Id<'invoices'>[],
       })
       toast.success(
-        `${selectedApprovedIds.size} invoice${selectedApprovedIds.size !== 1 ? 's' : ''} marked as paid`
+        `${validSelectedApprovedIds.size} invoice${validSelectedApprovedIds.size !== 1 ? 's' : ''} marked as paid`
       )
       setSelectedApprovedIds(new Set())
     } catch (error) {
@@ -347,7 +329,7 @@ export default function AdminInvoicesPage() {
   function toggleAllApproved() {
     if (!groupedInvoices) return
     const allIds = groupedInvoices.approved.map((i) => i._id)
-    if (selectedApprovedIds.size === allIds.length) {
+    if (validSelectedApprovedIds.size === allIds.length) {
       setSelectedApprovedIds(new Set())
     } else {
       setSelectedApprovedIds(new Set(allIds))
@@ -425,7 +407,7 @@ export default function AdminInvoicesPage() {
 
   function renderApprovedInvoiceTable(invoices: typeof filteredInvoices) {
     if (!invoices || invoices.length === 0) return null
-    const allSelected = invoices.length > 0 && selectedApprovedIds.size === invoices.length
+    const allSelected = invoices.length > 0 && validSelectedApprovedIds.size === invoices.length
     return (
       <Table>
         <TableHeader>
@@ -454,7 +436,7 @@ export default function AdminInvoicesPage() {
             >
               <TableCell onClick={(e) => e.stopPropagation()}>
                 <Checkbox
-                  checked={selectedApprovedIds.has(invoice._id)}
+                  checked={validSelectedApprovedIds.has(invoice._id)}
                   onCheckedChange={() => toggleApprovedSelection(invoice._id)}
                   aria-label={`Select ${invoice.vendorName}`}
                 />
@@ -762,7 +744,7 @@ export default function AdminInvoicesPage() {
             setShowApproved,
             'secondary',
             renderApprovedInvoiceTable,
-            selectedApprovedIds.size > 0 ? (
+            validSelectedApprovedIds.size > 0 ? (
               <Button
                 size="sm"
                 disabled={isBatchMarking}
@@ -776,7 +758,7 @@ export default function AdminInvoicesPage() {
                 ) : (
                   <DollarSign className="mr-1 h-3 w-3" />
                 )}
-                Mark {selectedApprovedIds.size} Paid
+                Mark {validSelectedApprovedIds.size} Paid
               </Button>
             ) : undefined
           )}
