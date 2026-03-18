@@ -61,6 +61,9 @@ export default function AdminsPage() {
   const params = useParams()
   const cohortSlug = params.cohortSlug as string
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<NonNullable<typeof adminUsers>[number] | null>(
+    null
+  )
   const [userToDelete, setUserToDelete] = useState<{
     _id: string
     role: string
@@ -272,115 +275,43 @@ export default function AdminsPage() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : adminUsers && adminUsers.length > 0 ? (
-            <div className="border ">
+            <div className="border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
-                    {isSuperAdmin && <TableHead>Permissions</TableHead>}
                     <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {adminUsers.map((user) => {
-                    // Only show delete button for regular admins (not super admins)
-                    // and only if they're assigned to this cohort (not just appearing because they're super admin)
-                    const canDelete = user.role === 'admin' && user.cohortIds?.includes(cohort._id)
-
-                    return (
-                      <TableRow key={user._id}>
-                        <TableCell className="font-medium">
-                          {user.fullName || (
-                            <span className="text-muted-foreground italic">No name set</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {user.email || (
-                            <span className="text-muted-foreground italic">No email</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={user.role === 'super_admin' ? 'destructive' : 'default'}>
-                            {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
-                          </Badge>
-                        </TableCell>
-                        {isSuperAdmin && (
-                          <TableCell>
-                            {user.role === 'super_admin' ? (
-                              <Badge variant="secondary">All permissions</Badge>
-                            ) : (
-                              <div className="flex flex-col gap-1.5">
-                                <label className="flex items-center gap-2 text-xs">
-                                  <input
-                                    type="checkbox"
-                                    checked={hasUserPermission(user._id, 'approve_milestones')}
-                                    onChange={() =>
-                                      handleTogglePermission(
-                                        user._id,
-                                        'approve_milestones',
-                                        hasUserPermission(user._id, 'approve_milestones')
-                                      )
-                                    }
-                                    className="h-3.5 w-3.5 rounded border-gray-300"
-                                  />
-                                  Approve milestones
-                                </label>
-                                <label className="flex items-center gap-2 text-xs">
-                                  <input
-                                    type="checkbox"
-                                    checked={hasUserPermission(user._id, 'approve_invoices')}
-                                    onChange={() =>
-                                      handleTogglePermission(
-                                        user._id,
-                                        'approve_invoices',
-                                        hasUserPermission(user._id, 'approve_invoices')
-                                      )
-                                    }
-                                    className="h-3.5 w-3.5 rounded border-gray-300"
-                                  />
-                                  Approve invoices
-                                </label>
-                                <label className="flex items-center gap-2 text-xs">
-                                  <input
-                                    type="checkbox"
-                                    checked={hasUserPermission(user._id, 'send_announcements')}
-                                    onChange={() =>
-                                      handleTogglePermission(
-                                        user._id,
-                                        'send_announcements',
-                                        hasUserPermission(user._id, 'send_announcements')
-                                      )
-                                    }
-                                    className="h-3.5 w-3.5 rounded border-gray-300"
-                                  />
-                                  Send announcements
-                                </label>
-                              </div>
-                            )}
-                          </TableCell>
+                  {adminUsers.map((user) => (
+                    <TableRow
+                      key={user._id}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedUser(user)}
+                    >
+                      <TableCell className="font-medium">
+                        {user.fullName || (
+                          <span className="text-muted-foreground italic">No name set</span>
                         )}
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(user._creationTime).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {canDelete && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteClick(user)}
-                              disabled={isRemoving}
-                            >
-                              <Trash2 className="mr-1 h-3 w-3" />
-                              Remove
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
+                      </TableCell>
+                      <TableCell>
+                        {user.email || (
+                          <span className="text-muted-foreground italic">No email</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={user.role === 'super_admin' ? 'destructive' : 'default'}>
+                          {user.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(user._creationTime).toLocaleDateString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>
@@ -606,6 +537,125 @@ export default function AdminsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Admin Detail Modal */}
+      <Dialog open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {selectedUser?.fullName || selectedUser?.email || 'Admin Details'}
+            </DialogTitle>
+            <DialogDescription>
+              View details and manage permissions for this admin.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedUser && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Name</p>
+                  <p className="font-medium">{selectedUser.fullName || 'No name set'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Email</p>
+                  <p className="font-medium">{selectedUser.email || 'No email'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Role</p>
+                  <Badge
+                    variant={selectedUser.role === 'super_admin' ? 'destructive' : 'default'}
+                    className="mt-0.5"
+                  >
+                    {selectedUser.role === 'super_admin' ? 'Super Admin' : 'Admin'}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Created</p>
+                  <p className="font-medium">
+                    {new Date(selectedUser._creationTime).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Permissions section */}
+              {isSuperAdmin && (
+                <div className="border-t pt-4">
+                  <p className="text-sm font-medium mb-3">Permissions</p>
+                  {selectedUser.role === 'super_admin' ? (
+                    <Badge variant="secondary">All permissions</Badge>
+                  ) : (
+                    <div className="flex flex-col gap-2.5">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={hasUserPermission(selectedUser._id, 'approve_milestones')}
+                          onChange={() =>
+                            handleTogglePermission(
+                              selectedUser._id,
+                              'approve_milestones',
+                              hasUserPermission(selectedUser._id, 'approve_milestones')
+                            )
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                        Approve milestones
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={hasUserPermission(selectedUser._id, 'approve_invoices')}
+                          onChange={() =>
+                            handleTogglePermission(
+                              selectedUser._id,
+                              'approve_invoices',
+                              hasUserPermission(selectedUser._id, 'approve_invoices')
+                            )
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                        Approve invoices
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={hasUserPermission(selectedUser._id, 'send_announcements')}
+                          onChange={() =>
+                            handleTogglePermission(
+                              selectedUser._id,
+                              'send_announcements',
+                              hasUserPermission(selectedUser._id, 'send_announcements')
+                            )
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                        Send announcements
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            {selectedUser &&
+              selectedUser.role === 'admin' &&
+              selectedUser.cohortIds?.includes(cohort._id) && (
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    handleDeleteClick(selectedUser)
+                    setSelectedUser(null)
+                  }}
+                >
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  Remove from Cohort
+                </Button>
+              )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Remove Admin Confirmation Dialog */}
       <Dialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
