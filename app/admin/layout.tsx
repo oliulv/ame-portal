@@ -23,7 +23,8 @@ function AdminHeader({ userRole }: { userRole: string }) {
   const mounted = useMounted()
 
   const cohortSlug =
-    extractAdminCohortSlug(pathname) ?? (mounted ? localStorage.getItem('selectedCohortSlug') : null)
+    extractAdminCohortSlug(pathname) ??
+    (mounted ? localStorage.getItem('selectedCohortSlug') : null)
   const adminsHref = cohortSlug ? `/admin/${cohortSlug}/admins` : '#'
 
   return (
