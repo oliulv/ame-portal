@@ -14,7 +14,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Send, AlertTriangle, Ban, CheckCircle2, XCircle, Phone } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Send,
+  AlertTriangle,
+  Ban,
+  CheckCircle2,
+  XCircle,
+  Phone,
+  ChevronDown,
+  ChevronUp,
+  Search,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import {
   NOTIFICATION_TYPES,
@@ -31,7 +43,10 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
+import { useState } from 'react'
 import type { Id } from '@/convex/_generated/dataModel'
+
+const INITIAL_VISIBLE = 5
 
 function groupByAudience(types: NotificationType[]) {
   const groups: Record<string, NotificationType[]> = {
@@ -62,6 +77,13 @@ export function NotificationsTab({
   const globalSettings = useQuery(api.notificationAdmin.getGlobalSettings, { cohortId })
   const userStatus = useQuery(api.notificationAdmin.getUserNotificationStatus, { cohortId })
   const setGlobalToggle = useMutation(api.notificationAdmin.setGlobalToggle)
+
+  const [breakdownExpanded, setBreakdownExpanded] = useState(false)
+  const [breakdownSearch, setBreakdownSearch] = useState('')
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
+  const [settingsSearch, setSettingsSearch] = useState('')
+  const [usersExpanded, setUsersExpanded] = useState(false)
+  const [usersSearch, setUsersSearch] = useState('')
 
   const handleToggle = async (notificationType: string, enabled: boolean) => {
     try {
@@ -133,34 +155,90 @@ export function NotificationsTab({
           <CardTitle>Notification Breakdown</CardTitle>
           <CardDescription>Delivery stats per notification type</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Type</TableHead>
-                <TableHead>Audience</TableHead>
-                <TableHead className="text-right">Sent</TableHead>
-                <TableHead className="text-right">Failed</TableHead>
-                <TableHead className="text-right">Skipped</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ACTIVE_NOTIFICATION_TYPES.map((t) => {
-                const s = stats.perType[t.key] || { sent: 0, failed: 0, skipped: 0 }
-                return (
-                  <TableRow key={t.key}>
-                    <TableCell className="font-medium">{t.label}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{audienceLabel[t.audience]}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">{s.sent}</TableCell>
-                    <TableCell className="text-right">{s.failed}</TableCell>
-                    <TableCell className="text-right">{s.skipped}</TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+        <CardContent className="space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={breakdownSearch}
+              onChange={(e) => {
+                setBreakdownSearch(e.target.value)
+                setBreakdownExpanded(true)
+              }}
+              placeholder="Search notification types"
+              className="pl-9"
+            />
+          </div>
+          {(() => {
+            const normalizedQuery = breakdownSearch.trim().toLowerCase()
+            const filtered = ACTIVE_NOTIFICATION_TYPES.filter(
+              (t) =>
+                normalizedQuery.length === 0 ||
+                t.label.toLowerCase().includes(normalizedQuery) ||
+                t.description.toLowerCase().includes(normalizedQuery) ||
+                t.audience.toLowerCase().includes(normalizedQuery)
+            )
+            const visible =
+              breakdownExpanded || normalizedQuery.length > 0
+                ? filtered
+                : filtered.slice(0, INITIAL_VISIBLE)
+            const hiddenCount = filtered.length - visible.length
+
+            return (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Audience</TableHead>
+                      <TableHead className="text-right">Sent</TableHead>
+                      <TableHead className="text-right">Failed</TableHead>
+                      <TableHead className="text-right">Skipped</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visible.map((t) => {
+                      const s = stats.perType[t.key] || { sent: 0, failed: 0, skipped: 0 }
+                      return (
+                        <TableRow key={t.key}>
+                          <TableCell className="font-medium">{t.label}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{audienceLabel[t.audience]}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{s.sent}</TableCell>
+                          <TableCell className="text-right">{s.failed}</TableCell>
+                          <TableCell className="text-right">{s.skipped}</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+                {hiddenCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground"
+                    onClick={() => setBreakdownExpanded(true)}
+                  >
+                    <ChevronDown className="mr-1.5 h-4 w-4" />
+                    Show {hiddenCount} more
+                  </Button>
+                )}
+                {breakdownExpanded &&
+                  normalizedQuery.length === 0 &&
+                  filtered.length > INITIAL_VISIBLE && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-muted-foreground"
+                      onClick={() => setBreakdownExpanded(false)}
+                    >
+                      <ChevronUp className="mr-1.5 h-4 w-4" />
+                      Show less
+                    </Button>
+                  )}
+              </>
+            )
+          })()}
         </CardContent>
       </Card>
 
@@ -247,44 +325,96 @@ export function NotificationsTab({
             regardless of individual preferences.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {Object.entries(grouped).map(([audience, types]) =>
-            types.length > 0 ? (
-              <div key={audience}>
-                <h4 className="text-sm font-semibold mb-3">{audienceLabel[audience]}</h4>
-                <div className="space-y-2">
-                  {types.map((t) => {
-                    const isActive = t.status === 'active'
-                    const enabled = isActive ? (globalSettings[t.key] ?? true) : false
+        <CardContent className="space-y-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={settingsSearch}
+              onChange={(e) => {
+                setSettingsSearch(e.target.value)
+                setSettingsExpanded(true)
+              }}
+              placeholder="Search notification settings"
+              className="pl-9"
+            />
+          </div>
+          {(() => {
+            const normalizedQuery = settingsSearch.trim().toLowerCase()
+            const allTypes = NOTIFICATION_TYPES.filter(
+              (t) =>
+                normalizedQuery.length === 0 ||
+                t.label.toLowerCase().includes(normalizedQuery) ||
+                t.description.toLowerCase().includes(normalizedQuery) ||
+                t.audience.toLowerCase().includes(normalizedQuery)
+            )
+            const filteredGrouped = groupByAudience(allTypes)
+            const totalCount = allTypes.length
+            const isSearching = normalizedQuery.length > 0
+
+            // Flatten to apply the global limit across groups
+            let remaining = settingsExpanded || isSearching ? Infinity : INITIAL_VISIBLE
+
+            return (
+              <>
+                <div className="space-y-6">
+                  {Object.entries(filteredGrouped).map(([audience, types]) => {
+                    if (types.length === 0 || remaining <= 0) return null
+                    const visibleTypes = types.slice(0, remaining)
+                    remaining -= visibleTypes.length
 
                     return (
-                      <div
-                        key={t.key}
-                        className={`flex items-center justify-between border p-3 ${!isActive ? 'opacity-50' : ''}`}
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium">{t.label}</p>
-                            {!isActive && (
-                              <Badge variant="outline" className="text-xs">
-                                Coming soon
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">{t.description}</p>
+                      <div key={audience}>
+                        <h4 className="text-sm font-semibold mb-3">{audienceLabel[audience]}</h4>
+                        <div className="space-y-2">
+                          {visibleTypes.map((t) => {
+                            const enabled = globalSettings[t.key] ?? true
+
+                            return (
+                              <div
+                                key={t.key}
+                                className="flex items-center justify-between border p-3"
+                              >
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium">{t.label}</p>
+                                  <p className="text-xs text-muted-foreground">{t.description}</p>
+                                </div>
+                                <Switch
+                                  checked={enabled}
+                                  onCheckedChange={(checked) => handleToggle(t.key, checked)}
+                                />
+                              </div>
+                            )
+                          })}
                         </div>
-                        <Switch
-                          checked={enabled}
-                          disabled={!isActive}
-                          onCheckedChange={(checked) => handleToggle(t.key, checked)}
-                        />
                       </div>
                     )
                   })}
                 </div>
-              </div>
-            ) : null
-          )}
+                {!settingsExpanded && !isSearching && totalCount > INITIAL_VISIBLE && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground"
+                    onClick={() => setSettingsExpanded(true)}
+                  >
+                    <ChevronDown className="mr-1.5 h-4 w-4" />
+                    Show {totalCount - INITIAL_VISIBLE} more
+                  </Button>
+                )}
+                {settingsExpanded && !isSearching && totalCount > INITIAL_VISIBLE && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground"
+                    onClick={() => setSettingsExpanded(false)}
+                  >
+                    <ChevronUp className="mr-1.5 h-4 w-4" />
+                    Show less
+                  </Button>
+                )}
+              </>
+            )
+          })()}
         </CardContent>
       </Card>
 
@@ -300,49 +430,102 @@ export function NotificationsTab({
             enabled
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Verified</TableHead>
-                <TableHead>Active</TableHead>
-                <TableHead className="text-right">Preferences</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[...userStatus.admins, ...userStatus.founders].map((user) => (
-                <TableRow key={user.userId}>
-                  <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>
-                    <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                      {user.role === 'admin' ? 'Admin' : 'Founder'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {user.phone ? `****${user.phone.slice(-4)}` : '—'}
-                  </TableCell>
-                  <TableCell>
-                    {user.isVerified ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {user.isVerified && user.notificationsEnabled ? (
-                      <Badge variant="success">Active</Badge>
-                    ) : (
-                      <Badge variant="secondary">Inactive</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">{user.enabledPreferenceCount}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <CardContent className="space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={usersSearch}
+              onChange={(e) => {
+                setUsersSearch(e.target.value)
+                setUsersExpanded(true)
+              }}
+              placeholder="Search users"
+              className="pl-9"
+            />
+          </div>
+          {(() => {
+            const normalizedQuery = usersSearch.trim().toLowerCase()
+            const allUsers = [...userStatus.admins, ...userStatus.founders]
+            const filtered = allUsers.filter(
+              (u) =>
+                normalizedQuery.length === 0 ||
+                u.name.toLowerCase().includes(normalizedQuery) ||
+                u.role.toLowerCase().includes(normalizedQuery)
+            )
+            const isSearching = normalizedQuery.length > 0
+            const visible =
+              usersExpanded || isSearching ? filtered : filtered.slice(0, INITIAL_VISIBLE)
+            const hiddenCount = filtered.length - visible.length
+
+            return (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Verified</TableHead>
+                      <TableHead>Active</TableHead>
+                      <TableHead className="text-right">Preferences</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visible.map((user) => (
+                      <TableRow key={user.userId}>
+                        <TableCell className="font-medium">{user.name}</TableCell>
+                        <TableCell>
+                          <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                            {user.role === 'admin' ? 'Admin' : 'Founder'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {user.phone ? `****${user.phone.slice(-4)}` : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {user.isVerified ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {user.isVerified && user.notificationsEnabled ? (
+                            <Badge variant="success">Active</Badge>
+                          ) : (
+                            <Badge variant="secondary">Inactive</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">{user.enabledPreferenceCount}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {hiddenCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground"
+                    onClick={() => setUsersExpanded(true)}
+                  >
+                    <ChevronDown className="mr-1.5 h-4 w-4" />
+                    Show {hiddenCount} more
+                  </Button>
+                )}
+                {usersExpanded && !isSearching && filtered.length > INITIAL_VISIBLE && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground"
+                    onClick={() => setUsersExpanded(false)}
+                  >
+                    <ChevronUp className="mr-1.5 h-4 w-4" />
+                    Show less
+                  </Button>
+                )}
+              </>
+            )
+          })()}
         </CardContent>
       </Card>
     </div>
