@@ -9,7 +9,8 @@ const http = httpRouter()
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, x-umami-cache',
+  'Access-Control-Expose-Headers': 'x-umami-cache',
   'Access-Control-Max-Age': '86400',
 }
 
@@ -37,13 +38,21 @@ http.route({
         })
       }
 
+      // Session dedup: use x-umami-cache header if present, otherwise generate new
+      const incomingCache = request.headers.get('x-umami-cache')
+      const sessionId =
+        incomingCache ||
+        payload.id ||
+        `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+
       // Store the event via internal mutation
       await ctx.runMutation(internal.http.insertTrackerEvent, {
         websiteId: payload.website,
         eventName: type === 'event' && payload.name ? payload.name : undefined,
-        sessionId: payload.id || `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
+        sessionId,
         url: payload.url || '',
         referrer: payload.referrer || undefined,
+        tag: payload.tag || undefined,
         screen: payload.screen || undefined,
         language: payload.language || undefined,
         title: payload.title || undefined,
@@ -51,9 +60,14 @@ http.route({
         data: payload.data || undefined,
       })
 
-      return new Response(JSON.stringify({ success: true }), {
+      // Return session ID in both response body and header for session dedup
+      return new Response(JSON.stringify({ success: true, sessionId }), {
         status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'x-umami-cache': sessionId,
+        },
       })
     } catch (error) {
       logConvexError('Tracker collect error:', error)
@@ -107,6 +121,7 @@ export const insertTrackerEvent = internalMutation({
     sessionId: v.string(),
     url: v.string(),
     referrer: v.optional(v.string()),
+    tag: v.optional(v.string()),
     screen: v.optional(v.string()),
     language: v.optional(v.string()),
     title: v.optional(v.string()),
@@ -130,6 +145,7 @@ export const insertTrackerEvent = internalMutation({
       eventName: args.eventName,
       url: normalizeUrl(args.url),
       referrer: args.referrer ? normalizeUrl(args.referrer) : undefined,
+      tag: args.tag,
       utmSource: utmParams.source,
       utmMedium: utmParams.medium,
       utmCampaign: utmParams.campaign,

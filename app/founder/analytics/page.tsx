@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -13,14 +13,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { MetricChart } from '@/components/analytics/metric-chart'
-import { Plug, TrendingUp, Eye, Clock } from 'lucide-react'
+import { KpiCard } from '@/components/analytics/kpi-card'
+import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
+import { SocialCard } from '@/components/analytics/social-card'
+import { VelocityScore } from '@/components/analytics/velocity-score'
+import { Plug, TrendingUp, Eye } from 'lucide-react'
 import Link from 'next/link'
+
+function computeGrowth(data: Array<{ value: number }> | undefined | null): number {
+  if (!data || data.length < 2) return 0
+  const recent = data[data.length - 1].value
+  const previous = data[Math.max(0, data.length - 8)]?.value ?? data[0].value
+  if (previous === 0) return 0
+  return ((recent - previous) / previous) * 100
+}
+
+function toSparkline(data: Array<{ value: number }> | undefined | null): Array<{ value: number }> {
+  if (!data) return []
+  return data.slice(-14).map((d) => ({ value: d.value }))
+}
 
 export default function FounderAnalyticsPage() {
   const [range, setRange] = useState('30')
 
-  const integrationStatus = useQuery(api.integrations.status)
+  const integrationStatus = useQuery(api.integrations.fullStatus)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
   const startupId = useQuery(api.integrations.getFounderStartupId)
 
@@ -29,8 +45,9 @@ export default function FounderAnalyticsPage() {
 
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
-  const trackerHasEvents = trackerWebsites?.some((w) => w.lastEventAt) ?? false
-  const hasAnyIntegration = hasStripe || hasTracker
+  const hasGithub = integrationStatus?.github?.status === 'active'
+  const hasSocial = (integrationStatus?.social?.length ?? 0) > 0
+  const hasAnyIntegration = hasStripe || hasTracker || hasGithub || hasSocial
 
   const startDate = useMemo(() => {
     const d = new Date()
@@ -41,17 +58,13 @@ export default function FounderAnalyticsPage() {
   const baseArgs = startupId ? { startupId, window: 'daily' as const, startDate } : null
 
   // Stripe metrics
-  const revenue = useQuery(
-    api.metrics.timeSeries,
-    baseArgs ? { ...baseArgs, provider: 'stripe' as const, metricKey: 'total_revenue' } : 'skip'
-  )
   const mrr = useQuery(
     api.metrics.timeSeries,
     baseArgs ? { ...baseArgs, provider: 'stripe' as const, metricKey: 'mrr' } : 'skip'
   )
-  const customers = useQuery(
+  const revenue = useQuery(
     api.metrics.timeSeries,
-    baseArgs ? { ...baseArgs, provider: 'stripe' as const, metricKey: 'active_customers' } : 'skip'
+    baseArgs ? { ...baseArgs, provider: 'stripe' as const, metricKey: 'total_revenue' } : 'skip'
   )
 
   // Tracker metrics
@@ -63,31 +76,48 @@ export default function FounderAnalyticsPage() {
     api.metrics.timeSeries,
     baseArgs ? { ...baseArgs, provider: 'tracker' as const, metricKey: 'pageviews' } : 'skip'
   )
-  const activeUsers = useQuery(
+
+  // GitHub metrics
+  const velocityScore = useQuery(
     api.metrics.timeSeries,
-    baseArgs
-      ? { ...baseArgs, provider: 'tracker' as const, metricKey: 'weekly_active_users' }
-      : 'skip'
+    baseArgs ? { ...baseArgs, provider: 'github' as const, metricKey: 'velocity_score' } : 'skip'
+  )
+  const commits = useQuery(
+    api.metrics.getLatest,
+    baseArgs ? { ...baseArgs, provider: 'github' as const, metricKey: 'commits' } : 'skip'
+  )
+  const prsOpened = useQuery(
+    api.metrics.getLatest,
+    baseArgs ? { ...baseArgs, provider: 'github' as const, metricKey: 'prs_opened' } : 'skip'
+  )
+  const reviews = useQuery(
+    api.metrics.getLatest,
+    baseArgs ? { ...baseArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
+  )
+
+  // Social metrics
+  const twitterFollowers = useQuery(
+    api.metrics.getLatest,
+    baseArgs ? { ...baseArgs, provider: 'apify' as const, metricKey: 'twitter_followers' } : 'skip'
   )
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <Skeleton className="h-9 w-48 mb-2" />
-          <Skeleton className="h-5 w-64" />
+        <Skeleton className="h-9 w-48 mb-2" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
         </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-32" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-64 w-full" />
-          </CardContent>
-        </Card>
+        <Skeleton className="h-80 w-full" />
       </div>
     )
   }
+
+  const latestMrr = mrr?.length ? mrr[mrr.length - 1].value : 0
+  const latestSessions = sessions?.length ? sessions[sessions.length - 1].value : 0
+  const latestVelocity = velocityScore?.length ? velocityScore[velocityScore.length - 1].value : 0
 
   return (
     <div className="space-y-6">
@@ -111,17 +141,6 @@ export default function FounderAnalyticsPage() {
         )}
       </div>
 
-      {/* Sync status */}
-      {integrationStatus?.stripe && (
-        <div className="text-xs text-muted-foreground">
-          {integrationStatus.stripe.lastSyncedAt && (
-            <span>
-              Last synced: {new Date(integrationStatus.stripe.lastSyncedAt).toLocaleString()}
-            </span>
-          )}
-        </div>
-      )}
-
       {/* No integrations prompt */}
       {!hasAnyIntegration && (
         <Card>
@@ -130,8 +149,7 @@ export default function FounderAnalyticsPage() {
               <Plug className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Integrations Connected</h3>
               <p className="text-muted-foreground mb-4 max-w-md">
-                Connect Stripe to track revenue and customers automatically, or add the Accelerate
-                ME Tracker to monitor website traffic and user activity.
+                Connect your tools to start tracking performance automatically.
               </p>
               <Link href="/founder/integrations">
                 <Button>Set Up Integrations</Button>
@@ -141,143 +159,138 @@ export default function FounderAnalyticsPage() {
         </Card>
       )}
 
-      {/* Stripe Metrics */}
-      {hasStripe && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-muted-foreground" />
-            Revenue Metrics
-            {integrationStatus?.stripe?.accountName && (
-              <span className="text-sm font-normal text-muted-foreground">
-                ({integrationStatus.stripe.accountName})
-              </span>
+      {hasAnyIntegration && (
+        <>
+          {/* Row 1: KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {hasStripe && (
+              <KpiCard
+                title="MRR"
+                value={`£${latestMrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                change={computeGrowth(mrr)}
+                sparklineData={toSparkline(mrr)}
+                color="hsl(var(--chart-1))"
+              />
             )}
-          </h2>
-
-          <MetricChart
-            title="Total Revenue"
-            description="All-time revenue (net of refunds)"
-            data={revenue ?? []}
-            formatValue={(v) =>
-              `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            }
-          />
-
-          <MetricChart
-            title="Monthly Recurring Revenue (MRR)"
-            description="Recurring revenue from subscriptions"
-            data={mrr ?? []}
-            formatValue={(v) =>
-              `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            }
-          />
-
-          <MetricChart
-            title="Active Customers"
-            description="Number of active paying customers"
-            data={customers ?? []}
-            formatValue={(v) => v.toLocaleString()}
-          />
-        </div>
-      )}
-
-      {/* Tracker Metrics */}
-      {hasTracker && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Eye className="h-5 w-5 text-muted-foreground" />
-            Traffic Metrics
-          </h2>
-
-          {trackerHasEvents ? (
-            <>
-              <MetricChart
+            {hasTracker && (
+              <KpiCard
                 title="Sessions"
-                description="Total number of user sessions"
-                data={sessions ?? []}
-                formatValue={(v) => v.toLocaleString()}
+                value={latestSessions.toLocaleString()}
+                change={computeGrowth(sessions)}
+                sparklineData={toSparkline(sessions)}
+                color="hsl(var(--chart-2))"
               />
+            )}
+            {hasGithub && (
+              <KpiCard
+                title="Velocity Score"
+                value={`${latestVelocity} pts`}
+                change={computeGrowth(velocityScore)}
+                sparklineData={toSparkline(velocityScore)}
+                color="hsl(var(--chart-3))"
+              />
+            )}
+            {hasSocial && (
+              <KpiCard
+                title="Social Followers"
+                value={(twitterFollowers ?? 0).toLocaleString()}
+                color="hsl(var(--chart-4))"
+              />
+            )}
+          </div>
 
-              <MetricChart
-                title="Page Views"
-                description="Total number of page views"
-                data={pageviews ?? []}
-                formatValue={(v) => v.toLocaleString()}
-              />
+          {/* Row 2: Revenue area chart */}
+          {hasStripe && mrr && mrr.length > 0 && (
+            <MetricAreaChart
+              title="Monthly Recurring Revenue"
+              description="MRR from active subscriptions"
+              data={mrr.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
+              formatValue={(v) =>
+                `£${v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+              }
+              color="hsl(var(--chart-1))"
+            />
+          )}
 
-              <MetricChart
-                title="Active Users"
-                description="Number of unique active users"
-                data={activeUsers ?? []}
-                formatValue={(v) => v.toLocaleString()}
+          {/* Row 3: Traffic + GitHub */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {hasTracker && sessions && sessions.length > 0 && (
+              <MetricAreaChart
+                title="Website Traffic"
+                description="Sessions over time"
+                data={sessions.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
+                color="hsl(var(--chart-2))"
+                height={250}
               />
-            </>
-          ) : (
-            <Card>
+            )}
+            {hasGithub && (
+              <VelocityScore
+                commits={commits ?? 0}
+                prsOpened={prsOpened ?? 0}
+                prsMerged={0}
+                reviews={reviews ?? 0}
+                totalScore={latestVelocity}
+              />
+            )}
+          </div>
+
+          {/* Row 4: Social platform cards */}
+          {hasSocial && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {integrationStatus?.social?.map((profile) => (
+                <SocialCard
+                  key={profile._id}
+                  platform={profile.platform}
+                  handle={profile.handle}
+                  followers={twitterFollowers ?? 0}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Integration nudges */}
+          {!hasStripe && (
+            <Card className="border-dashed">
               <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">Waiting for first event</p>
+                <div className="flex items-center gap-4">
+                  <TrendingUp className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Track revenue automatically</p>
                     <p className="text-sm text-muted-foreground">
-                      Your tracker is set up but hasn&apos;t received any events yet. Make sure
-                      you&apos;ve added the script to your website.{' '}
-                      <Link
-                        href="/founder/integrations?tab=tracker"
-                        className="underline font-medium text-primary hover:text-primary/80"
-                      >
-                        View setup
-                      </Link>
+                      Connect Stripe for MRR, ARR, and customer metrics.
                     </p>
                   </div>
+                  <Link href="/founder/integrations">
+                    <Button variant="outline" size="sm">
+                      Connect Stripe
+                    </Button>
+                  </Link>
                 </div>
               </CardContent>
             </Card>
           )}
-        </div>
-      )}
 
-      {/* Individual integration prompts when partially set up */}
-      {hasAnyIntegration && !hasStripe && (
-        <Card className="border-dashed">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <TrendingUp className="h-5 w-5 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Want to track revenue?</p>
-                <p className="text-sm text-muted-foreground">
-                  Connect Stripe to automatically track revenue, MRR, and customer metrics.
-                </p>
-              </div>
-              <Link href="/founder/integrations?tab=stripe">
-                <Button variant="outline" size="sm">
-                  Connect Stripe
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {hasAnyIntegration && !hasTracker && (
-        <Card className="border-dashed">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <Eye className="h-5 w-5 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Want to track website traffic?</p>
-                <p className="text-sm text-muted-foreground">
-                  Add the Accelerate ME Tracker to monitor pageviews, sessions, and user activity.
-                </p>
-              </div>
-              <Link href="/founder/integrations?tab=tracker">
-                <Button variant="outline" size="sm">
-                  Set Up Tracker
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+          {!hasTracker && (
+            <Card className="border-dashed">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <Eye className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Track website traffic</p>
+                    <p className="text-sm text-muted-foreground">
+                      Add the tracker to monitor sessions and pageviews.
+                    </p>
+                  </div>
+                  <Link href="/founder/integrations">
+                    <Button variant="outline" size="sm">
+                      Set Up Tracker
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
     </div>
   )

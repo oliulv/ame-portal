@@ -161,20 +161,40 @@
 
     if (!payload) return
 
+    // Session dedup: send cached session ID if available
+    if (sessionCache) {
+      payload.id = sessionCache
+    }
+
     try {
+      const headers = {
+        'Content-Type': 'application/json',
+      }
+      if (sessionCache) {
+        headers['x-umami-cache'] = sessionCache
+      }
+
       const res = await fetch(endpoint, {
         keepalive: true,
         method: 'POST',
         body: JSON.stringify({ type, payload }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         credentials,
       })
 
       const data = await res.json()
       if (data) {
         disabled = !!data.disabled
+        // Store session cache from response header
+        if (data.sessionId) {
+          sessionCache = data.sessionId
+        }
+      }
+
+      // Also check response header
+      const cacheHeader = res.headers.get('x-umami-cache')
+      if (cacheHeader) {
+        sessionCache = cacheHeader
       }
     } catch (e) {
       /* no-op */
@@ -226,6 +246,7 @@
   let initialized = false
   let disabled = false
   let identity
+  let sessionCache
 
   if (autoTrack && !trackingDisabled()) {
     if (document.readyState === 'complete') {

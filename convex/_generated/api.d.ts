@@ -13,7 +13,9 @@ import type * as adminInvitations from "../adminInvitations.js";
 import type * as adminPermissions from "../adminPermissions.js";
 import type * as adminUsers from "../adminUsers.js";
 import type * as ai from "../ai.js";
+import type * as analytics from "../analytics.js";
 import type * as announcements from "../announcements.js";
+import type * as apify from "../apify.js";
 import type * as auth from "../auth.js";
 import type * as bankDetails from "../bankDetails.js";
 import type * as cohortEvents from "../cohortEvents.js";
@@ -31,8 +33,11 @@ import type * as invitations from "../invitations.js";
 import type * as invoiceBatching from "../invoiceBatching.js";
 import type * as invoiceValidation from "../invoiceValidation.js";
 import type * as invoices from "../invoices.js";
+import type * as leaderboard from "../leaderboard.js";
+import type * as leaderboardChat from "../leaderboardChat.js";
 import type * as lib_logging from "../lib/logging.js";
 import type * as lib_notificationTypes from "../lib/notificationTypes.js";
+import type * as lib_providers from "../lib/providers.js";
 import type * as lib_slugify from "../lib/slugify.js";
 import type * as lib_tokens from "../lib/tokens.js";
 import type * as lib_userCleanup from "../lib/userCleanup.js";
@@ -50,6 +55,7 @@ import type * as seed from "../seed.js";
 import type * as startups from "../startups.js";
 import type * as trackerWebsites from "../trackerWebsites.js";
 import type * as users from "../users.js";
+import type * as weeklyUpdates from "../weeklyUpdates.js";
 
 import type {
   ApiFromModules,
@@ -63,7 +69,9 @@ declare const fullApi: ApiFromModules<{
   adminPermissions: typeof adminPermissions;
   adminUsers: typeof adminUsers;
   ai: typeof ai;
+  analytics: typeof analytics;
   announcements: typeof announcements;
+  apify: typeof apify;
   auth: typeof auth;
   bankDetails: typeof bankDetails;
   cohortEvents: typeof cohortEvents;
@@ -81,8 +89,11 @@ declare const fullApi: ApiFromModules<{
   invoiceBatching: typeof invoiceBatching;
   invoiceValidation: typeof invoiceValidation;
   invoices: typeof invoices;
+  leaderboard: typeof leaderboard;
+  leaderboardChat: typeof leaderboardChat;
   "lib/logging": typeof lib_logging;
   "lib/notificationTypes": typeof lib_notificationTypes;
+  "lib/providers": typeof lib_providers;
   "lib/slugify": typeof lib_slugify;
   "lib/tokens": typeof lib_tokens;
   "lib/userCleanup": typeof lib_userCleanup;
@@ -100,6 +111,7 @@ declare const fullApi: ApiFromModules<{
   startups: typeof startups;
   trackerWebsites: typeof trackerWebsites;
   users: typeof users;
+  weeklyUpdates: typeof weeklyUpdates;
 }>;
 
 /**
