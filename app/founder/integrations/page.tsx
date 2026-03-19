@@ -628,7 +628,17 @@ function IntegrationsPageInner() {
                       render={({ field }) => (
                         <FormItem className="flex-1">
                           <FormControl>
-                            <Input placeholder="@yourhandle" {...field} />
+                            <div className="flex items-center">
+                              <span className="flex h-9 items-center border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                                @
+                              </span>
+                              <Input
+                                placeholder="yourhandle"
+                                className="border-l-0"
+                                {...field}
+                                value={field.value.replace(/^@/, '')}
+                              />
+                            </div>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -698,7 +708,17 @@ function IntegrationsPageInner() {
                       render={({ field }) => (
                         <FormItem className="flex-1">
                           <FormControl>
-                            <Input placeholder="@yourhandle" {...field} />
+                            <div className="flex items-center">
+                              <span className="flex h-9 items-center border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                                @
+                              </span>
+                              <Input
+                                placeholder="yourhandle"
+                                className="border-l-0"
+                                {...field}
+                                value={field.value.replace(/^@/, '')}
+                              />
+                            </div>
                           </FormControl>
                           <FormMessage />
                         </FormItem>

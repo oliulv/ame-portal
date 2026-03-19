@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { logClientError } from '@/lib/logging'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -30,32 +29,13 @@ import {
   type StartupUpdateFormData,
   type BankDetailsFormData,
 } from '@/lib/schemas'
-import {
-  User,
-  Building2,
-  CreditCard,
-  Save,
-  AlertCircle,
-  Plug,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  Users,
-  Bell,
-} from 'lucide-react'
+import { User, Building2, CreditCard, Save, AlertCircle, Users, Bell } from 'lucide-react'
 import { TeamTab } from './_components/team-tab'
 import { NotificationsTab } from './_components/notifications-tab'
 
-type SettingsTab = 'personal' | 'startup' | 'bank' | 'team' | 'integrations' | 'notifications'
+type SettingsTab = 'personal' | 'startup' | 'bank' | 'team' | 'notifications'
 
-const validSettingsTabs: SettingsTab[] = [
-  'personal',
-  'startup',
-  'bank',
-  'team',
-  'integrations',
-  'notifications',
-]
+const validSettingsTabs: SettingsTab[] = ['personal', 'startup', 'bank', 'team', 'notifications']
 
 export default function SettingsPage() {
   return (
@@ -86,7 +66,6 @@ export default function SettingsPage() {
 }
 
 function SettingsPageInner() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
   const initialTab = validSettingsTabs.includes(tabParam as SettingsTab)
@@ -99,17 +78,12 @@ function SettingsPageInner() {
 
   // Convex queries - founderProfile.get returns { founderProfile, startup, startupProfile, bankDetails }
   const profileData = useQuery(api.founderProfile.get)
-  const integrationStatus = useQuery(api.integrations.status)
-  const trackerWebsites = useQuery(api.trackerWebsites.list)
-
   // Convex mutations
   const updateProfile = useMutation(api.founderProfile.update)
   const updateStartup = useMutation(api.founderStartup.update)
   const upsertBank = useMutation(api.bankDetails.upsert)
-  const disconnectStripe = useMutation(api.integrations.disconnectStripe)
 
   const isLoading = profileData === undefined
-  const isLoadingIntegrations = integrationStatus === undefined
 
   const fp = profileData?.founderProfile
   const s = profileData?.startup
@@ -230,26 +204,11 @@ function SettingsPageInner() {
     }
   }
 
-  const handleConnectStripe = () => {
-    router.push('/founder/integrations?tab=stripe')
-  }
-
-  const handleDisconnectStripe = async () => {
-    try {
-      await disconnectStripe()
-      toast.success('Stripe disconnected successfully')
-    } catch (err) {
-      logClientError('Failed to disconnect Stripe:', err)
-      toast.error('Failed to disconnect Stripe')
-    }
-  }
-
   const tabs: Array<{ key: SettingsTab; title: string; icon: typeof User }> = [
     { key: 'personal', title: 'Personal Information', icon: User },
     { key: 'startup', title: 'Startup Details', icon: Building2 },
     { key: 'bank', title: 'Bank Details', icon: CreditCard },
     { key: 'team', title: 'Team', icon: Users },
-    { key: 'integrations', title: 'Integrations', icon: Plug },
     { key: 'notifications', title: 'Notifications', icon: Bell },
   ]
 
@@ -775,99 +734,6 @@ function SettingsPageInner() {
       {/* Notifications Tab */}
       {activeTab === 'notifications' && (
         <NotificationsTab prefillPhone={profileData?.founderProfile?.phone} />
-      )}
-
-      {/* Integrations Tab */}
-      {activeTab === 'integrations' && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Integrations</CardTitle>
-              <CardDescription>
-                Connect your external services to automatically track metrics and goals
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Stripe Integration */}
-              <div className="border  p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold">Stripe</h3>
-                      {isLoadingIntegrations ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      ) : integrationStatus?.stripe ? (
-                        integrationStatus.stripe.status === 'active' ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-600" />
-                        )
-                      ) : null}
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Connect your Stripe account to automatically track revenue, customers, and MRR
-                    </p>
-                    {integrationStatus?.stripe && (
-                      <div className="text-sm text-muted-foreground">
-                        {integrationStatus.stripe.accountName && (
-                          <p>Account: {integrationStatus.stripe.accountName}</p>
-                        )}
-                        {integrationStatus.stripe.connectedAt && (
-                          <p>
-                            Connected:{' '}
-                            {new Date(integrationStatus.stripe.connectedAt).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    {integrationStatus?.stripe && integrationStatus.stripe.status === 'active' ? (
-                      <Button variant="outline" onClick={handleDisconnectStripe}>
-                        Disconnect
-                      </Button>
-                    ) : (
-                      <Button onClick={handleConnectStripe}>Connect Stripe</Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Accelerate ME Tracker Integration */}
-              <div className="border  p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold">Accelerate ME Tracker</h3>
-                      {trackerWebsites && trackerWebsites.length > 0 ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      ) : null}
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Add a lightweight tracking script to your website to track pageviews,
-                      sessions, and user activity
-                    </p>
-                    {trackerWebsites && trackerWebsites.length > 0 && (
-                      <div className="text-sm text-muted-foreground">
-                        <p>
-                          {trackerWebsites.length} tracker website
-                          {trackerWebsites.length !== 1 ? 's' : ''} configured
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <Button onClick={() => router.push('/founder/integrations?tab=tracker')}>
-                      {trackerWebsites && trackerWebsites.length > 0
-                        ? 'Manage Trackers'
-                        : 'Set Up Tracker'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       )}
     </div>
   )

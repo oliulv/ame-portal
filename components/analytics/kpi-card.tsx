@@ -22,6 +22,7 @@ export function KpiCard({
   color = 'var(--chart-1)',
 }: KpiCardProps) {
   const isPositive = change !== undefined && change >= 0
+  const gradientId = `sparkGrad-${title.replace(/[^a-zA-Z0-9]/g, '-')}`
 
   return (
     <Card>
@@ -53,7 +54,7 @@ export function KpiCard({
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={sparklineData}>
                   <defs>
-                    <linearGradient id={`sparkGrad-${title}`} x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={color} stopOpacity={0.3} />
                       <stop offset="100%" stopColor={color} stopOpacity={0} />
                     </linearGradient>
@@ -63,7 +64,7 @@ export function KpiCard({
                     dataKey="value"
                     stroke={color}
                     strokeWidth={1.5}
-                    fill={`url(#sparkGrad-${title})`}
+                    fill={`url(#${gradientId})`}
                     dot={false}
                     animationDuration={500}
                   />

@@ -43,6 +43,7 @@ export function MetricAreaChart({
   height = 300,
 }: MetricAreaChartProps) {
   const hasComparison = data.some((d) => d.compareValue !== undefined)
+  const gradientId = `grad-${title.replace(/[^a-zA-Z0-9]/g, '-')}`
 
   if (!data || data.length === 0) {
     return (
@@ -70,7 +71,7 @@ export function MetricAreaChart({
         <ResponsiveContainer width="100%" height={height}>
           <AreaChart data={data}>
             <defs>
-              <linearGradient id={`grad-${title}`} x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity={0.3} />
                 <stop offset="100%" stopColor={color} stopOpacity={0} />
               </linearGradient>
@@ -106,7 +107,7 @@ export function MetricAreaChart({
               dataKey="value"
               stroke={color}
               strokeWidth={2}
-              fill={`url(#grad-${title})`}
+              fill={`url(#${gradientId})`}
               dot={false}
               animationDuration={500}
             />

@@ -105,11 +105,23 @@ export default function FounderAnalyticsPage() {
     latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
   )
 
-  // Social metrics
+  // Social metrics — per platform
   const twitterFollowers = useQuery(
     api.metrics.getLatest,
     latestArgs
       ? { ...latestArgs, provider: 'apify' as const, metricKey: 'twitter_followers' }
+      : 'skip'
+  )
+  const instagramFollowers = useQuery(
+    api.metrics.getLatest,
+    latestArgs
+      ? { ...latestArgs, provider: 'apify' as const, metricKey: 'instagram_followers' }
+      : 'skip'
+  )
+  const linkedinFollowers = useQuery(
+    api.metrics.getLatest,
+    latestArgs
+      ? { ...latestArgs, provider: 'apify' as const, metricKey: 'linkedin_followers' }
       : 'skip'
   )
 
@@ -205,7 +217,11 @@ export default function FounderAnalyticsPage() {
             {hasSocial && (
               <KpiCard
                 title="Social Followers"
-                value={(twitterFollowers ?? 0).toLocaleString()}
+                value={(
+                  (twitterFollowers ?? 0) +
+                  (instagramFollowers ?? 0) +
+                  (linkedinFollowers ?? 0)
+                ).toLocaleString()}
                 color="hsl(var(--chart-4))"
               />
             )}
@@ -249,14 +265,24 @@ export default function FounderAnalyticsPage() {
           {/* Row 4: Social platform cards */}
           {hasSocial && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {integrationStatus?.social?.map((profile) => (
-                <SocialCard
-                  key={profile._id}
-                  platform={profile.platform}
-                  handle={profile.handle}
-                  followers={twitterFollowers ?? 0}
-                />
-              ))}
+              {integrationStatus?.social?.map((profile) => {
+                const followers =
+                  profile.platform === 'twitter'
+                    ? (twitterFollowers ?? 0)
+                    : profile.platform === 'instagram'
+                      ? (instagramFollowers ?? 0)
+                      : profile.platform === 'linkedin'
+                        ? (linkedinFollowers ?? 0)
+                        : 0
+                return (
+                  <SocialCard
+                    key={profile._id}
+                    platform={profile.platform}
+                    handle={profile.handle}
+                    followers={followers}
+                  />
+                )
+              })}
             </div>
           )}
 

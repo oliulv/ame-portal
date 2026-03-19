@@ -12,7 +12,7 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
  */
 export async function GET(request: Request) {
   try {
-    const { userId } = await auth()
+    const { userId, getToken } = await auth()
     if (!userId) {
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=not_authenticated`
@@ -74,6 +74,12 @@ export async function GET(request: Request) {
     })
 
     const userData = await userResponse.json()
+
+    // Authenticate the Convex client with Clerk token
+    const token = await getToken({ template: 'convex' })
+    if (token) {
+      convex.setAuth(token)
+    }
 
     // Get founder's startup ID
     const startupId = await convex.query(api.integrations.getFounderStartupId)

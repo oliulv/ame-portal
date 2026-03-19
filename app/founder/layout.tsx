@@ -92,6 +92,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
     { title: 'Announcements', href: '/founder/announcements', icon: 'Megaphone' },
     { title: 'Funding', href: '/founder/funding', icon: 'Target' },
     { title: 'Analytics', href: '/founder/analytics', icon: 'TrendingUp' },
+    { title: 'Integrations', href: '/founder/integrations', icon: 'Plug' },
     { title: 'Invoices', href: '/founder/invoices', icon: 'FileText' },
     { title: 'Perks', href: '/founder/perks', icon: 'Gift' },
     { title: 'Resources', href: '/founder/resources', icon: 'BookOpen' },
