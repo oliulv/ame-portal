@@ -57,6 +57,12 @@ const adminInvitationSchema = z.object({
 
 type AdminInvitationFormData = z.infer<typeof adminInvitationSchema>
 
+type PermissionType =
+  | 'approve_milestones'
+  | 'approve_invoices'
+  | 'send_announcements'
+  | 'manage_notifications'
+
 export default function AdminsPage() {
   const params = useParams()
   const cohortSlug = params.cohortSlug as string
@@ -191,24 +197,13 @@ export default function AdminsPage() {
     }
   }
 
-  function hasUserPermission(
-    userId: string,
-    permission:
-      | 'approve_milestones'
-      | 'approve_invoices'
-      | 'send_announcements'
-      | 'manage_notifications'
-  ) {
+  function hasUserPermission(userId: string, permission: PermissionType) {
     return permissions?.some((p) => p.userId === userId && p.permission === permission) ?? false
   }
 
   async function handleTogglePermission(
     userId: string,
-    permission:
-      | 'approve_milestones'
-      | 'approve_invoices'
-      | 'send_announcements'
-      | 'manage_notifications',
+    permission: PermissionType,
     currentlyGranted: boolean
   ) {
     if (!cohort) return

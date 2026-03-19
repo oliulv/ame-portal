@@ -310,8 +310,12 @@ export default function FounderFundingPage() {
         <CardContent className="divide-y">
           {filteredMilestones.length > 0 ? (
             filteredMilestones.map((milestone) => (
-              <Link key={milestone._id} href={`/founder/milestones/${milestone._id}`}>
-                <div className="cursor-pointer transition-colors hover:bg-muted/50">
+              <Link
+                key={milestone._id}
+                href={`/founder/milestones/${milestone._id}`}
+                className="block cursor-pointer transition-colors hover:bg-muted/50"
+              >
+                <div>
                   <div className="flex items-center justify-between gap-4 px-4 py-3">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="shrink-0">
