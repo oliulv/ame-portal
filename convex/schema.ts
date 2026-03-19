@@ -339,14 +339,13 @@ export default defineSchema({
     startupId: v.id('startups'),
     founderId: v.id('users'),
     weekOf: v.string(), // Monday ISO date (YYYY-MM-DD)
-    primaryMetric: v.object({
-      label: v.string(),
-      value: v.number(),
-    }),
-    usersTalkedTo: v.number(),
-    learnings: v.string(),
-    goalsNextWeek: v.string(),
-    biggestObstacle: v.string(),
+    highlight: v.string(), // Brief 2-4 line update — what happened, craziest thing
+    primaryMetric: v.optional(
+      v.object({
+        label: v.string(),
+        value: v.number(),
+      })
+    ),
     isFavorite: v.boolean(),
     favoritedBy: v.optional(v.id('users')),
     createdAt: v.string(),

@@ -55,50 +55,62 @@ export default function FounderAnalyticsPage() {
     return d.toISOString()
   }, [range])
 
-  const baseArgs = startupId ? { startupId, window: 'daily' as const, startDate } : null
+  // timeSeries args include startDate; getLatest args do not
+  const timeSeriesArgs = startupId ? { startupId, window: 'daily' as const, startDate } : null
+  const latestArgs = startupId ? { startupId, window: 'daily' as const } : null
 
   // Stripe metrics
   const mrr = useQuery(
     api.metrics.timeSeries,
-    baseArgs ? { ...baseArgs, provider: 'stripe' as const, metricKey: 'mrr' } : 'skip'
+    timeSeriesArgs ? { ...timeSeriesArgs, provider: 'stripe' as const, metricKey: 'mrr' } : 'skip'
   )
   const revenue = useQuery(
     api.metrics.timeSeries,
-    baseArgs ? { ...baseArgs, provider: 'stripe' as const, metricKey: 'total_revenue' } : 'skip'
+    timeSeriesArgs
+      ? { ...timeSeriesArgs, provider: 'stripe' as const, metricKey: 'total_revenue' }
+      : 'skip'
   )
 
   // Tracker metrics
   const sessions = useQuery(
     api.metrics.timeSeries,
-    baseArgs ? { ...baseArgs, provider: 'tracker' as const, metricKey: 'sessions' } : 'skip'
+    timeSeriesArgs
+      ? { ...timeSeriesArgs, provider: 'tracker' as const, metricKey: 'sessions' }
+      : 'skip'
   )
   const pageviews = useQuery(
     api.metrics.timeSeries,
-    baseArgs ? { ...baseArgs, provider: 'tracker' as const, metricKey: 'pageviews' } : 'skip'
+    timeSeriesArgs
+      ? { ...timeSeriesArgs, provider: 'tracker' as const, metricKey: 'pageviews' }
+      : 'skip'
   )
 
   // GitHub metrics
   const velocityScore = useQuery(
     api.metrics.timeSeries,
-    baseArgs ? { ...baseArgs, provider: 'github' as const, metricKey: 'velocity_score' } : 'skip'
+    timeSeriesArgs
+      ? { ...timeSeriesArgs, provider: 'github' as const, metricKey: 'velocity_score' }
+      : 'skip'
   )
   const commits = useQuery(
     api.metrics.getLatest,
-    baseArgs ? { ...baseArgs, provider: 'github' as const, metricKey: 'commits' } : 'skip'
+    latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'commits' } : 'skip'
   )
   const prsOpened = useQuery(
     api.metrics.getLatest,
-    baseArgs ? { ...baseArgs, provider: 'github' as const, metricKey: 'prs_opened' } : 'skip'
+    latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'prs_opened' } : 'skip'
   )
   const reviews = useQuery(
     api.metrics.getLatest,
-    baseArgs ? { ...baseArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
+    latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
   )
 
   // Social metrics
   const twitterFollowers = useQuery(
     api.metrics.getLatest,
-    baseArgs ? { ...baseArgs, provider: 'apify' as const, metricKey: 'twitter_followers' } : 'skip'
+    latestArgs
+      ? { ...latestArgs, provider: 'apify' as const, metricKey: 'twitter_followers' }
+      : 'skip'
   )
 
   if (isLoading) {

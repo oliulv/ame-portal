@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 function getDeadline(): Date {
   const now = new Date()
   const day = now.getUTCDay()
-  const diff = day === 0 ? 1 : 8 - day // Days until next Monday
+  const diff = day === 0 ? 1 : 8 - day
   const deadline = new Date(now)
   deadline.setUTCDate(deadline.getUTCDate() + diff)
   deadline.setUTCHours(9, 0, 0, 0)
@@ -41,12 +41,9 @@ export default function WeeklyUpdatePage() {
   const history = useQuery(api.weeklyUpdates.listForStartup, {})
   const submitUpdate = useMutation(api.weeklyUpdates.submit)
 
+  const [highlight, setHighlight] = useState('')
   const [metricLabel, setMetricLabel] = useState('')
   const [metricValue, setMetricValue] = useState('')
-  const [usersTalkedTo, setUsersTalkedTo] = useState('')
-  const [learnings, setLearnings] = useState('')
-  const [goalsNextWeek, setGoalsNextWeek] = useState('')
-  const [biggestObstacle, setBiggestObstacle] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [countdown, setCountdown] = useState('')
 
@@ -64,30 +61,29 @@ export default function WeeklyUpdatePage() {
   // Populate form with existing update
   useEffect(() => {
     if (currentUpdate) {
-      setMetricLabel(currentUpdate.primaryMetric.label)
-      setMetricValue(String(currentUpdate.primaryMetric.value))
-      setUsersTalkedTo(String(currentUpdate.usersTalkedTo))
-      setLearnings(currentUpdate.learnings)
-      setGoalsNextWeek(currentUpdate.goalsNextWeek)
-      setBiggestObstacle(currentUpdate.biggestObstacle)
+      setHighlight(currentUpdate.highlight)
+      if (currentUpdate.primaryMetric) {
+        setMetricLabel(currentUpdate.primaryMetric.label)
+        setMetricValue(String(currentUpdate.primaryMetric.value))
+      }
     }
   }, [currentUpdate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!metricLabel || !metricValue || !learnings || !goalsNextWeek || !biggestObstacle) {
-      toast.error('Please fill in all required fields')
+    if (!highlight.trim()) {
+      toast.error('Write a quick update about your week')
       return
     }
 
     setSubmitting(true)
     try {
       await submitUpdate({
-        primaryMetric: { label: metricLabel, value: Number(metricValue) },
-        usersTalkedTo: Number(usersTalkedTo) || 0,
-        learnings,
-        goalsNextWeek,
-        biggestObstacle,
+        highlight: highlight.trim(),
+        primaryMetric:
+          metricLabel && metricValue
+            ? { label: metricLabel, value: Number(metricValue) }
+            : undefined,
       })
       toast.success(currentUpdate ? 'Update saved' : 'Weekly update submitted!')
     } catch (error) {
@@ -101,7 +97,7 @@ export default function WeeklyUpdatePage() {
     return (
       <div className="space-y-6">
         <Skeleton className="h-9 w-48" />
-        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-48 w-full" />
       </div>
     )
   }
@@ -111,7 +107,7 @@ export default function WeeklyUpdatePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight font-display">Weekly Update</h1>
-          <p className="text-muted-foreground">Share your progress with the cohort</p>
+          <p className="text-muted-foreground">What happened this week?</p>
         </div>
         <div className="flex items-center gap-3">
           {(streak ?? 0) > 0 && (
@@ -131,30 +127,48 @@ export default function WeeklyUpdatePage() {
         <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
           <CheckCircle className="h-4 w-4 text-green-600" />
           <span className="text-sm text-green-700 dark:text-green-400">
-            Update submitted. You can edit until the deadline.
+            Submitted. You can edit until the deadline.
           </span>
         </div>
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle>This Week&apos;s Update</CardTitle>
+          <CardTitle>This Week</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="highlight">What did you ship, learn, or discover this week? *</Label>
+              <Textarea
+                id="highlight"
+                placeholder="We landed our first paying customer, shipped v2 of the onboarding flow, and discovered our CAC is 3x lower via LinkedIn than Google..."
+                value={highlight}
+                onChange={(e) => setHighlight(e.target.value)}
+                disabled={isPastDeadline}
+                className="min-h-[100px]"
+                maxLength={500}
+              />
+              <p className="text-xs text-muted-foreground text-right">{highlight.length}/500</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="metricLabel">Primary Metric Label *</Label>
+                <Label htmlFor="metricLabel" className="text-muted-foreground">
+                  Key metric (optional)
+                </Label>
                 <Input
                   id="metricLabel"
-                  placeholder="e.g. MRR, Users, Revenue"
+                  placeholder="e.g. MRR, Users"
                   value={metricLabel}
                   onChange={(e) => setMetricLabel(e.target.value)}
                   disabled={isPastDeadline}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="metricValue">Metric Value *</Label>
+                <Label htmlFor="metricValue" className="text-muted-foreground">
+                  Value
+                </Label>
                 <Input
                   id="metricValue"
                   type="number"
@@ -164,54 +178,6 @@ export default function WeeklyUpdatePage() {
                   disabled={isPastDeadline}
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="usersTalkedTo">Users / Customers Talked To</Label>
-              <Input
-                id="usersTalkedTo"
-                type="number"
-                placeholder="0"
-                value={usersTalkedTo}
-                onChange={(e) => setUsersTalkedTo(e.target.value)}
-                disabled={isPastDeadline}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="learnings">Key Learnings *</Label>
-              <Textarea
-                id="learnings"
-                placeholder="What did you learn this week?"
-                value={learnings}
-                onChange={(e) => setLearnings(e.target.value)}
-                disabled={isPastDeadline}
-                className="min-h-[100px]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="goalsNextWeek">Goals for Next Week *</Label>
-              <Textarea
-                id="goalsNextWeek"
-                placeholder="What are your top priorities?"
-                value={goalsNextWeek}
-                onChange={(e) => setGoalsNextWeek(e.target.value)}
-                disabled={isPastDeadline}
-                className="min-h-[100px]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="biggestObstacle">Biggest Obstacle *</Label>
-              <Textarea
-                id="biggestObstacle"
-                placeholder="What's blocking your progress?"
-                value={biggestObstacle}
-                onChange={(e) => setBiggestObstacle(e.target.value)}
-                disabled={isPastDeadline}
-                className="min-h-[80px]"
-              />
             </div>
 
             <Button type="submit" disabled={submitting || isPastDeadline}>
@@ -224,35 +190,29 @@ export default function WeeklyUpdatePage() {
 
       {/* Previous updates */}
       {history && history.length > 0 && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <h2 className="text-lg font-semibold">Previous Updates</h2>
           {history.map((update) => (
             <Card key={update._id} className="opacity-80">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">Week of {update.weekOf}</CardTitle>
-                  <div className="flex items-center gap-2">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-xs text-muted-foreground mb-1">Week of {update.weekOf}</p>
+                    <p className="text-sm">{update.highlight}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
                     {update.isFavorite && (
                       <Badge variant="secondary" className="text-xs">
-                        Admin Favorite
+                        Favourite
                       </Badge>
                     )}
-                    <Badge variant="outline" className="text-xs">
-                      {update.primaryMetric.label}: {update.primaryMetric.value.toLocaleString()}
-                    </Badge>
+                    {update.primaryMetric && (
+                      <Badge variant="outline" className="text-xs">
+                        {update.primaryMetric.label}: {update.primaryMetric.value.toLocaleString()}
+                      </Badge>
+                    )}
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>
-                  <strong className="text-foreground">Learnings:</strong> {update.learnings}
-                </p>
-                <p>
-                  <strong className="text-foreground">Goals:</strong> {update.goalsNextWeek}
-                </p>
-                <p>
-                  <strong className="text-foreground">Obstacle:</strong> {update.biggestObstacle}
-                </p>
               </CardContent>
             </Card>
           ))}

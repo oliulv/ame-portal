@@ -19,14 +19,13 @@ function getMonday(date: Date): string {
  */
 export const submit = mutation({
   args: {
-    primaryMetric: v.object({
-      label: v.string(),
-      value: v.number(),
-    }),
-    usersTalkedTo: v.number(),
-    learnings: v.string(),
-    goalsNextWeek: v.string(),
-    biggestObstacle: v.string(),
+    highlight: v.string(),
+    primaryMetric: v.optional(
+      v.object({
+        label: v.string(),
+        value: v.number(),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
@@ -54,22 +53,16 @@ export const submit = mutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
+        highlight: args.highlight,
         primaryMetric: args.primaryMetric,
-        usersTalkedTo: args.usersTalkedTo,
-        learnings: args.learnings,
-        goalsNextWeek: args.goalsNextWeek,
-        biggestObstacle: args.biggestObstacle,
       })
     } else {
       await ctx.db.insert('weeklyUpdates', {
         startupId,
         founderId: user._id,
         weekOf,
+        highlight: args.highlight,
         primaryMetric: args.primaryMetric,
-        usersTalkedTo: args.usersTalkedTo,
-        learnings: args.learnings,
-        goalsNextWeek: args.goalsNextWeek,
-        biggestObstacle: args.biggestObstacle,
         isFavorite: false,
         createdAt: now.toISOString(),
       })

@@ -178,54 +178,6 @@ export const syncMetricsForStartup = action({
 })
 
 /**
- * Process a Stripe webhook event — public mutation used by Next.js webhook route.
- * Handles idempotency and schedules metric sync.
- */
-export const processStripeWebhook = mutation({
-  args: {
-    stripeEventId: v.string(),
-    eventType: v.string(),
-    accountId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    // Check idempotency
-    const existing = await ctx.db
-      .query('stripeWebhookEvents')
-      .withIndex('by_stripeEventId', (q) => q.eq('stripeEventId', args.stripeEventId))
-      .first()
-    if (existing) return // Already processed
-
-    // Record the event
-    await ctx.db.insert('stripeWebhookEvents', {
-      stripeEventId: args.stripeEventId,
-      type: args.eventType,
-      processedAt: new Date().toISOString(),
-    })
-
-    // Find the startup connection for this Stripe account
-    if (!args.accountId) return
-
-    const connection = await ctx.db
-      .query('integrationConnections')
-      .filter((q) =>
-        q.and(
-          q.eq(q.field('provider'), 'stripe'),
-          q.eq(q.field('accountId'), args.accountId),
-          q.eq(q.field('isActive'), true)
-        )
-      )
-      .first()
-
-    if (!connection) return
-
-    // Schedule a metric resync for this startup
-    await ctx.scheduler.runAfter(0, internal.metrics.fetchStripeMetrics, {
-      startupId: connection.startupId,
-    })
-  },
-})
-
-/**
  * Auto-paginate a Stripe list endpoint, following `has_more` cursors.
  */
 async function paginateStripe<T extends { id: string }>(

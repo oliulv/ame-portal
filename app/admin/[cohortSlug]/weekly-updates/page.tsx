@@ -21,13 +21,19 @@ function getMonday(date: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-function getRecentWeeks(count: number): string[] {
+// Weekly updates launched 2026-03-16 — only show weeks from then onwards
+const WEEKLY_UPDATES_START = '2026-03-16'
+
+function getAvailableWeeks(): string[] {
   const weeks: string[] = []
   const now = new Date()
-  for (let i = 0; i < count; i++) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i * 7)
-    weeks.push(getMonday(d))
+  const current = getMonday(now)
+  // Walk backwards from current week, stop at launch week
+  const d = new Date(current + 'T00:00:00Z')
+  const start = new Date(WEEKLY_UPDATES_START + 'T00:00:00Z')
+  while (d >= start) {
+    weeks.push(d.toISOString().slice(0, 10))
+    d.setDate(d.getDate() - 7)
   }
   return weeks
 }
@@ -37,7 +43,7 @@ export default function AdminWeeklyUpdatesPage() {
   const cohortSlug = params.cohortSlug as string
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
 
-  const weeks = useMemo(() => getRecentWeeks(12), [])
+  const weeks = useMemo(() => getAvailableWeeks(), [])
   const [selectedWeek, setSelectedWeek] = useState(weeks[0])
 
   const updates = useQuery(
@@ -132,20 +138,24 @@ export default function AdminWeeklyUpdatesPage() {
         <div className="space-y-4">
           {updates.map((update) => (
             <Card key={update._id} className={update.isFavorite ? 'ring-2 ring-yellow-400' : ''}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <CardTitle className="text-base">{update.startupName}</CardTitle>
-                    <Badge variant="outline">
-                      {update.primaryMetric.label}: {update.primaryMetric.value.toLocaleString()}
-                    </Badge>
-                    {update.usersTalkedTo > 0 && (
-                      <Badge variant="secondary">{update.usersTalkedTo} users talked to</Badge>
-                    )}
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-sm font-semibold">{update.startupName}</span>
+                      {update.primaryMetric && (
+                        <Badge variant="outline" className="text-xs">
+                          {update.primaryMetric.label}:{' '}
+                          {update.primaryMetric.value.toLocaleString()}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{update.highlight}</p>
                   </div>
                   <Button
                     variant={update.isFavorite ? 'default' : 'outline'}
                     size="sm"
+                    className="shrink-0"
                     onClick={() => handleToggleFavorite(update._id, update.isFavorite)}
                   >
                     {update.isFavorite ? (
@@ -154,20 +164,6 @@ export default function AdminWeeklyUpdatesPage() {
                       <StarOff className="h-4 w-4" />
                     )}
                   </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div>
-                  <p className="font-medium text-foreground mb-1">Key Learnings</p>
-                  <p className="text-muted-foreground">{update.learnings}</p>
-                </div>
-                <div>
-                  <p className="font-medium text-foreground mb-1">Goals for Next Week</p>
-                  <p className="text-muted-foreground">{update.goalsNextWeek}</p>
-                </div>
-                <div>
-                  <p className="font-medium text-foreground mb-1">Biggest Obstacle</p>
-                  <p className="text-muted-foreground">{update.biggestObstacle}</p>
                 </div>
               </CardContent>
             </Card>

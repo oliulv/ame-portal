@@ -19,6 +19,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { z } from 'zod'
 import {
   CreditCard,
@@ -32,6 +33,8 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Github,
+  Share2,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
@@ -46,11 +49,17 @@ const trackerWebsiteSchema = z.object({
   domain: z.string().optional(),
 })
 
+const socialProfileSchema = z.object({
+  handle: z.string().min(1, 'Handle is required'),
+  profileUrl: z.string().optional(),
+})
+
 type StripeConnectFormData = z.infer<typeof stripeConnectSchema>
 type TrackerWebsiteFormData = z.infer<typeof trackerWebsiteSchema>
+type SocialProfileFormData = z.infer<typeof socialProfileSchema>
 
-type IntegrationTab = 'stripe' | 'tracker'
-const validIntegrationTabs: IntegrationTab[] = ['stripe', 'tracker']
+type IntegrationTab = 'stripe' | 'tracker' | 'github' | 'social'
+const validIntegrationTabs: IntegrationTab[] = ['stripe', 'tracker', 'github', 'social']
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -69,20 +78,8 @@ export default function IntegrationsPage() {
     <Suspense
       fallback={
         <div className="space-y-6">
-          <div>
-            <Skeleton className="h-9 w-48 mb-2" />
-            <Skeleton className="h-5 w-64" />
-          </div>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-              <Skeleton className="h-4 w-48" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </CardContent>
-          </Card>
+          <Skeleton className="h-9 w-48 mb-2" />
+          <Skeleton className="h-64 w-full" />
         </div>
       }
     >
@@ -105,16 +102,19 @@ function IntegrationsPageInner() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [newTrackerId, setNewTrackerId] = useState<string | null>(null)
   const newTrackerRef = useRef<HTMLDivElement>(null)
+  const [savingSocial, setSavingSocial] = useState<string | null>(null)
 
   // Convex queries
   const trackerWebsites = useQuery(api.trackerWebsites.list)
+  const fullStatus = useQuery(api.integrations.fullStatus)
 
   // Convex mutations and actions
   const createTrackerWebsite = useMutation(api.trackerWebsites.create)
   const removeTrackerWebsite = useMutation(api.trackerWebsites.remove)
   const connectStripe = useAction(api.integrations.connectStripe)
+  const disconnectGithub = useMutation(api.integrations.disconnectGithub)
+  const saveSocialProfile = useMutation(api.integrations.saveSocialProfile)
 
-  // Auto-scroll to newly created tracker
   useEffect(() => {
     if (newTrackerId && trackerWebsites?.some((w) => w._id === newTrackerId)) {
       newTrackerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -124,30 +124,49 @@ function IntegrationsPageInner() {
 
   const stripeForm = useForm<StripeConnectFormData>({
     resolver: zodResolver(stripeConnectSchema),
-    defaultValues: {
-      api_key: '',
-      account_id: '',
-    },
+    defaultValues: { api_key: '', account_id: '' },
   })
 
   const trackerForm = useForm<TrackerWebsiteFormData>({
     resolver: zodResolver(trackerWebsiteSchema),
-    defaultValues: {
-      name: '',
-      domain: '',
-    },
+    defaultValues: { name: '', domain: '' },
   })
+
+  const twitterForm = useForm<SocialProfileFormData>({
+    resolver: zodResolver(socialProfileSchema),
+    defaultValues: { handle: '', profileUrl: '' },
+  })
+  const linkedinForm = useForm<SocialProfileFormData>({
+    resolver: zodResolver(socialProfileSchema),
+    defaultValues: { handle: '', profileUrl: '' },
+  })
+  const instagramForm = useForm<SocialProfileFormData>({
+    resolver: zodResolver(socialProfileSchema),
+    defaultValues: { handle: '', profileUrl: '' },
+  })
+
+  // Populate social forms with existing data
+  useEffect(() => {
+    if (fullStatus?.social) {
+      for (const profile of fullStatus.social) {
+        if (profile.platform === 'twitter') {
+          twitterForm.reset({ handle: profile.handle, profileUrl: profile.profileUrl ?? '' })
+        } else if (profile.platform === 'linkedin') {
+          linkedinForm.reset({ handle: profile.handle, profileUrl: profile.profileUrl ?? '' })
+        } else if (profile.platform === 'instagram') {
+          instagramForm.reset({ handle: profile.handle, profileUrl: profile.profileUrl ?? '' })
+        }
+      }
+    }
+  }, [fullStatus?.social, twitterForm, linkedinForm, instagramForm])
 
   const handleCreateTracker = async (data: TrackerWebsiteFormData) => {
     setIsCreatingTracker(true)
     try {
-      const id = await createTrackerWebsite({
-        name: data.name,
-        domain: data.domain || undefined,
-      })
+      const id = await createTrackerWebsite({ name: data.name, domain: data.domain || undefined })
       setNewTrackerId(id)
       trackerForm.reset()
-      toast.success('Tracker website created successfully')
+      toast.success('Tracker website created')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create tracker website')
     } finally {
@@ -187,10 +206,8 @@ function IntegrationsPageInner() {
   const handleConnectStripe = async (data: StripeConnectFormData) => {
     setIsConnectingStripe(true)
     try {
-      await connectStripe({
-        apiKey: data.api_key,
-      })
-      toast.success('Stripe connected successfully')
+      await connectStripe({ apiKey: data.api_key })
+      toast.success('Stripe connected')
       router.push('/founder/integrations?tab=stripe')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to connect Stripe')
@@ -199,131 +216,171 @@ function IntegrationsPageInner() {
     }
   }
 
+  const handleSaveSocial = async (
+    platform: 'twitter' | 'linkedin' | 'instagram',
+    data: SocialProfileFormData
+  ) => {
+    setSavingSocial(platform)
+    try {
+      await saveSocialProfile({
+        platform,
+        handle: data.handle.replace(/^@/, ''),
+        profileUrl: data.profileUrl || undefined,
+      })
+      toast.success(`${platform.charAt(0).toUpperCase() + platform.slice(1)} profile saved`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSavingSocial(null)
+    }
+  }
+
+  const githubClientId = process.env.NEXT_PUBLIC_GITHUB_APP_CLIENT_ID
+
+  const tabItems: {
+    key: IntegrationTab
+    label: string
+    icon: React.ReactNode
+    connected: boolean
+  }[] = [
+    {
+      key: 'stripe',
+      label: 'Stripe',
+      icon: <CreditCard className="h-4 w-4" />,
+      connected: fullStatus?.stripe?.status === 'active',
+    },
+    {
+      key: 'tracker',
+      label: 'Tracker',
+      icon: <Code className="h-4 w-4" />,
+      connected: (trackerWebsites?.length ?? 0) > 0,
+    },
+    {
+      key: 'github',
+      label: 'GitHub',
+      icon: <Github className="h-4 w-4" />,
+      connected: fullStatus?.github?.status === 'active',
+    },
+    {
+      key: 'social',
+      label: 'Social',
+      icon: <Share2 className="h-4 w-4" />,
+      connected: (fullStatus?.social?.length ?? 0) > 0,
+    },
+  ]
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight font-display">Integrations</h1>
-        <p className="text-muted-foreground">
-          Connect your external services to track metrics automatically
-        </p>
+        <p className="text-muted-foreground">Connect your tools to track metrics automatically</p>
       </div>
 
       {/* Tabs */}
       <div className="border-b">
         <nav className="flex gap-4">
-          <button
-            onClick={() => setActiveTab('stripe')}
-            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors cursor-pointer ${
-              activeTab === 'stripe'
-                ? 'border-primary text-primary font-medium'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <CreditCard className="h-4 w-4" />
-            Stripe
-          </button>
-          <button
-            onClick={() => setActiveTab('tracker')}
-            className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors cursor-pointer ${
-              activeTab === 'tracker'
-                ? 'border-primary text-primary font-medium'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Code className="h-4 w-4" />
-            Accelerate ME Tracker
-          </button>
+          {tabItems.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors cursor-pointer ${
+                activeTab === tab.key
+                  ? 'border-primary text-primary font-medium'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+              {tab.connected && <span className="h-2 w-2 rounded-full bg-green-500" />}
+            </button>
+          ))}
         </nav>
       </div>
 
-      {/* Stripe Form */}
+      {/* ── Stripe Tab ────────────────────────────────────── */}
       {activeTab === 'stripe' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Connect Stripe</CardTitle>
-            <CardDescription>
-              Enter your Stripe API key to automatically track revenue, customers, and MRR
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...stripeForm}>
-              <form
-                onSubmit={stripeForm.handleSubmit(handleConnectStripe)}
-                className="space-y-6"
-                autoComplete="off"
-              >
-                <FormField
-                  control={stripeForm.control}
-                  name="api_key"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Stripe Secret Key</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="password"
-                          placeholder="sk_live_..."
-                          autoComplete="new-password"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Your Stripe secret key (starts with sk_live_ or sk_test_)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={stripeForm.control}
-                  name="account_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Account ID (Optional)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="acct_..." autoComplete="off" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Your Stripe account ID (optional, will be auto-detected)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={isConnectingStripe}>
-                    {isConnectingStripe ? 'Connecting...' : 'Connect Stripe'}
-                  </Button>
+        <div className="space-y-4">
+          {fullStatus?.stripe ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <div>
+                      <p className="font-medium">
+                        Connected
+                        {fullStatus.stripe.accountName ? ` — ${fullStatus.stripe.accountName}` : ''}
+                      </p>
+                      {fullStatus.stripe.lastSyncedAt && (
+                        <p className="text-xs text-muted-foreground">
+                          Last synced {formatRelativeTime(fullStatus.stripe.lastSyncedAt)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Badge variant="secondary">Active</Badge>
                 </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Connect Stripe</CardTitle>
+                <CardDescription>
+                  Enter your Stripe API key to track revenue, MRR, and customers
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Form {...stripeForm}>
+                  <form
+                    onSubmit={stripeForm.handleSubmit(handleConnectStripe)}
+                    className="space-y-4"
+                  >
+                    <FormField
+                      control={stripeForm.control}
+                      name="api_key"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Stripe Secret Key</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="sk_live_..."
+                              autoComplete="new-password"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription>Starts with sk_live_ or sk_test_</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button type="submit" disabled={isConnectingStripe}>
+                      {isConnectingStripe ? 'Connecting...' : 'Connect Stripe'}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
-      {/* Tracker Tab */}
+      {/* ── Tracker Tab ───────────────────────────────────── */}
       {activeTab === 'tracker' && (
         <div className="space-y-6">
-          {/* Existing Tracker Websites (shown first) */}
           {trackerWebsites && trackerWebsites.length > 0 && (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold">Your Tracker Websites</h2>
               {trackerWebsites.map((website) => {
                 const snippet = getTrackerSnippet(website._id)
                 const isNew = website._id === newTrackerId
                 return (
-                  <Card
-                    key={website._id}
-                    id={`tracker-${website._id}`}
-                    ref={isNew ? newTrackerRef : undefined}
-                  >
+                  <Card key={website._id} ref={isNew ? newTrackerRef : undefined}>
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div>
-                            <CardTitle>{website.name}</CardTitle>
+                            <CardTitle className="text-base">{website.name}</CardTitle>
                             {website.domain && <CardDescription>{website.domain}</CardDescription>}
                           </div>
                           {website.lastEventAt ? (
@@ -336,9 +393,7 @@ function IntegrationsPageInner() {
                           ) : (
                             <div className="flex items-center gap-1.5 text-amber-600">
                               <Clock className="h-4 w-4" />
-                              <span className="text-xs font-medium">
-                                Waiting for first event...
-                              </span>
+                              <span className="text-xs font-medium">Waiting for first event</span>
                             </div>
                           )}
                         </div>
@@ -352,36 +407,22 @@ function IntegrationsPageInner() {
                         </Button>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Tracking Script</label>
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 px-3 py-2 bg-muted  text-sm break-all">
-                            {snippet}
-                          </code>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => copyToClipboard(snippet, website._id)}
-                          >
-                            {copiedId === website._id ? (
-                              <Check className="h-4 w-4" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                        {!trackerBaseUrl && (
-                          <div className="mt-2 flex items-center gap-2 text-amber-600 text-xs">
-                            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                            <span>
-                              Replace <code className="font-mono">YOUR_DOMAIN</code> with your
-                              production URL, or set{' '}
-                              <code className="font-mono">NEXT_PUBLIC_APP_URL</code> in your
-                              environment variables.
-                            </span>
-                          </div>
-                        )}
+                    <CardContent>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 px-3 py-2 bg-muted text-sm break-all">
+                          {snippet}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(snippet, website._id)}
+                        >
+                          {copiedId === website._id ? (
+                            <Check className="h-4 w-4" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -390,164 +431,309 @@ function IntegrationsPageInner() {
             </div>
           )}
 
-          {/* Create Tracker Website */}
           <Card>
             <CardHeader>
-              <CardTitle>Create Tracker Website</CardTitle>
-              <CardDescription>
-                Create a new tracker website to get a tracking script you can add to your site
-              </CardDescription>
+              <CardTitle>Add Tracker Website</CardTitle>
+              <CardDescription>Get a tracking script to add to your site</CardDescription>
             </CardHeader>
             <CardContent>
               <Form {...trackerForm}>
                 <form
                   onSubmit={trackerForm.handleSubmit(handleCreateTracker)}
-                  className="space-y-6"
+                  className="space-y-4"
                 >
-                  <FormField
-                    control={trackerForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Website Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="My Marketing Site" {...field} />
-                        </FormControl>
-                        <FormDescription>A friendly name to identify this website</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={trackerForm.control}
-                    name="domain"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Domain (Optional)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="example.com" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          The domain where you&apos;ll install the tracker (optional)
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="flex justify-end">
-                    <Button type="submit" disabled={isCreatingTracker}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      {isCreatingTracker ? 'Creating...' : 'Create Tracker Website'}
-                    </Button>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={trackerForm.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Website Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="My Marketing Site" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={trackerForm.control}
+                      name="domain"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Domain (optional)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="example.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
+                  <Button type="submit" disabled={isCreatingTracker}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    {isCreatingTracker ? 'Creating...' : 'Create'}
+                  </Button>
                 </form>
               </Form>
             </CardContent>
           </Card>
 
-          {/* Installation Guide */}
+          {/* Installation guide */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-primary" />
-                <CardTitle>How to Install the Tracker</CardTitle>
+                <CardTitle>Installation Guide</CardTitle>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>1. Create a tracker website above to get your tracking script.</p>
+              <p>
+                2. Paste the script into your website&apos;s{' '}
+                <code className="px-1 py-0.5 bg-muted text-xs font-mono">&lt;head&gt;</code> tag.
+              </p>
+              <p>
+                3. Visit your{' '}
+                <Link href="/founder/analytics" className="underline text-primary">
+                  Analytics page
+                </Link>{' '}
+                to see data within minutes.
+              </p>
+              <details className="mt-3">
+                <summary className="cursor-pointer font-medium text-foreground flex items-center gap-1">
+                  <ChevronRight className="h-4 w-4" />
+                  Track custom events
+                </summary>
+                <code className="block px-3 py-2 bg-muted text-xs mt-2 font-mono">
+                  {`window.accelerateTracker.track('event-name', { key: 'value' })`}
+                </code>
+              </details>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── GitHub Tab ────────────────────────────────────── */}
+      {activeTab === 'github' && (
+        <div className="space-y-4">
+          {fullStatus?.github ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <div>
+                      <p className="font-medium">Connected — @{fullStatus.github.accountName}</p>
+                      {fullStatus.github.lastSyncedAt && (
+                        <p className="text-xs text-muted-foreground">
+                          Last synced {formatRelativeTime(fullStatus.github.lastSyncedAt)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">Active</Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        await disconnectGithub()
+                        toast.success('GitHub disconnected')
+                      }}
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Connect GitHub</CardTitle>
+                <CardDescription>
+                  Track development velocity — commits, PRs, and code reviews are scored on the
+                  leaderboard
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Each founder on your team should connect their own GitHub account. Contributions
+                  are averaged per founder for fair scoring.
+                </p>
+                {githubClientId ? (
+                  <Button asChild>
+                    <a
+                      href={`https://github.com/login/oauth/authorize?client_id=${githubClientId}&scope=read:user`}
+                    >
+                      <Github className="mr-2 h-4 w-4" />
+                      Connect with GitHub
+                    </a>
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-2 text-amber-600 text-sm">
+                    <AlertCircle className="h-4 w-4" />
+                    GitHub App not configured yet. Ask your admin to set up the GitHub integration.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">How GitHub Scoring Works</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-2">
+              <p>Your Git Velocity score is calculated from the last 4 weeks of activity:</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex justify-between bg-muted px-3 py-2">
+                  <span>Commit</span>
+                  <span className="font-mono font-medium">10 pts</span>
+                </div>
+                <div className="flex justify-between bg-muted px-3 py-2">
+                  <span>PR opened</span>
+                  <span className="font-mono font-medium">25 pts</span>
+                </div>
+                <div className="flex justify-between bg-muted px-3 py-2">
+                  <span>PR merged</span>
+                  <span className="font-mono font-medium">50 pts</span>
+                </div>
+                <div className="flex justify-between bg-muted px-3 py-2">
+                  <span>PR review</span>
+                  <span className="font-mono font-medium">30 pts</span>
+                </div>
+              </div>
+              <p>For startups with multiple founders, the velocity score is averaged per person.</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Social Tab ────────────────────────────────────── */}
+      {activeTab === 'social' && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Social Media Profiles</CardTitle>
               <CardDescription>
-                Follow these simple steps to add the Accelerate ME Tracker to your website
+                Add your handles — follower growth and engagement are tracked daily for the
+                leaderboard
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-                    1
+            <CardContent className="space-y-6">
+              {/* Twitter / X */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium">X (Twitter)</h3>
+                <Form {...twitterForm}>
+                  <form
+                    onSubmit={twitterForm.handleSubmit((data) => handleSaveSocial('twitter', data))}
+                    className="flex gap-3 items-end"
+                  >
+                    <FormField
+                      control={twitterForm.control}
+                      name="handle"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormControl>
+                            <Input placeholder="@yourhandle" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button type="submit" size="sm" disabled={savingSocial === 'twitter'}>
+                      {savingSocial === 'twitter' ? 'Saving...' : 'Save'}
+                    </Button>
+                  </form>
+                </Form>
+                {fullStatus?.social?.find((p) => p.platform === 'twitter') && (
+                  <div className="flex items-center gap-1.5 text-green-600 text-xs">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Tracking @{fullStatus.social.find((p) => p.platform === 'twitter')?.handle}
                   </div>
-                  <div className="flex-1 pt-0.5">
-                    <p className="font-medium">Create a Tracker Website</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Fill out the form above to create a new tracker website. Give it a name and
-                      optionally specify the domain.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-                    2
-                  </div>
-                  <div className="flex-1 pt-0.5">
-                    <p className="font-medium">Copy Your Tracking Script</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      After creating a tracker website, you&apos;ll see a tracking script. Click the
-                      copy button to copy it to your clipboard.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-                    3
-                  </div>
-                  <div className="flex-1 pt-0.5">
-                    <p className="font-medium">Paste Into Your Website</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Paste the script into the{' '}
-                      <code className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">
-                        &lt;head&gt;
-                      </code>{' '}
-                      section of your HTML, or before the closing{' '}
-                      <code className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">
-                        &lt;/body&gt;
-                      </code>{' '}
-                      tag.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-                    4
-                  </div>
-                  <div className="flex-1 pt-0.5">
-                    <p className="font-medium">View Your Analytics</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Once installed, visit your{' '}
-                      <Link
-                        href="/founder/analytics"
-                        className="underline font-medium text-primary hover:text-primary/80"
-                      >
-                        Analytics page
-                      </Link>{' '}
-                      to see pageviews, sessions, and user metrics appear within a few minutes.
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
 
-              <div className="mt-4 pt-4 border-t">
-                <details className="group">
-                  <summary className="cursor-pointer text-sm font-medium flex items-center gap-2 hover:text-foreground">
-                    <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90 text-muted-foreground" />
-                    Advanced: Track Custom Events
-                  </summary>
-                  <div className="mt-3 ml-6 space-y-2 text-sm text-muted-foreground">
-                    <p>You can track custom events by adding attributes to HTML elements:</p>
-                    <code className="block px-3 py-2 bg-muted rounded text-xs mt-2 font-mono">
-                      {`<button data-accelerate-event="signup-button" data-accelerate-event-button-type="primary">`}
-                      <br />
-                      {`  Sign Up`}
-                      <br />
-                      {`</button>`}
-                    </code>
-                    <p className="mt-2">Or use JavaScript:</p>
-                    <code className="block px-3 py-2 bg-muted rounded text-xs mt-2 font-mono">
-                      {`window.accelerateTracker.track('event-name', { custom: 'data' });`}
-                    </code>
+              {/* LinkedIn */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium">LinkedIn</h3>
+                <Form {...linkedinForm}>
+                  <form
+                    onSubmit={linkedinForm.handleSubmit((data) =>
+                      handleSaveSocial('linkedin', data)
+                    )}
+                    className="flex gap-3 items-end"
+                  >
+                    <FormField
+                      control={linkedinForm.control}
+                      name="handle"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormControl>
+                            <Input placeholder="company-slug or full URL" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button type="submit" size="sm" disabled={savingSocial === 'linkedin'}>
+                      {savingSocial === 'linkedin' ? 'Saving...' : 'Save'}
+                    </Button>
+                  </form>
+                </Form>
+                {fullStatus?.social?.find((p) => p.platform === 'linkedin') && (
+                  <div className="flex items-center gap-1.5 text-green-600 text-xs">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Tracking {fullStatus.social.find((p) => p.platform === 'linkedin')?.handle}
                   </div>
-                </details>
+                )}
               </div>
+
+              {/* Instagram */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium">Instagram</h3>
+                <Form {...instagramForm}>
+                  <form
+                    onSubmit={instagramForm.handleSubmit((data) =>
+                      handleSaveSocial('instagram', data)
+                    )}
+                    className="flex gap-3 items-end"
+                  >
+                    <FormField
+                      control={instagramForm.control}
+                      name="handle"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormControl>
+                            <Input placeholder="@yourhandle" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button type="submit" size="sm" disabled={savingSocial === 'instagram'}>
+                      {savingSocial === 'instagram' ? 'Saving...' : 'Save'}
+                    </Button>
+                  </form>
+                </Form>
+                {fullStatus?.social?.find((p) => p.platform === 'instagram') && (
+                  <div className="flex items-center gap-1.5 text-green-600 text-xs">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Tracking @{fullStatus.social.find((p) => p.platform === 'instagram')?.handle}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6 text-sm text-muted-foreground">
+              <p>
+                No login required — we scrape public profile data daily using Apify. Follower growth
+                and engagement rate are tracked week-over-week for the leaderboard.
+              </p>
             </CardContent>
           </Card>
         </div>
