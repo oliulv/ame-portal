@@ -629,7 +629,7 @@ export default function AdminsPage() {
                           }
                           className="h-4 w-4 rounded border-gray-300"
                         />
-                        Send announcements
+                        Manage comms &amp; notifications
                       </label>
                     </div>
                   )}

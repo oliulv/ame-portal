@@ -29,6 +29,52 @@ export const getMyPhone = query({
 })
 
 /**
+ * Get globally disabled notification types for the user's cohort(s).
+ * Returns a Set-like array of disabled type keys.
+ */
+export const getDisabledNotificationTypes = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireAuth(ctx)
+
+    // Find cohort IDs the user belongs to
+    const cohortIds: Id<'cohorts'>[] = []
+
+    if (user.role === 'founder') {
+      const profiles = await ctx.db
+        .query('founderProfiles')
+        .withIndex('by_userId', (q) => q.eq('userId', user._id))
+        .collect()
+      for (const p of profiles) {
+        const startup = await ctx.db.get(p.startupId)
+        if (startup) cohortIds.push(startup.cohortId)
+      }
+    } else {
+      // Admin — get assigned cohorts
+      const assignments = await ctx.db
+        .query('adminCohorts')
+        .withIndex('by_userId', (q) => q.eq('userId', user._id))
+        .collect()
+      cohortIds.push(...assignments.map((a) => a.cohortId))
+    }
+
+    // Collect all disabled types across the user's cohorts
+    const disabled = new Set<string>()
+    for (const cohortId of cohortIds) {
+      const settings = await ctx.db
+        .query('notificationSettings')
+        .withIndex('by_cohortId', (q) => q.eq('cohortId', cohortId))
+        .collect()
+      for (const s of settings) {
+        if (!s.enabled) disabled.add(s.notificationType)
+      }
+    }
+
+    return [...disabled]
+  },
+})
+
+/**
  * Request OTP verification for a SMS number.
  * Creates/updates the phone number record and sends OTP via SMS.
  */

@@ -17,6 +17,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Send,
   AlertTriangle,
   Ban,
@@ -31,7 +38,9 @@ import { toast } from 'sonner'
 import {
   NOTIFICATION_TYPES,
   ACTIVE_NOTIFICATION_TYPES,
-  type NotificationType,
+  GROUP_ORDER,
+  GROUP_LABELS,
+  groupByCategory,
 } from '@/convex/lib/notificationTypes'
 import {
   BarChart,
@@ -47,18 +56,6 @@ import { useState } from 'react'
 import type { Id } from '@/convex/_generated/dataModel'
 
 const INITIAL_VISIBLE = 5
-
-function groupByAudience(types: NotificationType[]) {
-  const groups: Record<string, NotificationType[]> = {
-    admins: [],
-    founders: [],
-    all: [],
-  }
-  for (const t of types) {
-    groups[t.audience].push(t)
-  }
-  return groups
-}
 
 const audienceLabel: Record<string, string> = {
   admins: 'Admins',
@@ -80,10 +77,15 @@ export function NotificationsTab({
 
   const [breakdownExpanded, setBreakdownExpanded] = useState(false)
   const [breakdownSearch, setBreakdownSearch] = useState('')
+  const [breakdownCategory, setBreakdownCategory] = useState<string>('all')
+  const [breakdownAudience, setBreakdownAudience] = useState<string>('all')
   const [settingsExpanded, setSettingsExpanded] = useState(false)
   const [settingsSearch, setSettingsSearch] = useState('')
+  const [settingsCategory, setSettingsCategory] = useState<string>('all')
+  const [settingsAudience, setSettingsAudience] = useState<string>('all')
   const [usersExpanded, setUsersExpanded] = useState(false)
   const [usersSearch, setUsersSearch] = useState('')
+  const [usersStatus, setUsersStatus] = useState<string>('all')
 
   const handleToggle = async (notificationType: string, enabled: boolean) => {
     try {
@@ -107,8 +109,6 @@ export function NotificationsTab({
       </div>
     )
   }
-
-  const grouped = groupByAudience(NOTIFICATION_TYPES)
 
   return (
     <div className="space-y-6">
@@ -156,31 +156,62 @@ export function NotificationsTab({
           <CardDescription>Delivery stats per notification type</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={breakdownSearch}
-              onChange={(e) => {
-                setBreakdownSearch(e.target.value)
-                setBreakdownExpanded(true)
-              }}
-              placeholder="Search notification types"
-              className="pl-9"
-            />
+          <div className="grid gap-3 md:grid-cols-[1fr_150px_150px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={breakdownSearch}
+                onChange={(e) => {
+                  setBreakdownSearch(e.target.value)
+                  setBreakdownExpanded(true)
+                }}
+                placeholder="Search types"
+                className="pl-9"
+              />
+            </div>
+            <Select value={breakdownCategory} onValueChange={setBreakdownCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {GROUP_ORDER.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {GROUP_LABELS[g]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={breakdownAudience} onValueChange={setBreakdownAudience}>
+              <SelectTrigger>
+                <SelectValue placeholder="Recipient" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All recipients</SelectItem>
+                <SelectItem value="admins">Admins</SelectItem>
+                <SelectItem value="founders">Founders</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {(() => {
             const normalizedQuery = breakdownSearch.trim().toLowerCase()
-            const filtered = ACTIVE_NOTIFICATION_TYPES.filter(
-              (t) =>
-                normalizedQuery.length === 0 ||
-                t.label.toLowerCase().includes(normalizedQuery) ||
-                t.description.toLowerCase().includes(normalizedQuery) ||
-                t.audience.toLowerCase().includes(normalizedQuery)
-            )
+            const filtered = ACTIVE_NOTIFICATION_TYPES.filter((t) => {
+              if (
+                normalizedQuery.length > 0 &&
+                !t.label.toLowerCase().includes(normalizedQuery) &&
+                !t.description.toLowerCase().includes(normalizedQuery)
+              )
+                return false
+              if (breakdownCategory !== 'all' && t.group !== breakdownCategory) return false
+              if (breakdownAudience !== 'all' && t.audience !== breakdownAudience) return false
+              return true
+            })
+            const hasFilters =
+              normalizedQuery.length > 0 ||
+              breakdownCategory !== 'all' ||
+              breakdownAudience !== 'all'
             const visible =
-              breakdownExpanded || normalizedQuery.length > 0
-                ? filtered
-                : filtered.slice(0, INITIAL_VISIBLE)
+              breakdownExpanded || hasFilters ? filtered : filtered.slice(0, INITIAL_VISIBLE)
             const hiddenCount = filtered.length - visible.length
 
             return (
@@ -223,19 +254,17 @@ export function NotificationsTab({
                     Show {hiddenCount} more
                   </Button>
                 )}
-                {breakdownExpanded &&
-                  normalizedQuery.length === 0 &&
-                  filtered.length > INITIAL_VISIBLE && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-muted-foreground"
-                      onClick={() => setBreakdownExpanded(false)}
-                    >
-                      <ChevronUp className="mr-1.5 h-4 w-4" />
-                      Show less
-                    </Button>
-                  )}
+                {breakdownExpanded && !hasFilters && filtered.length > INITIAL_VISIBLE && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground"
+                    onClick={() => setBreakdownExpanded(false)}
+                  >
+                    <ChevronUp className="mr-1.5 h-4 w-4" />
+                    Show less
+                  </Button>
+                )}
               </>
             )
           })()}
@@ -326,71 +355,110 @@ export function NotificationsTab({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={settingsSearch}
-              onChange={(e) => {
-                setSettingsSearch(e.target.value)
-                setSettingsExpanded(true)
-              }}
-              placeholder="Search notification settings"
-              className="pl-9"
-            />
+          <div className="grid gap-3 md:grid-cols-[1fr_150px_150px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={settingsSearch}
+                onChange={(e) => {
+                  setSettingsSearch(e.target.value)
+                  setSettingsExpanded(true)
+                }}
+                placeholder="Search settings"
+                className="pl-9"
+              />
+            </div>
+            <Select value={settingsCategory} onValueChange={setSettingsCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {GROUP_ORDER.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {GROUP_LABELS[g]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={settingsAudience} onValueChange={setSettingsAudience}>
+              <SelectTrigger>
+                <SelectValue placeholder="Recipient" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All recipients</SelectItem>
+                <SelectItem value="admins">Admins</SelectItem>
+                <SelectItem value="founders">Founders</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {(() => {
             const normalizedQuery = settingsSearch.trim().toLowerCase()
-            const allTypes = NOTIFICATION_TYPES.filter(
-              (t) =>
-                normalizedQuery.length === 0 ||
-                t.label.toLowerCase().includes(normalizedQuery) ||
-                t.description.toLowerCase().includes(normalizedQuery) ||
-                t.audience.toLowerCase().includes(normalizedQuery)
-            )
-            const filteredGrouped = groupByAudience(allTypes)
+            const allTypes = NOTIFICATION_TYPES.filter((t) => {
+              if (
+                normalizedQuery.length > 0 &&
+                !t.label.toLowerCase().includes(normalizedQuery) &&
+                !t.description.toLowerCase().includes(normalizedQuery)
+              )
+                return false
+              if (settingsCategory !== 'all' && t.group !== settingsCategory) return false
+              if (settingsAudience !== 'all' && t.audience !== settingsAudience) return false
+              return true
+            })
+            const groups = groupByCategory(allTypes)
             const totalCount = allTypes.length
-            const isSearching = normalizedQuery.length > 0
+            const hasFilters =
+              normalizedQuery.length > 0 || settingsCategory !== 'all' || settingsAudience !== 'all'
 
-            // Flatten to apply the global limit across groups
-            let remaining = settingsExpanded || isSearching ? Infinity : INITIAL_VISIBLE
+            // Pre-compute visible types per group with a global limit
+            const limit = settingsExpanded || hasFilters ? Infinity : INITIAL_VISIBLE
+            const visibleGroups: { group: string; label: string; types: typeof allTypes }[] = []
+            {
+              let used = 0
+              for (const { group, label, types } of groups) {
+                const take = Math.min(types.length, limit - used)
+                if (take <= 0) break
+                used += take
+                visibleGroups.push({ group, label, types: types.slice(0, take) })
+              }
+            }
 
             return (
               <>
                 <div className="space-y-6">
-                  {Object.entries(filteredGrouped).map(([audience, types]) => {
-                    if (types.length === 0 || remaining <= 0) return null
-                    const visibleTypes = types.slice(0, remaining)
-                    remaining -= visibleTypes.length
+                  {visibleGroups.map(({ group, label, types }) => (
+                    <div key={group}>
+                      <h4 className="text-sm font-semibold mb-3">{label}</h4>
+                      <div className="space-y-2">
+                        {types.map((t) => {
+                          const enabled = globalSettings[t.key] ?? true
 
-                    return (
-                      <div key={audience}>
-                        <h4 className="text-sm font-semibold mb-3">{audienceLabel[audience]}</h4>
-                        <div className="space-y-2">
-                          {visibleTypes.map((t) => {
-                            const enabled = globalSettings[t.key] ?? true
-
-                            return (
-                              <div
-                                key={t.key}
-                                className="flex items-center justify-between border p-3"
-                              >
-                                <div className="flex-1">
+                          return (
+                            <div
+                              key={t.key}
+                              className="flex items-center justify-between border p-3"
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
                                   <p className="text-sm font-medium">{t.label}</p>
-                                  <p className="text-xs text-muted-foreground">{t.description}</p>
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {audienceLabel[t.audience]}
+                                  </Badge>
                                 </div>
-                                <Switch
-                                  checked={enabled}
-                                  onCheckedChange={(checked) => handleToggle(t.key, checked)}
-                                />
+                                <p className="text-xs text-muted-foreground">{t.description}</p>
                               </div>
-                            )
-                          })}
-                        </div>
+                              <Switch
+                                checked={enabled}
+                                onCheckedChange={(checked) => handleToggle(t.key, checked)}
+                              />
+                            </div>
+                          )
+                        })}
                       </div>
-                    )
-                  })}
+                    </div>
+                  ))}
                 </div>
-                {!settingsExpanded && !isSearching && totalCount > INITIAL_VISIBLE && (
+                {!settingsExpanded && !hasFilters && totalCount > INITIAL_VISIBLE && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -401,7 +469,7 @@ export function NotificationsTab({
                     Show {totalCount - INITIAL_VISIBLE} more
                   </Button>
                 )}
-                {settingsExpanded && !isSearching && totalCount > INITIAL_VISIBLE && (
+                {settingsExpanded && !hasFilters && totalCount > INITIAL_VISIBLE && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -431,30 +499,48 @@ export function NotificationsTab({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={usersSearch}
-              onChange={(e) => {
-                setUsersSearch(e.target.value)
-                setUsersExpanded(true)
-              }}
-              placeholder="Search users"
-              className="pl-9"
-            />
+          <div className="grid gap-3 md:grid-cols-[1fr_150px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={usersSearch}
+                onChange={(e) => {
+                  setUsersSearch(e.target.value)
+                  setUsersExpanded(true)
+                }}
+                placeholder="Search users"
+                className="pl-9"
+              />
+            </div>
+            <Select value={usersStatus} onValueChange={setUsersStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All users</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {(() => {
             const normalizedQuery = usersSearch.trim().toLowerCase()
             const allUsers = [...userStatus.admins, ...userStatus.founders]
-            const filtered = allUsers.filter(
-              (u) =>
-                normalizedQuery.length === 0 ||
-                u.name.toLowerCase().includes(normalizedQuery) ||
-                u.role.toLowerCase().includes(normalizedQuery)
-            )
-            const isSearching = normalizedQuery.length > 0
+            const filtered = allUsers.filter((u) => {
+              if (
+                normalizedQuery.length > 0 &&
+                !u.name.toLowerCase().includes(normalizedQuery) &&
+                !u.role.toLowerCase().includes(normalizedQuery)
+              )
+                return false
+              if (usersStatus === 'active' && !(u.isVerified && u.notificationsEnabled))
+                return false
+              if (usersStatus === 'inactive' && u.isVerified && u.notificationsEnabled) return false
+              return true
+            })
+            const hasFilters = normalizedQuery.length > 0 || usersStatus !== 'all'
             const visible =
-              usersExpanded || isSearching ? filtered : filtered.slice(0, INITIAL_VISIBLE)
+              usersExpanded || hasFilters ? filtered : filtered.slice(0, INITIAL_VISIBLE)
             const hiddenCount = filtered.length - visible.length
 
             return (
@@ -512,7 +598,7 @@ export function NotificationsTab({
                     Show {hiddenCount} more
                   </Button>
                 )}
-                {usersExpanded && !isSearching && filtered.length > INITIAL_VISIBLE && (
+                {usersExpanded && !hasFilters && filtered.length > INITIAL_VISIBLE && (
                   <Button
                     variant="ghost"
                     size="sm"

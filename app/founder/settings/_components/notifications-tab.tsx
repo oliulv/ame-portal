@@ -27,8 +27,8 @@ import {
   type SmsNumberFormData,
   type SmsVerificationFormData,
 } from '@/lib/schemas'
-import { CheckCircle2, MessageSquare, Shield, Loader2 } from 'lucide-react'
-import { ACTIVE_NOTIFICATION_TYPES } from '@/convex/lib/notificationTypes'
+import { CheckCircle2, MessageSquare, Shield, Loader2, Search } from 'lucide-react'
+import { ACTIVE_NOTIFICATION_TYPES, groupByCategory } from '@/convex/lib/notificationTypes'
 
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof ConvexError) return err.data as string
@@ -43,7 +43,9 @@ export function NotificationsTab({
   prefillPhone?: string
   userRole?: 'super_admin' | 'admin' | 'founder'
 }) {
+  const [prefSearch, setPrefSearch] = useState('')
   const phoneData = useQuery(api.notifications.getMyPhone)
+  const disabledTypes = useQuery(api.notifications.getDisabledNotificationTypes)
   const requestVerification = useMutation(api.notifications.requestVerification)
   const confirmVerification = useMutation(api.notifications.confirmVerification)
   const updatePreferences = useMutation(api.notifications.updatePreferences)
@@ -275,36 +277,86 @@ export function NotificationsTab({
       </Card>
 
       {/* Notification Preferences */}
-      {smsRecord?.isVerified && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Notification Preferences</CardTitle>
-            <CardDescription>Choose which notifications you want to receive</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {ACTIVE_NOTIFICATION_TYPES.filter((t) => {
-                const isAdmin = userRole === 'admin' || userRole === 'super_admin'
-                if (isAdmin) return true // admins see all types
-                return t.audience === 'founders' || t.audience === 'all'
-              }).map((pref) => (
-                <div key={pref.key} className="flex items-center justify-between border p-3">
-                  <div>
-                    <p className="font-medium text-sm">{pref.label}</p>
-                    <p className="text-xs text-muted-foreground">{pref.description}</p>
+      {smsRecord?.isVerified &&
+        (() => {
+          const isAdmin = userRole === 'admin' || userRole === 'super_admin'
+          const disabledSet = new Set(disabledTypes ?? [])
+          const normalizedQuery = prefSearch.trim().toLowerCase()
+
+          // Filter: role-appropriate, not globally disabled, matches search
+          const availableTypes = ACTIVE_NOTIFICATION_TYPES.filter((t) => {
+            if (!isAdmin && t.audience !== 'founders' && t.audience !== 'all') return false
+            if (disabledSet.has(t.key)) return false
+            if (
+              normalizedQuery.length > 0 &&
+              !t.label.toLowerCase().includes(normalizedQuery) &&
+              !t.description.toLowerCase().includes(normalizedQuery) &&
+              !t.group.toLowerCase().includes(normalizedQuery)
+            )
+              return false
+            return true
+          })
+
+          const groups = groupByCategory(availableTypes)
+
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle>Notification Preferences</CardTitle>
+                <CardDescription>Choose which notifications you want to receive</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {availableTypes.length > 6 && (
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={prefSearch}
+                      onChange={(e) => setPrefSearch(e.target.value)}
+                      placeholder="Search notifications"
+                      className="pl-9"
+                    />
                   </div>
-                  <Switch
-                    checked={
-                      (preferences?.[pref.key as keyof typeof preferences] as boolean) ?? true
-                    }
-                    onCheckedChange={(checked) => handlePreferenceChange(pref.key, checked)}
-                  />
+                )}
+                <div className="space-y-5">
+                  {groups.map(({ group, label, types }) => (
+                    <div key={group}>
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        {label}
+                      </h4>
+                      <div className="space-y-2">
+                        {types.map((pref) => (
+                          <div
+                            key={pref.key}
+                            className="flex items-center justify-between border p-3"
+                          >
+                            <div>
+                              <p className="font-medium text-sm">{pref.label}</p>
+                              <p className="text-xs text-muted-foreground">{pref.description}</p>
+                            </div>
+                            <Switch
+                              checked={
+                                (preferences?.[pref.key as keyof typeof preferences] as boolean) ??
+                                true
+                              }
+                              onCheckedChange={(checked) =>
+                                handlePreferenceChange(pref.key, checked)
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                {availableTypes.length === 0 && normalizedQuery.length > 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No notifications match your search
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })()}
     </div>
   )
 }
