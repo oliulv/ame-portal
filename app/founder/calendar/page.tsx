@@ -122,9 +122,13 @@ export default function FounderCalendarPage() {
                       </Button>
                     )}
                     <Button variant="outline" size="sm" asChild>
-                      <a href={event.lumaEmbedUrl} target="_blank" rel="noopener noreferrer">
-                        View Event
-                        <ExternalLink className="ml-1.5 h-3 w-3" />
+                      <a
+                        href={event.lumaEmbedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        View Event <ExternalLink className="h-3 w-3 shrink-0" />
                       </a>
                     </Button>
                   </div>

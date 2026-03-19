@@ -379,9 +379,13 @@ export default function FounderDashboard() {
                         </Button>
                       )}
                       <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                        <a href={nextEvent.lumaEmbedUrl} target="_blank" rel="noopener noreferrer">
-                          View
-                          <ExternalLink className="ml-1 h-3 w-3" />
+                        <a
+                          href={nextEvent.lumaEmbedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 whitespace-nowrap"
+                        >
+                          View <ExternalLink className="h-3 w-3 shrink-0" />
                         </a>
                       </Button>
                     </div>
