@@ -1,7 +1,16 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from 'recharts'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Cell,
+} from 'recharts'
 
 interface VelocityScoreProps {
   commits: number
@@ -41,8 +50,24 @@ export function VelocityScore({
         </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={data} layout="vertical">
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={data} layout="vertical" barCategoryGap="20%">
+            <defs>
+              {data.map((entry) => (
+                <linearGradient
+                  key={entry.name}
+                  id={`bar-grad-${entry.name.replace(/\s/g, '-')}`}
+                  x1="0"
+                  y1="0"
+                  x2="1"
+                  y2="0"
+                >
+                  <stop offset="0%" stopColor={entry.color} stopOpacity={0.7} />
+                  <stop offset="100%" stopColor={entry.color} stopOpacity={1} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 11 }} />
             <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={80} />
             <Tooltip
@@ -57,9 +82,9 @@ export function VelocityScore({
                 fontSize: '12px',
               }}
             />
-            <Bar dataKey="points" animationDuration={500}>
-              {data.map((entry, index) => (
-                <Cell key={index} fill={entry.color} />
+            <Bar dataKey="points" animationDuration={500} radius={[0, 4, 4, 0]}>
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={`url(#bar-grad-${entry.name.replace(/\s/g, '-')})`} />
               ))}
             </Bar>
           </BarChart>

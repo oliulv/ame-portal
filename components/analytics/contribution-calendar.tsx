@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -24,7 +25,25 @@ function getColor(count: number): string {
   return 'bg-green-800 dark:bg-green-400'
 }
 
+const DAY_LABELS = ['', 'M', '', 'W', '', 'F', '']
+
 export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
+  const monthLabels = useMemo(() => {
+    if (!weeks || weeks.length === 0) return []
+    const labels: { label: string; colIndex: number }[] = []
+    let lastMonth = ''
+    weeks.forEach((week, wi) => {
+      const firstDay = week.contributionDays[0]
+      if (!firstDay) return
+      const month = new Date(firstDay.date).toLocaleString('en-US', { month: 'short' })
+      if (month !== lastMonth) {
+        labels.push({ label: month, colIndex: wi })
+        lastMonth = month
+      }
+    })
+    return labels
+  }, [weeks])
+
   if (!weeks || weeks.length === 0) {
     return null
   }
@@ -47,30 +66,67 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
       </CardHeader>
       <CardContent>
         <TooltipProvider delayDuration={100}>
-          <div className="flex gap-[3px] overflow-x-auto">
-            {weeks.map((week, wi) => (
-              <div key={wi} className="flex flex-col gap-[3px]">
-                {week.contributionDays.map((day) => (
-                  <Tooltip key={day.date}>
-                    <TooltipTrigger asChild>
-                      <div
-                        className={`h-[13px] w-[13px] rounded-[2px] ${getColor(day.contributionCount)}`}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      {day.contributionCount} contribution{day.contributionCount !== 1 ? 's' : ''}{' '}
-                      on {new Date(day.date).toLocaleDateString()}
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
-              </div>
-            ))}
+          {/* Month labels */}
+          <div className="flex mb-1" style={{ paddingLeft: '24px' }}>
+            {weeks.map((week, wi) => {
+              const label = monthLabels.find((m) => m.colIndex === wi)
+              return (
+                <div
+                  key={wi}
+                  className="text-[10px] text-muted-foreground"
+                  style={{ width: '19px', flexShrink: 0 }}
+                >
+                  {label?.label ?? ''}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="flex">
+            {/* Day-of-week labels */}
+            <div className="flex flex-col gap-[4px] mr-1.5 pt-[1px]">
+              {DAY_LABELS.map((label, i) => (
+                <div
+                  key={i}
+                  className="text-[10px] text-muted-foreground leading-none"
+                  style={{ height: '15px', display: 'flex', alignItems: 'center' }}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+
+            {/* Grid */}
+            <div className="flex gap-[4px] overflow-x-auto">
+              {weeks.map((week, wi) => (
+                <div key={wi} className="flex flex-col gap-[4px]">
+                  {week.contributionDays.map((day) => (
+                    <Tooltip key={day.date}>
+                      <TooltipTrigger asChild>
+                        <div
+                          className={`h-[15px] w-[15px] rounded-[2px] ${getColor(day.contributionCount)}`}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        className="text-xs"
+                        style={{ borderRadius: '0px' }}
+                      >
+                        {day.contributionCount} contribution
+                        {day.contributionCount !== 1 ? 's' : ''} on{' '}
+                        {new Date(day.date).toLocaleDateString()}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </TooltipProvider>
 
-        <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <span>Less</span>
-          <div className="flex gap-[3px]">
+          <div className="flex gap-[4px]">
             <div className="h-[11px] w-[11px] rounded-[2px] bg-muted" />
             <div className="h-[11px] w-[11px] rounded-[2px] bg-green-200 dark:bg-green-900" />
             <div className="h-[11px] w-[11px] rounded-[2px] bg-green-400 dark:bg-green-700" />
