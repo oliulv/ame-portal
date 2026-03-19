@@ -36,7 +36,13 @@ function errorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
+export function NotificationsTab({
+  prefillPhone,
+  userRole,
+}: {
+  prefillPhone?: string
+  userRole?: 'super_admin' | 'admin' | 'founder'
+}) {
   const phoneData = useQuery(api.notifications.getMyPhone)
   const requestVerification = useMutation(api.notifications.requestVerification)
   const confirmVerification = useMutation(api.notifications.confirmVerification)
@@ -277,9 +283,11 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {ACTIVE_NOTIFICATION_TYPES.filter(
-                (t) => t.audience === 'founders' || t.audience === 'all'
-              ).map((pref) => (
+              {ACTIVE_NOTIFICATION_TYPES.filter((t) => {
+                const isAdmin = userRole === 'admin' || userRole === 'super_admin'
+                if (isAdmin) return true // admins see all types
+                return t.audience === 'founders' || t.audience === 'all'
+              }).map((pref) => (
                 <div key={pref.key} className="flex items-center justify-between border p-3">
                   <div>
                     <p className="font-medium text-sm">{pref.label}</p>
