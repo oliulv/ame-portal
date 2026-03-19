@@ -79,6 +79,7 @@ export function NotificationsTab({
   const [breakdownSearch, setBreakdownSearch] = useState('')
   const [breakdownCategory, setBreakdownCategory] = useState<string>('all')
   const [breakdownAudience, setBreakdownAudience] = useState<string>('all')
+  const [breakdownSort, setBreakdownSort] = useState<string>('default')
   const [settingsExpanded, setSettingsExpanded] = useState(false)
   const [settingsSearch, setSettingsSearch] = useState('')
   const [settingsCategory, setSettingsCategory] = useState<string>('all')
@@ -156,7 +157,7 @@ export function NotificationsTab({
           <CardDescription>Delivery stats per notification type</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-[1fr_150px_150px]">
+          <div className="grid gap-3 md:grid-cols-[1fr_150px_150px_160px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -192,6 +193,18 @@ export function NotificationsTab({
                 <SelectItem value="founders">Founders</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={breakdownSort} onValueChange={setBreakdownSort}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default order</SelectItem>
+                <SelectItem value="sent-desc">Most sent</SelectItem>
+                <SelectItem value="sent-asc">Least sent</SelectItem>
+                <SelectItem value="failed-desc">Most failed</SelectItem>
+                <SelectItem value="name">Name</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {(() => {
             const normalizedQuery = breakdownSearch.trim().toLowerCase()
@@ -206,13 +219,31 @@ export function NotificationsTab({
               if (breakdownAudience !== 'all' && t.audience !== breakdownAudience) return false
               return true
             })
+            // Sort
+            const sorted = [...filtered].sort((a, b) => {
+              const sa = stats.perType[a.key] || { sent: 0, failed: 0, skipped: 0 }
+              const sb = stats.perType[b.key] || { sent: 0, failed: 0, skipped: 0 }
+              switch (breakdownSort) {
+                case 'sent-desc':
+                  return sb.sent - sa.sent
+                case 'sent-asc':
+                  return sa.sent - sb.sent
+                case 'failed-desc':
+                  return sb.failed - sa.failed
+                case 'name':
+                  return a.label.localeCompare(b.label)
+                default:
+                  return 0
+              }
+            })
+
             const hasFilters =
               normalizedQuery.length > 0 ||
               breakdownCategory !== 'all' ||
               breakdownAudience !== 'all'
             const visible =
-              breakdownExpanded || hasFilters ? filtered : filtered.slice(0, INITIAL_VISIBLE)
-            const hiddenCount = filtered.length - visible.length
+              breakdownExpanded || hasFilters ? sorted : sorted.slice(0, INITIAL_VISIBLE)
+            const hiddenCount = sorted.length - visible.length
 
             return (
               <>
