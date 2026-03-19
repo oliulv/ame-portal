@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -48,14 +48,8 @@ const trackerWebsiteSchema = z.object({
   domain: z.string().optional(),
 })
 
-const socialProfileSchema = z.object({
-  handle: z.string().min(1, 'Handle is required'),
-  profileUrl: z.string().optional(),
-})
-
 type StripeConnectFormData = z.infer<typeof stripeConnectSchema>
 type TrackerWebsiteFormData = z.infer<typeof trackerWebsiteSchema>
-type SocialProfileFormData = z.infer<typeof socialProfileSchema>
 
 type IntegrationTab = 'stripe' | 'tracker' | 'github' | 'social'
 const validIntegrationTabs: IntegrationTab[] = ['stripe', 'tracker', 'github', 'social']
@@ -102,6 +96,9 @@ function IntegrationsPageInner() {
   const [newTrackerId, setNewTrackerId] = useState<string | null>(null)
   const newTrackerRef = useRef<HTMLDivElement>(null)
   const [savingSocial, setSavingSocial] = useState<string | null>(null)
+  const [savedSocial, setSavedSocial] = useState<string | null>(null)
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const socialInputs = useRef<Record<string, string>>({})
 
   // Convex queries
   const trackerWebsites = useQuery(api.trackerWebsites.list)
@@ -131,33 +128,22 @@ function IntegrationsPageInner() {
     defaultValues: { name: '', domain: '' },
   })
 
-  const twitterForm = useForm<SocialProfileFormData>({
-    resolver: zodResolver(socialProfileSchema),
-    defaultValues: { handle: '', profileUrl: '' },
-  })
-  const linkedinForm = useForm<SocialProfileFormData>({
-    resolver: zodResolver(socialProfileSchema),
-    defaultValues: { handle: '', profileUrl: '' },
-  })
-  const instagramForm = useForm<SocialProfileFormData>({
-    resolver: zodResolver(socialProfileSchema),
-    defaultValues: { handle: '', profileUrl: '' },
-  })
-
-  // Populate social forms with existing data
+  // Populate social inputs from existing data
   useEffect(() => {
     if (fullStatus?.social) {
       for (const profile of fullStatus.social) {
-        if (profile.platform === 'twitter') {
-          twitterForm.reset({ handle: profile.handle, profileUrl: profile.profileUrl ?? '' })
-        } else if (profile.platform === 'linkedin') {
-          linkedinForm.reset({ handle: profile.handle, profileUrl: profile.profileUrl ?? '' })
-        } else if (profile.platform === 'instagram') {
-          instagramForm.reset({ handle: profile.handle, profileUrl: profile.profileUrl ?? '' })
-        }
+        socialInputs.current[profile.platform] = profile.handle
       }
     }
-  }, [fullStatus?.social, twitterForm, linkedinForm, instagramForm])
+  }, [fullStatus?.social])
+
+  // Cleanup debounce timers
+  useEffect(() => {
+    const timers = debounceTimers.current
+    return () => {
+      Object.values(timers).forEach(clearTimeout)
+    }
+  }, [])
 
   const handleCreateTracker = async (data: TrackerWebsiteFormData) => {
     setIsCreatingTracker(true)
@@ -215,24 +201,33 @@ function IntegrationsPageInner() {
     }
   }
 
-  const handleSaveSocial = async (
-    platform: 'twitter' | 'linkedin' | 'instagram',
-    data: SocialProfileFormData
-  ) => {
-    setSavingSocial(platform)
-    try {
-      await saveSocialProfile({
-        platform,
-        handle: data.handle.replace(/^@/, ''),
-        profileUrl: data.profileUrl || undefined,
-      })
-      toast.success(`${platform.charAt(0).toUpperCase() + platform.slice(1)} profile saved`)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save')
-    } finally {
-      setSavingSocial(null)
-    }
-  }
+  const handleSocialBlur = useCallback(
+    (platform: 'twitter' | 'linkedin' | 'instagram', rawValue: string) => {
+      const handle = rawValue.replace(/^@/, '').trim()
+      const prev = fullStatus?.social?.find((p) => p.platform === platform)?.handle ?? ''
+      if (!handle || handle === prev) return
+
+      // Clear any pending debounce for this platform
+      if (debounceTimers.current[platform]) {
+        clearTimeout(debounceTimers.current[platform])
+      }
+
+      debounceTimers.current[platform] = setTimeout(async () => {
+        setSavingSocial(platform)
+        setSavedSocial(null)
+        try {
+          await saveSocialProfile({ platform, handle })
+          setSavedSocial(platform)
+          setTimeout(() => setSavedSocial((s) => (s === platform ? null : s)), 2000)
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to save')
+        } finally {
+          setSavingSocial((s) => (s === platform ? null : s))
+        }
+      }, 800)
+    },
+    [saveSocialProfile, fullStatus?.social]
+  )
 
   const tabItems: {
     key: IntegrationTab
@@ -618,40 +613,29 @@ function IntegrationsPageInner() {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Twitter / X */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium">X (Twitter)</h3>
-                <Form {...twitterForm}>
-                  <form
-                    onSubmit={twitterForm.handleSubmit((data) => handleSaveSocial('twitter', data))}
-                    className="flex gap-3 items-end"
-                  >
-                    <FormField
-                      control={twitterForm.control}
-                      name="handle"
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormControl>
-                            <div className="flex items-center">
-                              <span className="flex h-9 items-center border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
-                                @
-                              </span>
-                              <Input
-                                placeholder="yourhandle"
-                                className="border-l-0"
-                                {...field}
-                                value={field.value.replace(/^@/, '')}
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" size="sm" disabled={savingSocial === 'twitter'}>
-                      {savingSocial === 'twitter' ? 'Saving...' : 'Save'}
-                    </Button>
-                  </form>
-                </Form>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium">X (Twitter)</h3>
+                  {savingSocial === 'twitter' && (
+                    <span className="text-xs text-muted-foreground">Saving...</span>
+                  )}
+                  {savedSocial === 'twitter' && (
+                    <span className="text-xs text-green-600">Saved</span>
+                  )}
+                </div>
+                <div className="flex items-center">
+                  <span className="flex h-9 items-center border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                    @
+                  </span>
+                  <Input
+                    placeholder="yourhandle"
+                    className="border-l-0"
+                    defaultValue={
+                      fullStatus?.social?.find((p) => p.platform === 'twitter')?.handle ?? ''
+                    }
+                    onBlur={(e) => handleSocialBlur('twitter', e.target.value)}
+                  />
+                </div>
                 {fullStatus?.social?.find((p) => p.platform === 'twitter') && (
                   <div className="flex items-center gap-1.5 text-green-600 text-xs">
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -661,32 +645,23 @@ function IntegrationsPageInner() {
               </div>
 
               {/* LinkedIn */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium">LinkedIn</h3>
-                <Form {...linkedinForm}>
-                  <form
-                    onSubmit={linkedinForm.handleSubmit((data) =>
-                      handleSaveSocial('linkedin', data)
-                    )}
-                    className="flex gap-3 items-end"
-                  >
-                    <FormField
-                      control={linkedinForm.control}
-                      name="handle"
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormControl>
-                            <Input placeholder="company-slug or full URL" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" size="sm" disabled={savingSocial === 'linkedin'}>
-                      {savingSocial === 'linkedin' ? 'Saving...' : 'Save'}
-                    </Button>
-                  </form>
-                </Form>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium">LinkedIn</h3>
+                  {savingSocial === 'linkedin' && (
+                    <span className="text-xs text-muted-foreground">Saving...</span>
+                  )}
+                  {savedSocial === 'linkedin' && (
+                    <span className="text-xs text-green-600">Saved</span>
+                  )}
+                </div>
+                <Input
+                  placeholder="company-slug or full URL"
+                  defaultValue={
+                    fullStatus?.social?.find((p) => p.platform === 'linkedin')?.handle ?? ''
+                  }
+                  onBlur={(e) => handleSocialBlur('linkedin', e.target.value)}
+                />
                 {fullStatus?.social?.find((p) => p.platform === 'linkedin') && (
                   <div className="flex items-center gap-1.5 text-green-600 text-xs">
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -696,42 +671,29 @@ function IntegrationsPageInner() {
               </div>
 
               {/* Instagram */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium">Instagram</h3>
-                <Form {...instagramForm}>
-                  <form
-                    onSubmit={instagramForm.handleSubmit((data) =>
-                      handleSaveSocial('instagram', data)
-                    )}
-                    className="flex gap-3 items-end"
-                  >
-                    <FormField
-                      control={instagramForm.control}
-                      name="handle"
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormControl>
-                            <div className="flex items-center">
-                              <span className="flex h-9 items-center border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
-                                @
-                              </span>
-                              <Input
-                                placeholder="yourhandle"
-                                className="border-l-0"
-                                {...field}
-                                value={field.value.replace(/^@/, '')}
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" size="sm" disabled={savingSocial === 'instagram'}>
-                      {savingSocial === 'instagram' ? 'Saving...' : 'Save'}
-                    </Button>
-                  </form>
-                </Form>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium">Instagram</h3>
+                  {savingSocial === 'instagram' && (
+                    <span className="text-xs text-muted-foreground">Saving...</span>
+                  )}
+                  {savedSocial === 'instagram' && (
+                    <span className="text-xs text-green-600">Saved</span>
+                  )}
+                </div>
+                <div className="flex items-center">
+                  <span className="flex h-9 items-center border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                    @
+                  </span>
+                  <Input
+                    placeholder="yourhandle"
+                    className="border-l-0"
+                    defaultValue={
+                      fullStatus?.social?.find((p) => p.platform === 'instagram')?.handle ?? ''
+                    }
+                    onBlur={(e) => handleSocialBlur('instagram', e.target.value)}
+                  />
+                </div>
                 {fullStatus?.social?.find((p) => p.platform === 'instagram') && (
                   <div className="flex items-center gap-1.5 text-green-600 text-xs">
                     <CheckCircle2 className="h-3.5 w-3.5" />
