@@ -121,15 +121,12 @@ export default function FounderCalendarPage() {
                         {isToggling ? '...' : "I'm Registered"}
                       </Button>
                     )}
-                    <a
-                      href={event.lumaEmbedUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex h-8 items-center gap-1.5 border bg-secondary px-3 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
-                    >
-                      {event.isRegistered ? 'View Event' : 'Register'}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                    <Button variant="secondary" size="sm" asChild>
+                      <a href={event.lumaEmbedUrl} target="_blank" rel="noopener noreferrer">
+                        {event.isRegistered ? 'View Event' : 'Register'}
+                        <ExternalLink className="ml-1.5 h-3 w-3" />
+                      </a>
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
