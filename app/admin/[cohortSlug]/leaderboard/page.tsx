@@ -23,7 +23,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ScoringChatbot } from '@/components/leaderboard/scoring-chatbot'
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -65,84 +64,59 @@ function ScoreBar({ value, maxValue, color }: { value: number; maxValue: number;
   )
 }
 
-function ScoringExplainer() {
-  const [open, setOpen] = useState(false)
-
+function ScoringExplainerContent() {
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Info className="mr-2 h-4 w-4" />
-          How scoring works
-          {open ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-4">
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div>
-              <h3 className="font-semibold mb-2">Categories & Weights</h3>
-              <div className="space-y-2">
-                {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                  <div key={key} className="flex items-center gap-3">
-                    <div className={`h-3 w-3 ${CATEGORY_COLORS[key]}`} />
-                    <span className="text-sm w-24">{label}</span>
-                    <div className="flex-1 h-2 bg-muted overflow-hidden">
-                      <div
-                        className={`h-full ${CATEGORY_COLORS[key]}`}
-                        style={{ width: `${CATEGORY_WEIGHTS[key]}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-muted-foreground w-10 text-right">
-                      {CATEGORY_WEIGHTS[key]}%
-                    </span>
-                  </div>
-                ))}
+    <Card>
+      <CardContent className="pt-6 space-y-4">
+        <div>
+          <h3 className="font-semibold mb-3">Categories & Weights</h3>
+          <div className="space-y-2">
+            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+              <div key={key} className="flex items-center gap-3">
+                <div className={`h-3 w-3 shrink-0 ${CATEGORY_COLORS[key]}`} />
+                <span className="text-sm w-20 shrink-0">{label}</span>
+                <div className="h-2 bg-muted overflow-hidden" style={{ width: '120px' }}>
+                  <div
+                    className={`h-full ${CATEGORY_COLORS[key]}`}
+                    style={{ width: `${(CATEGORY_WEIGHTS[key] / 22) * 100}%` }}
+                  />
+                </div>
+                <span className="text-sm text-muted-foreground shrink-0">
+                  {CATEGORY_WEIGHTS[key]}%
+                </span>
               </div>
-            </div>
+            ))}
+          </div>
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <h4 className="font-medium mb-1">Rolling 4-Week Window</h4>
-                <p className="text-muted-foreground">
-                  Only the last 4 weeks count. No cumulative advantage.
-                </p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-1">Temporal Decay</h4>
-                <p className="text-muted-foreground">
-                  Recent weeks count more. This week = 100%, last week ~81%, 2 weeks ~66%.
-                </p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-1">40% Cap</h4>
-                <p className="text-muted-foreground">
-                  No single category can exceed 40% of max possible score.
-                </p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-1">4-of-6 Gate</h4>
-                <p className="text-muted-foreground">
-                  Must have activity in at least 4 categories to be ranked.
-                </p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-1">Consistency Bonus</h4>
-                <p className="text-muted-foreground">
-                  Steady performance over sporadic bursts earns up to +5% bonus.
-                </p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-1">Admin Favorite</h4>
-                <p className="text-muted-foreground">
-                  Weekly updates picked as favorites get a 1.25x multiplier.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </CollapsibleContent>
-    </Collapsible>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <h4 className="font-medium mb-1">Rolling 4-Week Window</h4>
+            <p className="text-muted-foreground">Only the last 4 weeks count.</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1">Temporal Decay</h4>
+            <p className="text-muted-foreground">This week 100%, last week ~81%, 2 weeks ~66%.</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1">40% Cap</h4>
+            <p className="text-muted-foreground">No single category can exceed 40%.</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1">4-of-6 Gate</h4>
+            <p className="text-muted-foreground">Need activity in 4+ categories to rank.</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1">Consistency Bonus</h4>
+            <p className="text-muted-foreground">Steady performance earns up to +5%.</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1">Admin Favourite</h4>
+            <p className="text-muted-foreground">Favourited updates get a 1.25x multiplier.</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -277,6 +251,7 @@ export default function LeaderboardPage() {
     cohort ? { cohortId: cohort._id } : 'skip'
   )
 
+  const [showExplainer, setShowExplainer] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [pValue, setPValue] = useState(0.7)
   const updateP = useMutation(api.leaderboard.updateNormalizationPower)
@@ -342,13 +317,24 @@ export default function LeaderboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <ScoringExplainer />
+          <Button variant="outline" size="sm" onClick={() => setShowExplainer(!showExplainer)}>
+            <Info className="mr-2 h-4 w-4" />
+            How scoring works
+            {showExplainer ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            )}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setShowConfig(!showConfig)}>
             <Settings2 className="mr-2 h-4 w-4" />
             Config
           </Button>
         </div>
       </div>
+
+      {/* Scoring explainer — rendered below header */}
+      {showExplainer && <ScoringExplainerContent />}
 
       {/* Scoring config (super_admin) */}
       {showConfig && (

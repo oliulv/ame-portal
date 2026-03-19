@@ -73,6 +73,7 @@ function computeConsistencyBonus(weeklyScores: number[]): number {
 export interface ScoreBreakdown {
   startupId: Id<'startups'>
   startupName: string
+  startupSlug?: string
   startupLogoUrl?: string
   rank: number | null // null = unranked
   totalScore: number
@@ -456,6 +457,7 @@ export const computeLeaderboard = query({
       results.push({
         startupId: startupId as Id<'startups'>,
         startupName: data.startup.name,
+        startupSlug: data.startup.slug,
         startupLogoUrl: data.startup.logoUrl,
         rank: null,
         totalScore: Math.round(totalScore * 100) / 100,
@@ -601,6 +603,7 @@ export const computeLeaderboardForFounder = query({
     const results: Array<{
       startupId: Id<'startups'>
       startupName: string
+      startupSlug?: string
       startupLogoUrl?: string
       rank: number | null
       totalScore: number
@@ -825,6 +828,7 @@ export const computeLeaderboardForFounder = query({
       results.push({
         startupId: d.startup._id,
         startupName: d.startup.name,
+        startupSlug: d.startup.slug,
         startupLogoUrl: d.startup.logoUrl,
         rank: null,
         totalScore: Math.round(total * 100) / 100,

@@ -409,6 +409,12 @@ export const fetchStripeMetrics = internalAction({
       }
     }
 
+    // Clear existing movements for this month before inserting (idempotent)
+    await ctx.runMutation(internal.metrics.clearMrrMovementsForMonth, {
+      startupId: args.startupId,
+      month: currentMonth,
+    })
+
     // Store movements
     for (const movement of movements) {
       await ctx.runMutation(internal.metrics.insertMrrMovement, {
@@ -421,38 +427,42 @@ export const fetchStripeMetrics = internalAction({
     }
 
     // ── Derived metrics ─────────────────────────────────────────────
-    // Trial conversion rate
+    // Trial conversion: only meaningful when trialing subs exist
     const trialingSubs = await paginateStripe((p) =>
       stripe.subscriptions.list({ ...p, status: 'trialing' })
     )
     const totalTrialing = trialingSubs.length
-    const totalActive = activeSubscriptionCount
+    // -1 means "not applicable" (no trial flow detected)
     const trialConversionRate =
-      totalTrialing + totalActive > 0 ? (totalActive / (totalTrialing + totalActive)) * 100 : 0
+      totalTrialing > 0
+        ? (activeSubscriptionCount / (totalTrialing + activeSubscriptionCount)) * 100
+        : -1
 
-    // Payment failure rate (from recent invoices)
+    // Payment failure rate from last 90 days of invoices
     const recentAllInvoices = await paginateStripe((p) =>
       stripe.invoices.list({
         ...p,
         created: { gte: ninetyDaysAgo },
       })
     )
-    const failedPayments = recentAllInvoices.filter((inv) => inv.status === 'uncollectible').length
+    const failedPayments = recentAllInvoices.filter(
+      (inv) => inv.status === 'uncollectible' || inv.status === 'void'
+    ).length
     const paymentFailureRate =
-      recentAllInvoices.length > 0 ? (failedPayments / recentAllInvoices.length) * 100 : 0
+      recentAllInvoices.length > 0 ? (failedPayments / recentAllInvoices.length) * 100 : -1
 
-    // Monthly churn rate
+    // Monthly churn rate (needs previous month MRR to compute)
     const churnAmount = movements
       .filter((m) => m.type === 'churn')
       .reduce((sum, m) => sum + m.amount, 0)
     const prevTotalMrr = Array.from(prevMrrMap.values()).reduce((sum, v) => sum + v, 0)
-    const monthlyChurnRate = prevTotalMrr > 0 ? (churnAmount / prevTotalMrr) * 100 : 0
+    const monthlyChurnRate = prevTotalMrr > 0 ? (churnAmount / prevTotalMrr) * 100 : -1
 
-    // Net Revenue Retention
-    const nrr = prevTotalMrr > 0 ? (mrrPence / prevTotalMrr) * 100 : 100
+    // Net Revenue Retention (needs previous month)
+    const nrr = prevTotalMrr > 0 ? (mrrPence / prevTotalMrr) * 100 : -1
 
-    // LTV (ARPU / monthly churn rate)
-    const ltv = monthlyChurnRate > 0 ? arpu / (monthlyChurnRate / 100) : 0
+    // LTV (ARPU / monthly churn rate) — only if we have churn data
+    const ltv = monthlyChurnRate > 0 ? arpu / (monthlyChurnRate / 100) : -1
 
     // ── Store all metric snapshots ──────────────────────────────────
     await ctx.runMutation(internal.metrics.storeInternal, {
@@ -1181,6 +1191,27 @@ export const getDistinctCustomerIds = internalQuery({
 /**
  * Insert an MRR movement record.
  */
+/**
+ * Clear MRR movements for a month (idempotent re-computation).
+ */
+export const clearMrrMovementsForMonth = internalMutation({
+  args: {
+    startupId: v.id('startups'),
+    month: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('mrrMovements')
+      .withIndex('by_startupId_month', (q) =>
+        q.eq('startupId', args.startupId).eq('month', args.month)
+      )
+      .collect()
+    for (const row of existing) {
+      await ctx.db.delete(row._id)
+    }
+  },
+})
+
 export const insertMrrMovement = internalMutation({
   args: {
     startupId: v.id('startups'),

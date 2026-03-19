@@ -341,33 +341,62 @@ export default function AdminStartupAnalyticsPage() {
               <Card>
                 <CardContent className="pt-6">
                   <p className="text-sm text-muted-foreground">NRR</p>
-                  <p className="text-xl font-bold">{(nrr ?? 100).toFixed(1)}%</p>
+                  <p className="text-xl font-bold">
+                    {nrr != null && nrr !== -1 ? `${nrr.toFixed(1)}%` : '—'}
+                  </p>
+                  {(nrr == null || nrr === -1) && (
+                    <p className="text-xs text-muted-foreground">Needs 2+ months</p>
+                  )}
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
                   <p className="text-sm text-muted-foreground">LTV</p>
                   <p className="text-xl font-bold">
-                    £{(ltv ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    {ltv != null && ltv !== -1
+                      ? `£${ltv.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                      : '—'}
                   </p>
+                  {(ltv == null || ltv === -1) && (
+                    <p className="text-xs text-muted-foreground">Needs churn data</p>
+                  )}
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
                   <p className="text-sm text-muted-foreground">Trial Conversion</p>
-                  <p className="text-xl font-bold">{(trialConversion ?? 0).toFixed(1)}%</p>
+                  <p className="text-xl font-bold">
+                    {trialConversion != null && trialConversion !== -1
+                      ? `${trialConversion.toFixed(1)}%`
+                      : '—'}
+                  </p>
+                  {(trialConversion == null || trialConversion === -1) && (
+                    <p className="text-xs text-muted-foreground">No trials detected</p>
+                  )}
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
                   <p className="text-sm text-muted-foreground">Payment Failure</p>
-                  <p className="text-xl font-bold">{(paymentFailure ?? 0).toFixed(1)}%</p>
+                  <p className="text-xl font-bold">
+                    {paymentFailure != null && paymentFailure !== -1
+                      ? `${paymentFailure.toFixed(1)}%`
+                      : '—'}
+                  </p>
+                  {(paymentFailure == null || paymentFailure === -1) && (
+                    <p className="text-xs text-muted-foreground">No invoice data</p>
+                  )}
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="pt-6">
                   <p className="text-sm text-muted-foreground">Monthly Churn</p>
-                  <p className="text-xl font-bold">{(churnRate ?? 0).toFixed(1)}%</p>
+                  <p className="text-xl font-bold">
+                    {churnRate != null && churnRate !== -1 ? `${churnRate.toFixed(1)}%` : '—'}
+                  </p>
+                  {(churnRate == null || churnRate === -1) && (
+                    <p className="text-xs text-muted-foreground">Needs 2+ months</p>
+                  )}
                 </CardContent>
               </Card>
             </div>

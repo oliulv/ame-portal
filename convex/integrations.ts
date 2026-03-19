@@ -1,4 +1,4 @@
-import { query, mutation, action } from './functions'
+import { query, mutation, action, internalMutation } from './functions'
 import { v } from 'convex/values'
 import { requireFounder, requireAdmin, getFounderStartupIds } from './auth'
 import { api, internal } from './_generated/api'
@@ -246,18 +246,64 @@ export const saveSocialProfile = mutation({
       )
       .first()
 
+    let profileId: any
     if (existing) {
       await ctx.db.patch(existing._id, {
         handle: args.handle,
         profileUrl: args.profileUrl,
       })
+      profileId = existing._id
     } else {
-      await ctx.db.insert('socialProfiles', {
+      profileId = await ctx.db.insert('socialProfiles', {
         startupId,
         platform: args.platform,
         handle: args.handle,
         profileUrl: args.profileUrl,
       })
+    }
+
+    // Schedule immediate scrape for this profile
+    await ctx.scheduler.runAfter(0, internal.integrations.triggerSocialScrape, {
+      profileId,
+      startupId,
+      platform: args.platform,
+      handle: args.handle,
+      profileUrl: args.profileUrl,
+    })
+  },
+})
+
+/**
+ * Trigger a scrape for a single social profile (internal, used after save).
+ */
+export const triggerSocialScrape = internalMutation({
+  args: {
+    profileId: v.id('socialProfiles'),
+    startupId: v.id('startups'),
+    platform: v.union(v.literal('twitter'), v.literal('linkedin'), v.literal('instagram')),
+    handle: v.string(),
+    profileUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const baseArgs = {
+      profileId: args.profileId,
+      startupId: args.startupId,
+      handle: args.handle,
+    }
+
+    switch (args.platform) {
+      case 'twitter':
+        await ctx.scheduler.runAfter(0, internal.apify.scrapeTwitterProfile, baseArgs)
+        break
+      case 'linkedin':
+        await ctx.scheduler.runAfter(0, internal.apify.scrapeLinkedInProfile, {
+          ...baseArgs,
+          profileUrl: args.profileUrl,
+        })
+        break
+      case 'instagram':
+        await ctx.scheduler.runAfter(0, internal.apify.scrapeInstagramProfile, baseArgs)
+        break
     }
   },
 })

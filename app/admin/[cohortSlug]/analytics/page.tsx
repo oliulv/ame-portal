@@ -111,7 +111,15 @@ export default function CohortAnalyticsPage() {
                 {allStartups
                   .sort((a, b) => b.totalScore - a.totalScore)
                   .map((startup) => (
-                    <tr key={startup.startupId}>
+                    <tr
+                      key={startup.startupId}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() =>
+                        router.push(
+                          `/admin/${cohortSlug}/startups/${startup.startupSlug ?? startup.startupId}/analytics`
+                        )
+                      }
+                    >
                       <td className="py-2 font-medium">{startup.startupName}</td>
                       <td className="py-2 text-right">
                         {startup.categories?.revenue?.weighted.toFixed(1)}
