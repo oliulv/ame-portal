@@ -53,10 +53,16 @@ export const scrapeTwitterProfile = internalAction({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            twitterHandles: [args.handle.replace(/^@/, '')],
+            twitterHandles: [
+              args.handle.replace(/^@/, ''),
+              args.handle.replace(/^@/, ''),
+              args.handle.replace(/^@/, ''),
+              args.handle.replace(/^@/, ''),
+              args.handle.replace(/^@/, ''),
+            ],
             getFollowers: false,
             getFollowing: false,
-            maxItems: 1,
+            maxItems: 5,
           }),
         }
       )
@@ -144,7 +150,7 @@ export const scrapeLinkedInProfile = internalAction({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            profileUrls: [url],
+            startUrls: [url.replace(/\/?$/, '/')],
           }),
         }
       )
@@ -215,7 +221,10 @@ export const scrapeInstagramProfile = internalAction({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            usernames: [args.handle.replace(/^@/, '')],
+            handles: [args.handle.replace(/^@/, '')],
+            getFollowers: false,
+            getFollowings: false,
+            maxItems: 1,
           }),
         }
       )
@@ -228,7 +237,8 @@ export const scrapeInstagramProfile = internalAction({
       const profile = data[0]
       const followers = profile?.followersCount ?? profile?.followerCount ?? profile?.followers ?? 0
       const following = profile?.followsCount ?? profile?.followingCount ?? profile?.following ?? 0
-      const posts = profile?.postsCount ?? profile?.mediaCount ?? profile?.posts ?? 0
+      const posts =
+        profile?.postsCount ?? profile?.postCount ?? profile?.mediaCount ?? profile?.posts ?? 0
 
       const timestamp = new Date().toISOString()
 

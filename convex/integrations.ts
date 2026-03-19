@@ -270,14 +270,8 @@ export const saveSocialProfile = mutation({
       })
     }
 
-    // Schedule immediate scrape for this profile
-    await ctx.scheduler.runAfter(0, internal.integrations.triggerSocialScrape, {
-      profileId,
-      startupId,
-      platform: args.platform,
-      handle: args.handle,
-      profileUrl: args.profileUrl,
-    })
+    // Data will be scraped by the daily cron (6am UTC).
+    // Use triggerSocialScrape for manual "Scrape now" if needed.
   },
 })
 
