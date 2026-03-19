@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery, useAction } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -16,9 +16,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { MetricChart } from '@/components/analytics/metric-chart'
-import { ArrowLeft, RefreshCw, TrendingUp, Eye, Plug } from 'lucide-react'
+import { KpiCard } from '@/components/analytics/kpi-card'
+import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
+import { VelocityScore } from '@/components/analytics/velocity-score'
+import { SocialCard } from '@/components/analytics/social-card'
+import { ArrowLeft, RefreshCw, Plug } from 'lucide-react'
 import { toast } from 'sonner'
+
+function computeGrowth(data: Array<{ value: number }> | undefined | null): number {
+  if (!data || data.length < 2) return 0
+  const recent = data[data.length - 1].value
+  const previous = data[Math.max(0, data.length - 8)]?.value ?? data[0].value
+  if (previous === 0) return 0
+  return ((recent - previous) / previous) * 100
+}
+
+function toSparkline(data: Array<{ value: number }> | undefined | null): Array<{ value: number }> {
+  if (!data) return []
+  return data.slice(-14).map((d) => ({ value: d.value }))
+}
 
 export default function AdminStartupAnalyticsPage() {
   const params = useParams()
@@ -42,56 +58,83 @@ export default function AdminStartupAnalyticsPage() {
     return d.toISOString()
   }, [range])
 
-  const timeSeriesArgs = startupId ? { window: 'daily' as const, startDate } : null
+  const tsArgs = startupId ? { startupId, window: 'daily' as const, startDate } : null
+  const latArgs = startupId ? { startupId, window: 'daily' as const } : null
 
-  // Stripe metrics
-  const revenue = useQuery(
-    api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { startupId: startupId!, provider: 'stripe', metricKey: 'total_revenue', ...timeSeriesArgs }
-      : 'skip'
-  )
+  // Stripe
   const mrr = useQuery(
     api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { startupId: startupId!, provider: 'stripe', metricKey: 'mrr', ...timeSeriesArgs }
+    tsArgs ? { ...tsArgs, provider: 'stripe' as const, metricKey: 'mrr' } : 'skip'
+  )
+  const revenue = useQuery(
+    api.metrics.timeSeries,
+    tsArgs ? { ...tsArgs, provider: 'stripe' as const, metricKey: 'total_revenue' } : 'skip'
+  )
+  const arr = useQuery(
+    api.metrics.getLatest,
+    latArgs ? { ...latArgs, provider: 'stripe' as const, metricKey: 'arr' } : 'skip'
+  )
+  const arpu = useQuery(
+    api.metrics.getLatest,
+    latArgs ? { ...latArgs, provider: 'stripe' as const, metricKey: 'arpu' } : 'skip'
+  )
+  const nrr = useQuery(
+    api.metrics.getLatest,
+    latArgs ? { ...latArgs, provider: 'stripe' as const, metricKey: 'nrr' } : 'skip'
+  )
+  const ltv = useQuery(
+    api.metrics.getLatest,
+    latArgs ? { ...latArgs, provider: 'stripe' as const, metricKey: 'ltv' } : 'skip'
+  )
+  const trialConversion = useQuery(
+    api.metrics.getLatest,
+    latArgs
+      ? { ...latArgs, provider: 'stripe' as const, metricKey: 'trial_conversion_rate' }
       : 'skip'
   )
-  const customers = useQuery(
-    api.metrics.timeSeries,
-    timeSeriesArgs
-      ? {
-          startupId: startupId!,
-          provider: 'stripe',
-          metricKey: 'active_customers',
-          ...timeSeriesArgs,
-        }
+  const paymentFailure = useQuery(
+    api.metrics.getLatest,
+    latArgs
+      ? { ...latArgs, provider: 'stripe' as const, metricKey: 'payment_failure_rate' }
       : 'skip'
+  )
+  const churnRate = useQuery(
+    api.metrics.getLatest,
+    latArgs ? { ...latArgs, provider: 'stripe' as const, metricKey: 'monthly_churn_rate' } : 'skip'
   )
 
-  // Tracker metrics
+  // Tracker
   const sessions = useQuery(
     api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { startupId: startupId!, provider: 'tracker', metricKey: 'sessions', ...timeSeriesArgs }
-      : 'skip'
+    tsArgs ? { ...tsArgs, provider: 'tracker' as const, metricKey: 'sessions' } : 'skip'
   )
   const pageviews = useQuery(
     api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { startupId: startupId!, provider: 'tracker', metricKey: 'pageviews', ...timeSeriesArgs }
-      : 'skip'
+    tsArgs ? { ...tsArgs, provider: 'tracker' as const, metricKey: 'pageviews' } : 'skip'
   )
-  const activeUsers = useQuery(
+
+  // GitHub
+  const velocityScore = useQuery(
     api.metrics.timeSeries,
-    timeSeriesArgs
-      ? {
-          startupId: startupId!,
-          provider: 'tracker',
-          metricKey: 'weekly_active_users',
-          ...timeSeriesArgs,
-        }
-      : 'skip'
+    tsArgs ? { ...tsArgs, provider: 'github' as const, metricKey: 'velocity_score' } : 'skip'
+  )
+  const commits = useQuery(
+    api.metrics.getLatest,
+    latArgs ? { ...latArgs, provider: 'github' as const, metricKey: 'commits' } : 'skip'
+  )
+  const prsOpened = useQuery(
+    api.metrics.getLatest,
+    latArgs ? { ...latArgs, provider: 'github' as const, metricKey: 'prs_opened' } : 'skip'
+  )
+  const reviews = useQuery(
+    api.metrics.getLatest,
+    latArgs ? { ...latArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
+  )
+
+  // Social
+  const twitterFollowers = useQuery(
+    api.metrics.getLatest,
+    latArgs ? { ...latArgs, provider: 'apify' as const, metricKey: 'twitter_followers' } : 'skip'
   )
 
   const syncMetrics = useAction(api.metrics.syncMetricsForStartup)
@@ -101,34 +144,35 @@ export default function AdminStartupAnalyticsPage() {
     setIsRefreshing(true)
     try {
       await syncMetrics({ startupId })
-      toast.success('Metrics synced successfully')
+      toast.success('Metrics synced')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to sync metrics')
+      toast.error(error instanceof Error ? error.message : 'Failed to sync')
     } finally {
       setIsRefreshing(false)
     }
   }
 
   const isLoading = startup === undefined || integrationStatus === undefined
-
   const hasStripe = integrationStatus?.stripe !== null
   const hasTracker = integrationStatus?.tracker !== null
+  const hasGithub = integrationStatus?.github !== null
+  const hasSocial = (integrationStatus?.social?.length ?? 0) > 0
+  const hasAny = hasStripe || hasTracker || hasGithub || hasSocial
+
+  const latestMrr = mrr?.length ? mrr[mrr.length - 1].value : 0
+  const latestSessions = sessions?.length ? sessions[sessions.length - 1].value : 0
+  const latestVelocity = velocityScore?.length ? velocityScore[velocityScore.length - 1].value : 0
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <Skeleton className="h-9 w-48 mb-2" />
-          <Skeleton className="h-5 w-64" />
+        <Skeleton className="h-9 w-48 mb-2" />
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
         </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-32" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-64 w-full" />
-          </CardContent>
-        </Card>
+        <Skeleton className="h-80 w-full" />
       </div>
     )
   }
@@ -137,21 +181,17 @@ export default function AdminStartupAnalyticsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-4">
-        <div>
-          <Link href={`/admin/${cohortSlug}/startups/${slug}`}>
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Startup
-            </Button>
-          </Link>
-        </div>
+        <Link href={`/admin/${cohortSlug}/startups/${slug}`}>
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Startup
+          </Button>
+        </Link>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight font-display">Analytics</h1>
             <p className="text-muted-foreground">
-              {startup?.name
-                ? `${startup.name} performance metrics`
-                : 'Startup performance metrics'}
+              {startup?.name ? `${startup.name} performance metrics` : 'Startup metrics'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -167,106 +207,172 @@ export default function AdminStartupAnalyticsPage() {
             </Select>
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
+              Sync
             </Button>
           </div>
         </div>
       </div>
 
       {/* Sync status */}
-      {integrationStatus?.stripe && (
-        <div className="text-xs text-muted-foreground">
-          {integrationStatus.stripe.lastSyncedAt && (
-            <span>
-              Last synced: {new Date(integrationStatus.stripe.lastSyncedAt).toLocaleString()}
-            </span>
-          )}
+      {integrationStatus?.stripe?.lastSyncedAt && (
+        <p className="text-xs text-muted-foreground">
+          Last synced: {new Date(integrationStatus.stripe.lastSyncedAt).toLocaleString()}
           {integrationStatus.stripe.syncError && (
             <span className="text-destructive ml-4">
-              Sync error: {integrationStatus.stripe.syncError}
+              Error: {integrationStatus.stripe.syncError}
             </span>
           )}
-        </div>
+        </p>
       )}
 
-      {/* No Data */}
-      {!hasStripe && !hasTracker && (
+      {!hasAny && (
         <EmptyState
           icon={<Plug className="h-6 w-6" />}
           title="No integrations connected"
-          description="Metrics will appear here once the startup connects Stripe or adds the Accelerate ME Tracker."
+          description="Metrics will appear once the startup connects integrations."
         />
       )}
 
-      {/* Stripe Metrics */}
-      {hasStripe && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-muted-foreground" />
-            Revenue Metrics
-            {integrationStatus?.stripe?.accountName && (
-              <span className="text-sm font-normal text-muted-foreground">
-                ({integrationStatus.stripe.accountName})
-              </span>
+      {hasAny && (
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {hasStripe && (
+              <KpiCard
+                title="MRR"
+                value={`£${latestMrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                change={computeGrowth(mrr)}
+                sparklineData={toSparkline(mrr)}
+                color="hsl(var(--chart-1))"
+              />
             )}
-          </h2>
+            {hasTracker && (
+              <KpiCard
+                title="Sessions"
+                value={latestSessions.toLocaleString()}
+                change={computeGrowth(sessions)}
+                sparklineData={toSparkline(sessions)}
+                color="hsl(var(--chart-2))"
+              />
+            )}
+            {hasGithub && (
+              <KpiCard
+                title="Velocity"
+                value={`${latestVelocity} pts`}
+                change={computeGrowth(velocityScore)}
+                sparklineData={toSparkline(velocityScore)}
+                color="hsl(var(--chart-3))"
+              />
+            )}
+            {hasSocial && (
+              <KpiCard
+                title="Followers"
+                value={(twitterFollowers ?? 0).toLocaleString()}
+                color="hsl(var(--chart-4))"
+              />
+            )}
+          </div>
 
-          <MetricChart
-            title="Total Revenue"
-            description="All-time revenue (net of refunds)"
-            data={revenue ?? []}
-            formatValue={(v) =>
-              `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            }
-          />
+          {/* Revenue chart */}
+          {hasStripe && mrr && mrr.length > 0 && (
+            <MetricAreaChart
+              title="MRR"
+              description="Monthly recurring revenue"
+              data={mrr.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
+              formatValue={(v) => `£${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+              color="hsl(var(--chart-1))"
+            />
+          )}
 
-          <MetricChart
-            title="Monthly Recurring Revenue (MRR)"
-            description="Recurring revenue from subscriptions"
-            data={mrr ?? []}
-            formatValue={(v) =>
-              `£${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            }
-          />
+          {/* Traffic + GitHub */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {hasTracker && sessions && sessions.length > 0 && (
+              <MetricAreaChart
+                title="Traffic"
+                data={sessions.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
+                color="hsl(var(--chart-2))"
+                height={250}
+              />
+            )}
+            {hasGithub && (
+              <VelocityScore
+                commits={commits ?? 0}
+                prsOpened={prsOpened ?? 0}
+                prsMerged={0}
+                reviews={reviews ?? 0}
+                totalScore={latestVelocity}
+              />
+            )}
+          </div>
 
-          <MetricChart
-            title="Active Customers"
-            description="Number of active paying customers"
-            data={customers ?? []}
-            formatValue={(v) => v.toLocaleString()}
-          />
-        </div>
-      )}
+          {/* Social cards */}
+          {hasSocial && integrationStatus?.social && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {integrationStatus.social.map((profile: any) => (
+                <SocialCard
+                  key={profile._id}
+                  platform={profile.platform}
+                  handle={profile.handle}
+                  followers={twitterFollowers ?? 0}
+                />
+              ))}
+            </div>
+          )}
 
-      {/* Tracker Metrics */}
-      {hasTracker && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Eye className="h-5 w-5 text-muted-foreground" />
-            Traffic Metrics
-          </h2>
-
-          <MetricChart
-            title="Sessions"
-            description="Total number of user sessions"
-            data={sessions ?? []}
-            formatValue={(v) => v.toLocaleString()}
-          />
-
-          <MetricChart
-            title="Page Views"
-            description="Total number of page views"
-            data={pageviews ?? []}
-            formatValue={(v) => v.toLocaleString()}
-          />
-
-          <MetricChart
-            title="Active Users"
-            description="Number of unique active users"
-            data={activeUsers ?? []}
-            formatValue={(v) => v.toLocaleString()}
-          />
-        </div>
+          {/* Derived Stripe metrics */}
+          {hasStripe && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">ARR</p>
+                  <p className="text-xl font-bold">
+                    £{(arr ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">ARPU</p>
+                  <p className="text-xl font-bold">
+                    £{(arpu ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">NRR</p>
+                  <p className="text-xl font-bold">{(nrr ?? 100).toFixed(1)}%</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">LTV</p>
+                  <p className="text-xl font-bold">
+                    £{(ltv ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">Trial Conversion</p>
+                  <p className="text-xl font-bold">{(trialConversion ?? 0).toFixed(1)}%</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">Payment Failure</p>
+                  <p className="text-xl font-bold">{(paymentFailure ?? 0).toFixed(1)}%</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">Monthly Churn</p>
+                  <p className="text-xl font-bold">{(churnRate ?? 0).toFixed(1)}%</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

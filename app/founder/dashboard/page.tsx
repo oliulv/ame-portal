@@ -17,6 +17,10 @@ import {
   Eye,
   CheckCircle,
   Megaphone,
+  Trophy,
+  Flame,
+  Github,
+  Share2,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -37,6 +41,9 @@ export default function FounderDashboard() {
   const integrationStatus = useQuery(api.integrations.status)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
   const recentAnnouncements = useQuery(api.announcements.recentForFounder)
+  const leaderboardData = useQuery(api.leaderboard.computeLeaderboardForFounder)
+  const currentWeeklyUpdate = useQuery(api.weeklyUpdates.getCurrent)
+  const updateStreak = useQuery(api.weeklyUpdates.getCurrentStreak, {})
   const registerEvent = useMutation(api.cohortEvents.register)
   const [isRegistering, setIsRegistering] = useState(false)
 
@@ -62,10 +69,13 @@ export default function FounderDashboard() {
     fundingSummary === undefined ||
     invoicesData === undefined
 
+  const fullIntegrationStatus = useQuery(api.integrations.fullStatus)
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
   const trackerHasEvents = trackerWebsites?.some((w) => w.lastEventAt) ?? false
-  const hasAnyIntegration = hasStripe || hasTracker
+  const hasGithub = fullIntegrationStatus?.github?.status === 'active'
+  const hasSocial = (fullIntegrationStatus?.social?.length ?? 0) > 0
+  const hasAnyIntegration = hasStripe || hasTracker || hasGithub || hasSocial
   const integrationsLoaded = integrationStatus !== undefined && trackerWebsites !== undefined
 
   const hasStartup = startup !== null
@@ -411,6 +421,92 @@ export default function FounderDashboard() {
         </Card>
       </div>
 
+      {/* Leaderboard + Weekly Update */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Leaderboard Position */}
+        <Card className="flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Leaderboard</CardTitle>
+            <Trophy className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col">
+            {leaderboardData ? (
+              <>
+                <div className="flex items-center gap-3">
+                  {leaderboardData.myRank ? (
+                    <div className="flex h-10 w-10 items-center justify-center bg-primary text-primary-foreground font-bold text-lg">
+                      #{leaderboardData.myRank}
+                    </div>
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center bg-muted text-muted-foreground">
+                      -
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-medium">
+                      {leaderboardData.myRank
+                        ? `Ranked #${leaderboardData.myRank}`
+                        : 'Not yet ranked'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {leaderboardData.myRank
+                        ? `${leaderboardData.myScore.toFixed(1)} points`
+                        : 'Need 4+ active categories'}
+                    </p>
+                  </div>
+                </div>
+                <Link href="/founder/leaderboard" className="mt-auto pt-3 inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    View leaderboard →
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Weekly Update */}
+        <Card className="flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Weekly Update</CardTitle>
+            {(updateStreak ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs text-orange-600">
+                <Flame className="h-3.5 w-3.5" />
+                {updateStreak} week streak
+              </span>
+            )}
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col">
+            {currentWeeklyUpdate ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {currentWeeklyUpdate.highlight}
+                  </p>
+                </div>
+                <Link href="/founder/weekly-update" className="mt-auto pt-3 inline-block">
+                  <Button variant="link" size="sm" className="h-auto p-0">
+                    Edit update →
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Share what you shipped, learned, or discovered this week.
+                </p>
+                <Link href="/founder/weekly-update" className="mt-auto pt-3 inline-block">
+                  <Button size="sm">Submit Update</Button>
+                </Link>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Recent Announcements */}
       {recentAnnouncements && recentAnnouncements.length > 0 && (
         <Card className="flex flex-col">
@@ -508,6 +604,48 @@ export default function FounderDashboard() {
                   </Link>
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {integrationsLoaded && !hasGithub && (
+        <Card className="border-dashed">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <Github className="h-5 w-5 text-muted-foreground" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Track development velocity</p>
+                <p className="text-sm text-muted-foreground">
+                  Connect GitHub to score commits, PRs, and reviews on the leaderboard.
+                </p>
+              </div>
+              <Link href="/founder/integrations?tab=github">
+                <Button variant="outline" size="sm">
+                  Connect GitHub
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {integrationsLoaded && !hasSocial && (
+        <Card className="border-dashed">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <Share2 className="h-5 w-5 text-muted-foreground" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Track social media growth</p>
+                <p className="text-sm text-muted-foreground">
+                  Add your Twitter, LinkedIn, or Instagram handles for the leaderboard.
+                </p>
+              </div>
+              <Link href="/founder/integrations?tab=social">
+                <Button variant="outline" size="sm">
+                  Add Profiles
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
