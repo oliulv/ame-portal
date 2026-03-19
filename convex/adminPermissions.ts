@@ -5,7 +5,8 @@ import { requireAdmin, requireSuperAdmin, hasPermission } from './auth'
 const permissionValue = v.union(
   v.literal('approve_milestones'),
   v.literal('approve_invoices'),
-  v.literal('send_announcements')
+  v.literal('send_announcements'),
+  v.literal('manage_notifications')
 )
 
 /**

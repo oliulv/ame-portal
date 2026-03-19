@@ -39,7 +39,8 @@ export default defineSchema({
     permission: v.union(
       v.literal('approve_milestones'),
       v.literal('approve_invoices'),
-      v.literal('send_announcements')
+      v.literal('send_announcements'),
+      v.literal('manage_notifications')
     ),
   })
     .index('by_userId_cohortId', ['userId', 'cohortId'])

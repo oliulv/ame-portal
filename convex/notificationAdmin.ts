@@ -1,7 +1,19 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdminWithPermission } from './auth'
+import { requireAdmin, requireAdminWithPermission, hasPermission } from './auth'
 import { NOTIFICATION_TYPES } from './lib/notificationTypes'
+
+/**
+ * Check if the current admin can manage notification settings for a cohort.
+ */
+export const canManageNotifications = query({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    const user = await requireAdmin(ctx)
+    if (user.role === 'super_admin') return true
+    return hasPermission(ctx, user._id, args.cohortId, 'manage_notifications')
+  },
+})
 
 /**
  * Get aggregated notification stats for a cohort.
@@ -10,7 +22,7 @@ import { NOTIFICATION_TYPES } from './lib/notificationTypes'
 export const getNotificationStats = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdminWithPermission(ctx, args.cohortId, 'send_announcements')
+    await requireAdminWithPermission(ctx, args.cohortId, 'manage_notifications')
 
     // Get all users in this cohort (founders + admins)
     const startups = await ctx.db
@@ -111,7 +123,7 @@ export const getNotificationStats = query({
 export const getGlobalSettings = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdminWithPermission(ctx, args.cohortId, 'send_announcements')
+    await requireAdminWithPermission(ctx, args.cohortId, 'manage_notifications')
 
     const settings = await ctx.db
       .query('notificationSettings')
@@ -137,7 +149,7 @@ export const getGlobalSettings = query({
 export const getUserNotificationStatus = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdminWithPermission(ctx, args.cohortId, 'send_announcements')
+    await requireAdminWithPermission(ctx, args.cohortId, 'manage_notifications')
 
     // Get founders
     const startups = await ctx.db
@@ -269,7 +281,7 @@ export const setGlobalToggle = mutation({
     enabled: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await requireAdminWithPermission(ctx, args.cohortId, 'send_announcements')
+    await requireAdminWithPermission(ctx, args.cohortId, 'manage_notifications')
 
     const existing = await ctx.db
       .query('notificationSettings')
