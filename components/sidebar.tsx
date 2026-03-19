@@ -25,6 +25,7 @@ import {
   BookOpen,
   ListChecks,
   Megaphone,
+  MessageCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -66,6 +67,7 @@ const iconMap: Record<string, LucideIcon> = {
   BookOpen,
   ListChecks,
   Megaphone,
+  MessageCircle,
 }
 
 /**

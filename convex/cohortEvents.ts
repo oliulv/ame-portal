@@ -1,4 +1,5 @@
 import { query, mutation } from './functions'
+import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAdmin, requireFounder, getFounderStartupIds } from './auth'
 
@@ -57,7 +58,7 @@ export const create = mutation({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
       .collect()
 
-    return await ctx.db.insert('cohortEvents', {
+    const eventId = await ctx.db.insert('cohortEvents', {
       cohortId: args.cohortId,
       title: args.title,
       description: args.description,
@@ -66,6 +67,15 @@ export const create = mutation({
       sortOrder: existing.length,
       isActive: true,
     })
+
+    // Notify founders about the new event
+    await ctx.scheduler.runAfter(0, internal.notifications.notifyEventCreated, {
+      cohortId: args.cohortId,
+      eventTitle: args.title,
+      eventDate: args.date,
+    })
+
+    return eventId
   },
 })
 

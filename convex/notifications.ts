@@ -171,6 +171,14 @@ export const updatePreferences = mutation({
     milestoneStatusChanged: v.optional(v.boolean()),
     announcements: v.optional(v.boolean()),
     eventReminders: v.optional(v.boolean()),
+    invoicePaid: v.optional(v.boolean()),
+    milestoneCreated: v.optional(v.boolean()),
+    eventCreated: v.optional(v.boolean()),
+    resourceSubmitted: v.optional(v.boolean()),
+    resourceReviewed: v.optional(v.boolean()),
+    onboardingCompleted: v.optional(v.boolean()),
+    invitationAccepted: v.optional(v.boolean()),
+    perkClaimed: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireAuth(ctx)
@@ -307,8 +315,20 @@ export const resolveRecipients = internalQuery({
   args: {
     userIds: v.array(v.id('users')),
     notificationType: v.string(),
+    cohortId: v.optional(v.id('cohorts')),
   },
   handler: async (ctx, args) => {
+    // Check global cohort-level toggle first
+    if (args.cohortId) {
+      const globalSetting = await ctx.db
+        .query('notificationSettings')
+        .withIndex('by_cohortId_type', (q) =>
+          q.eq('cohortId', args.cohortId!).eq('notificationType', args.notificationType)
+        )
+        .first()
+      if (globalSetting && globalSetting.enabled === false) return []
+    }
+
     const recipients: { userId: Id<'users'>; phone: string }[] = []
 
     for (const userId of args.userIds) {
@@ -534,6 +554,7 @@ export const notifyInvoiceSubmitted = internalAction({
     const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
       userIds: adminIds,
       notificationType: 'invoiceSubmitted',
+      cohortId: args.cohortId,
     })
 
     const message = `New invoice from ${args.startupName}: ${args.vendorName} — £${args.amountGbp.toFixed(2)}`
@@ -605,6 +626,7 @@ export const notifyMilestoneSubmitted = internalAction({
     const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
       userIds: adminIds,
       notificationType: 'milestoneSubmitted',
+      cohortId: args.cohortId,
     })
 
     const message = `New milestone submitted: ${args.milestoneTitle} from ${args.startupName}`
@@ -761,6 +783,7 @@ export const sendAnnouncementNotification = internalAction({
     const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
       userIds: allUserIds,
       notificationType: 'announcements',
+      cohortId: args.cohortId,
     })
 
     const message = `${args.title}: ${args.body}`
@@ -774,5 +797,292 @@ export const sendAnnouncementNotification = internalAction({
         metadata: { title: args.title },
       })
     }
+  },
+})
+
+// ── New Notification Triggers ────────────────────────────────
+
+/**
+ * Notify founder when their invoice is marked as paid.
+ */
+export const notifyInvoicePaid = internalAction({
+  args: {
+    userId: v.id('users'),
+    fileName: v.string(),
+    amountGbp: v.number(),
+    cohortId: v.optional(v.id('cohorts')),
+  },
+  handler: async (ctx, args) => {
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: [args.userId],
+      notificationType: 'invoicePaid',
+      cohortId: args.cohortId,
+    })
+
+    if (recipients.length === 0) return
+
+    const message = `Your invoice ${args.fileName} (£${args.amountGbp.toFixed(2)}) has been marked as paid`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'invoicePaid',
+        metadata: { fileName: args.fileName, amountGbp: args.amountGbp },
+      })
+    }
+  },
+})
+
+/**
+ * Notify founders when admin creates a new milestone for their startup.
+ */
+export const notifyMilestoneCreated = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    startupId: v.id('startups'),
+    milestoneTitle: v.string(),
+    amount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const founderProfiles = await ctx.runQuery(internal.notifications.getFoundersForStartup, {
+      startupId: args.startupId,
+    })
+
+    if (founderProfiles.length === 0) return
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: founderProfiles,
+      notificationType: 'milestoneCreated',
+      cohortId: args.cohortId,
+    })
+
+    const message = `New milestone: "${args.milestoneTitle}" (£${args.amount.toLocaleString()}) has been added to your startup`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'milestoneCreated',
+        metadata: { milestoneTitle: args.milestoneTitle, amount: args.amount },
+      })
+    }
+  },
+})
+
+/**
+ * Notify founders when a new event is created for their cohort.
+ */
+export const notifyEventCreated = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    eventTitle: v.string(),
+    eventDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const founderIds = await ctx.runQuery(internal.notifications.getFounderUserIdsInCohort, {
+      cohortId: args.cohortId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: founderIds,
+      notificationType: 'eventCreated',
+      cohortId: args.cohortId,
+    })
+
+    const message = `New event: "${args.eventTitle}" on ${args.eventDate}`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'eventCreated',
+        metadata: { eventTitle: args.eventTitle, eventDate: args.eventDate },
+      })
+    }
+  },
+})
+
+/**
+ * Notify admins when a founder submits a resource for review.
+ */
+export const notifyResourceSubmitted = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    founderName: v.string(),
+    resourceTitle: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminUserIdsForCohort, {
+      cohortId: args.cohortId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: adminIds,
+      notificationType: 'resourceSubmitted',
+      cohortId: args.cohortId,
+    })
+
+    const message = `${args.founderName} submitted a resource for review: "${args.resourceTitle}"`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'resourceSubmitted',
+        metadata: { founderName: args.founderName, resourceTitle: args.resourceTitle },
+      })
+    }
+  },
+})
+
+/**
+ * Notify founder when their resource submission is reviewed.
+ */
+export const notifyResourceReviewed = internalAction({
+  args: {
+    userId: v.id('users'),
+    resourceTitle: v.string(),
+    status: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: [args.userId],
+      notificationType: 'resourceReviewed',
+    })
+
+    if (recipients.length === 0) return
+
+    const message = `Your resource "${args.resourceTitle}" has been ${args.status}`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'resourceReviewed',
+        metadata: { resourceTitle: args.resourceTitle, status: args.status },
+      })
+    }
+  },
+})
+
+/**
+ * Notify admins when a founder completes onboarding.
+ */
+export const notifyOnboardingCompleted = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    founderName: v.string(),
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminUserIdsForCohort, {
+      cohortId: args.cohortId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: adminIds,
+      notificationType: 'onboardingCompleted',
+      cohortId: args.cohortId,
+    })
+
+    const message = `${args.founderName} from ${args.startupName} has completed onboarding`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'onboardingCompleted',
+        metadata: { founderName: args.founderName, startupName: args.startupName },
+      })
+    }
+  },
+})
+
+/**
+ * Notify admins when a founder accepts an invitation.
+ */
+export const notifyInvitationAccepted = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    founderName: v.string(),
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminUserIdsForCohort, {
+      cohortId: args.cohortId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: adminIds,
+      notificationType: 'invitationAccepted',
+      cohortId: args.cohortId,
+    })
+
+    const message = `${args.founderName} has accepted their invitation and joined ${args.startupName}`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'invitationAccepted',
+        metadata: { founderName: args.founderName, startupName: args.startupName },
+      })
+    }
+  },
+})
+
+/**
+ * Notify admins when a founder claims a perk.
+ */
+export const notifyPerkClaimed = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    founderName: v.string(),
+    perkTitle: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminUserIdsForCohort, {
+      cohortId: args.cohortId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: adminIds,
+      notificationType: 'perkClaimed',
+      cohortId: args.cohortId,
+    })
+
+    const message = `${args.founderName} claimed a perk: "${args.perkTitle}"`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'perkClaimed',
+        metadata: { founderName: args.founderName, perkTitle: args.perkTitle },
+      })
+    }
+  },
+})
+
+/**
+ * Internal query: get founder user IDs for a specific startup.
+ */
+export const getFoundersForStartup = internalQuery({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    const profiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+    return profiles.map((p) => p.userId)
   },
 })

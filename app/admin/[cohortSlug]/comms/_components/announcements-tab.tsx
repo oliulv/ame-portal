@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
-import { useParams } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,7 +19,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog,
   DialogContent,
@@ -40,11 +38,9 @@ import {
 import { Megaphone, Send, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { announcementSchema, type AnnouncementFormData } from '@/lib/schemas'
+import type { Id } from '@/convex/_generated/dataModel'
 
-export default function AnnouncementsPage() {
-  const params = useParams()
-  const cohortSlug = params.cohortSlug as string
-
+export function AnnouncementsTab({ cohortSlug }: { cohortSlug: string }) {
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const announcements = useQuery(
     api.announcements.listForAdmin,
@@ -74,7 +70,7 @@ export default function AnnouncementsPage() {
     setIsSending(true)
     try {
       await sendAnnouncement({
-        cohortId: cohort._id,
+        cohortId: cohort._id as Id<'cohorts'>,
         title: pendingData.title,
         body: pendingData.body,
       })
@@ -90,25 +86,13 @@ export default function AnnouncementsPage() {
     }
   }
 
-  if (cohort === undefined || announcements === undefined) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-9 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    )
-  }
-
-  if (!cohort) {
-    return <p className="text-muted-foreground">Cohort not found</p>
-  }
+  if (!cohort) return null
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight font-display">Announcements</h1>
           <p className="text-muted-foreground">
             {canSend
               ? `Send announcements to all founders in ${cohort.label}`
@@ -213,7 +197,7 @@ export default function AnnouncementsPage() {
       </Dialog>
 
       {/* Announcements History */}
-      {announcements.length === 0 ? (
+      {announcements === undefined ? null : announcements.length === 0 ? (
         <EmptyState
           icon={<Megaphone className="h-6 w-6" />}
           title="No announcements yet"

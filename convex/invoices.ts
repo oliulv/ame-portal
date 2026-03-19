@@ -438,6 +438,17 @@ export const updateStatus = mutation({
         status: args.status,
       })
     }
+
+    // Notify founder when invoice is marked as paid
+    if (args.status === 'paid') {
+      const startup = await ctx.db.get(invoice.startupId)
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyInvoicePaid, {
+        userId: invoice.uploadedByUserId,
+        fileName: invoice.fileName,
+        amountGbp: invoice.amountGbp,
+        cohortId: startup?.cohortId,
+      })
+    }
   },
 })
 
@@ -455,6 +466,15 @@ export const batchMarkPaid = mutation({
       await ctx.db.patch(id, {
         status: 'paid',
         paidAt: new Date().toISOString(),
+      })
+
+      // Notify founder about payment
+      const startup = await ctx.db.get(invoice.startupId)
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyInvoicePaid, {
+        userId: invoice.uploadedByUserId,
+        fileName: invoice.fileName,
+        amountGbp: invoice.amountGbp,
+        cohortId: startup?.cohortId,
       })
     }
   },

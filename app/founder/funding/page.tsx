@@ -307,12 +307,12 @@ export default function FounderFundingPage() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="divide-y">
           {filteredMilestones.length > 0 ? (
             filteredMilestones.map((milestone) => (
               <Link key={milestone._id} href={`/founder/milestones/${milestone._id}`}>
-                <Card className="shadow-none cursor-pointer transition-colors hover:bg-muted/50">
-                  <CardContent className="flex items-center justify-between gap-4 px-4 py-3">
+                <div className="cursor-pointer transition-colors hover:bg-muted/50">
+                  <div className="flex items-center justify-between gap-4 px-4 py-3">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="shrink-0">
                         {milestone.status === 'approved' ? (
@@ -369,8 +369,8 @@ export default function FounderFundingPage() {
                         )}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </Link>
             ))
           ) : (

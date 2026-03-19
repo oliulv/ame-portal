@@ -221,6 +221,16 @@ export const accept = mutation({
       acceptedAt: new Date().toISOString(),
     })
 
+    // Notify admins about the accepted invitation
+    const startup = await ctx.db.get(invitation.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyInvitationAccepted, {
+        cohortId: startup.cohortId,
+        founderName: invitation.fullName,
+        startupName: startup.name,
+      })
+    }
+
     return userId
   },
 })

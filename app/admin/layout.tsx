@@ -98,7 +98,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
     { title: 'Startups', href: '/admin/startups', icon: 'Building2' },
-    { title: 'Announcements', href: '/admin/announcements', icon: 'Megaphone' },
+    { title: 'Comms', href: '/admin/comms', icon: 'MessageCircle' },
     { title: 'Funding', href: '/admin/funding', icon: 'Target' },
     { title: 'Milestones', href: '/admin/milestones', icon: 'ListChecks' },
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },

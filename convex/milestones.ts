@@ -413,7 +413,7 @@ export const create = mutation({
       sortOrder = existing.length
     }
 
-    return await ctx.db.insert('milestones', {
+    const milestoneId = await ctx.db.insert('milestones', {
       startupId: args.startupId,
       title: args.title,
       description: args.description,
@@ -424,6 +424,19 @@ export const create = mutation({
       requireLink: args.requireLink,
       requireFile: args.requireFile,
     })
+
+    // Notify founders about the new milestone
+    const startup = await ctx.db.get(args.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneCreated, {
+        cohortId: startup.cohortId,
+        startupId: args.startupId,
+        milestoneTitle: args.title,
+        amount: args.amount,
+      })
+    }
+
+    return milestoneId
   },
 })
 

@@ -1,4 +1,5 @@
 import { query, mutation } from './functions'
+import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireFounder } from './auth'
 
@@ -130,6 +131,16 @@ export const complete = mutation({
     await ctx.db.patch(founderProfile.startupId, {
       onboardingStatus: 'completed',
     })
+
+    // Notify admins about completed onboarding
+    const startup = await ctx.db.get(founderProfile.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyOnboardingCompleted, {
+        cohortId: startup.cohortId,
+        founderName: founderProfile.fullName,
+        startupName: startup.name,
+      })
+    }
   },
 })
 

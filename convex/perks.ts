@@ -1,4 +1,5 @@
 import { query, mutation, action } from './functions'
+import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAdmin, requireAuth, getFounderStartupIds } from './auth'
 import { api } from './_generated/api'
@@ -216,6 +217,13 @@ export const claim = mutation({
       userId: user._id,
       startupId: startup._id,
       claimedAt: new Date().toISOString(),
+    })
+
+    // Notify admins about the perk claim
+    await ctx.scheduler.runAfter(0, internal.notifications.notifyPerkClaimed, {
+      cohortId: startup.cohortId,
+      founderName: user.fullName || 'A founder',
+      perkTitle: perk.title,
     })
   },
 })

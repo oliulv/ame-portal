@@ -28,6 +28,7 @@ import {
   type SmsVerificationFormData,
 } from '@/lib/schemas'
 import { CheckCircle2, MessageSquare, Shield, Loader2 } from 'lucide-react'
+import { ACTIVE_NOTIFICATION_TYPES } from '@/convex/lib/notificationTypes'
 
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof ConvexError) return err.data as string
@@ -276,28 +277,9 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                {
-                  key: 'invoiceStatusChanged',
-                  label: 'Invoice Updates',
-                  description: 'When your invoices are approved or rejected',
-                },
-                {
-                  key: 'milestoneStatusChanged',
-                  label: 'Milestone Updates',
-                  description: 'When your milestones are approved or need changes',
-                },
-                {
-                  key: 'announcements',
-                  label: 'Announcements',
-                  description: 'Important announcements from the programme',
-                },
-                {
-                  key: 'eventReminders',
-                  label: 'Event Reminders',
-                  description: 'Daily reminders for events happening today',
-                },
-              ].map((pref) => (
+              {ACTIVE_NOTIFICATION_TYPES.filter(
+                (t) => t.audience === 'founders' || t.audience === 'all'
+              ).map((pref) => (
                 <div key={pref.key} className="flex items-center justify-between border p-3">
                   <div>
                     <p className="font-medium text-sm">{pref.label}</p>
