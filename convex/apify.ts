@@ -31,7 +31,10 @@ export const updateScrapeStatus = internalMutation({
 })
 
 /**
- * Scrape a Twitter profile via Apify.
+ * Scrape a Twitter/X profile via Apify.
+ * Actor: apidojo/tweet-scraper (Tweet Scraper V2)
+ * Input: twitterHandles (array of usernames), maxItems
+ * Output: author object with follower data, likeCount, retweetCount, replyCount per tweet
  */
 export const scrapeTwitterProfile = internalAction({
   args: {
@@ -45,15 +48,13 @@ export const scrapeTwitterProfile = internalAction({
 
     try {
       const response = await fetch(
-        'https://api.apify.com/v2/acts/apidojo~tweet-scraper/run-sync-get-dataset-items?token=' +
-          apiToken,
+        `https://api.apify.com/v2/acts/apidojo~tweet-scraper/run-sync-get-dataset-items?token=${apiToken}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            startUrls: [{ url: `https://twitter.com/${args.handle}` }],
+            twitterHandles: [args.handle.replace(/^@/, '')],
             maxItems: 20,
-            proxyConfiguration: { useApifyProxy: true },
           }),
         }
       )
@@ -63,10 +64,10 @@ export const scrapeTwitterProfile = internalAction({
       const data = await response.json()
       if (!Array.isArray(data) || data.length === 0) return
 
-      // Extract profile info from first result
-      const profile = data[0]?.author ?? data[0]
-      const followers = profile?.followers ?? profile?.followersCount ?? 0
-      const following = profile?.following ?? profile?.friendsCount ?? 0
+      // Extract profile info from the author object on the first tweet
+      const author = data[0]?.author
+      const followers = author?.followers ?? author?.followersCount ?? 0
+      const following = author?.following ?? author?.friendsCount ?? 0
 
       // Calculate engagement from recent tweets
       const totalInteractions = data.reduce((sum: number, tweet: any) => {
@@ -137,7 +138,10 @@ export const scrapeTwitterProfile = internalAction({
 })
 
 /**
- * Scrape a LinkedIn profile via Apify.
+ * Scrape a LinkedIn company profile via Apify.
+ * Actor: dev_fusion/linkedin-company-scraper (Bulk LinkedIn Company Profile Scraper, No Cookies)
+ * Input: urls (array of LinkedIn company URLs)
+ * Output: stats.follower_count, stats.employee_count, name, etc.
  */
 export const scrapeLinkedInProfile = internalAction({
   args: {
@@ -154,14 +158,12 @@ export const scrapeLinkedInProfile = internalAction({
       const url = args.profileUrl || `https://www.linkedin.com/company/${args.handle}`
 
       const response = await fetch(
-        'https://api.apify.com/v2/acts/anchor~linkedin-company-scraper/run-sync-get-dataset-items?token=' +
-          apiToken,
+        `https://api.apify.com/v2/acts/dev_fusion~linkedin-company-scraper/run-sync-get-dataset-items?token=${apiToken}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            startUrls: [{ url }],
-            proxyConfiguration: { useApifyProxy: true },
+            urls: [url],
           }),
         }
       )
@@ -172,7 +174,13 @@ export const scrapeLinkedInProfile = internalAction({
       if (!Array.isArray(data) || data.length === 0) return
 
       const company = data[0]
-      const followers = company?.followersCount ?? company?.followers ?? 0
+      // dev_fusion scraper uses stats.follower_count or top-level followerCount
+      const followers =
+        company?.stats?.follower_count ??
+        company?.followerCount ??
+        company?.followersCount ??
+        company?.follower_count ??
+        0
 
       const timestamp = new Date().toISOString()
 
@@ -206,6 +214,9 @@ export const scrapeLinkedInProfile = internalAction({
 
 /**
  * Scrape an Instagram profile via Apify.
+ * Actor: apify/instagram-profile-scraper
+ * Input: usernames (array)
+ * Output: followersCount, followsCount, postsCount, biography, fullName, etc.
  */
 export const scrapeInstagramProfile = internalAction({
   args: {
@@ -219,14 +230,12 @@ export const scrapeInstagramProfile = internalAction({
 
     try {
       const response = await fetch(
-        'https://api.apify.com/v2/acts/apify~instagram-profile-scraper/run-sync-get-dataset-items?token=' +
-          apiToken,
+        `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/run-sync-get-dataset-items?token=${apiToken}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            usernames: [args.handle],
-            proxyConfiguration: { useApifyProxy: true },
+            usernames: [args.handle.replace(/^@/, '')],
           }),
         }
       )
