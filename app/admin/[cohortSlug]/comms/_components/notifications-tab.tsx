@@ -172,29 +172,66 @@ export function NotificationsTab({
             <CardDescription>Last 30 days</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={stats.timeSeries}>
-                <CartesianGrid strokeDasharray="3 3" />
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart
+                data={stats.timeSeries}
+                margin={{ top: 8, right: 4, left: -12, bottom: 0 }}
+                barCategoryGap="20%"
+              >
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.6} />
                 <XAxis
                   dataKey="date"
                   tickFormatter={(d: string) => {
-                    const date = new Date(d)
-                    return `${date.getDate()}/${date.getMonth() + 1}`
+                    const date = new Date(d + 'T00:00:00')
+                    return date.getDate().toString()
                   }}
-                  fontSize={12}
+                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                  tickLine={false}
+                  interval={2}
                 />
-                <YAxis fontSize={12} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
                 <Tooltip
+                  cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--popover))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  }}
                   labelFormatter={(d: string) =>
-                    new Date(d).toLocaleDateString('en-GB', {
+                    new Date(d + 'T00:00:00').toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'short',
+                      year: 'numeric',
                     })
                   }
                 />
-                <Legend />
-                <Bar dataKey="sent" fill="hsl(142, 71%, 45%)" name="Sent" stackId="a" />
-                <Bar dataKey="failed" fill="hsl(0, 72%, 51%)" name="Failed" stackId="a" />
+                <Legend
+                  iconType="circle"
+                  iconSize={8}
+                  wrapperStyle={{ fontSize: '12px', paddingTop: '12px' }}
+                />
+                <Bar
+                  dataKey="sent"
+                  fill="hsl(var(--chart-1))"
+                  name="Sent"
+                  stackId="a"
+                  radius={[3, 3, 0, 0]}
+                />
+                <Bar
+                  dataKey="failed"
+                  fill="hsl(var(--chart-4))"
+                  name="Failed"
+                  stackId="a"
+                  radius={[3, 3, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
