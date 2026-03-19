@@ -118,12 +118,12 @@ export default function FounderCalendarPage() {
                         onClick={() => handleRegister(event._id)}
                         disabled={isToggling}
                       >
-                        {isToggling ? '...' : "I'm Registered"}
+                        {isToggling ? '...' : "I'm Attending"}
                       </Button>
                     )}
                     <Button variant="secondary" size="sm" asChild>
                       <a href={event.lumaEmbedUrl} target="_blank" rel="noopener noreferrer">
-                        {event.isRegistered ? 'View Event' : 'Register'}
+                        View Event
                         <ExternalLink className="ml-1.5 h-3 w-3" />
                       </a>
                     </Button>
