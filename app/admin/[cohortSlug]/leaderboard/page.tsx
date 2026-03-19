@@ -9,13 +9,22 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Users,
   Plus,
   ChevronDown,
   ChevronUp,
   Star,
+  StarOff,
   Flame,
   AlertTriangle,
+  AlertCircle,
   Info,
   Settings2,
 } from 'lucide-react'
@@ -24,6 +33,7 @@ import Image from 'next/image'
 import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { ScoringChatbot } from '@/components/leaderboard/scoring-chatbot'
+import type { Id } from '@/convex/_generated/dataModel'
 
 const CATEGORY_COLORS: Record<string, string> = {
   revenue: 'bg-emerald-500',
@@ -251,10 +261,39 @@ export default function LeaderboardPage() {
     cohort ? { cohortId: cohort._id } : 'skip'
   )
 
+  const [activeTab, setActiveTab] = useState<'rankings' | 'updates'>('rankings')
   const [showExplainer, setShowExplainer] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [pValue, setPValue] = useState(0.7)
   const updateP = useMutation(api.leaderboard.updateNormalizationPower)
+
+  // Weekly updates data
+  const currentWeek = useMemo(() => {
+    const d = new Date()
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    d.setDate(diff)
+    return d.toISOString().slice(0, 10)
+  }, [])
+  const [selectedWeek, setSelectedWeek] = useState(currentWeek)
+  const updates = useQuery(
+    api.weeklyUpdates.list,
+    cohort && activeTab === 'updates' ? { cohortId: cohort._id, weekOf: selectedWeek } : 'skip'
+  )
+  const summary = useQuery(
+    api.weeklyUpdates.getWeeklySummary,
+    cohort && activeTab === 'updates' ? { cohortId: cohort._id, weekOf: selectedWeek } : 'skip'
+  )
+  const setFavorite = useMutation(api.weeklyUpdates.setFavorite)
+
+  const handleToggleFavorite = async (updateId: Id<'weeklyUpdates'>, currentValue: boolean) => {
+    try {
+      await setFavorite({ updateId, isFavorite: !currentValue })
+      toast.success(!currentValue ? 'Marked as favourite' : 'Removed from favourites')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update')
+    }
+  }
 
   const maxScore = useMemo(() => {
     if (!leaderboard?.ranked?.length) return 10
@@ -333,153 +372,297 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* Scoring explainer — rendered below header */}
-      {showExplainer && <ScoringExplainerContent />}
-
-      {/* Scoring config (super_admin) */}
-      {showConfig && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Normalization Power (p)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-4">
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                More compressed
-              </span>
-              <input
-                type="range"
-                min={0.3}
-                max={1.0}
-                step={0.05}
-                value={pValue}
-                onChange={(e) => setPValue(Number(e.target.value))}
-                className="flex-1"
-              />
-              <span className="text-xs text-muted-foreground whitespace-nowrap">More linear</span>
-              <span className="text-sm font-mono font-bold w-10 text-right">
-                {pValue.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={async () => {
-                  try {
-                    await updateP({ cohortId: cohort!._id, normalizationPower: pValue })
-                    toast.success('Normalization power updated')
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : 'Failed')
-                  }
-                }}
-              >
-                Apply
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setPValue(0.7)}>
-                Reset to default (0.70)
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Current: {leaderboard?.normalizationPower?.toFixed(2) ?? '0.70'}. Changes recalculate
-              all scores retroactively.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Leaderboard table */}
-      <div className="bg-card border overflow-hidden overflow-x-auto">
-        <table className="min-w-full divide-y divide-border">
-          <thead className="bg-muted">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-12">
-                Rank
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Startup
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Score Breakdown
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
-                Score
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">
-                Fav
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-16">
-                Streak
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-12" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {leaderboard?.ranked?.map((entry: any) => (
-              <ExpandableRow key={entry.startupId} entry={entry} maxScore={maxScore} />
-            ))}
-          </tbody>
-        </table>
+      {/* Tabs */}
+      <div className="border-b">
+        <nav className="flex gap-4">
+          <button
+            onClick={() => setActiveTab('rankings')}
+            className={`px-4 py-3 border-b-2 text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === 'rankings'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Rankings
+          </button>
+          <button
+            onClick={() => setActiveTab('updates')}
+            className={`px-4 py-3 border-b-2 text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === 'updates'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Weekly Updates
+            {summary && (
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {summary.submittedCount}/{summary.totalStartups}
+              </Badge>
+            )}
+          </button>
+        </nav>
       </div>
 
-      {/* Unranked section */}
-      {leaderboard?.unranked && leaderboard.unranked.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            Unranked ({leaderboard.unranked.length})
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            These startups don&apos;t meet the 4-of-6 category activity requirement.
-          </p>
-          <div className="bg-card border overflow-hidden">
+      {/* Rankings tab */}
+      {activeTab === 'rankings' && (
+        <>
+          {/* Scoring explainer — rendered below header */}
+          {showExplainer && <ScoringExplainerContent />}
+
+          {/* Scoring config (super_admin) */}
+          {showConfig && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Normalization Power (p)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    More compressed
+                  </span>
+                  <input
+                    type="range"
+                    min={0.3}
+                    max={1.0}
+                    step={0.05}
+                    value={pValue}
+                    onChange={(e) => setPValue(Number(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    More linear
+                  </span>
+                  <span className="text-sm font-mono font-bold w-10 text-right">
+                    {pValue.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await updateP({ cohortId: cohort!._id, normalizationPower: pValue })
+                        toast.success('Normalization power updated')
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'Failed')
+                      }
+                    }}
+                  >
+                    Apply
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setPValue(0.7)}>
+                    Reset to default (0.70)
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Current: {leaderboard?.normalizationPower?.toFixed(2) ?? '0.70'}. Changes
+                  recalculate all scores retroactively.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Leaderboard table */}
+          <div className="bg-card border overflow-hidden overflow-x-auto">
             <table className="min-w-full divide-y divide-border">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-12">
+                    Rank
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Startup
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Score Breakdown
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
+                    Score
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">
+                    Fav
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-16">
+                    Streak
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-12" />
+                </tr>
+              </thead>
               <tbody className="divide-y divide-border">
-                {leaderboard.unranked.map((entry: any) => (
-                  <tr key={entry.startupId} className="opacity-60">
-                    <td className="px-4 py-3 w-12">
-                      <span className="text-muted-foreground text-sm">-</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {entry.startupLogoUrl && (
-                          <Image
-                            src={entry.startupLogoUrl}
-                            alt={entry.startupName}
-                            width={32}
-                            height={32}
-                            className="h-8 w-8 rounded-full"
-                          />
-                        )}
-                        <span className="text-sm">{entry.startupName}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {entry.activeCategories}/6 active
-                        </Badge>
-                        {entry.excludeFromMetrics && (
-                          <Badge variant="warning" className="text-xs">
-                            Excluded
-                          </Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-muted-foreground">
-                      {entry.totalScore.toFixed(1)}
-                    </td>
-                  </tr>
+                {leaderboard?.ranked?.map((entry: any) => (
+                  <ExpandableRow key={entry.startupId} entry={entry} maxScore={maxScore} />
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+
+          {/* Unranked section */}
+          {leaderboard?.unranked && leaderboard.unranked.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                Unranked ({leaderboard.unranked.length})
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                These startups don&apos;t meet the 4-of-6 category activity requirement.
+              </p>
+              <div className="bg-card border overflow-hidden">
+                <table className="min-w-full divide-y divide-border">
+                  <tbody className="divide-y divide-border">
+                    {leaderboard.unranked.map((entry: any) => (
+                      <tr key={entry.startupId} className="opacity-60">
+                        <td className="px-4 py-3 w-12">
+                          <span className="text-muted-foreground text-sm">-</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            {entry.startupLogoUrl && (
+                              <Image
+                                src={entry.startupLogoUrl}
+                                alt={entry.startupName}
+                                width={32}
+                                height={32}
+                                className="h-8 w-8 rounded-full"
+                              />
+                            )}
+                            <span className="text-sm">{entry.startupName}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {entry.activeCategories}/6 active
+                            </Badge>
+                            {entry.excludeFromMetrics && (
+                              <Badge variant="warning" className="text-xs">
+                                Excluded
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-muted-foreground">
+                          {entry.totalScore.toFixed(1)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Legend */}
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+              <div key={key} className="flex items-center gap-1.5">
+                <div className={`h-2 w-2 ${CATEGORY_COLORS[key]}`} />
+                {label} ({CATEGORY_WEIGHTS[key]}%)
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-          <div key={key} className="flex items-center gap-1.5">
-            <div className={`h-2 w-2 ${CATEGORY_COLORS[key]}`} />
-            {label} ({CATEGORY_WEIGHTS[key]}%)
+      {/* Weekly Updates tab */}
+      {activeTab === 'updates' && (
+        <div className="space-y-4">
+          {/* Week selector */}
+          <div className="flex items-center gap-4">
+            <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={currentWeek}>{currentWeek}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        ))}
-      </div>
+
+          {/* Summary */}
+          {summary && (
+            <div className="grid grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-2xl font-bold">
+                    {summary.submittedCount}/{summary.totalStartups}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Submitted</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-2xl font-bold">{summary.missingCount}</div>
+                  <p className="text-sm text-muted-foreground">Missing</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-2xl font-bold">{summary.favoriteCount}/2</div>
+                  <p className="text-sm text-muted-foreground">Favourites</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Updates */}
+          {updates && updates.length > 0 ? (
+            updates.map((update: any) => (
+              <Card key={update._id} className={update.isFavorite ? 'ring-2 ring-yellow-400' : ''}>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-sm font-semibold">{update.startupName}</span>
+                        {update.primaryMetric && (
+                          <Badge variant="outline" className="text-xs">
+                            {update.primaryMetric.label}:{' '}
+                            {update.primaryMetric.value.toLocaleString()}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{update.highlight}</p>
+                    </div>
+                    <Button
+                      variant={update.isFavorite ? 'default' : 'outline'}
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => handleToggleFavorite(update._id, update.isFavorite)}
+                    >
+                      {update.isFavorite ? (
+                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      ) : (
+                        <StarOff className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No updates submitted this week yet.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Missing startups */}
+          {summary && summary.missing.length > 0 && (
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Missing ({summary.missingCount})</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {summary.missing.map((s: any) => (
+                    <Badge key={s._id} variant="outline" className="text-muted-foreground">
+                      {s.name}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* AI Chatbot */}
       <ScoringChatbot />

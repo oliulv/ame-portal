@@ -103,7 +103,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { title: 'Funding', href: '/admin/funding', icon: 'Target' },
     { title: 'Milestones', href: '/admin/milestones', icon: 'ListChecks' },
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },
-    { title: 'Weekly Updates', href: '/admin/weekly-updates', icon: 'ClipboardList' },
     { title: 'Analytics', href: '/admin/analytics', icon: 'BarChart3' },
     { title: 'Events', href: '/admin/events', icon: 'Calendar' },
     { title: 'Perks', href: '/admin/perks', icon: 'Gift' },

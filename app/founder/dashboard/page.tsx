@@ -487,7 +487,7 @@ export default function FounderDashboard() {
                     {currentWeeklyUpdate.highlight}
                   </p>
                 </div>
-                <Link href="/founder/weekly-update" className="mt-auto pt-3 inline-block">
+                <Link href="/founder/leaderboard" className="mt-auto pt-3 inline-block">
                   <Button variant="link" size="sm" className="h-auto p-0">
                     Edit update →
                   </Button>
@@ -498,7 +498,7 @@ export default function FounderDashboard() {
                 <p className="text-sm text-muted-foreground">
                   Share what you shipped, learned, or discovered this week.
                 </p>
-                <Link href="/founder/weekly-update" className="mt-auto pt-3 inline-block">
+                <Link href="/founder/leaderboard" className="mt-auto pt-3 inline-block">
                   <Button size="sm">Submit Update</Button>
                 </Link>
               </>
