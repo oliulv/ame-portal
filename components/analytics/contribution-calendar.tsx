@@ -56,7 +56,7 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Contributions</CardTitle>
           <span className="text-sm text-muted-foreground">
@@ -66,45 +66,47 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
       </CardHeader>
       <CardContent>
         <TooltipProvider delayDuration={100}>
-          {/* Month labels */}
-          <div className="flex mb-1" style={{ paddingLeft: '24px' }}>
-            {weeks.map((week, wi) => {
+          {/* Month labels row */}
+          <div className="flex gap-1 mb-1" style={{ paddingLeft: '28px' }}>
+            {weeks.map((_week, wi) => {
               const label = monthLabels.find((m) => m.colIndex === wi)
               return (
-                <div
-                  key={wi}
-                  className="text-[10px] text-muted-foreground"
-                  style={{ width: '19px', flexShrink: 0 }}
-                >
+                <div key={wi} className="flex-1 text-[10px] text-muted-foreground min-w-0">
                   {label?.label ?? ''}
                 </div>
               )
             })}
           </div>
 
-          <div className="flex">
+          <div className="flex gap-0">
             {/* Day-of-week labels */}
-            <div className="flex flex-col gap-[4px] mr-1.5 pt-[1px]">
+            <div className="flex flex-col gap-1 mr-1 shrink-0">
               {DAY_LABELS.map((label, i) => (
                 <div
                   key={i}
-                  className="text-[10px] text-muted-foreground leading-none"
-                  style={{ height: '15px', display: 'flex', alignItems: 'center' }}
+                  className="text-[10px] text-muted-foreground leading-none flex items-center justify-end"
+                  style={{ height: '0', paddingBottom: '100%', position: 'relative' }}
                 >
-                  {label}
+                  <span className="absolute inset-0 flex items-center justify-end pr-0.5 text-[10px]">
+                    {label}
+                  </span>
                 </div>
               ))}
             </div>
 
-            {/* Grid */}
-            <div className="flex gap-[4px] overflow-x-auto">
+            {/* Grid — cells stretch to fill width */}
+            <div
+              className="flex-1 grid gap-1"
+              style={{ gridTemplateColumns: `repeat(${weeks.length}, 1fr)` }}
+            >
               {weeks.map((week, wi) => (
-                <div key={wi} className="flex flex-col gap-[4px]">
+                <div key={wi} className="flex flex-col gap-1">
                   {week.contributionDays.map((day) => (
                     <Tooltip key={day.date}>
                       <TooltipTrigger asChild>
                         <div
-                          className={`h-[15px] w-[15px] rounded-[2px] ${getColor(day.contributionCount)}`}
+                          className={`w-full rounded-[2px] ${getColor(day.contributionCount)}`}
+                          style={{ aspectRatio: '1' }}
                         />
                       </TooltipTrigger>
                       <TooltipContent
@@ -124,14 +126,14 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
           </div>
         </TooltipProvider>
 
-        <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
           <span>Less</span>
-          <div className="flex gap-[4px]">
-            <div className="h-[11px] w-[11px] rounded-[2px] bg-muted" />
-            <div className="h-[11px] w-[11px] rounded-[2px] bg-green-200 dark:bg-green-900" />
-            <div className="h-[11px] w-[11px] rounded-[2px] bg-green-400 dark:bg-green-700" />
-            <div className="h-[11px] w-[11px] rounded-[2px] bg-green-600 dark:bg-green-500" />
-            <div className="h-[11px] w-[11px] rounded-[2px] bg-green-800 dark:bg-green-400" />
+          <div className="flex gap-1">
+            <div className="h-3 w-3 rounded-[2px] bg-muted" />
+            <div className="h-3 w-3 rounded-[2px] bg-green-200 dark:bg-green-900" />
+            <div className="h-3 w-3 rounded-[2px] bg-green-400 dark:bg-green-700" />
+            <div className="h-3 w-3 rounded-[2px] bg-green-600 dark:bg-green-500" />
+            <div className="h-3 w-3 rounded-[2px] bg-green-800 dark:bg-green-400" />
           </div>
           <span>More</span>
         </div>

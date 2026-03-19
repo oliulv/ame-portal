@@ -20,12 +20,12 @@ interface VelocityScoreProps {
   totalScore: number
 }
 
-const POINT_VALUES = {
-  Commits: { points: 10, color: '#22c55e' },
-  'PRs Opened': { points: 25, color: '#3b82f6' },
-  'PRs Merged': { points: 50, color: '#8b5cf6' },
-  Reviews: { points: 30, color: '#f59e0b' },
-}
+const BARS = [
+  { key: 'Commits', points: 10, cssVar: '--chart-1' },
+  { key: 'PRs Opened', points: 25, cssVar: '--chart-2' },
+  { key: 'PRs Merged', points: 50, cssVar: '--chart-3' },
+  { key: 'Reviews', points: 30, cssVar: '--chart-4' },
+]
 
 export function VelocityScore({
   commits,
@@ -35,10 +35,20 @@ export function VelocityScore({
   totalScore,
 }: VelocityScoreProps) {
   const data = [
-    { name: 'Commits', count: commits, points: commits * 10, color: '#22c55e' },
-    { name: 'PRs Opened', count: prsOpened, points: prsOpened * 25, color: '#3b82f6' },
-    { name: 'PRs Merged', count: prsMerged, points: prsMerged * 50, color: '#8b5cf6' },
-    { name: 'Reviews', count: reviews, points: reviews * 30, color: '#f59e0b' },
+    { name: 'Commits', count: commits, points: commits * 10, color: 'hsl(var(--chart-1))' },
+    {
+      name: 'PRs Opened',
+      count: prsOpened,
+      points: prsOpened * 25,
+      color: 'hsl(var(--chart-2))',
+    },
+    {
+      name: 'PRs Merged',
+      count: prsMerged,
+      points: prsMerged * 50,
+      color: 'hsl(var(--chart-3))',
+    },
+    { name: 'Reviews', count: reviews, points: reviews * 30, color: 'hsl(var(--chart-4))' },
   ]
 
   return (
@@ -53,17 +63,17 @@ export function VelocityScore({
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={data} layout="vertical" barCategoryGap="20%">
             <defs>
-              {data.map((entry) => (
+              {BARS.map((bar) => (
                 <linearGradient
-                  key={entry.name}
-                  id={`bar-grad-${entry.name.replace(/\s/g, '-')}`}
+                  key={bar.key}
+                  id={`vel-grad-${bar.key.replace(/\s/g, '-')}`}
                   x1="0"
                   y1="0"
                   x2="1"
                   y2="0"
                 >
-                  <stop offset="0%" stopColor={entry.color} stopOpacity={0.7} />
-                  <stop offset="100%" stopColor={entry.color} stopOpacity={1} />
+                  <stop offset="0%" stopColor={`hsl(var(${bar.cssVar}))`} stopOpacity={0.5} />
+                  <stop offset="100%" stopColor={`hsl(var(${bar.cssVar}))`} stopOpacity={1} />
                 </linearGradient>
               ))}
             </defs>
@@ -84,17 +94,20 @@ export function VelocityScore({
             />
             <Bar dataKey="points" animationDuration={500} radius={[0, 4, 4, 0]}>
               {data.map((entry) => (
-                <Cell key={entry.name} fill={`url(#bar-grad-${entry.name.replace(/\s/g, '-')})`} />
+                <Cell key={entry.name} fill={`url(#vel-grad-${entry.name.replace(/\s/g, '-')})`} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
 
         <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-          {Object.entries(POINT_VALUES).map(([name, { points, color }]) => (
-            <span key={name} className="flex items-center gap-1">
-              <span className="h-2 w-2" style={{ backgroundColor: color }} />
-              {name}: {points}pts each
+          {BARS.map((bar) => (
+            <span key={bar.key} className="flex items-center gap-1">
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: `hsl(var(${bar.cssVar}))` }}
+              />
+              {bar.key}: {bar.points}pts each
             </span>
           ))}
         </div>
