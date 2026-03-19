@@ -121,7 +121,7 @@ export default function FounderCalendarPage() {
                         {isToggling ? '...' : "I'm Attending"}
                       </Button>
                     )}
-                    <Button variant="secondary" size="sm" asChild>
+                    <Button variant="outline" size="sm" asChild>
                       <a href={event.lumaEmbedUrl} target="_blank" rel="noopener noreferrer">
                         View Event
                         <ExternalLink className="ml-1.5 h-3 w-3" />

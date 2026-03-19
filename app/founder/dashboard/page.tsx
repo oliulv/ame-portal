@@ -375,18 +375,20 @@ export default function FounderDashboard() {
                           onClick={() => handleRegister(nextEvent._id)}
                           disabled={isRegistering}
                         >
-                          {isRegistering ? '...' : "I'm Registered"}
+                          {isRegistering ? '...' : "I'm Attending"}
                         </Button>
                       )}
-                      <a
-                        href={nextEvent.lumaEmbedUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex h-7 shrink-0 items-center gap-1  border bg-secondary px-2.5 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-[10px] px-1.5"
+                        asChild
                       >
-                        {nextEvent.isRegistered ? 'View Event' : 'Register'}
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
+                        <a href={nextEvent.lumaEmbedUrl} target="_blank" rel="noopener noreferrer">
+                          View Event
+                          <ExternalLink className="ml-1 h-2.5 w-2.5" />
+                        </a>
+                      </Button>
                     </div>
                   </div>
                 </div>
