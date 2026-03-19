@@ -371,22 +371,17 @@ export default function FounderDashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-6 text-[10px] px-1.5"
+                          className="h-7 text-xs whitespace-nowrap"
                           onClick={() => handleRegister(nextEvent._id)}
                           disabled={isRegistering}
                         >
                           {isRegistering ? '...' : "I'm Attending"}
                         </Button>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-6 text-[10px] px-1.5"
-                        asChild
-                      >
+                      <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
                         <a href={nextEvent.lumaEmbedUrl} target="_blank" rel="noopener noreferrer">
-                          View Event
-                          <ExternalLink className="ml-1 h-2.5 w-2.5" />
+                          View
+                          <ExternalLink className="ml-1 h-3 w-3" />
                         </a>
                       </Button>
                     </div>
