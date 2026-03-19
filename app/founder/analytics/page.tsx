@@ -17,6 +17,7 @@ import { KpiCard } from '@/components/analytics/kpi-card'
 import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { SocialCard } from '@/components/analytics/social-card'
 import { VelocityScore } from '@/components/analytics/velocity-score'
+import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
 import { Plug, TrendingUp, Eye, Github } from 'lucide-react'
 import Link from 'next/link'
 
@@ -103,6 +104,12 @@ export default function FounderAnalyticsPage() {
   const reviews = useQuery(
     api.metrics.getLatest,
     latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
+  )
+
+  // GitHub contribution calendar
+  const contributionCalendar = useQuery(
+    api.metrics.getContributionCalendar,
+    startupId ? { startupId } : 'skip'
   )
 
   // Social metrics — per platform
@@ -261,6 +268,11 @@ export default function FounderAnalyticsPage() {
               />
             )}
           </div>
+
+          {/* Row 3.5: GitHub Contribution Calendar */}
+          {hasGithub && contributionCalendar && (
+            <ContributionCalendar weeks={contributionCalendar} />
+          )}
 
           {/* Row 4: Social platform cards */}
           {hasSocial && (

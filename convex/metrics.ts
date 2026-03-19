@@ -134,6 +134,29 @@ export const timeSeries = query({
 })
 
 /**
+ * Get the latest GitHub contribution calendar data for a startup.
+ */
+export const getContributionCalendar = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx)
+
+    const metric = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'contribution_calendar')
+      )
+      .order('desc')
+      .first()
+
+    return metric?.meta ?? null
+  },
+})
+
+/**
  * Manually sync metrics for a startup (admin-only).
  * Triggers Stripe, tracker, and GitHub metric fetches.
  */

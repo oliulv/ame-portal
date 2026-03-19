@@ -19,6 +19,7 @@ import {
 import { KpiCard } from '@/components/analytics/kpi-card'
 import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { VelocityScore } from '@/components/analytics/velocity-score'
+import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
 import { SocialCard } from '@/components/analytics/social-card'
 import { ArrowLeft, RefreshCw, Plug } from 'lucide-react'
 import { toast } from 'sonner'
@@ -129,6 +130,12 @@ export default function AdminStartupAnalyticsPage() {
   const reviews = useQuery(
     api.metrics.getLatest,
     latArgs ? { ...latArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
+  )
+
+  // GitHub contribution calendar
+  const contributionCalendar = useQuery(
+    api.metrics.getContributionCalendar,
+    startupId ? { startupId } : 'skip'
   )
 
   // Social
@@ -304,6 +311,11 @@ export default function AdminStartupAnalyticsPage() {
               />
             )}
           </div>
+
+          {/* GitHub Contribution Calendar */}
+          {hasGithub && contributionCalendar && (
+            <ContributionCalendar weeks={contributionCalendar} />
+          )}
 
           {/* Social cards */}
           {hasSocial && integrationStatus?.social && (

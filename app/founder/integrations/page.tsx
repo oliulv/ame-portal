@@ -530,10 +530,13 @@ function IntegrationsPageInner() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary">Active</Badge>
+                    <Badge variant="secondary" className="h-8 px-3">
+                      Active
+                    </Badge>
                     <Button
                       variant="outline"
                       size="sm"
+                      className="h-8"
                       onClick={async () => {
                         await disconnectGithub()
                         toast.success('GitHub disconnected')

@@ -193,11 +193,19 @@ export const storeGithubConnection = mutation({
       connectedAt: new Date().toISOString(),
     }
 
+    let connectionId: any
     if (existing) {
       await ctx.db.patch(existing._id, data)
+      connectionId = existing._id
     } else {
-      await ctx.db.insert('integrationConnections', data)
+      connectionId = await ctx.db.insert('integrationConnections', data)
     }
+
+    // Trigger immediate sync after connection
+    await ctx.scheduler.runAfter(0, internal.metrics.syncGithubForStartup, {
+      startupId: args.startupId,
+      connectionId: connectionId!,
+    })
   },
 })
 
