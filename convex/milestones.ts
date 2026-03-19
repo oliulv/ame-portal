@@ -491,6 +491,16 @@ export const remove = mutation({
     const milestone = await ctx.db.get(args.id)
     if (!milestone) throw new Error('Milestone not found')
 
+    // Notify founders before deleting
+    const startup = await ctx.db.get(milestone.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneDeleted, {
+        cohortId: startup.cohortId,
+        startupId: milestone.startupId,
+        milestoneTitle: milestone.title,
+      })
+    }
+
     await ctx.db.delete(args.id)
   },
 })
@@ -692,6 +702,16 @@ export const withdraw = mutation({
       planStorageId: undefined,
       planFileName: undefined,
     })
+
+    // Notify admins about the withdrawal
+    const startup = await ctx.db.get(milestone.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneWithdrawn, {
+        cohortId: startup.cohortId,
+        startupName: startup.name,
+        milestoneTitle: milestone.title,
+      })
+    }
   },
 })
 

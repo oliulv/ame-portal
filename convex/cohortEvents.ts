@@ -106,6 +106,25 @@ export const update = mutation({
     }
 
     await ctx.db.patch(id, patch)
+
+    // Notify founders about event updates
+    if (args.isActive === false && event.isActive) {
+      // Event was deactivated (cancelled)
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyEventCancelled, {
+        cohortId: event.cohortId,
+        eventTitle: event.title,
+      })
+    } else if (args.isActive !== false) {
+      // Event details were updated (title, date, etc.)
+      const hasContentChanges =
+        args.title !== undefined || args.date !== undefined || args.description !== undefined
+      if (hasContentChanges) {
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyEventUpdated, {
+          cohortId: event.cohortId,
+          eventTitle: args.title ?? event.title,
+        })
+      }
+    }
   },
 })
 
@@ -119,6 +138,14 @@ export const remove = mutation({
 
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error('Event not found')
+
+    // Notify founders before deleting
+    if (event.isActive) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyEventCancelled, {
+        cohortId: event.cohortId,
+        eventTitle: event.title,
+      })
+    }
 
     await ctx.db.delete(args.id)
   },

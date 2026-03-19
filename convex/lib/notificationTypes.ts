@@ -115,55 +115,54 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     status: 'active',
   },
 
-  // ── Planned (Coming Soon) ──────────────────────────────────
   {
     key: 'milestoneWithdrawn',
     label: 'Milestone Withdrawn',
     audience: 'admins',
     description: 'When a founder withdraws a submitted milestone',
-    status: 'planned',
+    status: 'active',
   },
   {
     key: 'milestoneDeleted',
     label: 'Milestone Deleted',
     audience: 'founders',
     description: 'When an admin deletes a milestone',
-    status: 'planned',
+    status: 'active',
   },
   {
     key: 'eventUpdated',
     label: 'Event Updated',
     audience: 'founders',
     description: 'When an admin edits event details',
-    status: 'planned',
+    status: 'active',
   },
   {
     key: 'eventCancelled',
     label: 'Event Cancelled',
     audience: 'founders',
     description: 'When an admin deactivates an event',
-    status: 'planned',
+    status: 'active',
   },
   {
     key: 'bankDetailsAdded',
     label: 'Bank Details Added',
     audience: 'admins',
     description: 'When a founder adds bank details',
-    status: 'planned',
+    status: 'active',
   },
   {
     key: 'perkCreated',
     label: 'Perk Created',
     audience: 'founders',
     description: 'When an admin creates a new perk',
-    status: 'planned',
+    status: 'active',
   },
   {
     key: 'founderRemoved',
     label: 'Founder Removed',
     audience: 'founders',
     description: 'When an admin removes a founder from a startup',
-    status: 'planned',
+    status: 'active',
   },
 ]
 

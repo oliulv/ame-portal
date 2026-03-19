@@ -125,6 +125,16 @@ export const complete = mutation({
           ...bankData,
         })
       }
+
+      // Notify admins about bank details
+      const startupForBank = await ctx.db.get(founderProfile.startupId)
+      if (startupForBank) {
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyBankDetailsAdded, {
+          cohortId: startupForBank.cohortId,
+          founderName: founderProfile.fullName,
+          startupName: startupForBank.name,
+        })
+      }
     }
 
     // Update startup onboarding status

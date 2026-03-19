@@ -262,6 +262,15 @@ export const removeFounder = mutation({
       }
     }
 
+    // Notify the founder before cleanup (while we still have their userId)
+    const startup = await ctx.db.get(invitation.startupId)
+    if (userId && startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyFounderRemoved, {
+        userId,
+        startupName: startup.name,
+      })
+    }
+
     // Delete the invitation itself
     await ctx.db.delete(invitation._id)
 

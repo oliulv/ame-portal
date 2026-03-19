@@ -112,7 +112,7 @@ export const create = mutation({
     const existing = await ctx.db.query('perks').collect()
     const sortOrder = existing.length
 
-    return await ctx.db.insert('perks', {
+    const perkId = await ctx.db.insert('perks', {
       title: args.title,
       description: args.description,
       details: args.details,
@@ -124,6 +124,15 @@ export const create = mutation({
       isPartnership: args.isPartnership ?? false,
       sortOrder,
     })
+
+    // Notify founders about the new perk
+    if (args.isActive !== false) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyPerkCreated, {
+        perkTitle: args.title,
+      })
+    }
+
+    return perkId
   },
 })
 

@@ -179,6 +179,13 @@ export const updatePreferences = mutation({
     onboardingCompleted: v.optional(v.boolean()),
     invitationAccepted: v.optional(v.boolean()),
     perkClaimed: v.optional(v.boolean()),
+    milestoneWithdrawn: v.optional(v.boolean()),
+    milestoneDeleted: v.optional(v.boolean()),
+    eventUpdated: v.optional(v.boolean()),
+    eventCancelled: v.optional(v.boolean()),
+    bankDetailsAdded: v.optional(v.boolean()),
+    perkCreated: v.optional(v.boolean()),
+    founderRemoved: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireAuth(ctx)
@@ -1084,5 +1091,254 @@ export const getFoundersForStartup = internalQuery({
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
       .collect()
     return profiles.map((p) => p.userId)
+  },
+})
+
+/**
+ * Notify admins when a founder withdraws a submitted milestone.
+ */
+export const notifyMilestoneWithdrawn = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    startupName: v.string(),
+    milestoneTitle: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminsWithPermission, {
+      cohortId: args.cohortId,
+      permission: 'approve_milestones',
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: adminIds,
+      notificationType: 'milestoneWithdrawn',
+      cohortId: args.cohortId,
+    })
+
+    const message = `${args.startupName} withdrew milestone: "${args.milestoneTitle}"`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'milestoneWithdrawn',
+        metadata: { startupName: args.startupName, milestoneTitle: args.milestoneTitle },
+      })
+    }
+  },
+})
+
+/**
+ * Notify founders when an admin deletes a milestone from their startup.
+ */
+export const notifyMilestoneDeleted = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    startupId: v.id('startups'),
+    milestoneTitle: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const founderIds = await ctx.runQuery(internal.notifications.getFoundersForStartup, {
+      startupId: args.startupId,
+    })
+
+    if (founderIds.length === 0) return
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: founderIds,
+      notificationType: 'milestoneDeleted',
+      cohortId: args.cohortId,
+    })
+
+    const message = `Milestone "${args.milestoneTitle}" has been removed from your startup`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'milestoneDeleted',
+        metadata: { milestoneTitle: args.milestoneTitle },
+      })
+    }
+  },
+})
+
+/**
+ * Notify founders when an event is updated.
+ */
+export const notifyEventUpdated = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    eventTitle: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const founderIds = await ctx.runQuery(internal.notifications.getFounderUserIdsInCohort, {
+      cohortId: args.cohortId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: founderIds,
+      notificationType: 'eventUpdated',
+      cohortId: args.cohortId,
+    })
+
+    const message = `Event updated: "${args.eventTitle}"`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'eventUpdated',
+        metadata: { eventTitle: args.eventTitle },
+      })
+    }
+  },
+})
+
+/**
+ * Notify founders when an event is cancelled/deactivated.
+ */
+export const notifyEventCancelled = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    eventTitle: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const founderIds = await ctx.runQuery(internal.notifications.getFounderUserIdsInCohort, {
+      cohortId: args.cohortId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: founderIds,
+      notificationType: 'eventCancelled',
+      cohortId: args.cohortId,
+    })
+
+    const message = `Event cancelled: "${args.eventTitle}"`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'eventCancelled',
+        metadata: { eventTitle: args.eventTitle },
+      })
+    }
+  },
+})
+
+/**
+ * Notify admins when a founder adds bank details.
+ */
+export const notifyBankDetailsAdded = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    founderName: v.string(),
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminUserIdsForCohort, {
+      cohortId: args.cohortId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: adminIds,
+      notificationType: 'bankDetailsAdded',
+      cohortId: args.cohortId,
+    })
+
+    const message = `${args.founderName} from ${args.startupName} has added bank details`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'bankDetailsAdded',
+        metadata: { founderName: args.founderName, startupName: args.startupName },
+      })
+    }
+  },
+})
+
+/**
+ * Notify founders when an admin creates a new perk.
+ */
+export const notifyPerkCreated = internalAction({
+  args: {
+    perkTitle: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Perks are global — notify founders in all active cohorts
+    const allCohorts = await ctx.runQuery(internal.notifications.getAllActiveCohorts, {})
+
+    for (const cohort of allCohorts) {
+      const founderIds = await ctx.runQuery(internal.notifications.getFounderUserIdsInCohort, {
+        cohortId: cohort._id,
+      })
+
+      const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+        userIds: founderIds,
+        notificationType: 'perkCreated',
+        cohortId: cohort._id,
+      })
+
+      const message = `New perk available: "${args.perkTitle}"`
+
+      for (const r of recipients) {
+        await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+          userId: r.userId,
+          phone: r.phone,
+          message,
+          type: 'perkCreated',
+          metadata: { perkTitle: args.perkTitle },
+        })
+      }
+    }
+  },
+})
+
+/**
+ * Notify a founder when they are removed from a startup.
+ */
+export const notifyFounderRemoved = internalAction({
+  args: {
+    userId: v.id('users'),
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: [args.userId],
+      notificationType: 'founderRemoved',
+    })
+
+    if (recipients.length === 0) return
+
+    const message = `You have been removed from ${args.startupName}`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'founderRemoved',
+        metadata: { startupName: args.startupName },
+      })
+    }
+  },
+})
+
+/**
+ * Internal query: get all active cohorts.
+ */
+export const getAllActiveCohorts = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const cohorts = await ctx.db.query('cohorts').collect()
+    return cohorts.filter((c) => c.isActive)
   },
 })

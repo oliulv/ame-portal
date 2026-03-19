@@ -413,6 +413,13 @@ export default defineSchema({
     onboardingCompleted: v.optional(v.boolean()),
     invitationAccepted: v.optional(v.boolean()),
     perkClaimed: v.optional(v.boolean()),
+    milestoneWithdrawn: v.optional(v.boolean()),
+    milestoneDeleted: v.optional(v.boolean()),
+    eventUpdated: v.optional(v.boolean()),
+    eventCancelled: v.optional(v.boolean()),
+    bankDetailsAdded: v.optional(v.boolean()),
+    perkCreated: v.optional(v.boolean()),
+    founderRemoved: v.optional(v.boolean()),
   }).index('by_userId', ['userId']),
 
   // ── Announcements ────────────────────────────────────────────
