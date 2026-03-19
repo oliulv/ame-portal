@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
@@ -111,98 +111,61 @@ function SettingsPageInner() {
   const isLoading = profileData === undefined
   const isLoadingIntegrations = integrationStatus === undefined
 
-  // Personal info form
+  const fp = profileData?.founderProfile
+  const s = profileData?.startup
+  const sp = profileData?.startupProfile
+  const bd = profileData?.bankDetails
+
+  // Personal info form — defaultValues computed from loaded data (no useEffect needed)
   const personalForm = useForm<FounderPersonalInfoUpdateFormData>({
     resolver: zodResolver(founderPersonalInfoUpdateSchema),
-    defaultValues: {
-      full_name: '',
-      personal_email: '',
-      address_line1: '',
-      address_line2: '',
-      city: '',
-      postcode: '',
-      country: '',
-      phone: '',
-      bio: '',
-      linkedin_url: '',
-      x_url: '',
-    },
+    values: fp
+      ? {
+          full_name: fp.fullName || '',
+          personal_email: fp.personalEmail || '',
+          address_line1: fp.addressLine1 || '',
+          address_line2: fp.addressLine2 || '',
+          city: fp.city || '',
+          postcode: fp.postcode || '',
+          country: fp.country || '',
+          phone: fp.phone || '',
+          bio: fp.bio || '',
+          linkedin_url: fp.linkedinUrl || '',
+          x_url: fp.xUrl || '',
+        }
+      : undefined,
   })
 
   // Startup form
   const startupForm = useForm<StartupUpdateFormData>({
     resolver: zodResolver(startupUpdateSchema),
-    defaultValues: {
-      name: '',
-      website_url: '',
-      one_liner: '',
-      description: '',
-      industry: '',
-      location: '',
-      initial_customers: undefined,
-      initial_revenue: undefined,
-    },
+    values:
+      s && sp
+        ? {
+            name: s.name || '',
+            website_url: s.websiteUrl || '',
+            one_liner: sp.oneLiner || '',
+            description: sp.description || '',
+            industry: sp.industry || '',
+            location: sp.location || '',
+            initial_customers: sp.initialCustomers,
+            initial_revenue: sp.initialRevenue,
+          }
+        : undefined,
   })
 
   // Bank form
   const bankForm = useForm<BankDetailsFormData>({
     resolver: zodResolver(bankDetailsSchema),
-    defaultValues: {
-      account_holder_name: '',
-      sort_code: '',
-      account_number: '',
-      bank_name: '',
-    },
+    values: bd
+      ? {
+          account_holder_name: bd.accountHolderName || '',
+          sort_code: bd.sortCode || '',
+          account_number: bd.accountNumber || '',
+          bank_name: bd.bankName || '',
+        }
+      : undefined,
   })
-
-  // Populate forms when data loads
-  useEffect(() => {
-    if (profileData?.founderProfile) {
-      const fp = profileData.founderProfile
-      personalForm.reset({
-        full_name: fp.fullName || '',
-        personal_email: fp.personalEmail || '',
-        address_line1: fp.addressLine1 || '',
-        address_line2: fp.addressLine2 || '',
-        city: fp.city || '',
-        postcode: fp.postcode || '',
-        country: fp.country || '',
-        phone: fp.phone || '',
-        bio: fp.bio || '',
-        linkedin_url: fp.linkedinUrl || '',
-        x_url: fp.xUrl || '',
-      })
-    }
-  }, [profileData, personalForm])
-
-  useEffect(() => {
-    if (profileData?.startup) {
-      const s = profileData.startup
-      const sp = profileData.startupProfile
-      startupForm.reset({
-        name: s.name || '',
-        website_url: s.websiteUrl || '',
-        one_liner: sp?.oneLiner || '',
-        description: sp?.description || '',
-        industry: sp?.industry || '',
-        location: sp?.location || '',
-        initial_customers: sp?.initialCustomers,
-        initial_revenue: sp?.initialRevenue,
-      })
-    }
-  }, [profileData, startupForm])
-
-  useEffect(() => {
-    if (profileData?.bankDetails) {
-      const bd = profileData.bankDetails
-      bankForm.reset({
-        account_holder_name: bd.accountHolderName || '',
-        sort_code: bd.sortCode || '',
-        account_number: bd.accountNumber || '',
-        bank_name: bd.bankName || '',
-      })
-    }
-  }, [profileData, bankForm])
 
   // Form submit handlers
   const handlePersonalSubmit = async (data: FounderPersonalInfoUpdateFormData) => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { logClientError } from '@/lib/logging'
@@ -25,6 +25,8 @@ import { ArrowLeft, Target } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
+type MilestoneStatus = 'waiting' | 'submitted' | 'approved' | 'changes_requested'
+
 export default function EditMilestonePage() {
   const params = useParams<{ cohortSlug: string; id: string }>()
   const router = useRouter()
@@ -33,31 +35,6 @@ export default function EditMilestonePage() {
 
   const milestone = useQuery(api.milestones.getForAdmin, { id: milestoneId })
   const updateMilestone = useMutation(api.milestones.update)
-
-  const [formTitle, setFormTitle] = useState('')
-  const [formDescription, setFormDescription] = useState('')
-  const [formAmount, setFormAmount] = useState('')
-  const [formStatus, setFormStatus] = useState<
-    'waiting' | 'submitted' | 'approved' | 'changes_requested'
-  >('waiting')
-  const [formDueDate, setFormDueDate] = useState('')
-  const [formRequireLink, setFormRequireLink] = useState(true)
-  const [formRequireFile, setFormRequireFile] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
-  const [initialized, setInitialized] = useState(false)
-
-  useEffect(() => {
-    if (milestone && !initialized) {
-      setFormTitle(milestone.title)
-      setFormDescription(milestone.description)
-      setFormAmount(String(milestone.amount))
-      setFormStatus(milestone.status)
-      setFormDueDate(milestone.dueDate ?? '')
-      setFormRequireLink(milestone.requireLink !== false)
-      setFormRequireFile(milestone.requireFile !== false)
-      setInitialized(true)
-    }
-  }, [milestone, initialized])
 
   if (milestone === undefined) {
     return (
@@ -86,6 +63,62 @@ export default function EditMilestonePage() {
       />
     )
   }
+
+  return (
+    <MilestoneEditForm
+      milestone={{
+        ...milestone,
+        startupName: milestone.startupName ?? '',
+        requireLink: milestone.requireLink ?? true,
+        requireFile: milestone.requireFile ?? true,
+      }}
+      milestoneId={milestoneId}
+      cohortSlug={cohortSlug}
+      updateMilestone={updateMilestone}
+      router={router}
+    />
+  )
+}
+
+function MilestoneEditForm({
+  milestone,
+  milestoneId,
+  cohortSlug,
+  updateMilestone,
+  router,
+}: {
+  milestone: {
+    title: string
+    description: string
+    amount: number
+    status: MilestoneStatus
+    dueDate?: string
+    requireLink: boolean
+    requireFile: boolean
+    startupName: string
+  }
+  milestoneId: Id<'milestones'>
+  cohortSlug: string
+  updateMilestone: (args: {
+    id: Id<'milestones'>
+    title: string
+    description: string
+    amount: number
+    status: MilestoneStatus
+    dueDate?: string
+    requireLink: boolean
+    requireFile: boolean
+  }) => Promise<null>
+  router: ReturnType<typeof useRouter>
+}) {
+  const [isSaving, setIsSaving] = useState(false)
+  const [formTitle, setFormTitle] = useState(milestone.title)
+  const [formDescription, setFormDescription] = useState(milestone.description)
+  const [formAmount, setFormAmount] = useState(String(milestone.amount))
+  const [formStatus, setFormStatus] = useState<MilestoneStatus>(milestone.status)
+  const [formDueDate, setFormDueDate] = useState(milestone.dueDate ?? '')
+  const [formRequireLink, setFormRequireLink] = useState(milestone.requireLink !== false)
+  const [formRequireFile, setFormRequireFile] = useState(milestone.requireFile !== false)
 
   async function handleSave() {
     const amount = parseFloat(formAmount)
@@ -177,10 +210,7 @@ export default function EditMilestonePage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="ms-status">Status</Label>
-              <Select
-                value={formStatus}
-                onValueChange={(v) => setFormStatus(v as typeof formStatus)}
-              >
+              <Select value={formStatus} onValueChange={(v) => setFormStatus(v as MilestoneStatus)}>
                 <SelectTrigger id="ms-status">
                   <SelectValue />
                 </SelectTrigger>

@@ -78,7 +78,11 @@ export async function hasPermission(
   ctx: QueryCtx | MutationCtx,
   userId: Doc<'users'>['_id'],
   cohortId: Doc<'cohorts'>['_id'],
-  permission: 'approve_milestones' | 'approve_invoices' | 'send_announcements'
+  permission:
+    | 'approve_milestones'
+    | 'approve_invoices'
+    | 'send_announcements'
+    | 'manage_notifications'
 ): Promise<boolean> {
   const row = await ctx.db
     .query('adminPermissions')
@@ -95,7 +99,11 @@ export async function hasPermission(
 export async function requireAdminWithPermission(
   ctx: QueryCtx | MutationCtx,
   cohortId: Doc<'cohorts'>['_id'],
-  permission: 'approve_milestones' | 'approve_invoices' | 'send_announcements'
+  permission:
+    | 'approve_milestones'
+    | 'approve_invoices'
+    | 'send_announcements'
+    | 'manage_notifications'
 ): Promise<Doc<'users'>> {
   const user = await requireAdmin(ctx)
   if (user.role === 'super_admin') return user

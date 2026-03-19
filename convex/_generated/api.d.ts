@@ -32,6 +32,7 @@ import type * as invoiceBatching from "../invoiceBatching.js";
 import type * as invoiceValidation from "../invoiceValidation.js";
 import type * as invoices from "../invoices.js";
 import type * as lib_logging from "../lib/logging.js";
+import type * as lib_notificationTypes from "../lib/notificationTypes.js";
 import type * as lib_slugify from "../lib/slugify.js";
 import type * as lib_tokens from "../lib/tokens.js";
 import type * as lib_userCleanup from "../lib/userCleanup.js";
@@ -41,13 +42,14 @@ import type * as migrations_stripBankDetailsVerified from "../migrations/stripBa
 import type * as migrations_updateSupabasePerk from "../migrations/updateSupabasePerk.js";
 import type * as milestoneTemplates from "../milestoneTemplates.js";
 import type * as milestones from "../milestones.js";
+import type * as notificationAdmin from "../notificationAdmin.js";
+import type * as notifications from "../notifications.js";
 import type * as perks from "../perks.js";
 import type * as resources from "../resources.js";
 import type * as seed from "../seed.js";
 import type * as startups from "../startups.js";
 import type * as trackerWebsites from "../trackerWebsites.js";
 import type * as users from "../users.js";
-import type * as whatsapp from "../whatsapp.js";
 
 import type {
   ApiFromModules,
@@ -80,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   invoiceValidation: typeof invoiceValidation;
   invoices: typeof invoices;
   "lib/logging": typeof lib_logging;
+  "lib/notificationTypes": typeof lib_notificationTypes;
   "lib/slugify": typeof lib_slugify;
   "lib/tokens": typeof lib_tokens;
   "lib/userCleanup": typeof lib_userCleanup;
@@ -89,13 +92,14 @@ declare const fullApi: ApiFromModules<{
   "migrations/updateSupabasePerk": typeof migrations_updateSupabasePerk;
   milestoneTemplates: typeof milestoneTemplates;
   milestones: typeof milestones;
+  notificationAdmin: typeof notificationAdmin;
+  notifications: typeof notifications;
   perks: typeof perks;
   resources: typeof resources;
   seed: typeof seed;
   startups: typeof startups;
   trackerWebsites: typeof trackerWebsites;
   users: typeof users;
-  whatsapp: typeof whatsapp;
 }>;
 
 /**

@@ -1,108 +1,108 @@
 import { describe, it, expect } from 'bun:test'
 
 import {
-  whatsappNumberSchema,
-  whatsappVerificationSchema,
+  smsNumberSchema,
+  smsVerificationSchema,
   notificationPreferencesSchema,
   announcementSchema,
 } from './schemas'
 
-describe('whatsappNumberSchema', () => {
+describe('smsNumberSchema', () => {
   describe('valid phone numbers (E.164)', () => {
     it('should accept a UK mobile number', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+447700900000' })
+      const result = smsNumberSchema.safeParse({ phone: '+447700900000' })
       expect(result.success).toBe(true)
     })
 
     it('should accept a US number', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+14155552671' })
+      const result = smsNumberSchema.safeParse({ phone: '+14155552671' })
       expect(result.success).toBe(true)
     })
 
     it('should accept a number with minimum digits (7 after country code)', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+1234567' })
+      const result = smsNumberSchema.safeParse({ phone: '+1234567' })
       expect(result.success).toBe(true)
     })
 
     it('should accept a number with maximum digits (15 total)', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+123456789012345' })
+      const result = smsNumberSchema.safeParse({ phone: '+123456789012345' })
       expect(result.success).toBe(true)
     })
 
     it('should accept an Indian number', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+919876543210' })
+      const result = smsNumberSchema.safeParse({ phone: '+919876543210' })
       expect(result.success).toBe(true)
     })
 
     it('should accept a Brazilian number', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+5511999887766' })
+      const result = smsNumberSchema.safeParse({ phone: '+5511999887766' })
       expect(result.success).toBe(true)
     })
   })
 
   describe('invalid phone numbers', () => {
     it('should reject empty string', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '' })
+      const result = smsNumberSchema.safeParse({ phone: '' })
       expect(result.success).toBe(false)
     })
 
     it('should reject missing plus prefix', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '447700900000' })
+      const result = smsNumberSchema.safeParse({ phone: '447700900000' })
       expect(result.success).toBe(false)
     })
 
     it('should reject number starting with +0', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+0447700900000' })
+      const result = smsNumberSchema.safeParse({ phone: '+0447700900000' })
       expect(result.success).toBe(false)
     })
 
     it('should reject number with too few digits', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+12345' })
+      const result = smsNumberSchema.safeParse({ phone: '+12345' })
       expect(result.success).toBe(false)
     })
 
     it('should reject number with too many digits (over 15)', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+1234567890123456' })
+      const result = smsNumberSchema.safeParse({ phone: '+1234567890123456' })
       expect(result.success).toBe(false)
     })
 
     it('should reject number with spaces', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+44 7700 900000' })
+      const result = smsNumberSchema.safeParse({ phone: '+44 7700 900000' })
       expect(result.success).toBe(false)
     })
 
     it('should reject number with dashes', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+44-7700-900000' })
+      const result = smsNumberSchema.safeParse({ phone: '+44-7700-900000' })
       expect(result.success).toBe(false)
     })
 
     it('should reject number with parentheses', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+1(415)5552671' })
+      const result = smsNumberSchema.safeParse({ phone: '+1(415)5552671' })
       expect(result.success).toBe(false)
     })
 
     it('should reject number with letters', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+44abc1234567' })
+      const result = smsNumberSchema.safeParse({ phone: '+44abc1234567' })
       expect(result.success).toBe(false)
     })
 
     it('should reject just a plus sign', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '+' })
+      const result = smsNumberSchema.safeParse({ phone: '+' })
       expect(result.success).toBe(false)
     })
 
     it('should reject missing phone field', () => {
-      const result = whatsappNumberSchema.safeParse({})
+      const result = smsNumberSchema.safeParse({})
       expect(result.success).toBe(false)
     })
 
     it('should reject non-string phone field', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: 447700900000 })
+      const result = smsNumberSchema.safeParse({ phone: 447700900000 })
       expect(result.success).toBe(false)
     })
 
     it('should provide a helpful error message', () => {
-      const result = whatsappNumberSchema.safeParse({ phone: '07700900000' })
+      const result = smsNumberSchema.safeParse({ phone: '07700900000' })
       expect(result.success).toBe(false)
       if (!result.success) {
         const messages = result.error.issues.map((i) => i.message)
@@ -112,67 +112,67 @@ describe('whatsappNumberSchema', () => {
   })
 })
 
-describe('whatsappVerificationSchema', () => {
+describe('smsVerificationSchema', () => {
   describe('valid codes', () => {
     it('should accept a 6-digit code', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: '123456' })
+      const result = smsVerificationSchema.safeParse({ code: '123456' })
       expect(result.success).toBe(true)
     })
 
     it('should accept all zeros', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: '000000' })
+      const result = smsVerificationSchema.safeParse({ code: '000000' })
       expect(result.success).toBe(true)
     })
 
     it('should accept all nines', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: '999999' })
+      const result = smsVerificationSchema.safeParse({ code: '999999' })
       expect(result.success).toBe(true)
     })
   })
 
   describe('invalid codes', () => {
     it('should reject empty string', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: '' })
+      const result = smsVerificationSchema.safeParse({ code: '' })
       expect(result.success).toBe(false)
     })
 
     it('should reject 5 digits', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: '12345' })
+      const result = smsVerificationSchema.safeParse({ code: '12345' })
       expect(result.success).toBe(false)
     })
 
     it('should reject 7 digits', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: '1234567' })
+      const result = smsVerificationSchema.safeParse({ code: '1234567' })
       expect(result.success).toBe(false)
     })
 
     it('should reject alphabetic characters', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: 'abcdef' })
+      const result = smsVerificationSchema.safeParse({ code: 'abcdef' })
       expect(result.success).toBe(false)
     })
 
     it('should reject mixed alpha-numeric', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: '12ab56' })
+      const result = smsVerificationSchema.safeParse({ code: '12ab56' })
       expect(result.success).toBe(false)
     })
 
     it('should reject code with spaces', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: '123 56' })
+      const result = smsVerificationSchema.safeParse({ code: '123 56' })
       expect(result.success).toBe(false)
     })
 
     it('should reject missing code field', () => {
-      const result = whatsappVerificationSchema.safeParse({})
+      const result = smsVerificationSchema.safeParse({})
       expect(result.success).toBe(false)
     })
 
     it('should reject numeric type instead of string', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: 123456 })
+      const result = smsVerificationSchema.safeParse({ code: 123456 })
       expect(result.success).toBe(false)
     })
 
     it('should provide length error for wrong-length numeric strings', () => {
-      const result = whatsappVerificationSchema.safeParse({ code: '12345' })
+      const result = smsVerificationSchema.safeParse({ code: '12345' })
       expect(result.success).toBe(false)
       if (!result.success) {
         const messages = result.error.issues.map((i) => i.message)

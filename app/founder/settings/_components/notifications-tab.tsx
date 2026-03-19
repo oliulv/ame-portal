@@ -22,12 +22,13 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  whatsappNumberSchema,
-  whatsappVerificationSchema,
-  type WhatsAppNumberFormData,
-  type WhatsAppVerificationFormData,
+  smsNumberSchema,
+  smsVerificationSchema,
+  type SmsNumberFormData,
+  type SmsVerificationFormData,
 } from '@/lib/schemas'
-import { CheckCircle2, MessageSquare, Shield, Loader2 } from 'lucide-react'
+import { CheckCircle2, MessageSquare, Shield, Loader2, Search } from 'lucide-react'
+import { ACTIVE_NOTIFICATION_TYPES, groupByCategory } from '@/convex/lib/notificationTypes'
 
 function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof ConvexError) return err.data as string
@@ -35,39 +36,47 @@ function errorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
-  const whatsappData = useQuery(api.whatsapp.getMyWhatsApp)
-  const requestVerification = useMutation(api.whatsapp.requestVerification)
-  const confirmVerification = useMutation(api.whatsapp.confirmVerification)
-  const updatePreferences = useMutation(api.whatsapp.updatePreferences)
-  const toggleNotifications = useMutation(api.whatsapp.toggleNotifications)
-  const removeNumber = useMutation(api.whatsapp.removeNumber)
+export function NotificationsTab({
+  prefillPhone,
+  userRole,
+}: {
+  prefillPhone?: string
+  userRole?: 'super_admin' | 'admin' | 'founder'
+}) {
+  const [prefSearch, setPrefSearch] = useState('')
+  const phoneData = useQuery(api.notifications.getMyPhone)
+  const disabledTypes = useQuery(api.notifications.getDisabledNotificationTypes)
+  const requestVerification = useMutation(api.notifications.requestVerification)
+  const confirmVerification = useMutation(api.notifications.confirmVerification)
+  const updatePreferences = useMutation(api.notifications.updatePreferences)
+  const toggleNotifications = useMutation(api.notifications.toggleNotifications)
+  const removeNumber = useMutation(api.notifications.removeNumber)
 
   const [isRequestingCode, setIsRequestingCode] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [showVerification, setShowVerification] = useState(false)
 
-  const phoneForm = useForm<WhatsAppNumberFormData>({
-    resolver: zodResolver(whatsappNumberSchema),
+  const phoneForm = useForm<SmsNumberFormData>({
+    resolver: zodResolver(smsNumberSchema),
     defaultValues: { phone: prefillPhone || '' },
   })
 
-  const codeForm = useForm<WhatsAppVerificationFormData>({
-    resolver: zodResolver(whatsappVerificationSchema),
+  const codeForm = useForm<SmsVerificationFormData>({
+    resolver: zodResolver(smsVerificationSchema),
     defaultValues: { code: '' },
   })
 
-  const whatsapp = whatsappData?.whatsapp
-  const preferences = whatsappData?.preferences
+  const smsRecord = phoneData?.smsRecord
+  const preferences = phoneData?.preferences
 
   // Prefill phone if provided and no existing number
   useEffect(() => {
-    if (prefillPhone && !whatsapp) {
+    if (prefillPhone && !smsRecord) {
       phoneForm.setValue('phone', prefillPhone)
     }
-  }, [prefillPhone, whatsapp, phoneForm])
+  }, [prefillPhone, smsRecord, phoneForm])
 
-  if (whatsappData === undefined) {
+  if (phoneData === undefined) {
     return (
       <Card>
         <CardHeader>
@@ -82,7 +91,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
     )
   }
 
-  const handleRequestCode = async (data: WhatsAppNumberFormData) => {
+  const handleRequestCode = async (data: SmsNumberFormData) => {
     setIsRequestingCode(true)
     try {
       await requestVerification({ phone: data.phone })
@@ -95,7 +104,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
     }
   }
 
-  const handleVerify = async (data: WhatsAppVerificationFormData) => {
+  const handleVerify = async (data: SmsVerificationFormData) => {
     setIsVerifying(true)
     try {
       await confirmVerification({ code: data.code })
@@ -139,7 +148,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
 
   return (
     <div className="space-y-6">
-      {/* WhatsApp Number Card */}
+      {/* Phone Number Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -151,28 +160,28 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {whatsapp?.isVerified ? (
+          {smsRecord?.isVerified ? (
             // Verified state
             <div className="space-y-4">
               <div className="flex items-center justify-between border p-4">
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                   <div>
-                    <p className="font-medium">{whatsapp.phone}</p>
+                    <p className="font-medium">{smsRecord.phone}</p>
                     <p className="text-sm text-muted-foreground">
                       Verified{' '}
-                      {whatsapp.verifiedAt &&
-                        new Date(whatsapp.verifiedAt).toLocaleDateString('en-GB')}
+                      {smsRecord.verifiedAt &&
+                        new Date(smsRecord.verifiedAt).toLocaleDateString('en-GB')}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">
-                      {whatsapp.notificationsEnabled ? 'Active' : 'Paused'}
+                      {smsRecord.notificationsEnabled ? 'Active' : 'Paused'}
                     </span>
                     <Switch
-                      checked={whatsapp.notificationsEnabled}
+                      checked={smsRecord.notificationsEnabled}
                       onCheckedChange={handleToggle}
                     />
                   </div>
@@ -216,7 +225,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
                     <Shield className="h-4 w-4 shrink-0" />
                     <span>
                       A 6-digit code has been sent to{' '}
-                      <strong>{whatsapp?.phone || phoneForm.getValues('phone')}</strong> via SMS
+                      <strong>{smsRecord?.phone || phoneForm.getValues('phone')}</strong> via SMS
                     </span>
                   </div>
                   <Form {...codeForm}>
@@ -268,53 +277,86 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
       </Card>
 
       {/* Notification Preferences */}
-      {whatsapp?.isVerified && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Notification Preferences</CardTitle>
-            <CardDescription>Choose which notifications you want to receive</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                {
-                  key: 'invoiceStatusChanged',
-                  label: 'Invoice Updates',
-                  description: 'When your invoices are approved or rejected',
-                },
-                {
-                  key: 'milestoneStatusChanged',
-                  label: 'Milestone Updates',
-                  description: 'When your milestones are approved or need changes',
-                },
-                {
-                  key: 'announcements',
-                  label: 'Announcements',
-                  description: 'Important announcements from the programme',
-                },
-                {
-                  key: 'eventReminders',
-                  label: 'Event Reminders',
-                  description: 'Daily reminders for events happening today',
-                },
-              ].map((pref) => (
-                <div key={pref.key} className="flex items-center justify-between border p-3">
-                  <div>
-                    <p className="font-medium text-sm">{pref.label}</p>
-                    <p className="text-xs text-muted-foreground">{pref.description}</p>
+      {smsRecord?.isVerified &&
+        (() => {
+          const isAdmin = userRole === 'admin' || userRole === 'super_admin'
+          const disabledSet = new Set(disabledTypes ?? [])
+          const normalizedQuery = prefSearch.trim().toLowerCase()
+
+          // Filter: role-appropriate, not globally disabled, matches search
+          const availableTypes = ACTIVE_NOTIFICATION_TYPES.filter((t) => {
+            if (!isAdmin && t.audience !== 'founders' && t.audience !== 'all') return false
+            if (disabledSet.has(t.key)) return false
+            if (
+              normalizedQuery.length > 0 &&
+              !t.label.toLowerCase().includes(normalizedQuery) &&
+              !t.description.toLowerCase().includes(normalizedQuery) &&
+              !t.group.toLowerCase().includes(normalizedQuery)
+            )
+              return false
+            return true
+          })
+
+          const groups = groupByCategory(availableTypes)
+
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle>Notification Preferences</CardTitle>
+                <CardDescription>Choose which notifications you want to receive</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {availableTypes.length > 6 && (
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={prefSearch}
+                      onChange={(e) => setPrefSearch(e.target.value)}
+                      placeholder="Search notifications"
+                      className="pl-9"
+                    />
                   </div>
-                  <Switch
-                    checked={
-                      (preferences?.[pref.key as keyof typeof preferences] as boolean) ?? true
-                    }
-                    onCheckedChange={(checked) => handlePreferenceChange(pref.key, checked)}
-                  />
+                )}
+                <div className="space-y-5">
+                  {groups.map(({ group, label, types }) => (
+                    <div key={group}>
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        {label}
+                      </h4>
+                      <div className="space-y-2">
+                        {types.map((pref) => (
+                          <div
+                            key={pref.key}
+                            className="flex items-center justify-between border p-3"
+                          >
+                            <div>
+                              <p className="font-medium text-sm">{pref.label}</p>
+                              <p className="text-xs text-muted-foreground">{pref.description}</p>
+                            </div>
+                            <Switch
+                              checked={
+                                (preferences?.[pref.key as keyof typeof preferences] as boolean) ??
+                                true
+                              }
+                              onCheckedChange={(checked) =>
+                                handlePreferenceChange(pref.key, checked)
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                {availableTypes.length === 0 && normalizedQuery.length > 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No notifications match your search
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })()}
     </div>
   )
 }

@@ -413,7 +413,7 @@ export const create = mutation({
       sortOrder = existing.length
     }
 
-    return await ctx.db.insert('milestones', {
+    const milestoneId = await ctx.db.insert('milestones', {
       startupId: args.startupId,
       title: args.title,
       description: args.description,
@@ -424,6 +424,19 @@ export const create = mutation({
       requireLink: args.requireLink,
       requireFile: args.requireFile,
     })
+
+    // Notify founders about the new milestone
+    const startup = await ctx.db.get(args.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneCreated, {
+        cohortId: startup.cohortId,
+        startupId: args.startupId,
+        milestoneTitle: args.title,
+        amount: args.amount,
+      })
+    }
+
+    return milestoneId
   },
 })
 
@@ -478,6 +491,16 @@ export const remove = mutation({
     const milestone = await ctx.db.get(args.id)
     if (!milestone) throw new Error('Milestone not found')
 
+    // Notify founders before deleting
+    const startup = await ctx.db.get(milestone.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneDeleted, {
+        cohortId: startup.cohortId,
+        startupId: milestone.startupId,
+        milestoneTitle: milestone.title,
+      })
+    }
+
     await ctx.db.delete(args.id)
   },
 })
@@ -512,7 +535,7 @@ export const approve = mutation({
       .withIndex('by_startupId', (q) => q.eq('startupId', milestone.startupId))
       .collect()
     for (const fp of founderProfiles) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyMilestoneStatusChanged, {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneStatusChanged, {
         userId: fp.userId,
         milestoneTitle: milestone.title,
         status: 'approved',
@@ -565,7 +588,7 @@ export const requestChanges = mutation({
       .withIndex('by_startupId', (q) => q.eq('startupId', milestone.startupId))
       .collect()
     for (const fp of founderProfiles) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyMilestoneStatusChanged, {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneStatusChanged, {
         userId: fp.userId,
         milestoneTitle: milestone.title,
         status: 'changes_requested',
@@ -603,26 +626,17 @@ export const submit = mutation({
       throw new Error('Only PDF files are accepted for milestone evidence.')
     }
 
-    const needsLink = milestone.requireLink !== false
-    const needsFile = milestone.requireFile !== false
+    const acceptsLink = milestone.requireLink !== false
+    const acceptsFile = milestone.requireFile !== false
+    const hasLink = !!args.planLink
+    const hasFile = !!args.planStorageId
 
-    if (needsLink && needsFile) {
-      if (!args.planLink && !args.planStorageId) {
-        throw new Error('Please provide a plan link or upload a plan file')
-      }
-    } else if (needsLink && !needsFile) {
-      if (!args.planLink) {
-        throw new Error('Please provide a plan link')
-      }
-    } else if (!needsLink && needsFile) {
-      if (!args.planStorageId) {
-        throw new Error('Please upload a plan file')
-      }
-    } else {
-      // Both false — still require at least one
-      if (!args.planLink && !args.planStorageId) {
-        throw new Error('Please provide a plan link or upload a plan file')
-      }
+    if (acceptsLink && !acceptsFile && !hasLink) {
+      throw new Error('Please provide a plan link')
+    } else if (!acceptsLink && acceptsFile && !hasFile) {
+      throw new Error('Please upload a plan file')
+    } else if (!hasLink && !hasFile) {
+      throw new Error('Please provide a plan link or upload a plan file')
     }
 
     await ctx.db.patch(args.id, {
@@ -644,7 +658,7 @@ export const submit = mutation({
     // Notify admins about milestone submission
     const startup = await ctx.db.get(milestone.startupId)
     if (startup) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyMilestoneSubmitted, {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneSubmitted, {
         cohortId: startup.cohortId,
         startupName: startup.name,
         milestoneTitle: milestone.title,
@@ -688,6 +702,16 @@ export const withdraw = mutation({
       planStorageId: undefined,
       planFileName: undefined,
     })
+
+    // Notify admins about the withdrawal
+    const startup = await ctx.db.get(milestone.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneWithdrawn, {
+        cohortId: startup.cohortId,
+        startupName: startup.name,
+        milestoneTitle: milestone.title,
+      })
+    }
   },
 })
 

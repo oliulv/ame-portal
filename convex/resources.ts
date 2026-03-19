@@ -1,4 +1,5 @@
 import { query, mutation } from './functions'
+import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAdmin, requireAuth } from './auth'
 
@@ -257,7 +258,7 @@ export const submitForApproval = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireAuth(ctx)
-    return await ctx.db.insert('resourceSubmissions', {
+    const submissionId = await ctx.db.insert('resourceSubmissions', {
       title: args.title,
       category: args.category,
       topic: args.topic,
@@ -268,6 +269,25 @@ export const submitForApproval = mutation({
       submittedBy: user._id,
       status: 'pending',
     })
+
+    // Notify admins about the new resource submission
+    // Find the founder's cohort
+    const founderProfile = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .first()
+    if (founderProfile) {
+      const startup = await ctx.db.get(founderProfile.startupId)
+      if (startup) {
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyResourceSubmitted, {
+          cohortId: startup.cohortId,
+          founderName: user.fullName || founderProfile.fullName || 'A founder',
+          resourceTitle: args.title,
+        })
+      }
+    }
+
+    return submissionId
   },
 })
 
@@ -338,5 +358,12 @@ export const reviewSubmission = mutation({
     } else {
       await ctx.db.patch(args.id, { status: 'rejected' })
     }
+
+    // Notify the founder who submitted
+    await ctx.scheduler.runAfter(0, internal.notifications.notifyResourceReviewed, {
+      userId: submission.submittedBy,
+      resourceTitle: submission.title,
+      status: args.action === 'approve' ? 'approved' : 'rejected',
+    })
   },
 })

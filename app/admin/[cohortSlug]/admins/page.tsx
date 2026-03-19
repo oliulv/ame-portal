@@ -57,6 +57,12 @@ const adminInvitationSchema = z.object({
 
 type AdminInvitationFormData = z.infer<typeof adminInvitationSchema>
 
+type PermissionType =
+  | 'approve_milestones'
+  | 'approve_invoices'
+  | 'send_announcements'
+  | 'manage_notifications'
+
 export default function AdminsPage() {
   const params = useParams()
   const cohortSlug = params.cohortSlug as string
@@ -191,16 +197,13 @@ export default function AdminsPage() {
     }
   }
 
-  function hasUserPermission(
-    userId: string,
-    permission: 'approve_milestones' | 'approve_invoices' | 'send_announcements'
-  ) {
+  function hasUserPermission(userId: string, permission: PermissionType) {
     return permissions?.some((p) => p.userId === userId && p.permission === permission) ?? false
   }
 
   async function handleTogglePermission(
     userId: string,
-    permission: 'approve_milestones' | 'approve_invoices' | 'send_announcements',
+    permission: PermissionType,
     currentlyGranted: boolean
   ) {
     if (!cohort) return
@@ -630,6 +633,21 @@ export default function AdminsPage() {
                           className="h-4 w-4 rounded border-gray-300"
                         />
                         Send announcements
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={hasUserPermission(selectedUser._id, 'manage_notifications')}
+                          onChange={() =>
+                            handleTogglePermission(
+                              selectedUser._id,
+                              'manage_notifications',
+                              hasUserPermission(selectedUser._id, 'manage_notifications')
+                            )
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                        Manage notifications
                       </label>
                     </div>
                   )}

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect, useMemo } from 'react'
+import { useMounted } from '@/hooks/useMounted'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { cn } from '@/lib/utils'
@@ -24,6 +25,7 @@ import {
   BookOpen,
   ListChecks,
   Megaphone,
+  MessageCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -65,6 +67,7 @@ const iconMap: Record<string, LucideIcon> = {
   BookOpen,
   ListChecks,
   Megaphone,
+  MessageCircle,
 }
 
 /**
@@ -114,16 +117,12 @@ function SidebarContent({
   const pathname = usePathname()
   const router = useRouter()
   const [selectedCohortSlug, setSelectedCohortSlug] = useState<string>('')
-  const [mounted, setMounted] = useState(false)
+  const mounted = useMounted()
 
   const cohortsData = useQuery(api.cohorts.list, showCohortSelector ? undefined : 'skip')
   const cohorts = useMemo(() => cohortsData ?? [], [cohortsData])
   const cohortSlugs = useMemo(() => cohorts.map((c) => c.slug), [cohorts])
   const isLoadingCohorts = cohortsData === undefined && showCohortSelector
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   useEffect(() => {
     if (!showCohortSelector || cohorts.length === 0) return

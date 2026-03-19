@@ -221,6 +221,16 @@ export const accept = mutation({
       acceptedAt: new Date().toISOString(),
     })
 
+    // Notify admins about the accepted invitation
+    const startup = await ctx.db.get(invitation.startupId)
+    if (startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyInvitationAccepted, {
+        cohortId: startup.cohortId,
+        founderName: invitation.fullName,
+        startupName: startup.name,
+      })
+    }
+
     return userId
   },
 })
@@ -250,6 +260,15 @@ export const removeFounder = mutation({
         userId = profile.userId
         await ctx.db.delete(profile._id)
       }
+    }
+
+    // Notify the founder before cleanup (while we still have their userId)
+    const startup = await ctx.db.get(invitation.startupId)
+    if (userId && startup) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyFounderRemoved, {
+        userId,
+        startupName: startup.name,
+      })
     }
 
     // Delete the invitation itself

@@ -1,6 +1,7 @@
 import { query, mutation, internalAction, internalQuery, enrichEvent } from './functions'
 import { internal } from './_generated/api'
 import { v, ConvexError } from 'convex/values'
+import type { Id } from './_generated/dataModel'
 import {
   requireAdmin,
   requireAdminWithPermission,
@@ -162,7 +163,7 @@ export const create = mutation({
     await ctx.scheduler.runAfter(0, internal.invoiceBatching.scheduleBatching, { startupId })
 
     // Notify admins about new invoice submission
-    await ctx.scheduler.runAfter(0, internal.whatsapp.notifyInvoiceSubmitted, {
+    await ctx.scheduler.runAfter(0, internal.notifications.notifyInvoiceSubmitted, {
       cohortId: startup.cohortId,
       startupName: startup.name,
       vendorName: args.vendorName,
@@ -203,21 +204,6 @@ export const getFounderInvoiceInfo = query({
       startupName: startup.name,
       nextInvoiceNumber: maxExisting + 1,
     }
-  },
-})
-
-/**
- * Get the founder's startup name (for invoice naming validation).
- * @deprecated Use getFounderInvoiceInfo instead.
- */
-export const getFounderStartupName = query({
-  args: {},
-  handler: async (ctx) => {
-    const user = await requireFounder(ctx)
-    const startupIds = await getFounderStartupIds(ctx, user._id)
-    if (startupIds.length === 0) return null
-    const startup = await ctx.db.get(startupIds[0])
-    return startup?.name ?? null
   },
 })
 
@@ -446,10 +432,21 @@ export const updateStatus = mutation({
 
     // Notify founder about invoice status change
     if (args.status === 'approved' || args.status === 'rejected') {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyInvoiceStatusChanged, {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyInvoiceStatusChanged, {
         userId: invoice.uploadedByUserId,
         fileName: invoice.fileName,
         status: args.status,
+      })
+    }
+
+    // Notify founder when invoice is marked as paid
+    if (args.status === 'paid') {
+      const startup = await ctx.db.get(invoice.startupId)
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyInvoicePaid, {
+        userId: invoice.uploadedByUserId,
+        fileName: invoice.fileName,
+        amountGbp: invoice.amountGbp,
+        cohortId: startup?.cohortId,
       })
     }
   },
@@ -469,6 +466,15 @@ export const batchMarkPaid = mutation({
       await ctx.db.patch(id, {
         status: 'paid',
         paidAt: new Date().toISOString(),
+      })
+
+      // Notify founder about payment
+      const startup = await ctx.db.get(invoice.startupId)
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyInvoicePaid, {
+        userId: invoice.uploadedByUserId,
+        fileName: invoice.fileName,
+        amountGbp: invoice.amountGbp,
+        cohortId: startup?.cohortId,
       })
     }
   },
@@ -550,7 +556,7 @@ export const sendToXero = internalAction({
     // Send all receipts in a single email — Resend fetches each via URL
     const receiptAttachments = []
     for (let i = 0; i < receiptIds.length; i++) {
-      const receiptFileUrl = await ctx.storage.getUrl(receiptIds[i] as any)
+      const receiptFileUrl = await ctx.storage.getUrl(receiptIds[i] as Id<'_storage'>)
       if (!receiptFileUrl) continue
       receiptAttachments.push({
         filename: receiptNames[i] || `Receipt ${i + 1}.pdf`,

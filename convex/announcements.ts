@@ -69,8 +69,8 @@ export const send = mutation({
       recipientCount: founderCount,
     })
 
-    // Schedule WhatsApp notification
-    await ctx.scheduler.runAfter(0, internal.whatsapp.sendAnnouncementNotification, {
+    // Schedule SMS notification
+    await ctx.scheduler.runAfter(0, internal.notifications.sendAnnouncementNotification, {
       cohortId: args.cohortId,
       title,
       body,

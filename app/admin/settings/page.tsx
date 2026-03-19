@@ -175,7 +175,7 @@ export default function AdminSettingsPage() {
       )}
 
       {/* Notifications Tab */}
-      {activeTab === 'notifications' && <NotificationsTab />}
+      {activeTab === 'notifications' && <NotificationsTab userRole={profile?.role} />}
     </div>
   )
 }

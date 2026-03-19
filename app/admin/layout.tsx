@@ -1,33 +1,30 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Sidebar } from '@/components/sidebar'
 import { useWaitForUser } from '@/hooks/useWaitForUser'
+import { useMounted } from '@/hooks/useMounted'
 import { Users, Settings } from 'lucide-react'
 import { UserButton } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
 
+const GLOBAL_ADMIN_ROUTES = new Set(['cohorts', 'settings', 'resources'])
+
+function extractAdminCohortSlug(pathname: string): string | null {
+  const match = pathname.match(/^\/admin\/([^/]+)(?:\/|$)/)
+  if (!match?.[1] || GLOBAL_ADMIN_ROUTES.has(match[1])) return null
+  return match[1]
+}
+
 function AdminHeader({ userRole }: { userRole: string }) {
   const pathname = usePathname()
-  const [cohortSlug, setCohortSlug] = useState<string | null>(null)
+  const mounted = useMounted()
 
-  useEffect(() => {
-    const match = pathname.match(/^\/admin\/([^/]+)(?:\/|$)/)
-    if (
-      match &&
-      match[1] &&
-      match[1] !== 'cohorts' &&
-      match[1] !== 'settings' &&
-      match[1] !== 'resources'
-    ) {
-      setCohortSlug(match[1])
-      return
-    }
-    setCohortSlug(localStorage.getItem('selectedCohortSlug'))
-  }, [pathname])
-
+  const cohortSlug =
+    extractAdminCohortSlug(pathname) ??
+    (mounted ? localStorage.getItem('selectedCohortSlug') : null)
   const adminsHref = cohortSlug ? `/admin/${cohortSlug}/admins` : '#'
 
   return (
@@ -101,7 +98,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { title: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
     { title: 'Startups', href: '/admin/startups', icon: 'Building2' },
-    { title: 'Announcements', href: '/admin/announcements', icon: 'Megaphone' },
+    { title: 'Comms', href: '/admin/comms', icon: 'MessageCircle' },
     { title: 'Funding', href: '/admin/funding', icon: 'Target' },
     { title: 'Milestones', href: '/admin/milestones', icon: 'ListChecks' },
     { title: 'Invoices', href: '/admin/invoices', icon: 'FileText' },

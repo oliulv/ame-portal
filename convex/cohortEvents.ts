@@ -1,4 +1,5 @@
 import { query, mutation } from './functions'
+import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAdmin, requireFounder, getFounderStartupIds } from './auth'
 
@@ -57,7 +58,7 @@ export const create = mutation({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
       .collect()
 
-    return await ctx.db.insert('cohortEvents', {
+    const eventId = await ctx.db.insert('cohortEvents', {
       cohortId: args.cohortId,
       title: args.title,
       description: args.description,
@@ -66,6 +67,15 @@ export const create = mutation({
       sortOrder: existing.length,
       isActive: true,
     })
+
+    // Notify founders about the new event
+    await ctx.scheduler.runAfter(0, internal.notifications.notifyEventCreated, {
+      cohortId: args.cohortId,
+      eventTitle: args.title,
+      eventDate: args.date,
+    })
+
+    return eventId
   },
 })
 
@@ -96,6 +106,25 @@ export const update = mutation({
     }
 
     await ctx.db.patch(id, patch)
+
+    // Notify founders about event updates
+    if (args.isActive === false && event.isActive) {
+      // Event was deactivated (cancelled)
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyEventCancelled, {
+        cohortId: event.cohortId,
+        eventTitle: event.title,
+      })
+    } else if (args.isActive !== false) {
+      // Event details were updated (title, date, etc.)
+      const hasContentChanges =
+        args.title !== undefined || args.date !== undefined || args.description !== undefined
+      if (hasContentChanges) {
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyEventUpdated, {
+          cohortId: event.cohortId,
+          eventTitle: args.title ?? event.title,
+        })
+      }
+    }
   },
 })
 
@@ -109,6 +138,14 @@ export const remove = mutation({
 
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error('Event not found')
+
+    // Notify founders before deleting
+    if (event.isActive) {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyEventCancelled, {
+        cohortId: event.cohortId,
+        eventTitle: event.title,
+      })
+    }
 
     await ctx.db.delete(args.id)
   },

@@ -39,7 +39,8 @@ export default defineSchema({
     permission: v.union(
       v.literal('approve_milestones'),
       v.literal('approve_invoices'),
-      v.literal('send_announcements')
+      v.literal('send_announcements'),
+      v.literal('manage_notifications')
     ),
   })
     .index('by_userId_cohortId', ['userId', 'cohortId'])
@@ -380,7 +381,8 @@ export default defineSchema({
     status: v.union(v.literal('pending'), v.literal('approved'), v.literal('rejected')),
   }),
 
-  // ── WhatsApp Numbers ──────────────────────────────────────────
+  // ── SMS Phone Numbers ────────────────────────────────────────
+  // TODO: rename table to smsNumbers via migration
   whatsappNumbers: defineTable({
     userId: v.id('users'),
     phone: v.string(), // E.164 format
@@ -403,6 +405,22 @@ export default defineSchema({
     milestoneStatusChanged: v.boolean(),
     announcements: v.boolean(),
     eventReminders: v.boolean(),
+    // New notification types (optional so existing rows aren't broken)
+    invoicePaid: v.optional(v.boolean()),
+    milestoneCreated: v.optional(v.boolean()),
+    eventCreated: v.optional(v.boolean()),
+    resourceSubmitted: v.optional(v.boolean()),
+    resourceReviewed: v.optional(v.boolean()),
+    onboardingCompleted: v.optional(v.boolean()),
+    invitationAccepted: v.optional(v.boolean()),
+    perkClaimed: v.optional(v.boolean()),
+    milestoneWithdrawn: v.optional(v.boolean()),
+    milestoneDeleted: v.optional(v.boolean()),
+    eventUpdated: v.optional(v.boolean()),
+    eventCancelled: v.optional(v.boolean()),
+    bankDetailsAdded: v.optional(v.boolean()),
+    perkCreated: v.optional(v.boolean()),
+    founderRemoved: v.optional(v.boolean()),
   }).index('by_userId', ['userId']),
 
   // ── Announcements ────────────────────────────────────────────
@@ -426,6 +444,15 @@ export default defineSchema({
   })
     .index('by_userId', ['userId'])
     .index('by_type', ['type']),
+
+  // ── Notification Settings (cohort-level global toggles) ─────
+  notificationSettings: defineTable({
+    cohortId: v.id('cohorts'),
+    notificationType: v.string(),
+    enabled: v.boolean(),
+  })
+    .index('by_cohortId', ['cohortId'])
+    .index('by_cohortId_type', ['cohortId', 'notificationType']),
 
   // ── Perk Claims ────────────────────────────────────────────────
   perkClaims: defineTable({

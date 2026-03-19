@@ -7,6 +7,6 @@ const crons = cronJobs()
 crons.interval('sync-metrics', { hours: 12 }, internal.metrics.syncAllMetrics)
 
 // Send daily event reminders at 8am UTC
-crons.cron('daily-event-reminders', '0 8 * * *', internal.whatsapp.sendDailyEventReminders)
+crons.cron('daily-event-reminders', '0 8 * * *', internal.notifications.sendDailyEventReminders)
 
 export default crons
