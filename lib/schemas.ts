@@ -182,25 +182,25 @@ export const metricsDataSchema = z.object({
 export type MetricsDataFormData = z.infer<typeof metricsDataSchema>
 
 /**
- * Validation schema for WhatsApp number
+ * Validation schema for SMS phone number
  */
-export const whatsappNumberSchema = z.object({
+export const smsNumberSchema = z.object({
   phone: z
     .string()
     .min(1, 'Phone number is required')
     .regex(/^\+[1-9]\d{6,14}$/, 'Must be in international format (e.g. +447700900000)'),
 })
 
-export type WhatsAppNumberFormData = z.infer<typeof whatsappNumberSchema>
+export type SmsNumberFormData = z.infer<typeof smsNumberSchema>
 
 /**
  * Validation schema for OTP verification code
  */
-export const whatsappVerificationSchema = z.object({
+export const smsVerificationSchema = z.object({
   code: z.string().length(6, 'Code must be 6 digits').regex(/^\d+$/, 'Code must be numeric'),
 })
 
-export type WhatsAppVerificationFormData = z.infer<typeof whatsappVerificationSchema>
+export type SmsVerificationFormData = z.infer<typeof smsVerificationSchema>
 
 /**
  * Validation schema for notification preferences

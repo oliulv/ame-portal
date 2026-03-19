@@ -163,7 +163,7 @@ export const create = mutation({
     await ctx.scheduler.runAfter(0, internal.invoiceBatching.scheduleBatching, { startupId })
 
     // Notify admins about new invoice submission
-    await ctx.scheduler.runAfter(0, internal.whatsapp.notifyInvoiceSubmitted, {
+    await ctx.scheduler.runAfter(0, internal.notifications.notifyInvoiceSubmitted, {
       cohortId: startup.cohortId,
       startupName: startup.name,
       vendorName: args.vendorName,
@@ -432,7 +432,7 @@ export const updateStatus = mutation({
 
     // Notify founder about invoice status change
     if (args.status === 'approved' || args.status === 'rejected') {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyInvoiceStatusChanged, {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyInvoiceStatusChanged, {
         userId: invoice.uploadedByUserId,
         fileName: invoice.fileName,
         status: args.status,

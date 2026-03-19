@@ -22,10 +22,10 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  whatsappNumberSchema,
-  whatsappVerificationSchema,
-  type WhatsAppNumberFormData,
-  type WhatsAppVerificationFormData,
+  smsNumberSchema,
+  smsVerificationSchema,
+  type SmsNumberFormData,
+  type SmsVerificationFormData,
 } from '@/lib/schemas'
 import { CheckCircle2, MessageSquare, Shield, Loader2 } from 'lucide-react'
 
@@ -36,38 +36,38 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
-  const whatsappData = useQuery(api.whatsapp.getMyWhatsApp)
-  const requestVerification = useMutation(api.whatsapp.requestVerification)
-  const confirmVerification = useMutation(api.whatsapp.confirmVerification)
-  const updatePreferences = useMutation(api.whatsapp.updatePreferences)
-  const toggleNotifications = useMutation(api.whatsapp.toggleNotifications)
-  const removeNumber = useMutation(api.whatsapp.removeNumber)
+  const phoneData = useQuery(api.notifications.getMyPhone)
+  const requestVerification = useMutation(api.notifications.requestVerification)
+  const confirmVerification = useMutation(api.notifications.confirmVerification)
+  const updatePreferences = useMutation(api.notifications.updatePreferences)
+  const toggleNotifications = useMutation(api.notifications.toggleNotifications)
+  const removeNumber = useMutation(api.notifications.removeNumber)
 
   const [isRequestingCode, setIsRequestingCode] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [showVerification, setShowVerification] = useState(false)
 
-  const phoneForm = useForm<WhatsAppNumberFormData>({
-    resolver: zodResolver(whatsappNumberSchema),
+  const phoneForm = useForm<SmsNumberFormData>({
+    resolver: zodResolver(smsNumberSchema),
     defaultValues: { phone: prefillPhone || '' },
   })
 
-  const codeForm = useForm<WhatsAppVerificationFormData>({
-    resolver: zodResolver(whatsappVerificationSchema),
+  const codeForm = useForm<SmsVerificationFormData>({
+    resolver: zodResolver(smsVerificationSchema),
     defaultValues: { code: '' },
   })
 
-  const whatsapp = whatsappData?.whatsapp
-  const preferences = whatsappData?.preferences
+  const smsRecord = phoneData?.smsRecord
+  const preferences = phoneData?.preferences
 
   // Prefill phone if provided and no existing number
   useEffect(() => {
-    if (prefillPhone && !whatsapp) {
+    if (prefillPhone && !smsRecord) {
       phoneForm.setValue('phone', prefillPhone)
     }
-  }, [prefillPhone, whatsapp, phoneForm])
+  }, [prefillPhone, smsRecord, phoneForm])
 
-  if (whatsappData === undefined) {
+  if (phoneData === undefined) {
     return (
       <Card>
         <CardHeader>
@@ -82,7 +82,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
     )
   }
 
-  const handleRequestCode = async (data: WhatsAppNumberFormData) => {
+  const handleRequestCode = async (data: SmsNumberFormData) => {
     setIsRequestingCode(true)
     try {
       await requestVerification({ phone: data.phone })
@@ -95,7 +95,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
     }
   }
 
-  const handleVerify = async (data: WhatsAppVerificationFormData) => {
+  const handleVerify = async (data: SmsVerificationFormData) => {
     setIsVerifying(true)
     try {
       await confirmVerification({ code: data.code })
@@ -139,7 +139,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
 
   return (
     <div className="space-y-6">
-      {/* WhatsApp Number Card */}
+      {/* Phone Number Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -151,28 +151,28 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {whatsapp?.isVerified ? (
+          {smsRecord?.isVerified ? (
             // Verified state
             <div className="space-y-4">
               <div className="flex items-center justify-between border p-4">
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                   <div>
-                    <p className="font-medium">{whatsapp.phone}</p>
+                    <p className="font-medium">{smsRecord.phone}</p>
                     <p className="text-sm text-muted-foreground">
                       Verified{' '}
-                      {whatsapp.verifiedAt &&
-                        new Date(whatsapp.verifiedAt).toLocaleDateString('en-GB')}
+                      {smsRecord.verifiedAt &&
+                        new Date(smsRecord.verifiedAt).toLocaleDateString('en-GB')}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">
-                      {whatsapp.notificationsEnabled ? 'Active' : 'Paused'}
+                      {smsRecord.notificationsEnabled ? 'Active' : 'Paused'}
                     </span>
                     <Switch
-                      checked={whatsapp.notificationsEnabled}
+                      checked={smsRecord.notificationsEnabled}
                       onCheckedChange={handleToggle}
                     />
                   </div>
@@ -216,7 +216,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
                     <Shield className="h-4 w-4 shrink-0" />
                     <span>
                       A 6-digit code has been sent to{' '}
-                      <strong>{whatsapp?.phone || phoneForm.getValues('phone')}</strong> via SMS
+                      <strong>{smsRecord?.phone || phoneForm.getValues('phone')}</strong> via SMS
                     </span>
                   </div>
                   <Form {...codeForm}>
@@ -268,7 +268,7 @@ export function NotificationsTab({ prefillPhone }: { prefillPhone?: string }) {
       </Card>
 
       {/* Notification Preferences */}
-      {whatsapp?.isVerified && (
+      {smsRecord?.isVerified && (
         <Card>
           <CardHeader>
             <CardTitle>Notification Preferences</CardTitle>

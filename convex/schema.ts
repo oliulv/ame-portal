@@ -380,7 +380,8 @@ export default defineSchema({
     status: v.union(v.literal('pending'), v.literal('approved'), v.literal('rejected')),
   }),
 
-  // ── WhatsApp Numbers ──────────────────────────────────────────
+  // ── SMS Phone Numbers ────────────────────────────────────────
+  // TODO: rename table to smsNumbers via migration
   whatsappNumbers: defineTable({
     userId: v.id('users'),
     phone: v.string(), // E.164 format

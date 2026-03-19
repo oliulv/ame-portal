@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 
 /**
- * The E.164 regex from requestVerification in convex/whatsapp.ts:
+ * The E.164 regex from requestVerification in convex/notifications.ts:
  *   /^\+[1-9]\d{6,14}$/
  *
  * This is the same pattern used both in the Convex mutation and in the
- * Zod schema (whatsappNumberSchema). We test it directly here to verify
+ * Zod schema (smsNumberSchema). We test it directly here to verify
  * the regex behavior independent of the Convex runtime.
  */
 const E164_REGEX = /^\+[1-9]\d{6,14}$/
 
 /**
- * Replica of the twilioAuth helper from convex/whatsapp.ts.
+ * Replica of the twilioAuth helper from convex/notifications.ts.
  * The original is not exported, so we duplicate the pure logic here.
  * If the implementation changes, this test will diverge -- but the logic
  * is simple enough that a 1:1 copy is acceptable for unit testing.

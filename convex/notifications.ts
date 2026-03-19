@@ -7,14 +7,14 @@ import type { Id } from './_generated/dataModel'
 // ── Verification Flow ──────────────────────────────────────────
 
 /**
- * Get the current user's WhatsApp number and notification preferences.
+ * Get the current user's SMS number and notification preferences.
  */
-export const getMyWhatsApp = query({
+export const getMyPhone = query({
   args: {},
   handler: async (ctx) => {
     const user = await requireAuth(ctx)
 
-    const whatsapp = await ctx.db
+    const smsRecord = await ctx.db
       .query('whatsappNumbers')
       .withIndex('by_userId', (q) => q.eq('userId', user._id))
       .first()
@@ -24,13 +24,13 @@ export const getMyWhatsApp = query({
       .withIndex('by_userId', (q) => q.eq('userId', user._id))
       .first()
 
-    return { whatsapp, preferences: prefs }
+    return { smsRecord, preferences: prefs }
   },
 })
 
 /**
- * Request OTP verification for a WhatsApp number.
- * Creates/updates the whatsappNumbers record and sends OTP via Twilio Verify.
+ * Request OTP verification for a SMS number.
+ * Creates/updates the phone number record and sends OTP via SMS.
  */
 export const requestVerification = mutation({
   args: { phone: v.string() },
@@ -51,7 +51,7 @@ export const requestVerification = mutation({
       throw new ConvexError('This phone number is already linked to another account')
     }
 
-    // Upsert whatsapp number record (unverified)
+    // Upsert phone number record (unverified)
     const existing = await ctx.db
       .query('whatsappNumbers')
       .withIndex('by_userId', (q) => q.eq('userId', user._id))
@@ -91,8 +91,8 @@ export const requestVerification = mutation({
       })
     }
 
-    // Send OTP via WhatsApp message
-    await ctx.scheduler.runAfter(0, internal.whatsapp.sendOtpMessage, {
+    // Send OTP via SMS
+    await ctx.scheduler.runAfter(0, internal.notifications.sendOtpMessage, {
       phone: args.phone,
       code: otpCode,
     })
@@ -107,33 +107,33 @@ export const confirmVerification = mutation({
   handler: async (ctx, args) => {
     const user = await requireAuth(ctx)
 
-    const whatsapp = await ctx.db
+    const smsRecord = await ctx.db
       .query('whatsappNumbers')
       .withIndex('by_userId', (q) => q.eq('userId', user._id))
       .first()
 
-    if (!whatsapp) {
-      throw new ConvexError('No WhatsApp number found. Please enter your number first.')
+    if (!smsRecord) {
+      throw new ConvexError('No SMS number found. Please enter your number first.')
     }
 
-    if (whatsapp.isVerified) {
+    if (smsRecord.isVerified) {
       throw new ConvexError('Number is already verified.')
     }
 
-    if (!whatsapp.otpCode || !whatsapp.otpExpiresAt) {
+    if (!smsRecord.otpCode || !smsRecord.otpExpiresAt) {
       throw new ConvexError('No verification code pending. Please request a new one.')
     }
 
-    if (new Date(whatsapp.otpExpiresAt) < new Date()) {
+    if (new Date(smsRecord.otpExpiresAt) < new Date()) {
       throw new ConvexError('Verification code has expired. Please request a new one.')
     }
 
-    if (whatsapp.otpCode !== args.code) {
+    if (smsRecord.otpCode !== args.code) {
       throw new ConvexError('Incorrect verification code.')
     }
 
     // Code is correct — mark as verified
-    await ctx.db.patch(whatsapp._id, {
+    await ctx.db.patch(smsRecord._id, {
       isVerified: true,
       verifiedAt: new Date().toISOString(),
       otpCode: undefined,
@@ -213,34 +213,34 @@ export const toggleNotifications = mutation({
   handler: async (ctx, args) => {
     const user = await requireAuth(ctx)
 
-    const whatsapp = await ctx.db
+    const smsRecord = await ctx.db
       .query('whatsappNumbers')
       .withIndex('by_userId', (q) => q.eq('userId', user._id))
       .first()
 
-    if (!whatsapp) {
-      throw new Error('No WhatsApp number registered.')
+    if (!smsRecord) {
+      throw new Error('No phone number registered.')
     }
 
-    await ctx.db.patch(whatsapp._id, { notificationsEnabled: args.enabled })
+    await ctx.db.patch(smsRecord._id, { notificationsEnabled: args.enabled })
   },
 })
 
 /**
- * Remove WhatsApp number (unlink).
+ * Remove SMS number (unlink).
  */
 export const removeNumber = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireAuth(ctx)
 
-    const whatsapp = await ctx.db
+    const smsRecord = await ctx.db
       .query('whatsappNumbers')
       .withIndex('by_userId', (q) => q.eq('userId', user._id))
       .first()
 
-    if (whatsapp) {
-      await ctx.db.delete(whatsapp._id)
+    if (smsRecord) {
+      await ctx.db.delete(smsRecord._id)
     }
   },
 })
@@ -300,7 +300,7 @@ export const sendOtpMessage = internalAction({
 
 /**
  * Internal query: resolve recipients for a notification type within a cohort.
- * Returns list of { userId, phone } for users who have verified WhatsApp
+ * Returns list of { userId, phone } for users who have verified SMS
  * and have the given notification type enabled.
  */
 export const resolveRecipients = internalQuery({
@@ -312,12 +312,12 @@ export const resolveRecipients = internalQuery({
     const recipients: { userId: Id<'users'>; phone: string }[] = []
 
     for (const userId of args.userIds) {
-      const whatsapp = await ctx.db
+      const smsRecord = await ctx.db
         .query('whatsappNumbers')
         .withIndex('by_userId', (q) => q.eq('userId', userId))
         .first()
 
-      if (!whatsapp?.isVerified || !whatsapp.notificationsEnabled) continue
+      if (!smsRecord?.isVerified || !smsRecord.notificationsEnabled) continue
 
       const prefs = await ctx.db
         .query('notificationPreferences')
@@ -330,7 +330,7 @@ export const resolveRecipients = internalQuery({
         if (prefKey in prefs && prefs[prefKey] === false) continue
       }
 
-      recipients.push({ userId, phone: whatsapp.phone })
+      recipients.push({ userId, phone: smsRecord.phone })
     }
 
     return recipients
@@ -434,7 +434,7 @@ export const sendSmsMessage = internalAction({
 
     if (!auth || !from) {
       console.log('Twilio credentials not configured, skipping SMS send')
-      await ctx.runMutation(internal.whatsapp.logNotification, {
+      await ctx.runMutation(internal.notifications.logNotification, {
         userId: args.userId,
         type: args.type,
         status: 'skipped',
@@ -467,7 +467,7 @@ export const sendSmsMessage = internalAction({
         throw new Error(data.message || `Twilio API error: ${resp.status}`)
       }
 
-      await ctx.runMutation(internal.whatsapp.logNotification, {
+      await ctx.runMutation(internal.notifications.logNotification, {
         userId: args.userId,
         type: args.type,
         status: 'sent',
@@ -476,9 +476,9 @@ export const sendSmsMessage = internalAction({
       })
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
-      console.error('WhatsApp send failed:', errorMsg)
+      console.error('SMS send failed:', errorMsg)
 
-      await ctx.runMutation(internal.whatsapp.logNotification, {
+      await ctx.runMutation(internal.notifications.logNotification, {
         userId: args.userId,
         type: args.type,
         status: 'failed',
@@ -526,12 +526,12 @@ export const notifyInvoiceSubmitted = internalAction({
     amountGbp: v.number(),
   },
   handler: async (ctx, args) => {
-    const adminIds = await ctx.runQuery(internal.whatsapp.getAdminsWithPermission, {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminsWithPermission, {
       cohortId: args.cohortId,
       permission: 'approve_invoices',
     })
 
-    const recipients = await ctx.runQuery(internal.whatsapp.resolveRecipients, {
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
       userIds: adminIds,
       notificationType: 'invoiceSubmitted',
     })
@@ -539,7 +539,7 @@ export const notifyInvoiceSubmitted = internalAction({
     const message = `New invoice from ${args.startupName}: ${args.vendorName} — £${args.amountGbp.toFixed(2)}`
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,
@@ -565,7 +565,7 @@ export const notifyInvoiceStatusChanged = internalAction({
     status: v.string(),
   },
   handler: async (ctx, args) => {
-    const recipients = await ctx.runQuery(internal.whatsapp.resolveRecipients, {
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
       userIds: [args.userId],
       notificationType: 'invoiceStatusChanged',
     })
@@ -575,7 +575,7 @@ export const notifyInvoiceStatusChanged = internalAction({
     const message = `Your invoice ${args.fileName} has been ${args.status}`
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,
@@ -597,12 +597,12 @@ export const notifyMilestoneSubmitted = internalAction({
     milestoneTitle: v.string(),
   },
   handler: async (ctx, args) => {
-    const adminIds = await ctx.runQuery(internal.whatsapp.getAdminsWithPermission, {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminsWithPermission, {
       cohortId: args.cohortId,
       permission: 'approve_milestones',
     })
 
-    const recipients = await ctx.runQuery(internal.whatsapp.resolveRecipients, {
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
       userIds: adminIds,
       notificationType: 'milestoneSubmitted',
     })
@@ -610,7 +610,7 @@ export const notifyMilestoneSubmitted = internalAction({
     const message = `New milestone submitted: ${args.milestoneTitle} from ${args.startupName}`
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,
@@ -635,7 +635,7 @@ export const notifyMilestoneStatusChanged = internalAction({
     status: v.string(),
   },
   handler: async (ctx, args) => {
-    const recipients = await ctx.runQuery(internal.whatsapp.resolveRecipients, {
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
       userIds: [args.userId],
       notificationType: 'milestoneStatusChanged',
     })
@@ -646,7 +646,7 @@ export const notifyMilestoneStatusChanged = internalAction({
     const message = `Your milestone "${args.milestoneTitle}" has been ${statusLabel}`
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,
@@ -670,14 +670,14 @@ export const sendDailyEventReminders = internalAction({
     const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
 
     // Get all events happening today
-    const todayEvents = await ctx.runQuery(internal.whatsapp.getEventsForDate, { date: today })
+    const todayEvents = await ctx.runQuery(internal.notifications.getEventsForDate, { date: today })
 
     for (const event of todayEvents) {
-      const founderIds = await ctx.runQuery(internal.whatsapp.getFounderUserIdsInCohort, {
+      const founderIds = await ctx.runQuery(internal.notifications.getFounderUserIdsInCohort, {
         cohortId: event.cohortId,
       })
 
-      const recipients = await ctx.runQuery(internal.whatsapp.resolveRecipients, {
+      const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
         userIds: founderIds,
         notificationType: 'eventReminders',
       })
@@ -685,7 +685,7 @@ export const sendDailyEventReminders = internalAction({
       const message = `Reminder: ${event.title} is today`
 
       for (const r of recipients) {
-        await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
+        await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
           userId: r.userId,
           phone: r.phone,
           message,
@@ -746,19 +746,19 @@ export const sendAnnouncementNotification = internalAction({
   },
   handler: async (ctx, args) => {
     // Get founders in cohort
-    const founderIds = await ctx.runQuery(internal.whatsapp.getFounderUserIdsInCohort, {
+    const founderIds = await ctx.runQuery(internal.notifications.getFounderUserIdsInCohort, {
       cohortId: args.cohortId,
     })
 
     // Get all admins for this cohort (assigned admins + super admins)
-    const adminIds = await ctx.runQuery(internal.whatsapp.getAdminUserIdsForCohort, {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminUserIdsForCohort, {
       cohortId: args.cohortId,
     })
 
     // Deduplicate (in case an admin is also a founder)
     const allUserIds = [...new Set([...founderIds, ...adminIds])]
 
-    const recipients = await ctx.runQuery(internal.whatsapp.resolveRecipients, {
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
       userIds: allUserIds,
       notificationType: 'announcements',
     })
@@ -766,7 +766,7 @@ export const sendAnnouncementNotification = internalAction({
     const message = `${args.title}: ${args.body}`
 
     for (const r of recipients) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.sendSmsMessage, {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
         userId: r.userId,
         phone: r.phone,
         message,

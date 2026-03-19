@@ -41,13 +41,13 @@ import type * as migrations_stripBankDetailsVerified from "../migrations/stripBa
 import type * as migrations_updateSupabasePerk from "../migrations/updateSupabasePerk.js";
 import type * as milestoneTemplates from "../milestoneTemplates.js";
 import type * as milestones from "../milestones.js";
+import type * as notifications from "../notifications.js";
 import type * as perks from "../perks.js";
 import type * as resources from "../resources.js";
 import type * as seed from "../seed.js";
 import type * as startups from "../startups.js";
 import type * as trackerWebsites from "../trackerWebsites.js";
 import type * as users from "../users.js";
-import type * as whatsapp from "../whatsapp.js";
 
 import type {
   ApiFromModules,
@@ -89,13 +89,13 @@ declare const fullApi: ApiFromModules<{
   "migrations/updateSupabasePerk": typeof migrations_updateSupabasePerk;
   milestoneTemplates: typeof milestoneTemplates;
   milestones: typeof milestones;
+  notifications: typeof notifications;
   perks: typeof perks;
   resources: typeof resources;
   seed: typeof seed;
   startups: typeof startups;
   trackerWebsites: typeof trackerWebsites;
   users: typeof users;
-  whatsapp: typeof whatsapp;
 }>;
 
 /**

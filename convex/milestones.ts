@@ -512,7 +512,7 @@ export const approve = mutation({
       .withIndex('by_startupId', (q) => q.eq('startupId', milestone.startupId))
       .collect()
     for (const fp of founderProfiles) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyMilestoneStatusChanged, {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneStatusChanged, {
         userId: fp.userId,
         milestoneTitle: milestone.title,
         status: 'approved',
@@ -565,7 +565,7 @@ export const requestChanges = mutation({
       .withIndex('by_startupId', (q) => q.eq('startupId', milestone.startupId))
       .collect()
     for (const fp of founderProfiles) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyMilestoneStatusChanged, {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneStatusChanged, {
         userId: fp.userId,
         milestoneTitle: milestone.title,
         status: 'changes_requested',
@@ -635,7 +635,7 @@ export const submit = mutation({
     // Notify admins about milestone submission
     const startup = await ctx.db.get(milestone.startupId)
     if (startup) {
-      await ctx.scheduler.runAfter(0, internal.whatsapp.notifyMilestoneSubmitted, {
+      await ctx.scheduler.runAfter(0, internal.notifications.notifyMilestoneSubmitted, {
         cohortId: startup.cohortId,
         startupName: startup.name,
         milestoneTitle: milestone.title,
