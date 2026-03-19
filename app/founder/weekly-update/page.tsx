@@ -46,9 +46,12 @@ export default function WeeklyUpdatePage() {
   const [metricValue, setMetricValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [countdown, setCountdown] = useState('')
+  const [editing, setEditing] = useState(false)
 
   const deadline = getDeadline()
   const isPastDeadline = new Date() > deadline
+  const hasSubmitted = !!currentUpdate
+  const isLocked = hasSubmitted && !editing
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -86,6 +89,7 @@ export default function WeeklyUpdatePage() {
             : undefined,
       })
       toast.success(currentUpdate ? 'Update saved' : 'Weekly update submitted!')
+      setEditing(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to submit')
     } finally {
@@ -123,70 +127,103 @@ export default function WeeklyUpdatePage() {
         </div>
       </div>
 
-      {currentUpdate && (
-        <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
-          <CheckCircle className="h-4 w-4 text-green-600" />
-          <span className="text-sm text-green-700 dark:text-green-400">
-            Submitted. You can edit until the deadline.
-          </span>
-        </div>
+      {/* Submitted read-only state */}
+      {hasSubmitted && !editing && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                    Submitted
+                  </span>
+                </div>
+                <p className="text-sm">{currentUpdate.highlight}</p>
+                {currentUpdate.primaryMetric && (
+                  <Badge variant="outline" className="text-xs">
+                    {currentUpdate.primaryMetric.label}:{' '}
+                    {currentUpdate.primaryMetric.value.toLocaleString()}
+                  </Badge>
+                )}
+              </div>
+              {!isPastDeadline && (
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  Edit
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>This Week</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="highlight">What did you ship, learn, or discover this week? *</Label>
-              <Textarea
-                id="highlight"
-                placeholder="We landed our first paying customer, shipped v2 of the onboarding flow, and discovered our CAC is 3x lower via LinkedIn than Google..."
-                value={highlight}
-                onChange={(e) => setHighlight(e.target.value)}
-                disabled={isPastDeadline}
-                className="min-h-[100px]"
-                maxLength={500}
-              />
-              <p className="text-xs text-muted-foreground text-right">{highlight.length}/500</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+      {/* Form: shown when not yet submitted, or when editing */}
+      {(!hasSubmitted || editing) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>This Week</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="metricLabel" className="text-muted-foreground">
-                  Key metric (optional)
+                <Label htmlFor="highlight">
+                  What did you ship, learn, or discover this week? *
                 </Label>
-                <Input
-                  id="metricLabel"
-                  placeholder="e.g. MRR, Users"
-                  value={metricLabel}
-                  onChange={(e) => setMetricLabel(e.target.value)}
+                <Textarea
+                  id="highlight"
+                  placeholder="We landed our first paying customer, shipped v2 of the onboarding flow, and discovered our CAC is 3x lower via LinkedIn than Google..."
+                  value={highlight}
+                  onChange={(e) => setHighlight(e.target.value)}
                   disabled={isPastDeadline}
+                  className="min-h-[100px]"
+                  maxLength={500}
                 />
+                <p className="text-xs text-muted-foreground text-right">{highlight.length}/500</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="metricValue" className="text-muted-foreground">
-                  Value
-                </Label>
-                <Input
-                  id="metricValue"
-                  type="number"
-                  placeholder="e.g. 5000"
-                  value={metricValue}
-                  onChange={(e) => setMetricValue(e.target.value)}
-                  disabled={isPastDeadline}
-                />
-              </div>
-            </div>
 
-            <Button type="submit" disabled={submitting || isPastDeadline}>
-              <Send className="mr-2 h-4 w-4" />
-              {submitting ? 'Submitting...' : currentUpdate ? 'Update' : 'Submit'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="metricLabel" className="text-muted-foreground">
+                    Key metric (optional)
+                  </Label>
+                  <Input
+                    id="metricLabel"
+                    placeholder="e.g. MRR, Users"
+                    value={metricLabel}
+                    onChange={(e) => setMetricLabel(e.target.value)}
+                    disabled={isPastDeadline}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="metricValue" className="text-muted-foreground">
+                    Value
+                  </Label>
+                  <Input
+                    id="metricValue"
+                    type="number"
+                    placeholder="e.g. 5000"
+                    value={metricValue}
+                    onChange={(e) => setMetricValue(e.target.value)}
+                    disabled={isPastDeadline}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="submit" disabled={submitting || isPastDeadline}>
+                  <Send className="mr-2 h-4 w-4" />
+                  {submitting ? 'Saving...' : hasSubmitted ? 'Save Changes' : 'Submit'}
+                </Button>
+                {editing && (
+                  <Button type="button" variant="outline" onClick={() => setEditing(false)}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Previous updates */}
       {history && history.length > 0 && (

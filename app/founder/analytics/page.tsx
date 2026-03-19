@@ -17,7 +17,7 @@ import { KpiCard } from '@/components/analytics/kpi-card'
 import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { SocialCard } from '@/components/analytics/social-card'
 import { VelocityScore } from '@/components/analytics/velocity-score'
-import { Plug, TrendingUp, Eye } from 'lucide-react'
+import { Plug, TrendingUp, Eye, Github } from 'lucide-react'
 import Link from 'next/link'
 
 function computeGrowth(data: Array<{ value: number }> | undefined | null): number {
@@ -293,9 +293,30 @@ export default function FounderAnalyticsPage() {
                       Add the tracker to monitor sessions and pageviews.
                     </p>
                   </div>
-                  <Link href="/founder/integrations">
+                  <Link href="/founder/integrations?tab=tracker">
                     <Button variant="outline" size="sm">
                       Set Up Tracker
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {!hasGithub && (
+            <Card className="border-dashed">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  <Github className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Track development velocity</p>
+                    <p className="text-sm text-muted-foreground">
+                      Connect GitHub to score commits, PRs, and code reviews on the leaderboard.
+                    </p>
+                  </div>
+                  <Link href="/founder/integrations?tab=github">
+                    <Button variant="outline" size="sm">
+                      Connect GitHub
                     </Button>
                   </Link>
                 </div>

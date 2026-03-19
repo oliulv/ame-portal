@@ -9,6 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Star, StarOff, Users, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
@@ -88,17 +95,18 @@ export default function AdminWeeklyUpdatesPage() {
       {/* Week selector */}
       <div className="flex items-center gap-4">
         <label className="text-sm font-medium">Week of:</label>
-        <select
-          value={selectedWeek}
-          onChange={(e) => setSelectedWeek(e.target.value)}
-          className="border bg-background px-3 py-2 text-sm"
-        >
-          {weeks.map((w) => (
-            <option key={w} value={w}>
-              {w}
-            </option>
-          ))}
-        </select>
+        <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {weeks.map((w) => (
+              <SelectItem key={w} value={w}>
+                {w}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Summary stats */}
