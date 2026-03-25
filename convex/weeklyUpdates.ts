@@ -1,17 +1,7 @@
 import { query, mutation, internalMutation } from './functions'
 import { v } from 'convex/values'
 import { requireAuth, requireFounder, requireAdmin, getFounderStartupIds } from './auth'
-
-/**
- * Get the Monday ISO date for a given date.
- */
-function getMonday(date: Date): string {
-  const d = new Date(date)
-  const day = d.getDay()
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-  d.setDate(diff)
-  return d.toISOString().slice(0, 10)
-}
+import { getMonday } from './lib/dateUtils'
 
 /**
  * Submit or update a weekly update (one per startup per week, upsert).
