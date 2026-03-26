@@ -7,7 +7,7 @@ import {
   internalQuery,
 } from './functions'
 import { v } from 'convex/values'
-import { requireFounder, requireAdmin, getFounderStartupIds } from './auth'
+import { requireFounder, requireAdmin, requireStartupAccess, getFounderStartupIds } from './auth'
 import { api, internal } from './_generated/api'
 import { logConvexError } from './lib/logging'
 
@@ -44,7 +44,8 @@ export const status = query({
 })
 
 /**
- * Store a Stripe connection (after API key validation in action).
+ * Store a Stripe connection — called by the Stripe OAuth callback route.
+ * Auth-gated: caller must be a founder who owns this startup.
  */
 export const storeStripeConnection = mutation({
   args: {
@@ -54,10 +55,7 @@ export const storeStripeConnection = mutation({
     accountName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Auth: verify caller is a founder who owns this startup
-    const user = await requireFounder(ctx)
-    const startupIds = await getFounderStartupIds(ctx, user._id)
-    if (!startupIds.includes(args.startupId)) throw new Error('Not authorized for this startup')
+    await requireStartupAccess(ctx, args.startupId)
 
     // Check if connection already exists
     const existing = await ctx.db
@@ -174,7 +172,8 @@ export const getFounderStartupId = query({
 })
 
 /**
- * Store a GitHub connection.
+ * Store a GitHub connection — called by the GitHub OAuth callback route.
+ * Auth-gated: caller must be a founder who owns this startup.
  */
 export const storeGithubConnection = mutation({
   args: {
@@ -186,10 +185,7 @@ export const storeGithubConnection = mutation({
     accountName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Auth: verify caller is a founder who owns this startup
-    const user = await requireFounder(ctx)
-    const startupIds = await getFounderStartupIds(ctx, user._id)
-    if (!startupIds.includes(args.startupId)) throw new Error('Not authorized for this startup')
+    await requireStartupAccess(ctx, args.startupId)
 
     const existing = await ctx.db
       .query('integrationConnections')

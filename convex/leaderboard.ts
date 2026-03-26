@@ -821,6 +821,19 @@ export const computeLeaderboardForFounder = query({
         d.updatesScore,
         d.milestonesScore,
       ].filter((v) => v > 0).length
+
+      // Consistency bonus (same as admin version)
+      const weeklyComposites: number[] = []
+      for (let w = 0; w < weeks.length; w++) {
+        weeklyComposites.push(
+          Math.abs(d.weeklyRevenue[w] ?? 0) +
+            Math.abs(d.weeklyTraffic[w] ?? 0) +
+            Math.abs(d.weeklyGithub[w] ?? 0)
+        )
+      }
+      const consistencyBonus = computeConsistencyBonus(weeklyComposites)
+      total *= 1 + consistencyBonus / 100
+
       if (d.isFavoriteThisWeek) total *= 1.25
 
       results.push({
