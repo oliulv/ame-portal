@@ -20,16 +20,16 @@ interface VelocityScoreProps {
 }
 
 const BARS = [
-  { key: 'Commits', points: 10, cssVar: '--chart-1' },
-  { key: 'PRs', points: 25, cssVar: '--chart-2' },
-  { key: 'Reviews', points: 30, cssVar: '--chart-4' },
+  { key: 'Commits', points: 10, color: 'hsl(var(--primary))' },
+  { key: 'PRs', points: 25, color: 'hsl(var(--primary) / 0.7)' },
+  { key: 'Reviews', points: 30, color: 'hsl(var(--primary) / 0.5)' },
 ]
 
 export function VelocityScore({ commits, prsOpened, reviews, totalScore }: VelocityScoreProps) {
   const data = [
-    { name: 'Commits', count: commits, points: commits * 10, color: 'hsl(var(--chart-1))' },
-    { name: 'PRs', count: prsOpened, points: prsOpened * 25, color: 'hsl(var(--chart-2))' },
-    { name: 'Reviews', count: reviews, points: reviews * 30, color: 'hsl(var(--chart-4))' },
+    { name: 'Commits', count: commits, points: commits * 10 },
+    { name: 'PRs', count: prsOpened, points: prsOpened * 25 },
+    { name: 'Reviews', count: reviews, points: reviews * 30 },
   ]
 
   return (
@@ -44,31 +44,23 @@ export function VelocityScore({ commits, prsOpened, reviews, totalScore }: Veloc
         </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={data} layout="vertical" barCategoryGap="25%">
-            <defs>
-              {BARS.map((bar) => (
-                <linearGradient
-                  key={bar.key}
-                  id={`vel-grad-${bar.key.replace(/\s/g, '-')}`}
-                  x1="0"
-                  y1="0"
-                  x2="1"
-                  y2="0"
-                >
-                  <stop offset="0%" stopColor={`hsl(var(${bar.cssVar}))`} stopOpacity={0.5} />
-                  <stop offset="100%" stopColor={`hsl(var(${bar.cssVar}))`} stopOpacity={1} />
-                </linearGradient>
-              ))}
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
-            <XAxis type="number" tick={{ fontSize: 11 }} />
-            <YAxis dataKey="name" type="category" tick={{ fontSize: 12 }} width={70} />
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={data} layout="vertical" barCategoryGap="30%">
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
+            <XAxis type="number" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+            <YAxis
+              dataKey="name"
+              type="category"
+              tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }}
+              width={70}
+              axisLine={false}
+              tickLine={false}
+            />
             <Tooltip
-              formatter={(value: number, _name: string, props: any) => [
-                `${props.payload.count} × ${BARS.find((b) => b.key === props.payload.name)?.points ?? 0}pts = ${value} pts`,
-                '',
-              ]}
+              formatter={(value: number, _name: string, props: any) => {
+                const bar = BARS.find((b) => b.key === props.payload.name)
+                return [`${props.payload.count} × ${bar?.points ?? 0} = ${value} pts`, '']
+              }}
               contentStyle={{
                 backgroundColor: 'hsl(var(--card))',
                 border: '1px solid hsl(var(--border))',
@@ -76,22 +68,19 @@ export function VelocityScore({ commits, prsOpened, reviews, totalScore }: Veloc
                 fontSize: '12px',
               }}
             />
-            <Bar dataKey="points" animationDuration={500} radius={[0, 4, 4, 0]}>
-              {data.map((entry) => (
-                <Cell key={entry.name} fill={`url(#vel-grad-${entry.name.replace(/\s/g, '-')})`} />
+            <Bar dataKey="points" animationDuration={400} radius={[0, 3, 3, 0]}>
+              {data.map((_, i) => (
+                <Cell key={i} fill={BARS[i].color} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
 
-        <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+        <div className="mt-3 flex gap-5 text-xs text-muted-foreground">
           {BARS.map((bar) => (
             <span key={bar.key} className="flex items-center gap-1.5">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: `hsl(var(${bar.cssVar}))` }}
-              />
-              {bar.key}: {bar.points}pts each
+              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: bar.color }} />
+              {bar.key} ({bar.points}pts)
             </span>
           ))}
         </div>

@@ -721,7 +721,8 @@ export const fetchGithubMetrics = internalAction({
     if (connections.length === 0) return
 
     const now = new Date()
-    const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000)
+    // Fetch 1 year of data for the contribution calendar (scoring only uses last 4 weeks)
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
 
     const graphqlQuery = `query($from: DateTime!, $to: DateTime!) {
       viewer {
@@ -763,7 +764,7 @@ export const fetchGithubMetrics = internalAction({
           body: JSON.stringify({
             query: graphqlQuery,
             variables: {
-              from: fourWeeksAgo.toISOString(),
+              from: oneYearAgo.toISOString(),
               to: now.toISOString(),
             },
           }),
