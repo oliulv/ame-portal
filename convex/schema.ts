@@ -107,6 +107,7 @@ export default defineSchema({
     bio: v.optional(v.string()),
     linkedinUrl: v.optional(v.string()),
     xUrl: v.optional(v.string()),
+    githubUsername: v.optional(v.string()),
     onboardingStatus: v.union(
       v.literal('pending'),
       v.literal('in_progress'),

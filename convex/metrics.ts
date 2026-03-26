@@ -511,12 +511,14 @@ export const syncAllMetrics = internalAction({
       })
     }
 
-    // Fan out GitHub syncs
+    // Fan out GitHub syncs (per-startup, not per-connection, since we aggregate)
     const githubConnections = await ctx.runQuery(internal.metrics.getAllActiveGithubConnections)
-    for (const connection of githubConnections) {
+    const githubStartupIds = new Set(githubConnections.map((c: any) => c.startupId))
+    for (const startupId of githubStartupIds) {
+      const firstConnection = githubConnections.find((c: any) => c.startupId === startupId)
       await ctx.scheduler.runAfter(0, internal.metrics.syncGithubForStartup, {
-        startupId: connection.startupId,
-        connectionId: connection._id,
+        startupId,
+        connectionId: firstConnection!._id,
       })
     }
   },
@@ -561,11 +563,23 @@ export const syncTrackerForStartup = internalAction({
 
 /**
  * Sync GitHub metrics for a single startup (fan-out target).
+ * Refreshes tokens before fetching if needed.
  */
 export const syncGithubForStartup = internalAction({
   args: { startupId: v.id('startups'), connectionId: v.id('integrationConnections') },
   handler: async (ctx, args) => {
     try {
+      // Refresh tokens for all GitHub connections on this startup before fetching
+      const connections: any[] = await ctx.runQuery(
+        internal.metrics.getAllGithubConnectionsForStartup,
+        { startupId: args.startupId }
+      )
+      for (const conn of connections) {
+        await ctx.runAction(internal.integrations.refreshGithubToken, {
+          connectionId: conn._id,
+        })
+      }
+
       await ctx.runAction(internal.metrics.fetchGithubMetrics, {
         startupId: args.startupId,
       })
@@ -605,21 +619,25 @@ export const getAllActiveGithubConnections = internalQuery({
 
 /**
  * Fetch and store GitHub metrics for a startup.
+ * Aggregates contributions across ALL connected founders (summed, not averaged).
  * Uses GraphQL contributionsCollection with Git Velocity scoring.
  */
 export const fetchGithubMetrics = internalAction({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    const connection: any = await ctx.runQuery(internal.metrics.getGithubConnection, {
-      startupId: args.startupId,
-    })
-    if (!connection?.accessToken) return
+    // Get ALL GitHub connections for this startup (one per founder)
+    const connections: any[] = await ctx.runQuery(
+      internal.metrics.getAllGithubConnectionsForStartup,
+      { startupId: args.startupId }
+    )
+    if (connections.length === 0) return
 
     const now = new Date()
     const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000)
 
-    const query = `query($from: DateTime!, $to: DateTime!) {
+    const graphqlQuery = `query($from: DateTime!, $to: DateTime!) {
       viewer {
+        login
         contributionsCollection(from: $from, to: $to) {
           totalCommitContributions
           totalPullRequestContributions
@@ -637,88 +655,98 @@ export const fetchGithubMetrics = internalAction({
       }
     }`
 
-    const response = await fetch('https://api.github.com/graphql', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${connection.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        variables: {
-          from: fourWeeksAgo.toISOString(),
-          to: now.toISOString(),
-        },
-      }),
-    })
+    // Aggregate across all founders
+    let totalCommits = 0
+    let totalPrsOpened = 0
+    let totalReviews = 0
+    let totalIssues = 0
+    const calendarMap = new Map<string, number>() // date → sum of contributions
 
-    if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.status}`)
+    for (const connection of connections) {
+      if (!connection.accessToken) continue
+
+      try {
+        const response = await fetch('https://api.github.com/graphql', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${connection.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: graphqlQuery,
+            variables: {
+              from: fourWeeksAgo.toISOString(),
+              to: now.toISOString(),
+            },
+          }),
+        })
+
+        if (!response.ok) {
+          logConvexError(
+            `GitHub API error for startup ${args.startupId}, connection ${connection._id}:`,
+            new Error(`HTTP ${response.status}`)
+          )
+          continue // Don't fail the whole startup — skip this founder
+        }
+
+        const data = await response.json()
+        const contrib = data.data?.viewer?.contributionsCollection
+        if (!contrib) continue
+
+        // Sum across founders (not average)
+        totalCommits += contrib.totalCommitContributions ?? 0
+        totalPrsOpened += contrib.totalPullRequestContributions ?? 0
+        totalReviews += contrib.totalPullRequestReviewContributions ?? 0
+        totalIssues += contrib.totalIssueContributions ?? 0
+
+        // Merge contribution calendars (sum per day)
+        const weeks = contrib.contributionCalendar?.weeks ?? []
+        for (const week of weeks) {
+          for (const day of week.contributionDays ?? []) {
+            calendarMap.set(day.date, (calendarMap.get(day.date) ?? 0) + (day.contributionCount ?? 0))
+          }
+        }
+      } catch (error) {
+        logConvexError(
+          `GitHub fetch error for startup ${args.startupId}, connection ${connection._id}:`,
+          error
+        )
+        continue
+      }
     }
 
-    const data = await response.json()
-    const contrib = data.data?.viewer?.contributionsCollection
-    if (!contrib) return
-
-    const commits = contrib.totalCommitContributions ?? 0
-    const prsOpened = contrib.totalPullRequestContributions ?? 0
-    const reviews = contrib.totalPullRequestReviewContributions ?? 0
-    const issues = contrib.totalIssueContributions ?? 0
-
-    // Git Velocity scoring
-    const velocityScore = commits * 10 + prsOpened * 25 + reviews * 30
-
+    // Git Velocity scoring (summed across all founders)
+    const velocityScore = totalCommits * 10 + totalPrsOpened * 25 + totalReviews * 30
     const timestamp = now.toISOString()
 
-    // Store contribution calendar for heatmap
-    const calendarData = contrib.contributionCalendar?.weeks ?? []
+    // Reconstruct merged calendar in GitHub's format
+    const mergedCalendarWeeks: Array<{
+      contributionDays: Array<{ date: string; contributionCount: number }>
+    }> = []
+    const sortedDates = Array.from(calendarMap.entries()).sort(([a], [b]) => a.localeCompare(b))
+    let currentWeek: Array<{ date: string; contributionCount: number }> = []
+    for (const [date, count] of sortedDates) {
+      currentWeek.push({ date, contributionCount: count })
+      if (currentWeek.length === 7) {
+        mergedCalendarWeeks.push({ contributionDays: currentWeek })
+        currentWeek = []
+      }
+    }
+    if (currentWeek.length > 0) {
+      mergedCalendarWeeks.push({ contributionDays: currentWeek })
+    }
 
     await ctx.runMutation(internal.metrics.storeInternal, {
       snapshots: [
-        {
-          startupId: args.startupId,
-          provider: 'github' as const,
-          metricKey: 'velocity_score',
-          value: velocityScore,
-          timestamp,
-          window: 'daily' as const,
-        },
-        {
-          startupId: args.startupId,
-          provider: 'github' as const,
-          metricKey: 'commits',
-          value: commits,
-          timestamp,
-          window: 'daily' as const,
-        },
-        {
-          startupId: args.startupId,
-          provider: 'github' as const,
-          metricKey: 'prs_opened',
-          value: prsOpened,
-          timestamp,
-          window: 'daily' as const,
-        },
-        {
-          startupId: args.startupId,
-          provider: 'github' as const,
-          metricKey: 'reviews',
-          value: reviews,
-          timestamp,
-          window: 'daily' as const,
-        },
-        {
-          startupId: args.startupId,
-          provider: 'github' as const,
-          metricKey: 'total_contributions',
-          value: commits + prsOpened + reviews + issues,
-          timestamp,
-          window: 'daily' as const,
-        },
+        { startupId: args.startupId, provider: 'github' as const, metricKey: 'velocity_score', value: velocityScore, timestamp, window: 'daily' as const },
+        { startupId: args.startupId, provider: 'github' as const, metricKey: 'commits', value: totalCommits, timestamp, window: 'daily' as const },
+        { startupId: args.startupId, provider: 'github' as const, metricKey: 'prs_opened', value: totalPrsOpened, timestamp, window: 'daily' as const },
+        { startupId: args.startupId, provider: 'github' as const, metricKey: 'reviews', value: totalReviews, timestamp, window: 'daily' as const },
+        { startupId: args.startupId, provider: 'github' as const, metricKey: 'total_contributions', value: totalCommits + totalPrsOpened + totalReviews + totalIssues, timestamp, window: 'daily' as const },
       ],
     })
 
-    // Store calendar data as meta on a special metric
+    // Store merged calendar data
     await ctx.runMutation(internal.metrics.storeInternalWithMeta, {
       startupId: args.startupId,
       provider: 'github' as const,
@@ -726,13 +754,13 @@ export const fetchGithubMetrics = internalAction({
       value: 0,
       timestamp,
       window: 'daily' as const,
-      meta: calendarData,
+      meta: mergedCalendarWeeks,
     })
   },
 })
 
 /**
- * Get GitHub connection for a startup.
+ * Get a single GitHub connection for a startup (legacy, used by integrations page).
  */
 export const getGithubConnection = internalQuery({
   args: { startupId: v.id('startups') },
@@ -744,6 +772,23 @@ export const getGithubConnection = internalQuery({
       )
       .filter((q) => q.and(q.eq(q.field('isActive'), true), q.eq(q.field('status'), 'active')))
       .first()
+  },
+})
+
+/**
+ * Get ALL active GitHub connections for a startup (one per connected founder).
+ * Used by fetchGithubMetrics to aggregate contributions across the team.
+ */
+export const getAllGithubConnectionsForStartup = internalQuery({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('integrationConnections')
+      .withIndex('by_startupId_provider', (q) =>
+        q.eq('startupId', args.startupId).eq('provider', 'github')
+      )
+      .filter((q) => q.and(q.eq(q.field('isActive'), true), q.eq(q.field('status'), 'active')))
+      .collect()
   },
 })
 

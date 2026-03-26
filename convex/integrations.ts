@@ -1,7 +1,8 @@
-import { query, mutation, action, internalMutation } from './functions'
+import { query, mutation, action, internalMutation, internalAction } from './functions'
 import { v } from 'convex/values'
 import { requireFounder, requireAdmin, getFounderStartupIds } from './auth'
 import { api, internal } from './_generated/api'
+import { logConvexError } from './lib/logging'
 
 /**
  * Get integration connection status for the current founder's startup.
@@ -421,5 +422,106 @@ export const statusForAdmin = query({
         : null,
       social: socialProfiles,
     }
+  },
+})
+
+// ── Token Refresh ────────────────────────────────────────────────────
+
+/**
+ * Refresh a GitHub access token using the refresh token.
+ * GitHub App tokens expire after 8 hours; OAuth app tokens don't expire.
+ * This handles the GitHub App case gracefully and is a no-op for OAuth apps.
+ */
+export const refreshGithubToken = internalAction({
+  args: { connectionId: v.id('integrationConnections') },
+  handler: async (ctx, args) => {
+    const connection: any = await ctx.runQuery(internal.integrations.getConnectionById, {
+      connectionId: args.connectionId,
+    })
+    if (!connection) return
+
+    // If no refresh token or no expiry, token doesn't expire (OAuth app) — skip
+    if (!connection.refreshToken || !connection.tokenExpiresAt) return
+
+    // Check if token expires within the next 10 minutes
+    const expiresAt = new Date(connection.tokenExpiresAt).getTime()
+    const tenMinutesFromNow = Date.now() + 10 * 60 * 1000
+    if (expiresAt > tenMinutesFromNow) return // Token still valid
+
+    const clientId = process.env.GITHUB_APP_CLIENT_ID
+    const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET
+    if (!clientId || !clientSecret) {
+      logConvexError('GitHub token refresh failed: missing GITHUB_APP_CLIENT_ID or SECRET', null)
+      return
+    }
+
+    try {
+      const response = await fetch('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: 'refresh_token',
+          refresh_token: connection.refreshToken,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`GitHub token refresh HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      if (data.error) {
+        throw new Error(`GitHub token refresh: ${data.error_description || data.error}`)
+      }
+
+      await ctx.runMutation(internal.integrations.updateConnectionToken, {
+        connectionId: args.connectionId,
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token ?? connection.refreshToken,
+        tokenExpiresAt: data.expires_in
+          ? new Date(Date.now() + data.expires_in * 1000).toISOString()
+          : undefined,
+      })
+    } catch (error) {
+      logConvexError(`GitHub token refresh failed for connection ${args.connectionId}:`, error)
+      await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+        connectionId: args.connectionId,
+        syncError: `Token refresh failed: ${error instanceof Error ? error.message : 'Unknown'}`,
+      })
+    }
+  },
+})
+
+/**
+ * Get a connection by ID (internal).
+ */
+export const getConnectionById = internalMutation({
+  args: { connectionId: v.id('integrationConnections') },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.connectionId)
+  },
+})
+
+/**
+ * Update a connection's access token after refresh.
+ */
+export const updateConnectionToken = internalMutation({
+  args: {
+    connectionId: v.id('integrationConnections'),
+    accessToken: v.string(),
+    refreshToken: v.optional(v.string()),
+    tokenExpiresAt: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.connectionId, {
+      accessToken: args.accessToken,
+      ...(args.refreshToken ? { refreshToken: args.refreshToken } : {}),
+      ...(args.tokenExpiresAt ? { tokenExpiresAt: args.tokenExpiresAt } : {}),
+    })
   },
 })
