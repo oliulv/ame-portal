@@ -32,7 +32,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
-import { ScoringChatbot } from '@/components/leaderboard/scoring-chatbot'
 import type { Id } from '@/convex/_generated/dataModel'
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -664,8 +663,6 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      {/* AI Chatbot */}
-      <ScoringChatbot />
     </div>
   )
 }

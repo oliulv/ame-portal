@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/dialog'
 import { Star, Flame, Trophy, Send, CheckCircle, Pencil } from 'lucide-react'
 import Image from 'next/image'
-import { ScoringChatbot } from '@/components/leaderboard/scoring-chatbot'
 import { toast } from 'sonner'
 
 function WeeklyUpdateModal() {
@@ -365,7 +364,6 @@ export default function FounderLeaderboardPage() {
         </div>
       )}
 
-      <ScoringChatbot />
     </div>
   )
 }
