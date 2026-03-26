@@ -38,7 +38,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   revenue: 'bg-emerald-500',
   traffic: 'bg-blue-500',
   github: 'bg-purple-500',
-  social: 'bg-pink-500',
   updates: 'bg-orange-500',
   milestones: 'bg-yellow-500',
 }
@@ -47,18 +46,31 @@ const CATEGORY_LABELS: Record<string, string> = {
   revenue: 'Revenue',
   traffic: 'Traffic',
   github: 'GitHub',
-  social: 'Social',
   updates: 'Updates',
   milestones: 'Milestones',
 }
 
 const CATEGORY_WEIGHTS: Record<string, number> = {
-  revenue: 22,
-  traffic: 18,
-  github: 16,
-  social: 16,
-  updates: 15,
-  milestones: 13,
+  revenue: 25,
+  traffic: 20,
+  github: 20,
+  updates: 20,
+  milestones: 15,
+}
+
+function MomentumArrow({ momentum }: { momentum: 'up' | 'flat' | 'down' | null }) {
+  if (!momentum) return null
+  const config = {
+    up: { icon: '↑', color: 'text-emerald-500', label: 'Trending up' },
+    flat: { icon: '→', color: 'text-muted-foreground', label: 'Flat' },
+    down: { icon: '↓', color: 'text-red-500', label: 'Trending down' },
+  }
+  const { icon, color, label } = config[momentum]
+  return (
+    <span className={`${color} font-bold text-sm`} title={label}>
+      {icon}
+    </span>
+  )
 }
 
 function ScoreBar({ value, maxValue, color }: { value: number; maxValue: number; color: string }) {
@@ -161,6 +173,14 @@ function ExpandableRow({ entry, maxScore }: { entry: any; maxScore: number }) {
               />
             )}
             <span className="text-sm font-medium">{entry.startupName}</span>
+            {entry.qualified && (
+              <Badge
+                variant="default"
+                className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+              >
+                Qualified
+              </Badge>
+            )}
             {entry.excludeFromMetrics && (
               <Badge variant="warning" className="text-xs">
                 Excluded
@@ -186,7 +206,10 @@ function ExpandableRow({ entry, maxScore }: { entry: any; maxScore: number }) {
           </div>
         </td>
         <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-right">
-          {entry.totalScore.toFixed(1)}
+          <span className="inline-flex items-center gap-1.5">
+            {entry.totalScore.toFixed(1)}
+            <MomentumArrow momentum={entry.momentum} />
+          </span>
         </td>
         <td className="px-4 py-3 whitespace-nowrap text-center">
           {entry.isFavoriteThisWeek && (

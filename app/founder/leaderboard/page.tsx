@@ -21,6 +21,21 @@ import { Star, Flame, Trophy, Send, CheckCircle, Pencil } from 'lucide-react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 
+function MomentumArrow({ momentum }: { momentum: 'up' | 'flat' | 'down' | null }) {
+  if (!momentum) return null
+  const config = {
+    up: { icon: '↑', color: 'text-emerald-500', label: 'Trending up' },
+    flat: { icon: '→', color: 'text-muted-foreground', label: 'Flat' },
+    down: { icon: '↓', color: 'text-red-500', label: 'Trending down' },
+  }
+  const { icon, color, label } = config[momentum]
+  return (
+    <span className={`${color} font-bold text-sm`} title={label}>
+      {icon}
+    </span>
+  )
+}
+
 function WeeklyUpdateModal() {
   const currentUpdate = useQuery(api.weeklyUpdates.getCurrent)
   const streak = useQuery(api.weeklyUpdates.getCurrentStreak, {})
@@ -333,13 +348,24 @@ export default function FounderLeaderboardPage() {
                         </Badge>
                       )}
                     </span>
+                    {entry.qualified && (
+                      <Badge
+                        variant="default"
+                        className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                      >
+                        Qualified
+                      </Badge>
+                    )}
                     {entry.isFavoriteThisWeek && (
                       <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
                     )}
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right text-sm font-bold">
-                  {entry.totalScore.toFixed(1)}
+                  <span className="inline-flex items-center gap-1.5">
+                    {entry.totalScore.toFixed(1)}
+                    <MomentumArrow momentum={entry.momentum} />
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-center text-sm">
                   {entry.updateStreak > 0 && (

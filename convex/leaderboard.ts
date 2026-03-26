@@ -37,6 +37,36 @@ function powerLawNormalize(values: number[], p: number): number[] {
   return transformed.map((t) => (t / maxVal) * 100)
 }
 
+/**
+ * Compute momentum by comparing this-week vs last-week raw activity.
+ * Uses a simple heuristic: sum the absolute values of this week's metrics
+ * and compare to last week's. >5% increase = up, >5% decrease = down.
+ */
+function computeMomentum(
+  _totalScore: number,
+  data: {
+    weeklyRevenue: number[]
+    weeklyTraffic: number[]
+    weeklyGithub: number[]
+  }
+): 'up' | 'flat' | 'down' | null {
+  const thisWeek =
+    Math.abs(data.weeklyRevenue[0] ?? 0) +
+    Math.abs(data.weeklyTraffic[0] ?? 0) +
+    Math.abs(data.weeklyGithub[0] ?? 0)
+  const lastWeek =
+    Math.abs(data.weeklyRevenue[1] ?? 0) +
+    Math.abs(data.weeklyTraffic[1] ?? 0) +
+    Math.abs(data.weeklyGithub[1] ?? 0)
+
+  if (thisWeek === 0 && lastWeek === 0) return null
+  if (lastWeek === 0) return 'up'
+  const change = (thisWeek - lastWeek) / lastWeek
+  if (change > 0.05) return 'up'
+  if (change < -0.05) return 'down'
+  return 'flat'
+}
+
 // ── Score Breakdown Type ─────────────────────────────────────────────
 
 export interface ScoreBreakdown {
@@ -458,7 +488,7 @@ export const computeLeaderboard = query({
         activeCategories,
         qualified,
         consistencyBonus,
-        momentum: null, // TODO: compute from previous week's score
+        momentum: computeMomentum(totalScore, data),
         isFavoriteThisWeek: data.isFavoriteThisWeek,
         favoriteMultiplier,
         updateStreak: data.startup.updateStreak ?? 0,
@@ -571,6 +601,7 @@ export const computeLeaderboardForFounder = query({
       totalScore: number
       activeCategories: number
       qualified: boolean
+      momentum: 'up' | 'flat' | 'down' | null
       isFavoriteThisWeek: boolean
       updateStreak: number
       excludeFromMetrics: boolean
@@ -579,6 +610,9 @@ export const computeLeaderboardForFounder = query({
     // Collect raw unbounded scores for normalization
     const rawData: Array<{
       startup: Doc<'startups'>
+      weeklyRevenue: number[]
+      weeklyTraffic: number[]
+      weeklyGithub: number[]
       totalRevenue: number
       totalTraffic: number
       totalGithub: number
@@ -598,6 +632,7 @@ export const computeLeaderboardForFounder = query({
         .collect()
 
       let totalRevenue = 0
+      const weeklyRevenue: number[] = []
       for (let i = 0; i < weeks.length; i++) {
         const week = weeks[i]
         const prevWeek = weeks[i + 1]
@@ -617,6 +652,7 @@ export const computeLeaderboardForFounder = query({
               .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0)
           : 0
         const growth = prevVal > 0 ? ((thisVal - prevVal) / prevVal) * 100 : 0
+        weeklyRevenue.push(growth)
         const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
         totalRevenue += growth * temporalDecay(daysOld)
       }
@@ -629,6 +665,7 @@ export const computeLeaderboardForFounder = query({
         )
         .collect()
       let totalTraffic = 0
+      const weeklyTraffic: number[] = []
       for (let i = 0; i < weeks.length; i++) {
         const week = weeks[i]
         const prevWeek = weeks[i + 1]
@@ -647,19 +684,12 @@ export const computeLeaderboardForFounder = query({
               .reduce((s, m) => s + m.value, 0)
           : 0
         const growth = prevVal > 0 ? ((thisVal - prevVal) / prevVal) * 100 : 0
+        weeklyTraffic.push(growth)
         const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
         totalTraffic += growth * temporalDecay(daysOld)
       }
 
-      // GitHub (averaged per founder)
-      const founderCount =
-        (
-          await ctx.db
-            .query('founderProfiles')
-            .withIndex('by_startupId', (q) => q.eq('startupId', s._id))
-            .collect()
-        ).length || 1
-
+      // GitHub (summed across founders — aggregated at sync time)
       const velocityMetrics = await ctx.db
         .query('metricsData')
         .withIndex('by_startupId_provider_metricKey', (q) =>
@@ -667,6 +697,7 @@ export const computeLeaderboardForFounder = query({
         )
         .collect()
       let totalGithub = 0
+      const weeklyGithub: number[] = []
       for (const week of weeks) {
         const val =
           velocityMetrics
@@ -674,8 +705,9 @@ export const computeLeaderboardForFounder = query({
               (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
             )
             .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
+        weeklyGithub.push(val) // Summed across founders (aggregated at sync time)
         const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-        totalGithub += (val / founderCount) * temporalDecay(daysOld) // Average per founder
+        totalGithub += val * temporalDecay(daysOld)
       }
 
       // Social
@@ -739,6 +771,9 @@ export const computeLeaderboardForFounder = query({
 
       rawData.push({
         startup: s,
+        weeklyRevenue,
+        weeklyTraffic,
+        weeklyGithub,
         totalRevenue,
         totalTraffic,
         totalGithub,
@@ -794,7 +829,8 @@ export const computeLeaderboardForFounder = query({
         rank: null,
         totalScore: Math.round(total * 100) / 100,
         activeCategories: activeCats,
-        qualified: activeCats >= QUALIFICATION_GATE,
+        qualified: activeCats >= QUALIFICATION_THRESHOLD,
+        momentum: computeMomentum(total, d),
         isFavoriteThisWeek: d.isFavoriteThisWeek,
         updateStreak: d.startup.updateStreak ?? 0,
         excludeFromMetrics: d.startup.excludeFromMetrics === true,
