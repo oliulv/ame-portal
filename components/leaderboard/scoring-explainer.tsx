@@ -24,59 +24,134 @@ export const CATEGORY_WEIGHTS: Record<string, number> = {
   milestones: 15,
 }
 
+const CATEGORY_DETAILS: Record<string, { signal: string; measurement: string; example: string }> = {
+  revenue: {
+    signal: 'MRR growth rate',
+    measurement: 'Week-over-week % change in Monthly Recurring Revenue from Stripe',
+    example: 'Growing 20%/week scores higher than flat at 10x the revenue',
+  },
+  traffic: {
+    signal: 'Session growth rate',
+    measurement: 'Week-over-week % change in unique sessions from your website tracker',
+    example: 'Doubling visitors in a week scores higher than steady high traffic',
+  },
+  github: {
+    signal: 'Shipping velocity',
+    measurement:
+      'Commits (10 pts) + PRs opened (25 pts) + code reviews (30 pts), summed across all founders',
+    example: '5 commits + 2 PRs + 1 review = 100 pts for that day',
+  },
+  updates: {
+    signal: 'Weekly update submitted',
+    measurement:
+      'Binary (submitted or not) + streak bonus: +10% per consecutive week, up to +80% at 8 weeks',
+    example: 'Submit every week for 8 weeks = nearly double the base score',
+  },
+  milestones: {
+    signal: 'Milestone completion rate',
+    measurement: 'Approved milestones / total due milestones over the cohort lifetime',
+    example: '4 of 5 milestones completed = 80% completion rate',
+  },
+}
+
 export function ScoringExplainerContent() {
   return (
     <Card>
-      <CardContent className="pt-6 space-y-4">
+      <CardContent className="pt-6 space-y-6">
+        {/* Category breakdown table */}
         <div>
-          <h3 className="font-semibold mb-3">Categories & Weights</h3>
-          <div className="space-y-2">
-            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-              <div key={key} className="flex items-center gap-3">
-                <div className={`h-3 w-3 shrink-0 ${CATEGORY_COLORS[key]}`} />
-                <span className="text-sm w-20 shrink-0">{label}</span>
-                <div className="h-2 bg-muted overflow-hidden" style={{ width: '120px' }}>
-                  <div
-                    className={`h-full ${CATEGORY_COLORS[key]}`}
-                    style={{ width: `${(CATEGORY_WEIGHTS[key] / 22) * 100}%` }}
-                  />
-                </div>
-                <span className="text-sm text-muted-foreground shrink-0">
-                  {CATEGORY_WEIGHTS[key]}%
-                </span>
-              </div>
-            ))}
+          <h3 className="font-semibold mb-3">How each category is scored</h3>
+          <div className="border overflow-hidden">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground w-28">
+                    Category
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground w-16">
+                    Weight
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+                    What we measure
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground hidden md:table-cell">
+                    Example
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {Object.entries(CATEGORY_DETAILS).map(([key, detail]) => (
+                  <tr key={key}>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className={`h-2.5 w-2.5 shrink-0 ${CATEGORY_COLORS[key]}`} />
+                        <span className="font-medium">{CATEGORY_LABELS[key]}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-muted-foreground">{CATEGORY_WEIGHTS[key]}%</td>
+                    <td className="px-3 py-2.5">
+                      <p className="font-medium text-xs text-muted-foreground mb-0.5">
+                        {detail.signal}
+                      </p>
+                      <p>{detail.measurement}</p>
+                    </td>
+                    <td className="px-3 py-2.5 text-muted-foreground hidden md:table-cell">
+                      {detail.example}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <h4 className="font-medium mb-1">Rolling 4-Week Window</h4>
-            <p className="text-muted-foreground">Only the last 4 weeks count.</p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-1">Temporal Decay</h4>
-            <p className="text-muted-foreground">This week 100%, last week ~81%, 2 weeks ~66%.</p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-1">40% Cap</h4>
-            <p className="text-muted-foreground">No single category can exceed 40%.</p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-1">Qualification Gate</h4>
-            <p className="text-muted-foreground">
-              Need activity in 3+ of 5 categories for &quot;Qualified&quot; tag.
-            </p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-1">Consistency Bonus</h4>
-            <p className="text-muted-foreground">Steady performance earns up to +5%.</p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-1">Momentum Arrows</h4>
-            <p className="text-muted-foreground">
-              Compare this week vs last — &gt;5% change = up or down.
-            </p>
+        {/* Scoring mechanics */}
+        <div>
+          <h3 className="font-semibold mb-3">How your score is calculated</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="border p-3 space-y-1">
+              <h4 className="font-medium text-sm">Rolling 4-Week Window</h4>
+              <p className="text-sm text-muted-foreground">
+                Only the last 4 weeks of activity count. Old work expires so the leaderboard
+                reflects who is shipping <em>now</em>.
+              </p>
+            </div>
+            <div className="border p-3 space-y-1">
+              <h4 className="font-medium text-sm">Temporal Decay</h4>
+              <p className="text-sm text-muted-foreground">
+                Recent activity is worth more. This week = 100%, last week = ~81%, 2 weeks ago =
+                ~66%, 3 weeks ago = ~53%.
+              </p>
+            </div>
+            <div className="border p-3 space-y-1">
+              <h4 className="font-medium text-sm">Qualification Gate</h4>
+              <p className="text-sm text-muted-foreground">
+                Need data in at least 3 of 5 categories to earn the &quot;Qualified&quot; tag (extra
+                funding eligibility). Categories you haven&apos;t connected are simply excluded
+                &mdash; no penalty.
+              </p>
+            </div>
+            <div className="border p-3 space-y-1">
+              <h4 className="font-medium text-sm">Consistency Bonus</h4>
+              <p className="text-sm text-muted-foreground">
+                Steady week-over-week performance earns up to +5%. High variance (big spikes then
+                nothing) incurs a -5% penalty.
+              </p>
+            </div>
+            <div className="border p-3 space-y-1">
+              <h4 className="font-medium text-sm">40% Cap</h4>
+              <p className="text-sm text-muted-foreground">
+                No single category can contribute more than 40% of your total score, even if you
+                dominate in one area. Breadth matters.
+              </p>
+            </div>
+            <div className="border p-3 space-y-1">
+              <h4 className="font-medium text-sm">Momentum Arrows</h4>
+              <p className="text-sm text-muted-foreground">
+                Compares your total score this week vs last week. &gt;5% increase = trending up,
+                &gt;5% decrease = trending down.
+              </p>
+            </div>
           </div>
         </div>
       </CardContent>
