@@ -85,7 +85,35 @@ http.route({
   method: 'POST',
   handler: httpAction(async (ctx, request) => {
     try {
-      const body = await request.json()
+      // Verify Svix signature to authenticate webhook origin
+      const webhookSecret = process.env.CLERK_WEBHOOK_SECRET
+      if (!webhookSecret) {
+        logConvexError('Clerk webhook error: CLERK_WEBHOOK_SECRET not set', null)
+        return new Response('Server misconfigured', { status: 500 })
+      }
+
+      const payload = await request.text()
+      const svixId = request.headers.get('svix-id')
+      const svixTimestamp = request.headers.get('svix-timestamp')
+      const svixSignature = request.headers.get('svix-signature')
+
+      if (!svixId || !svixTimestamp || !svixSignature) {
+        return new Response('Missing svix headers', { status: 400 })
+      }
+
+      const { Webhook } = await import('svix')
+      const wh = new Webhook(webhookSecret)
+      let body: any
+      try {
+        body = wh.verify(payload, {
+          'svix-id': svixId,
+          'svix-timestamp': svixTimestamp,
+          'svix-signature': svixSignature,
+        }) as any
+      } catch {
+        return new Response('Invalid signature', { status: 401 })
+      }
+
       const eventType = body.type
 
       if (eventType === 'user.deleted') {
