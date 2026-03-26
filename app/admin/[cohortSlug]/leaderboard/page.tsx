@@ -520,7 +520,8 @@ export default function LeaderboardPage() {
                 Unranked ({leaderboard.unranked.length})
               </h2>
               <p className="text-xs text-muted-foreground">
-                These startups don&apos;t yet meet the 3-of-5 category activity requirement for the Qualified tag.
+                These startups don&apos;t yet meet the 3-of-5 category activity requirement for the
+                Qualified tag.
               </p>
               <div className="bg-card border overflow-hidden">
                 <table className="min-w-full divide-y divide-border">
