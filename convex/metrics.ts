@@ -1,7 +1,7 @@
 import { query, action, internalAction, internalMutation, internalQuery } from './functions'
 import { api, internal } from './_generated/api'
 import { v } from 'convex/values'
-import { requireAuth } from './auth'
+import { requireStartupAccess } from './auth'
 import { logConvexError } from './lib/logging'
 import { providerValidator } from './lib/providers'
 import { normalizeToMonthlyCents } from './lib/stripeMrr'
@@ -60,7 +60,7 @@ export const getLatest = query({
     window: v.union(v.literal('daily'), v.literal('weekly'), v.literal('monthly')),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireStartupAccess(ctx, args.startupId)
 
     const metrics = await ctx.db
       .query('metricsData')
@@ -94,7 +94,7 @@ export const timeSeries = query({
     endDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireStartupAccess(ctx, args.startupId)
 
     let metrics = await ctx.db
       .query('metricsData')
@@ -147,7 +147,7 @@ export const getVelocityTimeSeries = query({
     startDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireStartupAccess(ctx, args.startupId)
 
     // Read the contribution calendar (stored by GitHub sync, contains ~1 year of daily data)
     const calendarMetric = await ctx.db
@@ -185,9 +185,8 @@ export const getVelocityTimeSeries = query({
     const earliestOutput = new Date(earliestDay + 'T00:00:00.000Z')
     earliestOutput.setDate(earliestOutput.getDate() + 28)
 
-    const requestedStart = args.startDate
-      ? new Date(args.startDate)
-      : new Date(Date.now() - 30 * 86400000)
+    // If no startDate provided (max), use earliest possible output date
+    const requestedStart = args.startDate ? new Date(args.startDate) : earliestOutput
 
     const outputStart =
       requestedStart.getTime() > earliestOutput.getTime() ? requestedStart : earliestOutput
@@ -231,7 +230,7 @@ export const getVelocityTimeSeries = query({
 export const getContributionCalendar = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireStartupAccess(ctx, args.startupId)
 
     const metric = await ctx.db
       .query('metricsData')
@@ -1327,7 +1326,7 @@ export const getMrrMovements = query({
     month: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireStartupAccess(ctx, args.startupId)
 
     const q = ctx.db
       .query('mrrMovements')
