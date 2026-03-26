@@ -77,19 +77,19 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
           </span>
         </div>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent>
         <TooltipProvider delayDuration={100}>
           {/*
             CSS Grid: 1 column for day labels + N columns for weeks.
             7 rows for days + 1 row for month labels on top.
-            Columns use 1fr so they stretch to fill the container.
+            Columns use minmax(0, 1fr) so they shrink to fit without overflow.
           */}
           <div
             className="w-full"
             style={{
               display: 'grid',
-              gridTemplateColumns: `28px repeat(${cols}, 1fr)`,
-              gridTemplateRows: `auto repeat(7, 1fr)`,
+              gridTemplateColumns: `28px repeat(${cols}, minmax(0, 1fr))`,
+              gridTemplateRows: `auto repeat(7, minmax(0, 1fr))`,
               gap: '2px',
             }}
           >
@@ -128,12 +128,11 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
                 <Tooltip key={day.date}>
                   <TooltipTrigger asChild>
                     <div
-                      className="rounded-sm w-full"
+                      className="rounded-sm w-full h-full min-h-[8px]"
                       style={{
                         gridColumn: wi + 2,
                         gridRow: di + 2,
                         backgroundColor: colorFor(day.contributionCount),
-                        aspectRatio: '1',
                         outline: isScoring ? '1px solid rgba(16,185,129,0.2)' : undefined,
                         outlineOffset: '-1px',
                       }}
