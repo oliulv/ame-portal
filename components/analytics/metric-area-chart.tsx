@@ -2,6 +2,13 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Area,
   AreaChart,
   CartesianGrid,
@@ -17,6 +24,13 @@ interface DataPoint {
   compareValue?: number
 }
 
+interface RangeOption {
+  value: string
+  label: string
+  disabled?: boolean
+  disabledReason?: string
+}
+
 interface MetricAreaChartProps {
   title: string
   description?: string
@@ -25,6 +39,9 @@ interface MetricAreaChartProps {
   compareColor?: string
   formatValue?: (value: number) => string
   height?: number
+  range?: string
+  onRangeChange?: (range: string) => void
+  rangeOptions?: RangeOption[]
 }
 
 function defaultFormat(value: number): string {
@@ -41,16 +58,43 @@ export function MetricAreaChart({
   compareColor = 'hsl(var(--chart-3))',
   formatValue = defaultFormat,
   height = 300,
+  range,
+  onRangeChange,
+  rangeOptions,
 }: MetricAreaChartProps) {
   const hasComparison = data.some((d) => d.compareValue !== undefined)
   const gradientId = `grad-${title.replace(/[^a-zA-Z0-9]/g, '-')}`
+  const hasRangeSelector = range !== undefined && onRangeChange && rangeOptions
 
   if (!data || data.length === 0) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{title}</CardTitle>
-          {description && <CardDescription>{description}</CardDescription>}
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">{title}</CardTitle>
+              {description && <CardDescription>{description}</CardDescription>}
+            </div>
+            {hasRangeSelector && (
+              <Select value={range} onValueChange={onRangeChange}>
+                <SelectTrigger className="w-[140px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {rangeOptions.map((opt) => (
+                    <SelectItem
+                      key={opt.value}
+                      value={opt.value}
+                      disabled={opt.disabled}
+                      title={opt.disabled ? opt.disabledReason : undefined}
+                    >
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
@@ -64,8 +108,31 @@ export function MetricAreaChart({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-        {description && <CardDescription>{description}</CardDescription>}
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base">{title}</CardTitle>
+            {description && <CardDescription>{description}</CardDescription>}
+          </div>
+          {hasRangeSelector && (
+            <Select value={range} onValueChange={onRangeChange}>
+              <SelectTrigger className="w-[140px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {rangeOptions.map((opt) => (
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    disabled={opt.disabled}
+                    title={opt.disabled ? opt.disabledReason : undefined}
+                  >
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>

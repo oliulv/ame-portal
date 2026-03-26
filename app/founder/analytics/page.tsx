@@ -6,13 +6,6 @@ import { api } from '@/convex/_generated/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { KpiCard } from '@/components/analytics/kpi-card'
 import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { VelocityScore } from '@/components/analytics/velocity-score'
@@ -22,6 +15,33 @@ import { Plug, TrendingUp, Eye, Github, CreditCard, Ship, LayoutDashboard } from
 import Link from 'next/link'
 
 type AnalyticsTab = 'overview' | 'stripe' | 'traffic' | 'shipping'
+
+const RANGE_OPTIONS = [
+  { value: '7', label: 'Last 7 days', days: 7 },
+  { value: '30', label: 'Last 30 days', days: 30 },
+  { value: '90', label: 'Last 3 months', days: 90 },
+  { value: '180', label: 'Last 6 months', days: 180 },
+  { value: '365', label: 'Last 12 months', days: 365 },
+]
+
+function useStartDate(range: string, mountTime: number) {
+  return useMemo(() => {
+    const d = new Date(mountTime)
+    d.setDate(d.getDate() - parseInt(range))
+    return d.toISOString()
+  }, [range, mountTime])
+}
+
+function buildRangeOptions(daysAvailable: number) {
+  return RANGE_OPTIONS.map((opt) => ({
+    ...opt,
+    disabled: daysAvailable < opt.days && opt.days > 7,
+    disabledReason:
+      daysAvailable < opt.days
+        ? `Not enough data — only ${daysAvailable} days available`
+        : undefined,
+  }))
+}
 
 function computeGrowth(data: Array<{ value: number }> | undefined | null): number {
   if (!data || data.length < 2) return 0
@@ -41,8 +61,17 @@ function formatGBP(v: number, decimals = 0): string {
 }
 
 export default function FounderAnalyticsPage() {
-  const [range, setRange] = useState('30')
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('overview')
+
+  // Per-chart range states
+  const [mrrRange, setMrrRange] = useState('30')
+  const [revenueRange, setRevenueRange] = useState('30')
+  const [sessionsRange, setSessionsRange] = useState('30')
+  const [pageviewsRange, setPageviewsRange] = useState('30')
+  const [shippingRange, setShippingRange] = useState('365')
+
+  // Stable mount time to avoid impure Date calls in render
+  const [mountTime] = useState(() => Date.now())
 
   const integrationStatus = useQuery(api.integrations.fullStatus)
   const trackerWebsites = useQuery(api.trackerWebsites.list)
@@ -56,24 +85,38 @@ export default function FounderAnalyticsPage() {
   const hasGithub = integrationStatus?.github?.status === 'active'
   const hasAnyIntegration = hasStripe || hasTracker || hasGithub
 
-  const startDate = useMemo(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - parseInt(range))
-    return d.toISOString()
-  }, [range])
+  // Per-chart start dates
+  const mrrStartDate = useStartDate(mrrRange, mountTime)
+  const revenueStartDate = useStartDate(revenueRange, mountTime)
+  const sessionsStartDate = useStartDate(sessionsRange, mountTime)
+  const pageviewsStartDate = useStartDate(pageviewsRange, mountTime)
+  const shippingStartDate = useStartDate(shippingRange, mountTime)
 
-  const timeSeriesArgs = startupId ? { startupId, window: 'daily' as const, startDate } : null
   const latestArgs = startupId ? { startupId, window: 'daily' as const } : null
 
-  // Stripe metrics
+  // Stripe metrics — per-chart ranges
   const mrr = useQuery(
     api.metrics.timeSeries,
-    timeSeriesArgs ? { ...timeSeriesArgs, provider: 'stripe' as const, metricKey: 'mrr' } : 'skip'
+    startupId
+      ? {
+          startupId,
+          window: 'daily' as const,
+          startDate: mrrStartDate,
+          provider: 'stripe' as const,
+          metricKey: 'mrr',
+        }
+      : 'skip'
   )
   const revenue = useQuery(
     api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { ...timeSeriesArgs, provider: 'stripe' as const, metricKey: 'total_revenue' }
+    startupId
+      ? {
+          startupId,
+          window: 'daily' as const,
+          startDate: revenueStartDate,
+          provider: 'stripe' as const,
+          metricKey: 'total_revenue',
+        }
       : 'skip'
   )
   const arr = useQuery(
@@ -126,24 +169,36 @@ export default function FounderAnalyticsPage() {
   // MRR movements
   const mrrMovements = useQuery(api.metrics.getMrrMovements, startupId ? { startupId } : 'skip')
 
-  // Tracker metrics
+  // Tracker metrics — per-chart ranges
   const sessions = useQuery(
     api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { ...timeSeriesArgs, provider: 'tracker' as const, metricKey: 'sessions' }
+    startupId
+      ? {
+          startupId,
+          window: 'daily' as const,
+          startDate: sessionsStartDate,
+          provider: 'tracker' as const,
+          metricKey: 'sessions',
+        }
       : 'skip'
   )
   const pageviews = useQuery(
     api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { ...timeSeriesArgs, provider: 'tracker' as const, metricKey: 'pageviews' }
+    startupId
+      ? {
+          startupId,
+          window: 'daily' as const,
+          startDate: pageviewsStartDate,
+          provider: 'tracker' as const,
+          metricKey: 'pageviews',
+        }
       : 'skip'
   )
 
-  // GitHub metrics — server-side rolling window velocity (single source of truth)
+  // GitHub metrics — velocity computed from contribution calendar (has full year)
   const velocityTimeSeries = useQuery(
     api.metrics.getVelocityTimeSeries,
-    startupId ? { startupId, startDate } : 'skip'
+    startupId ? { startupId, startDate: shippingStartDate } : 'skip'
   )
   const commits = useQuery(
     api.metrics.getLatest,
@@ -161,26 +216,6 @@ export default function FounderAnalyticsPage() {
     api.metrics.getContributionCalendar,
     startupId ? { startupId } : 'skip'
   )
-
-  // Capture mount time once to avoid impure Date calls during render
-  const [mountTime] = useState(() => Date.now())
-
-  // Compute how many days of data are available (for disabling range options)
-  // MUST be before the early return to avoid conditional hook calls
-  const dataDaysAvailable = useMemo(() => {
-    const dates: number[] = []
-    if (integrationStatus?.stripe?.connectedAt) {
-      dates.push(new Date(integrationStatus.stripe.connectedAt).getTime())
-    }
-    if (integrationStatus?.github?.connectedAt) {
-      dates.push(new Date(integrationStatus.github.connectedAt).getTime())
-    }
-    if (mrr?.length) dates.push(new Date(mrr[0].timestamp).getTime())
-    if (sessions?.length) dates.push(new Date(sessions[0].timestamp).getTime())
-    if (velocityTimeSeries?.length) dates.push(new Date(velocityTimeSeries[0].timestamp).getTime())
-    if (dates.length === 0) return 0
-    return Math.floor((mountTime - Math.min(...dates)) / 86400000)
-  }, [integrationStatus, mrr, sessions, velocityTimeSeries, mountTime])
 
   // Compute velocity % change vs last week from contribution calendar
   // MUST be before the early return to avoid conditional hook calls
@@ -200,6 +235,22 @@ export default function FounderAnalyticsPage() {
     if (lastWeek === 0) return thisWeek > 0 ? 100 : 0
     return ((thisWeek - lastWeek) / lastWeek) * 100
   }, [contributionCalendar])
+
+  // Compute data availability per source for range option disabling
+  const stripeDaysAvailable = useMemo(() => {
+    if (!integrationStatus?.stripe?.connectedAt) return 0
+    return Math.floor(
+      (mountTime - new Date(integrationStatus.stripe.connectedAt).getTime()) / 86400000
+    )
+  }, [integrationStatus, mountTime])
+
+  const trackerDaysAvailable = useMemo(() => {
+    if (!sessions?.length) return 0
+    return Math.floor((mountTime - new Date(sessions[0].timestamp).getTime()) / 86400000)
+  }, [sessions, mountTime])
+
+  // GitHub contribution calendar always has ~365 days
+  const githubDaysAvailable = 365
 
   if (isLoading) {
     return (
@@ -225,13 +276,9 @@ export default function FounderAnalyticsPage() {
   const currentMonth = new Date(mountTime).toISOString().slice(0, 7)
   const currentMovements = mrrMovements?.filter((m) => m.month === currentMonth) ?? []
 
-  const rangeOptions = [
-    { value: '7', label: 'Last 7 days', days: 7 },
-    { value: '30', label: 'Last 30 days', days: 30 },
-    { value: '90', label: 'Last 3 months', days: 90 },
-    { value: '180', label: 'Last 6 months', days: 180 },
-    { value: '365', label: 'Last 12 months', days: 365 },
-  ]
+  const stripeRangeOptions = buildRangeOptions(stripeDaysAvailable)
+  const trackerRangeOptions = buildRangeOptions(trackerDaysAvailable)
+  const githubRangeOptions = buildRangeOptions(githubDaysAvailable)
 
   const tabItems: { key: AnalyticsTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -242,38 +289,10 @@ export default function FounderAnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight font-display">Analytics</h1>
-          <p className="text-muted-foreground">Track your startup&apos;s performance metrics</p>
-        </div>
-        {hasAnyIntegration && (
-          <Select value={range} onValueChange={setRange}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {rangeOptions.map((opt) => {
-                const hasData = dataDaysAvailable >= opt.days || opt.days <= 7
-                return (
-                  <SelectItem
-                    key={opt.value}
-                    value={opt.value}
-                    disabled={!hasData}
-                    title={
-                      !hasData
-                        ? `Not enough data — connected ${dataDaysAvailable} days ago`
-                        : undefined
-                    }
-                  >
-                    {opt.label}
-                  </SelectItem>
-                )
-              })}
-            </SelectContent>
-          </Select>
-        )}
+      {/* Header — no global range selector */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight font-display">Analytics</h1>
+        <p className="text-muted-foreground">Track your startup&apos;s performance metrics</p>
       </div>
 
       {/* No integrations prompt */}
@@ -356,6 +375,9 @@ export default function FounderAnalyticsPage() {
                   data={mrr.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
                   formatValue={(v) => formatGBP(v)}
                   color="hsl(var(--chart-1))"
+                  range={mrrRange}
+                  onRangeChange={setMrrRange}
+                  rangeOptions={stripeRangeOptions}
                 />
               )}
 
@@ -366,6 +388,9 @@ export default function FounderAnalyticsPage() {
                   data={sessions.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
                   color="hsl(var(--chart-2))"
                   height={250}
+                  range={sessionsRange}
+                  onRangeChange={setSessionsRange}
+                  rangeOptions={trackerRangeOptions}
                 />
               )}
               {hasGithub && (
@@ -493,6 +518,9 @@ export default function FounderAnalyticsPage() {
                       data={mrr.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
                       formatValue={(v) => formatGBP(v)}
                       color="hsl(var(--chart-1))"
+                      range={mrrRange}
+                      onRangeChange={setMrrRange}
+                      rangeOptions={stripeRangeOptions}
                     />
                   )}
 
@@ -504,21 +532,23 @@ export default function FounderAnalyticsPage() {
                       data={revenue.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
                       formatValue={(v) => formatGBP(v)}
                       color="hsl(var(--chart-2))"
+                      range={revenueRange}
+                      onRangeChange={setRevenueRange}
+                      rangeOptions={stripeRangeOptions}
                     />
                   )}
 
-                  {/* MRR waterfall — startingMrr uses last value before current month */}
+                  {/* MRR waterfall */}
                   {currentMovements.length > 0 && mrr && mrr.length > 0 && (
                     <MrrWaterfall
                       startingMrr={(() => {
-                        // Find the last MRR snapshot before the current month
                         const monthStart = currentMonth + '-01'
                         const priorValues = mrr.filter((m) => m.timestamp < monthStart)
                         const priorMrr =
                           priorValues.length > 0
                             ? priorValues[priorValues.length - 1].value
                             : mrr[0].value
-                        return priorMrr * 100 // Convert pounds to pence (movements are in pence)
+                        return priorMrr * 100
                       })()}
                       movements={currentMovements.map((m) => ({
                         type: m.type,
@@ -649,6 +679,9 @@ export default function FounderAnalyticsPage() {
                       description="Unique sessions per day"
                       data={sessions.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
                       color="hsl(var(--chart-2))"
+                      range={sessionsRange}
+                      onRangeChange={setSessionsRange}
+                      rangeOptions={trackerRangeOptions}
                     />
                   )}
 
@@ -658,6 +691,9 @@ export default function FounderAnalyticsPage() {
                       description="Total page views per day"
                       data={pageviews.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
                       color="hsl(var(--chart-3))"
+                      range={pageviewsRange}
+                      onRangeChange={setPageviewsRange}
+                      rangeOptions={trackerRangeOptions}
                     />
                   )}
                 </>
@@ -694,16 +730,17 @@ export default function FounderAnalyticsPage() {
                     totalScore={latestVelocity}
                   />
 
-                  {/* Shipping Activity — server-side rolling window velocity */}
-                  {velocityTimeSeries && velocityTimeSeries.length > 0 && (
-                    <MetricAreaChart
-                      title="Shipping Activity"
-                      description="Daily velocity score — 4-week rolling window with temporal decay"
-                      data={velocityTimeSeries}
-                      color="hsl(var(--primary))"
-                      formatValue={(v) => `${v.toLocaleString()} pts`}
-                    />
-                  )}
+                  {/* Shipping Activity — computed from contribution calendar, full year available */}
+                  <MetricAreaChart
+                    title="Shipping Activity"
+                    description="Daily velocity score — 4-week rolling window with temporal decay"
+                    data={velocityTimeSeries ?? []}
+                    color="hsl(var(--primary))"
+                    formatValue={(v) => `${v.toLocaleString()} pts`}
+                    range={shippingRange}
+                    onRangeChange={setShippingRange}
+                    rangeOptions={githubRangeOptions}
+                  />
 
                   {contributionCalendar && <ContributionCalendar weeks={contributionCalendar} />}
                 </>

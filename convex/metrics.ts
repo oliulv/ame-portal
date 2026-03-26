@@ -132,8 +132,14 @@ export const timeSeries = query({
 /**
  * Get velocity score time series with 28-day rolling window and temporal decay.
  * Server-side computation — single source of truth for both KPI and chart.
- * For each day in the range, sums daily velocity_score values over the prior
- * 28 days with exponential decay (same formula as leaderboard scoring engine).
+ *
+ * Computes from the GitHub contribution calendar (has a full year of daily data).
+ * For each day in the requested range, looks back 28 days and sums:
+ *   contribution_count × 10 × e^(-0.03 × days_ago)
+ *
+ * The contribution calendar gives us total contributions per day (commits + PRs + reviews
+ * combined). We multiply by 10 as the base score unit, consistent with the velocity
+ * scoring in the sync cron.
  */
 export const getVelocityTimeSeries = query({
   args: {
@@ -143,63 +149,72 @@ export const getVelocityTimeSeries = query({
   handler: async (ctx, args) => {
     await requireAuth(ctx)
 
-    // Fetch all daily velocity_score values (need extra 28 days before startDate for rolling window)
-    const lookbackDate = new Date()
-    if (args.startDate) {
-      lookbackDate.setTime(new Date(args.startDate).getTime())
-    } else {
-      lookbackDate.setDate(lookbackDate.getDate() - 30)
-    }
-    lookbackDate.setDate(lookbackDate.getDate() - 28)
-    const lookbackStr = lookbackDate.toISOString()
-
-    const metrics = await ctx.db
+    // Read the contribution calendar (stored by GitHub sync, contains ~1 year of daily data)
+    const calendarMetric = await ctx.db
       .query('metricsData')
       .withIndex('by_startupId_provider_metricKey', (q) =>
-        q.eq('startupId', args.startupId).eq('provider', 'github').eq('metricKey', 'velocity_score')
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'contribution_calendar')
       )
-      .filter((q) => q.gte(q.field('timestamp'), lookbackStr))
-      .collect()
+      .order('desc')
+      .first()
 
-    // Dedup by day, keep latest value per day
-    const byDay = new Map<string, number>()
-    for (const m of metrics) {
-      const day = m.timestamp.slice(0, 10)
-      const existing = byDay.get(day)
-      if (existing === undefined || m.timestamp > day) {
-        byDay.set(day, m.value)
+    const calendar = calendarMetric?.meta as
+      | Array<{ contributionDays?: Array<{ date: string; contributionCount?: number }> }>
+      | undefined
+
+    if (!calendar || calendar.length === 0) return []
+
+    // Flatten calendar into a date→count map
+    const countByDay = new Map<string, number>()
+    for (const week of calendar) {
+      for (const day of week.contributionDays ?? []) {
+        countByDay.set(day.date, day.contributionCount ?? 0)
       }
     }
 
-    // Build sorted array of all days with data
-    const sortedDays = Array.from(byDay.entries()).sort(([a], [b]) => a.localeCompare(b))
+    if (countByDay.size === 0) return []
 
-    if (sortedDays.length === 0) return []
+    // Find the data range from the calendar
+    const allDates = Array.from(countByDay.keys()).sort()
+    const earliestDay = allDates[0]
 
-    // For each day in the output range, compute 28-day rolling sum with decay
-    const startDate = args.startDate ?? new Date(Date.now() - 30 * 86400000).toISOString()
-    const startDay = startDate.slice(0, 10)
-    const todayDay = new Date().toISOString().slice(0, 10)
+    // Determine output range — start 28 days after earliest data (need lookback window)
+    const earliestOutput = new Date(earliestDay + 'T00:00:00.000Z')
+    earliestOutput.setDate(earliestOutput.getDate() + 28)
+
+    const requestedStart = args.startDate
+      ? new Date(args.startDate)
+      : new Date(Date.now() - 30 * 86400000)
+
+    const outputStart =
+      requestedStart.getTime() > earliestOutput.getTime() ? requestedStart : earliestOutput
+
+    const today = new Date()
+    today.setUTCHours(0, 0, 0, 0)
 
     const result: { timestamp: string; value: number }[] = []
-    const current = new Date(startDay + 'T00:00:00.000Z')
-    const end = new Date(todayDay + 'T00:00:00.000Z')
+    const current = new Date(outputStart)
+    current.setUTCHours(0, 0, 0, 0)
 
-    while (current <= end) {
-      const currentDay = current.toISOString().slice(0, 10)
+    while (current <= today) {
       let score = 0
 
-      // Sum all data points within 28-day lookback with decay
-      for (const [day, value] of sortedDays) {
-        const dayDate = new Date(day + 'T00:00:00.000Z')
-        const daysAgo = Math.floor((current.getTime() - dayDate.getTime()) / 86400000)
-        if (daysAgo >= 0 && daysAgo < 28) {
-          score += value * Math.exp(-DECAY_RATE * daysAgo)
+      // Sum contributions in the 28-day lookback window with temporal decay
+      for (let daysAgo = 0; daysAgo < 28; daysAgo++) {
+        const lookbackDate = new Date(current)
+        lookbackDate.setDate(lookbackDate.getDate() - daysAgo)
+        const dayStr = lookbackDate.toISOString().slice(0, 10)
+        const count = countByDay.get(dayStr) ?? 0
+        if (count > 0) {
+          score += count * 10 * Math.exp(-DECAY_RATE * daysAgo)
         }
       }
 
       result.push({
-        timestamp: currentDay + 'T00:00:00.000Z',
+        timestamp: current.toISOString().slice(0, 10) + 'T00:00:00.000Z',
         value: Math.round(score),
       })
 
