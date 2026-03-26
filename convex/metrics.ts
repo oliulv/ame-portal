@@ -1,11 +1,4 @@
-import {
-  query,
-  mutation,
-  action,
-  internalAction,
-  internalMutation,
-  internalQuery,
-} from './functions'
+import { query, action, internalAction, internalMutation, internalQuery } from './functions'
 import { api, internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAuth } from './auth'
@@ -15,8 +8,9 @@ import { normalizeToMonthlyCents } from './lib/stripe-mrr'
 
 /**
  * Store metric snapshots (upserts by day to avoid duplicates).
+ * Internal only — not exposed as a public API.
  */
-export const store = mutation({
+export const store = internalMutation({
   args: {
     snapshots: v.array(
       v.object({

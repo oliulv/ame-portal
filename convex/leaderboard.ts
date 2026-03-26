@@ -118,7 +118,7 @@ export const computeLeaderboard = query({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
       .collect()
 
-    const weeks = getWeekBoundaries(ROLLING_WEEKS)
+    const weeks = getWeekBoundaries(ROLLING_WEEKS + 1) // +1 for prev-week lookback
     const now = new Date()
 
     // Collect raw scores per startup per category
@@ -437,14 +437,16 @@ export const computeLeaderboard = query({
 
       const qualified = activeCategories >= QUALIFICATION_THRESHOLD
 
-      // Consistency bonus
-      const allWeeklyScores = [
-        ...data.weeklyRevenue,
-        ...data.weeklyTraffic,
-        ...data.weeklyGithub,
-        ...data.weeklySocial,
-      ]
-      const consistencyBonus = computeConsistencyBonus(allWeeklyScores)
+      // Consistency bonus — compute per-week composite scores (not flat array)
+      const weeklyComposites: number[] = []
+      for (let w = 0; w < weeks.length; w++) {
+        weeklyComposites.push(
+          Math.abs(data.weeklyRevenue[w] ?? 0) +
+            Math.abs(data.weeklyTraffic[w] ?? 0) +
+            Math.abs(data.weeklyGithub[w] ?? 0)
+        )
+      }
+      const consistencyBonus = computeConsistencyBonus(weeklyComposites)
       totalScore *= 1 + consistencyBonus / 100
 
       // Admin favorite multiplier
@@ -588,7 +590,7 @@ export const computeLeaderboardForFounder = query({
       .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
       .collect()
 
-    const weeks = getWeekBoundaries(ROLLING_WEEKS)
+    const weeks = getWeekBoundaries(ROLLING_WEEKS + 1) // +1 for prev-week lookback
     const now = new Date()
 
     // Simplified scoring for founder view - compute same metrics

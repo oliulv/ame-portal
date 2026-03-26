@@ -79,9 +79,9 @@ export function normalizeToMonthlyCents(
 ): number {
   switch (interval) {
     case 'day':
-      return amountCents * (365 / 12)
+      return (amountCents / intervalCount) * (365 / 12)
     case 'week':
-      return amountCents * (52 / 12)
+      return (amountCents / intervalCount) * (52 / 12)
     case 'month':
       return amountCents / intervalCount
     case 'year':

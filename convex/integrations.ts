@@ -54,6 +54,11 @@ export const storeStripeConnection = mutation({
     accountName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Auth: verify caller is a founder who owns this startup
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+    if (!startupIds.includes(args.startupId)) throw new Error('Not authorized for this startup')
+
     // Check if connection already exists
     const existing = await ctx.db
       .query('integrationConnections')
@@ -181,6 +186,11 @@ export const storeGithubConnection = mutation({
     accountName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Auth: verify caller is a founder who owns this startup
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+    if (!startupIds.includes(args.startupId)) throw new Error('Not authorized for this startup')
+
     const existing = await ctx.db
       .query('integrationConnections')
       .withIndex('by_startupId_provider', (q) =>

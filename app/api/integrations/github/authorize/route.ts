@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { cookies } from 'next/headers'
 
 /**
  * GET /api/integrations/github/authorize
- * Redirects to GitHub OAuth.
- *
- * IMPORTANT: You must add your callback URL to the GitHub App settings:
- * Settings → Developer settings → GitHub Apps → Your App → "Callback URL"
- * Add: http://localhost:3000/api/integrations/github/callback (dev)
- * Add: https://yourdomain.com/api/integrations/github/callback (prod)
+ * Redirects to GitHub OAuth with CSRF state parameter.
  */
 export async function GET() {
   const { userId } = await auth()
@@ -25,10 +21,19 @@ export async function GET() {
     )
   }
 
-  // Note: redirect_uri must be registered in your GitHub App settings.
-  // If using the same GitHub App as Clerk, add this callback URL alongside Clerk's.
+  // Generate CSRF state token
+  const state = crypto.randomUUID()
+  const cookieStore = await cookies()
+  cookieStore.set('github_oauth_state', state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 600, // 10 minutes
+    path: '/api/integrations/github',
+  })
+
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/github/callback`
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user&redirect_uri=${encodeURIComponent(redirectUri)}`
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`
 
   return NextResponse.redirect(url)
 }
