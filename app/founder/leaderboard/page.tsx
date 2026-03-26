@@ -319,15 +319,19 @@ export default function FounderLeaderboardPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {leaderboard.ranked.map((entry) => (
+            {[...leaderboard.ranked, ...leaderboard.unranked].map((entry) => (
               <tr
                 key={entry.startupId}
-                className={entry.startupId === leaderboard.myStartupId ? 'bg-primary/5' : ''}
+                className={`${entry.startupId === leaderboard.myStartupId ? 'bg-primary/5' : ''} ${!entry.qualified ? 'opacity-60' : ''}`}
               >
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <span className="inline-flex h-7 w-7 items-center justify-center bg-primary text-primary-foreground text-xs font-bold">
-                    {entry.rank}
-                  </span>
+                  {entry.rank ? (
+                    <span className="inline-flex h-7 w-7 items-center justify-center bg-primary text-primary-foreground text-xs font-bold">
+                      {entry.rank}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="flex items-center gap-3">
@@ -380,15 +384,6 @@ export default function FounderLeaderboardPage() {
           </tbody>
         </table>
       </div>
-
-      {leaderboard.unranked.length > 0 && (
-        <div className="text-sm text-muted-foreground">
-          <p>
-            {leaderboard.unranked.length} startup(s) not yet ranked — need activity in 3+
-            categories.
-          </p>
-        </div>
-      )}
     </div>
   )
 }
