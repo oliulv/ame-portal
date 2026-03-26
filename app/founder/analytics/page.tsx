@@ -239,6 +239,23 @@ export default function FounderAnalyticsPage() {
   const currentMonth = new Date().toISOString().slice(0, 7)
   const currentMovements = mrrMovements?.filter((m) => m.month === currentMonth) ?? []
 
+  // Compute velocity % change vs last week from contribution calendar
+  const velocityChange = useMemo(() => {
+    if (!contributionCalendar || contributionCalendar.length < 5) return 0
+    const allDays = contributionCalendar
+      .flatMap((w: any) => (w.contributionDays ?? []).map((d: any) => ({
+        date: d.date, count: d.contributionCount ?? 0,
+      })))
+      .sort((a: any, b: any) => a.date.localeCompare(b.date))
+    if (allDays.length < 14) return 0
+    // This week: last 7 days contributions
+    const thisWeek = allDays.slice(-7).reduce((s: number, d: any) => s + d.count, 0)
+    // Last week: 7 days before that
+    const lastWeek = allDays.slice(-14, -7).reduce((s: number, d: any) => s + d.count, 0)
+    if (lastWeek === 0) return thisWeek > 0 ? 100 : 0
+    return ((thisWeek - lastWeek) / lastWeek) * 100
+  }, [contributionCalendar])
+
   const tabItems: { key: AnalyticsTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <LayoutDashboard className="h-4 w-4" /> },
     { key: 'stripe', label: 'Revenue', icon: <CreditCard className="h-4 w-4" /> },
@@ -336,7 +353,7 @@ export default function FounderAnalyticsPage() {
                   <KpiCard
                     title="Velocity Score"
                     value={`${latestVelocity} pts`}
-                    change={computeGrowth(velocityScore)}
+                    change={velocityChange}
                     sparklineData={toSparkline(velocityScore)}
                     color="hsl(var(--chart-3))"
                   />
