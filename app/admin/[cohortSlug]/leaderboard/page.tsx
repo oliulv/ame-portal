@@ -23,7 +23,6 @@ import {
   Star,
   StarOff,
   Flame,
-  AlertTriangle,
   AlertCircle,
   Info,
   Settings2,
@@ -225,9 +224,6 @@ function ExpandableRow({ entry, maxScore }: { entry: any; maxScore: number }) {
           )}
         </td>
         <td className="px-4 py-3 whitespace-nowrap text-center">
-          {entry.anomalies.length > 0 && (
-            <AlertTriangle className="h-4 w-4 text-amber-500 inline" />
-          )}
           {expanded ? (
             <ChevronUp className="h-4 w-4 text-muted-foreground inline ml-1" />
           ) : (
@@ -256,13 +252,10 @@ function ExpandableRow({ entry, maxScore }: { entry: any; maxScore: number }) {
               ))}
             </div>
             <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
-              <span>Active categories: {entry.activeCategories}/6</span>
+              <span>Active categories: {entry.activeCategories}/5</span>
               <span>Consistency bonus: +{entry.consistencyBonus.toFixed(1)}%</span>
               {entry.favoriteMultiplier > 1 && (
                 <span className="text-yellow-600">Favorite boost: x{entry.favoriteMultiplier}</span>
-              )}
-              {entry.anomalies.length > 0 && (
-                <span className="text-amber-600">{entry.anomalies.length} anomaly flag(s)</span>
               )}
             </div>
           </td>
