@@ -144,3 +144,4 @@ source-map-resources/
 !DEPLOYMENT.md
 !ADMIN_SETUP.md
 !INTEGRATIONS_SETUP.md
+.gstack/
