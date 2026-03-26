@@ -319,7 +319,10 @@ export default function FounderLeaderboardPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {[...leaderboard.ranked, ...leaderboard.unranked].map((entry) => (
+            {[
+              ...leaderboard.ranked,
+              ...leaderboard.unranked.sort((a, b) => b.totalScore - a.totalScore),
+            ].map((entry) => (
               <tr
                 key={entry.startupId}
                 className={`${entry.startupId === leaderboard.myStartupId ? 'bg-primary/5' : ''} ${!entry.qualified ? 'opacity-60' : ''}`}

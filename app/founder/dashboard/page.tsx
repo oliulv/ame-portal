@@ -20,7 +20,6 @@ import {
   Trophy,
   Flame,
   Github,
-  Share2,
 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -630,26 +629,7 @@ export default function FounderDashboard() {
         </Card>
       )}
 
-      {integrationsLoaded && !hasSocial && (
-        <Card className="border-dashed">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <Share2 className="h-5 w-5 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Track social media growth</p>
-                <p className="text-sm text-muted-foreground">
-                  Add your Twitter, LinkedIn, or Instagram handles for the leaderboard.
-                </p>
-              </div>
-              <Link href="/founder/integrations?tab=social">
-                <Button variant="outline" size="sm">
-                  Add Profiles
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Social nudge hidden — social excluded from v1 scoring */}
     </div>
   )
 }
