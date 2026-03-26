@@ -289,7 +289,7 @@ export default function FounderLeaderboardPage() {
                 <p className="text-sm text-muted-foreground">
                   {leaderboard.myRank
                     ? `Score: ${leaderboard.myScore.toFixed(1)} points`
-                    : 'Need activity in at least 4 of 6 categories to be ranked'}
+                    : 'Need activity in at least 3 of 5 categories to be ranked'}
                 </p>
               </div>
             </div>
@@ -384,7 +384,7 @@ export default function FounderLeaderboardPage() {
       {leaderboard.unranked.length > 0 && (
         <div className="text-sm text-muted-foreground">
           <p>
-            {leaderboard.unranked.length} startup(s) not yet ranked — need activity in 4+
+            {leaderboard.unranked.length} startup(s) not yet ranked — need activity in 3+
             categories.
           </p>
         </div>

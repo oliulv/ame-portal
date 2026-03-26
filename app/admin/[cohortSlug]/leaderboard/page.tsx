@@ -123,8 +123,10 @@ function ScoringExplainerContent() {
             <p className="text-muted-foreground">No single category can exceed 40%.</p>
           </div>
           <div>
-            <h4 className="font-medium mb-1">4-of-6 Gate</h4>
-            <p className="text-muted-foreground">Need activity in 4+ categories to rank.</p>
+            <h4 className="font-medium mb-1">Qualification Gate</h4>
+            <p className="text-muted-foreground">
+              Need activity in 3+ of 5 categories for &quot;Qualified&quot; tag.
+            </p>
           </div>
           <div>
             <h4 className="font-medium mb-1">Consistency Bonus</h4>
@@ -518,7 +520,7 @@ export default function LeaderboardPage() {
                 Unranked ({leaderboard.unranked.length})
               </h2>
               <p className="text-xs text-muted-foreground">
-                These startups don&apos;t meet the 4-of-6 category activity requirement.
+                These startups don&apos;t yet meet the 3-of-5 category activity requirement for the Qualified tag.
               </p>
               <div className="bg-card border overflow-hidden">
                 <table className="min-w-full divide-y divide-border">
@@ -541,7 +543,7 @@ export default function LeaderboardPage() {
                             )}
                             <span className="text-sm">{entry.startupName}</span>
                             <Badge variant="outline" className="text-xs">
-                              {entry.activeCategories}/6 active
+                              {entry.activeCategories}/5 active
                             </Badge>
                             {entry.excludeFromMetrics && (
                               <Badge variant="warning" className="text-xs">
