@@ -155,8 +155,8 @@ export function calculateSubscriptionMrr(
   // Apply coupon discounts: percent_off first, then amount_off (matches Stripe)
   const discounts: Array<string | Stripe.Discount> = sub.discounts?.length
     ? sub.discounts
-    : sub.discount
-      ? [sub.discount]
+    : (sub as any).discount
+      ? [(sub as any).discount]
       : []
 
   const subInterval = sub.items.data[0]?.price?.recurring?.interval ?? 'month'
@@ -166,7 +166,7 @@ export function calculateSubscriptionMrr(
   // Pass 1: percent_off
   for (const d of discounts) {
     if (typeof d === 'string') continue
-    const coupon = d?.coupon
+    const coupon = (d as any)?.coupon
     if (!coupon) continue
     const shouldApply =
       coupon.duration === 'forever' || (coupon.duration === 'repeating' && d.end && d.end > nowTs)
@@ -179,7 +179,7 @@ export function calculateSubscriptionMrr(
   // Pass 2: amount_off
   for (const d of discounts) {
     if (typeof d === 'string') continue
-    const coupon = d?.coupon
+    const coupon = (d as any)?.coupon
     if (!coupon) continue
     const shouldApply =
       coupon.duration === 'forever' || (coupon.duration === 'repeating' && d.end && d.end > nowTs)

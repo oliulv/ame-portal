@@ -50,11 +50,8 @@ export default function CohortAnalyticsPage() {
         allStartups.length
       : 0
   const totalGithubScore = allStartups.reduce((sum, s) => sum + (s.categories?.github?.raw ?? 0), 0)
-  const avgSocialScore =
-    allStartups.length > 0
-      ? allStartups.reduce((sum, s) => sum + (s.categories?.social?.raw ?? 0), 0) /
-        allStartups.length
-      : 0
+  // Social scoring excluded from v1
+  const avgSocialScore = 0
 
   return (
     <div className="space-y-6">
@@ -80,11 +77,6 @@ export default function CohortAnalyticsPage() {
           value={`${totalGithubScore.toFixed(0)} pts`}
           color="hsl(var(--chart-3))"
         />
-        <KpiCard
-          title="Avg Social Growth"
-          value={`${avgSocialScore.toFixed(1)}%`}
-          color="hsl(var(--chart-4))"
-        />
       </div>
 
       {/* Startup comparison table */}
@@ -101,7 +93,6 @@ export default function CohortAnalyticsPage() {
                   <th className="pb-2 font-medium text-muted-foreground text-right">Revenue</th>
                   <th className="pb-2 font-medium text-muted-foreground text-right">Traffic</th>
                   <th className="pb-2 font-medium text-muted-foreground text-right">GitHub</th>
-                  <th className="pb-2 font-medium text-muted-foreground text-right">Social</th>
                   <th className="pb-2 font-medium text-muted-foreground text-right">Updates</th>
                   <th className="pb-2 font-medium text-muted-foreground text-right">Milestones</th>
                   <th className="pb-2 font-medium text-muted-foreground text-right">Total</th>
@@ -129,9 +120,6 @@ export default function CohortAnalyticsPage() {
                       </td>
                       <td className="py-2 text-right">
                         {startup.categories?.github?.weighted.toFixed(1)}
-                      </td>
-                      <td className="py-2 text-right">
-                        {startup.categories?.social?.weighted.toFixed(1)}
                       </td>
                       <td className="py-2 text-right">
                         {startup.categories?.updates?.weighted.toFixed(1)}

@@ -2,46 +2,33 @@ import { query, mutation } from './functions'
 import { v } from 'convex/values'
 import { requireAdmin, requireAuth, requireSuperAdmin } from './auth'
 import type { Doc, Id } from './_generated/dataModel'
+import { getMonday, getWeekBoundaries } from './lib/dateUtils'
+import {
+  WEIGHTS as SCORING_WEIGHTS,
+  ROLLING_WEEKS,
+  QUALIFICATION_THRESHOLD,
+  DECAY_RATE,
+  computeGrowthRate,
+  computeUpdateScore,
+  computeStartupScore,
+  computeConsistencyBonus,
+  type CategoryKey,
+  type CategoryMetric,
+} from './lib/scoring'
 
-// ── Scoring Constants ────────────────────────────────────────────────
+// Legacy weights map including social at 0 for backward compatibility
+// The shared scoring lib uses 5-category weights; this map keeps old code paths working
+// while social scores contribute 0 to the total.
 const WEIGHTS = {
-  revenue: 0.22,
-  traffic: 0.18,
-  github: 0.16,
-  social: 0.16,
-  updates: 0.15,
-  milestones: 0.13,
+  ...SCORING_WEIGHTS,
+  social: 0,
 } as const
 
-const DECAY_RATE = 0.03
-const MAX_CAP = 40
-const QUALIFICATION_GATE = 4
-const ROLLING_WEEKS = 4
-
-// ── Helpers ──────────────────────────────────────────────────────────
-
-function getMonday(date: Date): string {
-  const d = new Date(date)
-  const day = d.getDay()
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-  d.setDate(diff)
-  return d.toISOString().slice(0, 10)
-}
-
-function getWeekBoundaries(weeksBack: number): Array<{ start: Date; end: Date; weekOf: string }> {
-  const now = new Date()
-  const weeks: Array<{ start: Date; end: Date; weekOf: string }> = []
-  for (let i = 0; i < weeksBack; i++) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i * 7)
-    const monday = getMonday(d)
-    const start = new Date(monday + 'T00:00:00.000Z')
-    const end = new Date(start)
-    end.setDate(end.getDate() + 7)
-    weeks.push({ start, end, weekOf: monday })
-  }
-  return weeks
-}
+// Legacy constants and helpers used by the existing scoring code.
+// These will be removed when the full dedup refactor replaces inline scoring
+// with calls to computeStartupScore from the shared lib.
+const MAX_CAP = 100 // Score range is 0-100 in UI (0-1 internally)
+const QUALIFICATION_GATE = QUALIFICATION_THRESHOLD
 
 function temporalDecay(daysOld: number): number {
   return Math.exp(-DECAY_RATE * daysOld)
@@ -53,19 +40,6 @@ function powerLawNormalize(values: number[], p: number): number[] {
   const maxVal = Math.max(...transformed)
   if (maxVal === 0) return values.map(() => 0)
   return transformed.map((t) => (t / maxVal) * 100)
-}
-
-function computeConsistencyBonus(weeklyScores: number[]): number {
-  const valid = weeklyScores.filter((s) => s > 0)
-  if (valid.length < 2) return 0
-  const mean = valid.reduce((a, b) => a + b, 0) / valid.length
-  if (mean === 0) return 0
-  const variance = valid.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / valid.length
-  const stdDev = Math.sqrt(variance)
-  const cv = stdDev / mean // coefficient of variation
-  // Low CV = high consistency = higher bonus (max +5%)
-  // CV of 0 = perfectly consistent = +5%, CV >= 1 = no bonus
-  return Math.max(0, (1 - cv) * 5)
 }
 
 // ── Score Breakdown Type ─────────────────────────────────────────────
@@ -81,18 +55,17 @@ export interface ScoreBreakdown {
     revenue: { raw: number; normalized: number; weighted: number }
     traffic: { raw: number; normalized: number; weighted: number }
     github: { raw: number; normalized: number; weighted: number }
-    social: { raw: number; normalized: number; weighted: number }
     updates: { raw: number; normalized: number; weighted: number }
     milestones: { raw: number; normalized: number; weighted: number }
   }
   activeCategories: number
   qualified: boolean
   consistencyBonus: number
+  momentum: 'up' | 'flat' | 'down' | null
   isFavoriteThisWeek: boolean
   favoriteMultiplier: number
   updateStreak: number
   excludeFromMetrics: boolean
-  anomalies: Array<{ category: string; value: number; threshold: number }>
 }
 
 // ── Main Leaderboard Query ───────────────────────────────────────────
@@ -249,7 +222,7 @@ export const computeLeaderboard = query({
               (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
             )
             .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-        weeklyGithub.push(weekVelocity / founderCount) // Average per founder
+        weeklyGithub.push(weekVelocity) // Summed across all founders (aggregated at sync time)
       }
 
       // ── Social Growth (follower growth %) ────────────────────
@@ -428,17 +401,16 @@ export const computeLeaderboard = query({
         weightedUpdates +
         weightedMilestones
 
-      // Count active categories (non-zero)
+      // Count active categories (non-zero) — 5 categories, no social
       const activeCategories = [
         data.totalRevenue,
         data.totalTraffic,
         data.totalGithub,
-        data.totalSocial,
         data.updatesScore,
         data.milestonesScore,
       ].filter((v) => v > 0).length
 
-      const qualified = activeCategories >= QUALIFICATION_GATE
+      const qualified = activeCategories >= QUALIFICATION_THRESHOLD
 
       // Consistency bonus
       const allWeeklyScores = [
@@ -477,11 +449,6 @@ export const computeLeaderboard = query({
             normalized: normalizedGithub[idx],
             weighted: weightedGithub,
           },
-          social: {
-            raw: data.totalSocial,
-            normalized: normalizedSocial[idx],
-            weighted: weightedSocial,
-          },
           updates: {
             raw: data.updatesScore,
             normalized: data.updatesScore,
@@ -496,11 +463,11 @@ export const computeLeaderboard = query({
         activeCategories,
         qualified,
         consistencyBonus,
+        momentum: null, // TODO: compute from previous week's score
         isFavoriteThisWeek: data.isFavoriteThisWeek,
         favoriteMultiplier,
         updateStreak: data.startup.updateStreak ?? 0,
         excludeFromMetrics: data.startup.excludeFromMetrics === true,
-        anomalies: data.anomalies,
       })
     }
 
@@ -819,7 +786,6 @@ export const computeLeaderboardForFounder = query({
         d.totalRevenue,
         d.totalTraffic,
         d.totalGithub,
-        d.totalSocial,
         d.updatesScore,
         d.milestonesScore,
       ].filter((v) => v > 0).length

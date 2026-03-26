@@ -1,4 +1,4 @@
-import { query, mutation, action, internalMutation, internalAction } from './functions'
+import { query, mutation, action, internalMutation, internalAction, internalQuery } from './functions'
 import { v } from 'convex/values'
 import { requireFounder, requireAdmin, getFounderStartupIds } from './auth'
 import { api, internal } from './_generated/api'
@@ -500,7 +500,7 @@ export const refreshGithubToken = internalAction({
 /**
  * Get a connection by ID (internal).
  */
-export const getConnectionById = internalMutation({
+export const getConnectionById = internalQuery({
   args: { connectionId: v.id('integrationConnections') },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.connectionId)

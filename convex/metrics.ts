@@ -11,6 +11,7 @@ import { v } from 'convex/values'
 import { requireAuth } from './auth'
 import { logConvexError } from './lib/logging'
 import { providerValidator } from './lib/providers'
+import { normalizeToMonthlyCents } from './lib/stripe-mrr'
 
 /**
  * Store metric snapshots (upserts by day to avoid duplicates).
@@ -1230,9 +1231,8 @@ export const backfillStripeHistory = internalAction({
         if (!line.price?.recurring) continue
         if (!line.price.unit_amount || line.price.unit_amount === 0) continue
 
-        const lineMrr = normalizeToMonthlyPence(
-          line.price.unit_amount,
-          line.quantity ?? 1,
+        const lineMrr = normalizeToMonthlyCents(
+          line.price.unit_amount * (line.quantity ?? 1),
           line.price.recurring.interval,
           line.price.recurring.interval_count ?? 1
         )
