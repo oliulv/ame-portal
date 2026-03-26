@@ -33,7 +33,6 @@ import {
   CheckCircle2,
   Clock,
   Github,
-  Share2,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'

@@ -85,9 +85,10 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
                   style={{
                     position: 'relative',
                     left: `${m.weekIndex * (CELL_SIZE + GAP)}px`,
-                    marginRight: i < monthLabels.length - 1
-                      ? `${((monthLabels[i + 1]?.weekIndex ?? m.weekIndex) - m.weekIndex) * (CELL_SIZE + GAP) - 30}px`
-                      : '0',
+                    marginRight:
+                      i < monthLabels.length - 1
+                        ? `${((monthLabels[i + 1]?.weekIndex ?? m.weekIndex) - m.weekIndex) * (CELL_SIZE + GAP) - 30}px`
+                        : '0',
                     width: '30px',
                   }}
                 >
@@ -125,9 +126,7 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
                           <TooltipTrigger asChild>
                             <div
                               className={`rounded-sm ${getColor(day.contributionCount)} ${
-                                isInScoringWindow
-                                  ? 'ring-1 ring-emerald-500/20'
-                                  : ''
+                                isInScoringWindow ? 'ring-1 ring-emerald-500/20' : ''
                               }`}
                               style={{
                                 width: `${CELL_SIZE}px`,
@@ -140,7 +139,12 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
                               {day.contributionCount} contribution
                               {day.contributionCount !== 1 ? 's' : ''}
                             </span>{' '}
-                            on {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            on{' '}
+                            {new Date(day.date).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
                           </TooltipContent>
                         </Tooltip>
                       ))}

@@ -538,9 +538,10 @@ export default function FounderAnalyticsPage() {
                         // Find the last MRR snapshot before the current month
                         const monthStart = currentMonth + '-01'
                         const priorValues = mrr.filter((m) => m.timestamp < monthStart)
-                        const priorMrr = priorValues.length > 0
-                          ? priorValues[priorValues.length - 1].value
-                          : mrr[0].value
+                        const priorMrr =
+                          priorValues.length > 0
+                            ? priorValues[priorValues.length - 1].value
+                            : mrr[0].value
                         return priorMrr * 100 // Convert pounds to pence (movements are in pence)
                       })()}
                       movements={currentMovements.map((m) => ({
@@ -800,12 +801,13 @@ export default function FounderAnalyticsPage() {
                   {velocityScore && velocityScore.length > 0 && (
                     <MetricAreaChart
                       title="Velocity Over Time"
-                      description="Daily velocity score trend"
+                      description="Velocity score per sync — higher = more shipping activity"
                       data={velocityScore.map((d) => ({
                         timestamp: d.timestamp,
                         value: d.value,
                       }))}
                       color="hsl(var(--chart-3))"
+                      formatValue={(v) => `${v.toLocaleString()} pts`}
                     />
                   )}
 
