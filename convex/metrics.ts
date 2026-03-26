@@ -5,6 +5,7 @@ import { requireAuth } from './auth'
 import { logConvexError } from './lib/logging'
 import { providerValidator } from './lib/providers'
 import { normalizeToMonthlyCents } from './lib/stripeMrr'
+import { DECAY_RATE } from './lib/scoring'
 
 /**
  * Store metric snapshots (upserts by day to avoid duplicates).
@@ -125,6 +126,91 @@ export const timeSeries = query({
     }
 
     return Array.from(byDay.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+  },
+})
+
+/**
+ * Get velocity score time series with 28-day rolling window and temporal decay.
+ * Server-side computation — single source of truth for both KPI and chart.
+ * For each day in the range, sums daily velocity_score values over the prior
+ * 28 days with exponential decay (same formula as leaderboard scoring engine).
+ */
+export const getVelocityTimeSeries = query({
+  args: {
+    startupId: v.id('startups'),
+    startDate: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx)
+
+    // Fetch all daily velocity_score values (need extra 28 days before startDate for rolling window)
+    const lookbackDate = new Date()
+    if (args.startDate) {
+      lookbackDate.setTime(new Date(args.startDate).getTime())
+    } else {
+      lookbackDate.setDate(lookbackDate.getDate() - 30)
+    }
+    lookbackDate.setDate(lookbackDate.getDate() - 28)
+    const lookbackStr = lookbackDate.toISOString()
+
+    const metrics = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'velocity_score')
+      )
+      .filter((q) => q.gte(q.field('timestamp'), lookbackStr))
+      .collect()
+
+    // Dedup by day, keep latest value per day
+    const byDay = new Map<string, number>()
+    for (const m of metrics) {
+      const day = m.timestamp.slice(0, 10)
+      const existing = byDay.get(day)
+      if (existing === undefined || m.timestamp > day) {
+        byDay.set(day, m.value)
+      }
+    }
+
+    // Build sorted array of all days with data
+    const sortedDays = Array.from(byDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+
+    if (sortedDays.length === 0) return []
+
+    // For each day in the output range, compute 28-day rolling sum with decay
+    const startDate = args.startDate ?? new Date(Date.now() - 30 * 86400000).toISOString()
+    const startDay = startDate.slice(0, 10)
+    const todayDay = new Date().toISOString().slice(0, 10)
+
+    const result: { timestamp: string; value: number }[] = []
+    const current = new Date(startDay + 'T00:00:00.000Z')
+    const end = new Date(todayDay + 'T00:00:00.000Z')
+
+    while (current <= end) {
+      const currentDay = current.toISOString().slice(0, 10)
+      let score = 0
+
+      // Sum all data points within 28-day lookback with decay
+      for (const [day, value] of sortedDays) {
+        const dayDate = new Date(day + 'T00:00:00.000Z')
+        const daysAgo = Math.floor((current.getTime() - dayDate.getTime()) / 86400000)
+        if (daysAgo >= 0 && daysAgo < 28) {
+          score += value * Math.exp(-DECAY_RATE * daysAgo)
+        }
+      }
+
+      result.push({
+        timestamp: currentDay + 'T00:00:00.000Z',
+        value: Math.round(score),
+      })
+
+      current.setDate(current.getDate() + 1)
+    }
+
+    return result
   },
 })
 

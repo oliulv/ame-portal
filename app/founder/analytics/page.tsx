@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/select'
 import { KpiCard } from '@/components/analytics/kpi-card'
 import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
-import { SocialCard } from '@/components/analytics/social-card'
 import { VelocityScore } from '@/components/analytics/velocity-score'
 import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
 import { MrrWaterfall } from '@/components/analytics/mrr-waterfall'
@@ -25,13 +24,12 @@ import {
   Eye,
   Github,
   CreditCard,
-  Share2,
   Ship,
   LayoutDashboard,
 } from 'lucide-react'
 import Link from 'next/link'
 
-type AnalyticsTab = 'overview' | 'stripe' | 'traffic' | 'social' | 'shipping'
+type AnalyticsTab = 'overview' | 'stripe' | 'traffic' | 'shipping'
 
 function computeGrowth(data: Array<{ value: number }> | undefined | null): number {
   if (!data || data.length < 2) return 0
@@ -64,8 +62,7 @@ export default function FounderAnalyticsPage() {
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
   const hasGithub = integrationStatus?.github?.status === 'active'
-  const hasSocial = (integrationStatus?.social?.length ?? 0) > 0
-  const hasAnyIntegration = hasStripe || hasTracker || hasGithub || hasSocial
+  const hasAnyIntegration = hasStripe || hasTracker || hasGithub
 
   const startDate = useMemo(() => {
     const d = new Date()
@@ -151,12 +148,10 @@ export default function FounderAnalyticsPage() {
       : 'skip'
   )
 
-  // GitHub metrics
-  const velocityScore = useQuery(
-    api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { ...timeSeriesArgs, provider: 'github' as const, metricKey: 'velocity_score' }
-      : 'skip'
+  // GitHub metrics — server-side rolling window velocity (single source of truth)
+  const velocityTimeSeries = useQuery(
+    api.metrics.getVelocityTimeSeries,
+    startupId ? { startupId, startDate } : 'skip'
   )
   const commits = useQuery(
     api.metrics.getLatest,
@@ -175,45 +170,25 @@ export default function FounderAnalyticsPage() {
     startupId ? { startupId } : 'skip'
   )
 
-  // Social metrics — latest counts
-  const twitterFollowers = useQuery(
-    api.metrics.getLatest,
-    latestArgs
-      ? { ...latestArgs, provider: 'apify' as const, metricKey: 'twitter_followers' }
-      : 'skip'
-  )
-  const instagramFollowers = useQuery(
-    api.metrics.getLatest,
-    latestArgs
-      ? { ...latestArgs, provider: 'apify' as const, metricKey: 'instagram_followers' }
-      : 'skip'
-  )
-  const linkedinFollowers = useQuery(
-    api.metrics.getLatest,
-    latestArgs
-      ? { ...latestArgs, provider: 'apify' as const, metricKey: 'linkedin_followers' }
-      : 'skip'
-  )
 
-  // Social metrics — time series for follower growth charts
-  const twitterFollowerTs = useQuery(
-    api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { ...timeSeriesArgs, provider: 'apify' as const, metricKey: 'twitter_followers' }
-      : 'skip'
-  )
-  const instagramFollowerTs = useQuery(
-    api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { ...timeSeriesArgs, provider: 'apify' as const, metricKey: 'instagram_followers' }
-      : 'skip'
-  )
-  const linkedinFollowerTs = useQuery(
-    api.metrics.timeSeries,
-    timeSeriesArgs
-      ? { ...timeSeriesArgs, provider: 'apify' as const, metricKey: 'linkedin_followers' }
-      : 'skip'
-  )
+  // Compute velocity % change vs last week from contribution calendar
+  // MUST be before the early return to avoid conditional hook calls
+  const velocityChange = useMemo(() => {
+    if (!contributionCalendar || contributionCalendar.length < 5) return 0
+    const allDays = contributionCalendar
+      .flatMap((w: any) =>
+        (w.contributionDays ?? []).map((d: any) => ({
+          date: d.date,
+          count: d.contributionCount ?? 0,
+        }))
+      )
+      .sort((a: any, b: any) => a.date.localeCompare(b.date))
+    if (allDays.length < 14) return 0
+    const thisWeek = allDays.slice(-7).reduce((s: number, d: any) => s + d.count, 0)
+    const lastWeek = allDays.slice(-14, -7).reduce((s: number, d: any) => s + d.count, 0)
+    if (lastWeek === 0) return thisWeek > 0 ? 100 : 0
+    return ((thisWeek - lastWeek) / lastWeek) * 100
+  }, [contributionCalendar])
 
   if (isLoading) {
     return (
@@ -231,30 +206,11 @@ export default function FounderAnalyticsPage() {
 
   const latestMrr = mrr?.length ? mrr[mrr.length - 1].value : 0
   const latestSessions = sessions?.length ? sessions[sessions.length - 1].value : 0
-  const latestVelocity = velocityScore?.length ? velocityScore[velocityScore.length - 1].value : 0
-  const totalFollowers =
-    (twitterFollowers ?? 0) + (instagramFollowers ?? 0) + (linkedinFollowers ?? 0)
+  const latestVelocity = velocityTimeSeries?.length ? velocityTimeSeries[velocityTimeSeries.length - 1].value : 0
 
   // Current month MRR movements for waterfall
   const currentMonth = new Date().toISOString().slice(0, 7)
   const currentMovements = mrrMovements?.filter((m) => m.month === currentMonth) ?? []
-
-  // Compute velocity % change vs last week from contribution calendar
-  const velocityChange = useMemo(() => {
-    if (!contributionCalendar || contributionCalendar.length < 5) return 0
-    const allDays = contributionCalendar
-      .flatMap((w: any) => (w.contributionDays ?? []).map((d: any) => ({
-        date: d.date, count: d.contributionCount ?? 0,
-      })))
-      .sort((a: any, b: any) => a.date.localeCompare(b.date))
-    if (allDays.length < 14) return 0
-    // This week: last 7 days contributions
-    const thisWeek = allDays.slice(-7).reduce((s: number, d: any) => s + d.count, 0)
-    // Last week: 7 days before that
-    const lastWeek = allDays.slice(-14, -7).reduce((s: number, d: any) => s + d.count, 0)
-    if (lastWeek === 0) return thisWeek > 0 ? 100 : 0
-    return ((thisWeek - lastWeek) / lastWeek) * 100
-  }, [contributionCalendar])
 
   const tabItems: { key: AnalyticsTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -354,15 +310,8 @@ export default function FounderAnalyticsPage() {
                     title="Velocity Score"
                     value={`${latestVelocity} pts`}
                     change={velocityChange}
-                    sparklineData={toSparkline(velocityScore)}
+                    sparklineData={toSparkline(velocityTimeSeries)}
                     color="hsl(var(--chart-3))"
-                  />
-                )}
-                {hasSocial && (
-                  <KpiCard
-                    title="Social Followers"
-                    value={totalFollowers.toLocaleString()}
-                    color="hsl(var(--chart-4))"
                   />
                 )}
               </div>
@@ -393,29 +342,6 @@ export default function FounderAnalyticsPage() {
                   reviews={reviews ?? 0}
                   totalScore={latestVelocity}
                 />
-              )}
-
-              {hasSocial && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {integrationStatus?.social?.map((profile) => {
-                    const followers =
-                      profile.platform === 'twitter'
-                        ? (twitterFollowers ?? 0)
-                        : profile.platform === 'instagram'
-                          ? (instagramFollowers ?? 0)
-                          : profile.platform === 'linkedin'
-                            ? (linkedinFollowers ?? 0)
-                            : 0
-                    return (
-                      <SocialCard
-                        key={profile._id}
-                        platform={profile.platform}
-                        handle={profile.handle}
-                        followers={followers}
-                      />
-                    )
-                  })}
-                </div>
               )}
 
               {/* Integration nudges */}
@@ -706,86 +632,6 @@ export default function FounderAnalyticsPage() {
             </div>
           )}
 
-          {/* ── Social Tab ────────────────────────────────────── */}
-          {activeTab === 'social' && (
-            <div className="space-y-4">
-              {!hasSocial ? (
-                <Card className="border-dashed">
-                  <CardContent className="pt-6">
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <Share2 className="h-10 w-10 text-muted-foreground mb-3" />
-                      <p className="text-sm font-medium mb-1">No social profiles</p>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Add your social handles to track follower growth daily.
-                      </p>
-                      <Link href="/founder/integrations?tab=social">
-                        <Button variant="outline" size="sm">
-                          Add Social Profiles
-                        </Button>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <>
-                  {/* Social cards row */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {integrationStatus?.social?.map((profile) => {
-                      const followers =
-                        profile.platform === 'twitter'
-                          ? (twitterFollowers ?? 0)
-                          : profile.platform === 'instagram'
-                            ? (instagramFollowers ?? 0)
-                            : profile.platform === 'linkedin'
-                              ? (linkedinFollowers ?? 0)
-                              : 0
-                      return (
-                        <SocialCard
-                          key={profile._id}
-                          platform={profile.platform}
-                          handle={profile.handle}
-                          followers={followers}
-                        />
-                      )
-                    })}
-                  </div>
-
-                  {/* Follower growth charts */}
-                  {twitterFollowerTs && twitterFollowerTs.length > 0 && (
-                    <MetricAreaChart
-                      title="X (Twitter) Followers"
-                      data={twitterFollowerTs.map((d) => ({
-                        timestamp: d.timestamp,
-                        value: d.value,
-                      }))}
-                      color="#000000"
-                    />
-                  )}
-                  {linkedinFollowerTs && linkedinFollowerTs.length > 0 && (
-                    <MetricAreaChart
-                      title="LinkedIn Followers"
-                      data={linkedinFollowerTs.map((d) => ({
-                        timestamp: d.timestamp,
-                        value: d.value,
-                      }))}
-                      color="#0a66c2"
-                    />
-                  )}
-                  {instagramFollowerTs && instagramFollowerTs.length > 0 && (
-                    <MetricAreaChart
-                      title="Instagram Followers"
-                      data={instagramFollowerTs.map((d) => ({
-                        timestamp: d.timestamp,
-                        value: d.value,
-                      }))}
-                      color="#e1306c"
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
           {/* ── Shipping Tab ──────────────────────────────────── */}
           {activeTab === 'shipping' && (
             <div className="space-y-4">
@@ -815,52 +661,12 @@ export default function FounderAnalyticsPage() {
                     totalScore={latestVelocity}
                   />
 
-                  {/* Shipping Activity — velocity score over time with 28-day decay window */}
-                  {contributionCalendar && contributionCalendar.length > 4 && (
+                  {/* Shipping Activity — server-side rolling window velocity */}
+                  {velocityTimeSeries && velocityTimeSeries.length > 0 && (
                     <MetricAreaChart
                       title="Shipping Activity"
-                      description="Daily velocity score snapshot — 4-week rolling window with decay"
-                      data={(() => {
-                        // Flatten all days, sorted chronologically
-                        const allDays = contributionCalendar
-                          .flatMap((w: any) =>
-                            (w.contributionDays ?? []).map((d: any) => ({
-                              date: d.date,
-                              count: d.contributionCount ?? 0,
-                            }))
-                          )
-                          .sort((a: any, b: any) => a.date.localeCompare(b.date))
-
-                        // For each day (after first 28 days), compute the velocity score:
-                        // Sum contributions in the last 28 days with exponential decay
-                        // Decay rate 0.03 per day (same as scoring engine)
-                        const DECAY_RATE = 0.03
-                        const rollingData: { timestamp: string; value: number }[] = []
-                        for (let i = 27; i < allDays.length; i++) {
-                          let score = 0
-                          for (let j = 0; j < 28; j++) {
-                            const dayIdx = i - j
-                            if (dayIdx < 0) break
-                            // Apply temporal decay: more recent = higher weight
-                            const decay = Math.exp(-DECAY_RATE * j)
-                            // Use contribution count × 10 as proxy for velocity points
-                            // (actual scoring uses commits×10 + PRs×25 + reviews×30,
-                            //  but calendar only has total count per day)
-                            score += allDays[dayIdx].count * 10 * decay
-                          }
-                          rollingData.push({
-                            timestamp: allDays[i].date + 'T00:00:00.000Z',
-                            value: Math.round(score),
-                          })
-                        }
-
-                        // Filter to selected range
-                        const rangeDays = parseInt(range)
-                        const cutoff = new Date()
-                        cutoff.setDate(cutoff.getDate() - rangeDays)
-                        const cutoffStr = cutoff.toISOString()
-                        return rollingData.filter((d) => d.timestamp >= cutoffStr)
-                      })()}
+                      description="Daily velocity score — 4-week rolling window with temporal decay"
+                      data={velocityTimeSeries}
                       color="hsl(var(--primary))"
                       formatValue={(v) => `${v.toLocaleString()} pts`}
                     />
