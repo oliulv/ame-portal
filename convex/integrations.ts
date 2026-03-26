@@ -1,4 +1,11 @@
-import { query, mutation, action, internalMutation, internalAction, internalQuery } from './functions'
+import {
+  query,
+  mutation,
+  action,
+  internalMutation,
+  internalAction,
+  internalQuery,
+} from './functions'
 import { v } from 'convex/values'
 import { requireFounder, requireAdmin, getFounderStartupIds } from './auth'
 import { api, internal } from './_generated/api'

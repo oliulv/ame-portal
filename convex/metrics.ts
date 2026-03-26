@@ -355,17 +355,94 @@ export const fetchStripeMetrics = internalAction({
     // ── Store all metric snapshots ──────────────────────────────────
     await ctx.runMutation(internal.metrics.storeInternal, {
       snapshots: [
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'mrr', value: mrr, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'arr', value: arr, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'total_revenue', value: totalRevenue, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'active_customers', value: uniqueCustomers, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'active_subscriptions', value: activeSubscriptionCount, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'arpu', value: arpu, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'nrr', value: nrr, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'ltv', value: ltv, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'trial_conversion_rate', value: trialConversionRate, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'payment_failure_rate', value: paymentFailureRate, timestamp, window: 'daily' },
-        { startupId: args.startupId, provider: 'stripe', metricKey: 'monthly_churn_rate', value: monthlyChurnRate, timestamp, window: 'daily' },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'mrr',
+          value: mrr,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'arr',
+          value: arr,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'total_revenue',
+          value: totalRevenue,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'active_customers',
+          value: uniqueCustomers,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'active_subscriptions',
+          value: activeSubscriptionCount,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'arpu',
+          value: arpu,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'nrr',
+          value: nrr,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'ltv',
+          value: ltv,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'trial_conversion_rate',
+          value: trialConversionRate,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'payment_failure_rate',
+          value: paymentFailureRate,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'monthly_churn_rate',
+          value: monthlyChurnRate,
+          timestamp,
+          window: 'daily',
+        },
       ],
     })
 
@@ -720,7 +797,10 @@ export const fetchGithubMetrics = internalAction({
         const weeks = contrib.contributionCalendar?.weeks ?? []
         for (const week of weeks) {
           for (const day of week.contributionDays ?? []) {
-            calendarMap.set(day.date, (calendarMap.get(day.date) ?? 0) + (day.contributionCount ?? 0))
+            calendarMap.set(
+              day.date,
+              (calendarMap.get(day.date) ?? 0) + (day.contributionCount ?? 0)
+            )
           }
         }
       } catch (error) {
@@ -755,11 +835,46 @@ export const fetchGithubMetrics = internalAction({
 
     await ctx.runMutation(internal.metrics.storeInternal, {
       snapshots: [
-        { startupId: args.startupId, provider: 'github' as const, metricKey: 'velocity_score', value: velocityScore, timestamp, window: 'daily' as const },
-        { startupId: args.startupId, provider: 'github' as const, metricKey: 'commits', value: totalCommits, timestamp, window: 'daily' as const },
-        { startupId: args.startupId, provider: 'github' as const, metricKey: 'prs_opened', value: totalPrsOpened, timestamp, window: 'daily' as const },
-        { startupId: args.startupId, provider: 'github' as const, metricKey: 'reviews', value: totalReviews, timestamp, window: 'daily' as const },
-        { startupId: args.startupId, provider: 'github' as const, metricKey: 'total_contributions', value: totalCommits + totalPrsOpened + totalReviews + totalIssues, timestamp, window: 'daily' as const },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'velocity_score',
+          value: velocityScore,
+          timestamp,
+          window: 'daily' as const,
+        },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'commits',
+          value: totalCommits,
+          timestamp,
+          window: 'daily' as const,
+        },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'prs_opened',
+          value: totalPrsOpened,
+          timestamp,
+          window: 'daily' as const,
+        },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'reviews',
+          value: totalReviews,
+          timestamp,
+          window: 'daily' as const,
+        },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'total_contributions',
+          value: totalCommits + totalPrsOpened + totalReviews + totalIssues,
+          timestamp,
+          window: 'daily' as const,
+        },
       ],
     })
 

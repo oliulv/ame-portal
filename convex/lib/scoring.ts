@@ -13,13 +13,7 @@
 
 // ── Constants ────────────────────────────────────────────────────────
 
-export const CATEGORY_KEYS = [
-  'revenue',
-  'traffic',
-  'github',
-  'updates',
-  'milestones',
-] as const
+export const CATEGORY_KEYS = ['revenue', 'traffic', 'github', 'updates', 'milestones'] as const
 export type CategoryKey = (typeof CATEGORY_KEYS)[number]
 
 export const WEIGHTS: Record<CategoryKey, number> = {
@@ -80,11 +74,7 @@ export function temporalDecay(weekIndex: number): number {
  *
  * Returns 0–1. If maxInCohort is 0, returns 0.
  */
-export function powerLawNormalize(
-  raw: number,
-  maxInCohort: number,
-  power: number
-): number {
+export function powerLawNormalize(raw: number, maxInCohort: number, power: number): number {
   if (maxInCohort <= 0) return 0
   const ratio = Math.max(0, raw) / maxInCohort
   return Math.pow(Math.min(ratio, 1), power)
@@ -96,10 +86,7 @@ export function powerLawNormalize(
  * Returns a percentage (e.g. 50 for +50%), capped to [-100, +200].
  * Returns `null` if both values are 0 (category inactive for this week).
  */
-export function computeGrowthRate(
-  current: number,
-  previous: number
-): number | null {
+export function computeGrowthRate(current: number, previous: number): number | null {
   if (current === 0 && previous === 0) return null
   if (previous === 0 && current > 0) return 100 // zero-to-positive
   if (previous > 0 && current === 0) return -100 // positive-to-zero
@@ -120,8 +107,7 @@ export function computeConsistencyBonus(weeklyScores: number[]): number {
   if (valid.length < ROLLING_WEEKS) return 0
   const mean = valid.reduce((a, b) => a + b, 0) / valid.length
   if (mean === 0) return 0
-  const variance =
-    valid.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / valid.length
+  const variance = valid.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / valid.length
   const cv = Math.sqrt(variance) / mean
   if (cv < 0.2) return 0.05
   if (cv > 0.5) return -0.05
@@ -153,10 +139,7 @@ export function isQualified(activeCategoryCount: number): boolean {
  * streak_bonus = 0.1 × min(streak, 8)   →  max +0.8
  * total range: 0.0 – 1.8
  */
-export function computeUpdateScore(
-  submitted: boolean,
-  streak: number
-): number {
+export function computeUpdateScore(submitted: boolean, streak: number): number {
   const base = submitted ? 1.0 : 0.0
   const bonus = 0.1 * Math.min(streak, 8)
   return base + bonus
@@ -220,8 +203,7 @@ export function computeStartupScore(
     for (const metric of metrics) {
       if (metric.active) {
         const reWeighted =
-          categories[metric.key].normalized *
-          (WEIGHTS[metric.key] / activeWeightSum)
+          categories[metric.key].normalized * (WEIGHTS[metric.key] / activeWeightSum)
         categories[metric.key].weighted = reWeighted
         baseScore += reWeighted
       }
@@ -237,9 +219,7 @@ export function computeStartupScore(
 
   // Momentum
   const momentum =
-    previousWeekScore !== undefined
-      ? computeMomentumArrow(totalScore, previousWeekScore)
-      : null
+    previousWeekScore !== undefined ? computeMomentumArrow(totalScore, previousWeekScore) : null
 
   return {
     totalScore,

@@ -363,7 +363,6 @@ export default function FounderLeaderboardPage() {
           </p>
         </div>
       )}
-
     </div>
   )
 }

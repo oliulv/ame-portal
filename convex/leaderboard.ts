@@ -2,18 +2,13 @@ import { query, mutation } from './functions'
 import { v } from 'convex/values'
 import { requireAdmin, requireAuth, requireSuperAdmin } from './auth'
 import type { Doc, Id } from './_generated/dataModel'
-import { getMonday, getWeekBoundaries } from './lib/dateUtils'
+import { getWeekBoundaries } from './lib/dateUtils'
 import {
   WEIGHTS as SCORING_WEIGHTS,
   ROLLING_WEEKS,
   QUALIFICATION_THRESHOLD,
   DECAY_RATE,
-  computeGrowthRate,
-  computeUpdateScore,
-  computeStartupScore,
   computeConsistencyBonus,
-  type CategoryKey,
-  type CategoryMetric,
 } from './lib/scoring'
 
 // Legacy weights map including social at 0 for backward compatibility
