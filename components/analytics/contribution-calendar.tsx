@@ -67,11 +67,15 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
       <CardContent>
         <TooltipProvider delayDuration={100}>
           {/* Month labels row */}
-          <div className="flex gap-1 mb-1" style={{ paddingLeft: '28px' }}>
+          <div className="flex gap-[3px] mb-1" style={{ paddingLeft: '24px' }}>
             {weeks.map((_week, wi) => {
               const label = monthLabels.find((m) => m.colIndex === wi)
               return (
-                <div key={wi} className="flex-1 text-[10px] text-muted-foreground min-w-0">
+                <div
+                  key={wi}
+                  className="text-[10px] text-muted-foreground"
+                  style={{ width: '14px' }}
+                >
                   {label?.label ?? ''}
                 </div>
               )
@@ -80,33 +84,28 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
 
           <div className="flex gap-0">
             {/* Day-of-week labels */}
-            <div className="flex flex-col gap-1 mr-1 shrink-0">
+            <div className="flex flex-col gap-[3px] mr-1 shrink-0" style={{ width: '20px' }}>
               {DAY_LABELS.map((label, i) => (
                 <div
                   key={i}
                   className="text-[10px] text-muted-foreground leading-none flex items-center justify-end"
-                  style={{ height: '0', paddingBottom: '100%', position: 'relative' }}
+                  style={{ height: '14px' }}
                 >
-                  <span className="absolute inset-0 flex items-center justify-end pr-0.5 text-[10px]">
-                    {label}
-                  </span>
+                  {label}
                 </div>
               ))}
             </div>
 
-            {/* Grid — cells stretch to fill width */}
-            <div
-              className="flex-1 grid gap-1"
-              style={{ gridTemplateColumns: `repeat(${weeks.length}, 1fr)` }}
-            >
+            {/* Grid — fixed-size cells like GitHub's contribution calendar */}
+            <div className="flex gap-[3px] overflow-x-auto">
               {weeks.map((week, wi) => (
-                <div key={wi} className="flex flex-col gap-1">
+                <div key={wi} className="flex flex-col gap-[3px]">
                   {week.contributionDays.map((day) => (
                     <Tooltip key={day.date}>
                       <TooltipTrigger asChild>
                         <div
-                          className={`w-full rounded-[2px] ${getColor(day.contributionCount)}`}
-                          style={{ aspectRatio: '1' }}
+                          className={`rounded-[2px] ${getColor(day.contributionCount)}`}
+                          style={{ width: '14px', height: '14px' }}
                         />
                       </TooltipTrigger>
                       <TooltipContent
