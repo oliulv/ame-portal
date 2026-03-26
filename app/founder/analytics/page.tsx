@@ -171,6 +171,23 @@ export default function FounderAnalyticsPage() {
   )
 
 
+  // Compute earliest data point to determine which range options have data
+  // MUST be before the early return to avoid conditional hook calls
+  const earliestDataDate = useMemo(() => {
+    const dates: number[] = []
+    if (integrationStatus?.stripe?.connectedAt) {
+      dates.push(new Date(integrationStatus.stripe.connectedAt).getTime())
+    }
+    if (integrationStatus?.github?.connectedAt) {
+      dates.push(new Date(integrationStatus.github.connectedAt).getTime())
+    }
+    if (mrr?.length) dates.push(new Date(mrr[0].timestamp).getTime())
+    if (sessions?.length) dates.push(new Date(sessions[0].timestamp).getTime())
+    if (velocityTimeSeries?.length)
+      dates.push(new Date(velocityTimeSeries[0].timestamp).getTime())
+    return dates.length > 0 ? Math.min(...dates) : null
+  }, [integrationStatus, mrr, sessions, velocityTimeSeries])
+
   // Compute velocity % change vs last week from contribution calendar
   // MUST be before the early return to avoid conditional hook calls
   const velocityChange = useMemo(() => {
@@ -212,6 +229,18 @@ export default function FounderAnalyticsPage() {
   const currentMonth = new Date().toISOString().slice(0, 7)
   const currentMovements = mrrMovements?.filter((m) => m.month === currentMonth) ?? []
 
+  const dataDaysAvailable = earliestDataDate
+    ? Math.floor((Date.now() - earliestDataDate) / 86400000)
+    : 0
+
+  const rangeOptions = [
+    { value: '7', label: 'Last 7 days', days: 7 },
+    { value: '30', label: 'Last 30 days', days: 30 },
+    { value: '90', label: 'Last 3 months', days: 90 },
+    { value: '180', label: 'Last 6 months', days: 180 },
+    { value: '365', label: 'Last 12 months', days: 365 },
+  ]
+
   const tabItems: { key: AnalyticsTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <LayoutDashboard className="h-4 w-4" /> },
     { key: 'stripe', label: 'Revenue', icon: <CreditCard className="h-4 w-4" /> },
@@ -233,11 +262,19 @@ export default function FounderAnalyticsPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 3 months</SelectItem>
-              <SelectItem value="180">Last 6 months</SelectItem>
-              <SelectItem value="365">Last 12 months</SelectItem>
+              {rangeOptions.map((opt) => {
+                const hasData = dataDaysAvailable >= opt.days || opt.days <= 7
+                return (
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    disabled={!hasData}
+                    title={!hasData ? `Not enough data — connected ${dataDaysAvailable} days ago` : undefined}
+                  >
+                    {opt.label}
+                  </SelectItem>
+                )
+              })}
             </SelectContent>
           </Select>
         )}
