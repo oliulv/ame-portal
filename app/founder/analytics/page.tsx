@@ -22,10 +22,12 @@ const RANGE_OPTIONS = [
   { value: '90', label: 'Last 3 months', days: 90 },
   { value: '180', label: 'Last 6 months', days: 180 },
   { value: '365', label: 'Last 12 months', days: 365 },
+  { value: 'max', label: 'Max', days: Infinity },
 ]
 
 function useStartDate(range: string, mountTime: number) {
   return useMemo(() => {
+    if (range === 'max') return undefined
     const d = new Date(mountTime)
     d.setDate(d.getDate() - parseInt(range))
     return d.toISOString()
@@ -35,9 +37,9 @@ function useStartDate(range: string, mountTime: number) {
 function buildRangeOptions(daysAvailable: number) {
   return RANGE_OPTIONS.map((opt) => ({
     ...opt,
-    disabled: daysAvailable < opt.days && opt.days > 7,
+    disabled: opt.days !== Infinity && daysAvailable < opt.days && opt.days > 7,
     disabledReason:
-      daysAvailable < opt.days
+      opt.days !== Infinity && daysAvailable < opt.days
         ? `Not enough data — only ${daysAvailable} days available`
         : undefined,
   }))
@@ -63,12 +65,12 @@ function formatGBP(v: number, decimals = 0): string {
 export default function FounderAnalyticsPage() {
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('overview')
 
-  // Per-chart range states
-  const [mrrRange, setMrrRange] = useState('30')
-  const [revenueRange, setRevenueRange] = useState('30')
-  const [sessionsRange, setSessionsRange] = useState('30')
-  const [pageviewsRange, setPageviewsRange] = useState('30')
-  const [shippingRange, setShippingRange] = useState('365')
+  // Per-chart range states — default to 'max' (show all available data)
+  const [mrrRange, setMrrRange] = useState('max')
+  const [revenueRange, setRevenueRange] = useState('max')
+  const [sessionsRange, setSessionsRange] = useState('max')
+  const [pageviewsRange, setPageviewsRange] = useState('max')
+  const [shippingRange, setShippingRange] = useState('max')
 
   // Stable mount time to avoid impure Date calls in render
   const [mountTime] = useState(() => Date.now())
