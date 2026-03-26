@@ -17,13 +17,22 @@ interface ContributionCalendarProps {
   weeks: ContributionWeek[]
 }
 
-function getColor(count: number): string {
-  // More contributions = more saturated/vivid green (both light and dark mode)
-  if (count === 0) return 'bg-zinc-100 dark:bg-zinc-800'
-  if (count <= 3) return 'bg-emerald-200 dark:bg-emerald-950'
-  if (count <= 8) return 'bg-emerald-400 dark:bg-emerald-800'
-  if (count <= 15) return 'bg-emerald-500 dark:bg-emerald-600'
-  return 'bg-emerald-700 dark:bg-emerald-400'
+// GitHub-style contribution colors using inline styles for absolute control
+// Less = faintest, More = most vivid/bright green
+const CONTRIBUTION_COLORS = [
+  '#ebedf0', // 0: light gray (no contributions)
+  '#9be9a8', // 1-3: faint green
+  '#40c463', // 4-8: medium green
+  '#30a14e', // 9-15: strong green
+  '#216e39', // 16+: darkest green
+]
+
+function getColorStyle(count: number): string {
+  if (count === 0) return CONTRIBUTION_COLORS[0]
+  if (count <= 3) return CONTRIBUTION_COLORS[1]
+  if (count <= 8) return CONTRIBUTION_COLORS[2]
+  if (count <= 15) return CONTRIBUTION_COLORS[3]
+  return CONTRIBUTION_COLORS[4]
 }
 
 const DAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', '']
@@ -126,12 +135,13 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
                         <Tooltip key={day.date}>
                           <TooltipTrigger asChild>
                             <div
-                              className={`rounded-sm ${getColor(day.contributionCount)} ${
-                                isInScoringWindow ? 'ring-1 ring-emerald-500/20' : ''
+                              className={`rounded-sm ${
+                                isInScoringWindow ? 'ring-1 ring-emerald-500/30' : ''
                               }`}
                               style={{
                                 width: `${CELL_SIZE}px`,
                                 height: `${CELL_SIZE}px`,
+                                backgroundColor: getColorStyle(day.contributionCount),
                               }}
                             />
                           </TooltipTrigger>
@@ -162,11 +172,13 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>Less</span>
             <div className="flex gap-0.5">
-              <div className="h-[11px] w-[11px] rounded-sm bg-zinc-100 dark:bg-zinc-800" />
-              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-200 dark:bg-emerald-950" />
-              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-400 dark:bg-emerald-800" />
-              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-500 dark:bg-emerald-600" />
-              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-700 dark:bg-emerald-400" />
+              {CONTRIBUTION_COLORS.map((color, i) => (
+                <div
+                  key={i}
+                  className="h-[11px] w-[11px] rounded-sm"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
             </div>
             <span>More</span>
           </div>
