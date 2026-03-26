@@ -388,7 +388,6 @@ export default function AdminStartupAnalyticsPage() {
                   <VelocityScore
                     commits={commits ?? 0}
                     prsOpened={prsOpened ?? 0}
-                    prsMerged={0}
                     reviews={reviews ?? 0}
                     totalScore={latestVelocity}
                   />
@@ -689,7 +688,6 @@ export default function AdminStartupAnalyticsPage() {
                   <VelocityScore
                     commits={commits ?? 0}
                     prsOpened={prsOpened ?? 0}
-                    prsMerged={0}
                     reviews={reviews ?? 0}
                     totalScore={latestVelocity}
                   />

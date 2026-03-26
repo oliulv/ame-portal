@@ -15,39 +15,20 @@ import {
 interface VelocityScoreProps {
   commits: number
   prsOpened: number
-  prsMerged: number
   reviews: number
   totalScore: number
 }
 
 const BARS = [
   { key: 'Commits', points: 10, cssVar: '--chart-1' },
-  { key: 'PRs Opened', points: 25, cssVar: '--chart-2' },
-  { key: 'PRs Merged', points: 50, cssVar: '--chart-3' },
+  { key: 'PRs', points: 25, cssVar: '--chart-2' },
   { key: 'Reviews', points: 30, cssVar: '--chart-4' },
 ]
 
-export function VelocityScore({
-  commits,
-  prsOpened,
-  prsMerged,
-  reviews,
-  totalScore,
-}: VelocityScoreProps) {
+export function VelocityScore({ commits, prsOpened, reviews, totalScore }: VelocityScoreProps) {
   const data = [
     { name: 'Commits', count: commits, points: commits * 10, color: 'hsl(var(--chart-1))' },
-    {
-      name: 'PRs Opened',
-      count: prsOpened,
-      points: prsOpened * 25,
-      color: 'hsl(var(--chart-2))',
-    },
-    {
-      name: 'PRs Merged',
-      count: prsMerged,
-      points: prsMerged * 50,
-      color: 'hsl(var(--chart-3))',
-    },
+    { name: 'PRs', count: prsOpened, points: prsOpened * 25, color: 'hsl(var(--chart-2))' },
     { name: 'Reviews', count: reviews, points: reviews * 30, color: 'hsl(var(--chart-4))' },
   ]
 
@@ -55,13 +36,16 @@ export function VelocityScore({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Git Velocity</CardTitle>
-          <span className="text-2xl font-bold">{totalScore} pts</span>
+          <div>
+            <CardTitle className="text-base">Git Velocity</CardTitle>
+            <p className="text-xs text-muted-foreground">Last 4 weeks</p>
+          </div>
+          <span className="text-2xl font-bold font-display tabular-nums">{totalScore} pts</span>
         </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={data} layout="vertical" barCategoryGap="20%">
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={data} layout="vertical" barCategoryGap="25%">
             <defs>
               {BARS.map((bar) => (
                 <linearGradient
@@ -79,10 +63,10 @@ export function VelocityScore({
             </defs>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 11 }} />
-            <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={80} />
+            <YAxis dataKey="name" type="category" tick={{ fontSize: 12 }} width={70} />
             <Tooltip
               formatter={(value: number, _name: string, props: any) => [
-                `${props.payload.count} (${value} pts)`,
+                `${props.payload.count} × ${BARS.find((b) => b.key === props.payload.name)?.points ?? 0}pts = ${value} pts`,
                 '',
               ]}
               contentStyle={{
@@ -100,9 +84,9 @@ export function VelocityScore({
           </BarChart>
         </ResponsiveContainer>
 
-        <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
           {BARS.map((bar) => (
-            <span key={bar.key} className="flex items-center gap-1">
+            <span key={bar.key} className="flex items-center gap-1.5">
               <span
                 className="h-2 w-2 rounded-full"
                 style={{ backgroundColor: `hsl(var(${bar.cssVar}))` }}

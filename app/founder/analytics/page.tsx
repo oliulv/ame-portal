@@ -372,7 +372,6 @@ export default function FounderAnalyticsPage() {
                   <VelocityScore
                     commits={commits ?? 0}
                     prsOpened={prsOpened ?? 0}
-                    prsMerged={0}
                     reviews={reviews ?? 0}
                     totalScore={latestVelocity}
                   />
@@ -786,7 +785,6 @@ export default function FounderAnalyticsPage() {
                   <VelocityScore
                     commits={commits ?? 0}
                     prsOpened={prsOpened ?? 0}
-                    prsMerged={0}
                     reviews={reviews ?? 0}
                     totalScore={latestVelocity}
                   />
