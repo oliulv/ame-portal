@@ -531,10 +531,18 @@ export default function FounderAnalyticsPage() {
                     />
                   )}
 
-                  {/* MRR waterfall */}
-                  {currentMovements.length > 0 && (
+                  {/* MRR waterfall — startingMrr uses last value before current month */}
+                  {currentMovements.length > 0 && mrr && mrr.length > 0 && (
                     <MrrWaterfall
-                      startingMrr={mrr && mrr.length > 1 ? mrr[0].value * 100 : latestMrr * 100}
+                      startingMrr={(() => {
+                        // Find the last MRR snapshot before the current month
+                        const monthStart = currentMonth + '-01'
+                        const priorValues = mrr.filter((m) => m.timestamp < monthStart)
+                        const priorMrr = priorValues.length > 0
+                          ? priorValues[priorValues.length - 1].value
+                          : mrr[0].value
+                        return priorMrr * 100 // Convert pounds to pence (movements are in pence)
+                      })()}
                       movements={currentMovements.map((m) => ({
                         type: m.type,
                         amount: m.amount,
