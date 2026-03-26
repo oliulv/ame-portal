@@ -156,10 +156,7 @@ export const getVelocityTimeSeries = query({
     const metrics = await ctx.db
       .query('metricsData')
       .withIndex('by_startupId_provider_metricKey', (q) =>
-        q
-          .eq('startupId', args.startupId)
-          .eq('provider', 'github')
-          .eq('metricKey', 'velocity_score')
+        q.eq('startupId', args.startupId).eq('provider', 'github').eq('metricKey', 'velocity_score')
       )
       .filter((q) => q.gte(q.field('timestamp'), lookbackStr))
       .collect()
@@ -175,8 +172,7 @@ export const getVelocityTimeSeries = query({
     }
 
     // Build sorted array of all days with data
-    const sortedDays = Array.from(byDay.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
+    const sortedDays = Array.from(byDay.entries()).sort(([a], [b]) => a.localeCompare(b))
 
     if (sortedDays.length === 0) return []
 

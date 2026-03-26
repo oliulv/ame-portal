@@ -18,15 +18,7 @@ import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { VelocityScore } from '@/components/analytics/velocity-score'
 import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
 import { MrrWaterfall } from '@/components/analytics/mrr-waterfall'
-import {
-  Plug,
-  TrendingUp,
-  Eye,
-  Github,
-  CreditCard,
-  Ship,
-  LayoutDashboard,
-} from 'lucide-react'
+import { Plug, TrendingUp, Eye, Github, CreditCard, Ship, LayoutDashboard } from 'lucide-react'
 import Link from 'next/link'
 
 type AnalyticsTab = 'overview' | 'stripe' | 'traffic' | 'shipping'
@@ -170,10 +162,12 @@ export default function FounderAnalyticsPage() {
     startupId ? { startupId } : 'skip'
   )
 
+  // Capture mount time once to avoid impure Date calls during render
+  const [mountTime] = useState(() => Date.now())
 
-  // Compute earliest data point to determine which range options have data
+  // Compute how many days of data are available (for disabling range options)
   // MUST be before the early return to avoid conditional hook calls
-  const earliestDataDate = useMemo(() => {
+  const dataDaysAvailable = useMemo(() => {
     const dates: number[] = []
     if (integrationStatus?.stripe?.connectedAt) {
       dates.push(new Date(integrationStatus.stripe.connectedAt).getTime())
@@ -183,10 +177,10 @@ export default function FounderAnalyticsPage() {
     }
     if (mrr?.length) dates.push(new Date(mrr[0].timestamp).getTime())
     if (sessions?.length) dates.push(new Date(sessions[0].timestamp).getTime())
-    if (velocityTimeSeries?.length)
-      dates.push(new Date(velocityTimeSeries[0].timestamp).getTime())
-    return dates.length > 0 ? Math.min(...dates) : null
-  }, [integrationStatus, mrr, sessions, velocityTimeSeries])
+    if (velocityTimeSeries?.length) dates.push(new Date(velocityTimeSeries[0].timestamp).getTime())
+    if (dates.length === 0) return 0
+    return Math.floor((mountTime - Math.min(...dates)) / 86400000)
+  }, [integrationStatus, mrr, sessions, velocityTimeSeries, mountTime])
 
   // Compute velocity % change vs last week from contribution calendar
   // MUST be before the early return to avoid conditional hook calls
@@ -223,15 +217,13 @@ export default function FounderAnalyticsPage() {
 
   const latestMrr = mrr?.length ? mrr[mrr.length - 1].value : 0
   const latestSessions = sessions?.length ? sessions[sessions.length - 1].value : 0
-  const latestVelocity = velocityTimeSeries?.length ? velocityTimeSeries[velocityTimeSeries.length - 1].value : 0
+  const latestVelocity = velocityTimeSeries?.length
+    ? velocityTimeSeries[velocityTimeSeries.length - 1].value
+    : 0
 
   // Current month MRR movements for waterfall
-  const currentMonth = new Date().toISOString().slice(0, 7)
+  const currentMonth = new Date(mountTime).toISOString().slice(0, 7)
   const currentMovements = mrrMovements?.filter((m) => m.month === currentMonth) ?? []
-
-  const dataDaysAvailable = earliestDataDate
-    ? Math.floor((Date.now() - earliestDataDate) / 86400000)
-    : 0
 
   const rangeOptions = [
     { value: '7', label: 'Last 7 days', days: 7 },
@@ -269,7 +261,11 @@ export default function FounderAnalyticsPage() {
                     key={opt.value}
                     value={opt.value}
                     disabled={!hasData}
-                    title={!hasData ? `Not enough data — connected ${dataDaysAvailable} days ago` : undefined}
+                    title={
+                      !hasData
+                        ? `Not enough data — connected ${dataDaysAvailable} days ago`
+                        : undefined
+                    }
                   >
                     {opt.label}
                   </SelectItem>

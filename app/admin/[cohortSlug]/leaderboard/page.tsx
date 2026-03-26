@@ -40,7 +40,6 @@ import {
   CATEGORY_WEIGHTS,
 } from '@/components/leaderboard/scoring-explainer'
 
-
 function ScoreBar({ value, maxValue, color }: { value: number; maxValue: number; color: string }) {
   const width = maxValue > 0 ? Math.min((value / maxValue) * 100, 100) : 0
   return (
@@ -52,7 +51,6 @@ function ScoreBar({ value, maxValue, color }: { value: number; maxValue: number;
     </div>
   )
 }
-
 
 function ExpandableRow({ entry, maxScore }: { entry: any; maxScore: number }) {
   const [expanded, setExpanded] = useState(false)
