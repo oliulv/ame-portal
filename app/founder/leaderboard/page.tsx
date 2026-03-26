@@ -17,24 +17,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Star, Flame, Trophy, Send, CheckCircle, Pencil } from 'lucide-react'
+import { Star, Flame, Trophy, Send, CheckCircle, Pencil, Info, ChevronDown } from 'lucide-react'
 import Image from 'next/image'
 import { toast } from 'sonner'
-
-function MomentumArrow({ momentum }: { momentum: 'up' | 'flat' | 'down' | null }) {
-  if (!momentum) return null
-  const config = {
-    up: { icon: '↑', color: 'text-emerald-500', label: 'Trending up' },
-    flat: { icon: '→', color: 'text-muted-foreground', label: 'Flat' },
-    down: { icon: '↓', color: 'text-red-500', label: 'Trending down' },
-  }
-  const { icon, color, label } = config[momentum]
-  return (
-    <span className={`${color} font-bold text-sm`} title={label}>
-      {icon}
-    </span>
-  )
-}
+import { MomentumArrow } from '@/components/leaderboard/momentum-arrow'
+import { ScoringExplainerContent } from '@/components/leaderboard/scoring-explainer'
 
 function WeeklyUpdateModal() {
   const currentUpdate = useQuery(api.weeklyUpdates.getCurrent)
@@ -241,6 +228,7 @@ function WeeklyUpdateDialogContent({
 
 export default function FounderLeaderboardPage() {
   const leaderboard = useQuery(api.leaderboard.computeLeaderboardForFounder)
+  const [showExplainer, setShowExplainer] = useState(false)
 
   if (leaderboard === undefined) {
     return (
@@ -263,12 +251,28 @@ export default function FounderLeaderboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight font-display">Leaderboard</h1>
-        <p className="text-muted-foreground">
-          See how your startup ranks in {leaderboard.cohortName}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Leaderboard</h1>
+          <p className="text-muted-foreground">
+            See how your startup ranks in {leaderboard.cohortName}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowExplainer(!showExplainer)}
+          className="shrink-0"
+        >
+          <Info className="mr-1.5 h-3.5 w-3.5" />
+          How scoring works
+          <ChevronDown
+            className={`ml-1.5 h-3.5 w-3.5 transition-transform ${showExplainer ? 'rotate-180' : ''}`}
+          />
+        </Button>
       </div>
+
+      {showExplainer && <ScoringExplainerContent />}
 
       {/* Your position + weekly update */}
       <div className="grid gap-4 md:grid-cols-2">
@@ -325,7 +329,7 @@ export default function FounderLeaderboardPage() {
             ].map((entry) => (
               <tr
                 key={entry.startupId}
-                className={`${entry.startupId === leaderboard.myStartupId ? 'bg-primary/5' : ''} ${!entry.qualified ? 'opacity-60' : ''}`}
+                className={`${entry.startupId === leaderboard.myStartupId ? 'bg-primary/5' : ''} ${entry.excludeFromMetrics ? 'opacity-50' : !entry.qualified ? 'opacity-60' : ''}`}
               >
                 <td className="px-4 py-3 whitespace-nowrap">
                   {entry.rank ? (
@@ -355,7 +359,16 @@ export default function FounderLeaderboardPage() {
                         </Badge>
                       )}
                     </span>
-                    {entry.qualified && (
+                    {entry.excludeFromMetrics && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs text-muted-foreground"
+                        title="This startup is excluded from ranking metrics"
+                      >
+                        Excluded
+                      </Badge>
+                    )}
+                    {entry.qualified && !entry.excludeFromMetrics && (
                       <Badge
                         variant="default"
                         className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
