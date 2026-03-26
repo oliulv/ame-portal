@@ -262,7 +262,9 @@ export default function FounderAnalyticsPage() {
             <SelectContent>
               <SelectItem value="7">Last 7 days</SelectItem>
               <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
+              <SelectItem value="90">Last 3 months</SelectItem>
+              <SelectItem value="180">Last 6 months</SelectItem>
+              <SelectItem value="365">Last 12 months</SelectItem>
             </SelectContent>
           </Select>
         )}
@@ -798,12 +800,13 @@ export default function FounderAnalyticsPage() {
                     totalScore={latestVelocity}
                   />
 
-                  {/* Shipping Activity — 28-day rolling contribution count from calendar */}
+                  {/* Shipping Activity — velocity score over time with 28-day decay window */}
                   {contributionCalendar && contributionCalendar.length > 4 && (
                     <MetricAreaChart
                       title="Shipping Activity"
-                      description="28-day rolling total — all GitHub contributions"
+                      description="Daily velocity score snapshot — 4-week rolling window with decay"
                       data={(() => {
+                        // Flatten all days, sorted chronologically
                         const allDays = contributionCalendar
                           .flatMap((w: any) =>
                             (w.contributionDays ?? []).map((d: any) => ({
@@ -813,21 +816,38 @@ export default function FounderAnalyticsPage() {
                           )
                           .sort((a: any, b: any) => a.date.localeCompare(b.date))
 
+                        // For each day (after first 28 days), compute the velocity score:
+                        // Sum contributions in the last 28 days with exponential decay
+                        // Decay rate 0.03 per day (same as scoring engine)
+                        const DECAY_RATE = 0.03
                         const rollingData: { timestamp: string; value: number }[] = []
                         for (let i = 27; i < allDays.length; i++) {
-                          let sum = 0
-                          for (let j = i - 27; j <= i; j++) {
-                            sum += allDays[j].count
+                          let score = 0
+                          for (let j = 0; j < 28; j++) {
+                            const dayIdx = i - j
+                            if (dayIdx < 0) break
+                            // Apply temporal decay: more recent = higher weight
+                            const decay = Math.exp(-DECAY_RATE * j)
+                            // Use contribution count × 10 as proxy for velocity points
+                            // (actual scoring uses commits×10 + PRs×25 + reviews×30,
+                            //  but calendar only has total count per day)
+                            score += allDays[dayIdx].count * 10 * decay
                           }
                           rollingData.push({
                             timestamp: allDays[i].date + 'T00:00:00.000Z',
-                            value: sum,
+                            value: Math.round(score),
                           })
                         }
-                        return rollingData
+
+                        // Filter to selected range
+                        const rangeDays = parseInt(range)
+                        const cutoff = new Date()
+                        cutoff.setDate(cutoff.getDate() - rangeDays)
+                        const cutoffStr = cutoff.toISOString()
+                        return rollingData.filter((d) => d.timestamp >= cutoffStr)
                       })()}
                       color="hsl(var(--primary))"
-                      formatValue={(v) => `${v}`}
+                      formatValue={(v) => `${v.toLocaleString()} pts`}
                     />
                   )}
 
