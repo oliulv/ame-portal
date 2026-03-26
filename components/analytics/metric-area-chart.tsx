@@ -90,7 +90,7 @@ export function MetricAreaChart({
               tickFormatter={formatValue}
               className="text-xs"
               tick={{ fontSize: 11 }}
-              width={50}
+              width={55}
             />
             <Tooltip
               formatter={(value: number) => [formatValue(value), '']}

@@ -798,13 +798,12 @@ export default function FounderAnalyticsPage() {
                     totalScore={latestVelocity}
                   />
 
-                  {/* Velocity Over Time — computed as 28-day rolling sum from contribution calendar */}
+                  {/* Shipping Activity — 28-day rolling contribution count from calendar */}
                   {contributionCalendar && contributionCalendar.length > 4 && (
                     <MetricAreaChart
-                      title="Shipping Activity Over Time"
-                      description="28-day rolling contribution count — how much your team is shipping"
+                      title="Shipping Activity"
+                      description="28-day rolling total — all GitHub contributions"
                       data={(() => {
-                        // Flatten all days from the calendar
                         const allDays = contributionCalendar
                           .flatMap((w: any) =>
                             (w.contributionDays ?? []).map((d: any) => ({
@@ -814,7 +813,6 @@ export default function FounderAnalyticsPage() {
                           )
                           .sort((a: any, b: any) => a.date.localeCompare(b.date))
 
-                        // Compute 28-day rolling sum for each day
                         const rollingData: { timestamp: string; value: number }[] = []
                         for (let i = 27; i < allDays.length; i++) {
                           let sum = 0
@@ -829,7 +827,7 @@ export default function FounderAnalyticsPage() {
                         return rollingData
                       })()}
                       color="hsl(var(--primary))"
-                      formatValue={(v) => `${v} contributions`}
+                      formatValue={(v) => `${v}`}
                     />
                   )}
 
