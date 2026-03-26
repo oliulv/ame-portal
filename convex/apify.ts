@@ -53,16 +53,10 @@ export const scrapeTwitterProfile = internalAction({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            twitterHandles: [
-              args.handle.replace(/^@/, ''),
-              args.handle.replace(/^@/, ''),
-              args.handle.replace(/^@/, ''),
-              args.handle.replace(/^@/, ''),
-              args.handle.replace(/^@/, ''),
-            ],
+            twitterHandles: [args.handle.replace(/^@/, '')],
             getFollowers: false,
             getFollowing: false,
-            maxItems: 5,
+            maxItems: 1,
           }),
         }
       )

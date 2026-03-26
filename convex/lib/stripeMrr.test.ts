@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test'
-import { normalizeToMonthlyCents, computeMrrMovements } from './stripe-mrr'
-import type { MrrMovement } from './stripe-mrr'
+import { normalizeToMonthlyCents, computeMrrMovements } from './stripeMrr'
+import type { MrrMovement } from './stripeMrr'
 
 // ── normalizeToMonthlyCents ─────────────────────────────────────────
 

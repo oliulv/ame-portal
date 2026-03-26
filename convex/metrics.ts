@@ -4,7 +4,7 @@ import { v } from 'convex/values'
 import { requireAuth } from './auth'
 import { logConvexError } from './lib/logging'
 import { providerValidator } from './lib/providers'
-import { normalizeToMonthlyCents } from './lib/stripe-mrr'
+import { normalizeToMonthlyCents } from './lib/stripeMrr'
 
 /**
  * Store metric snapshots (upserts by day to avoid duplicates).
@@ -233,7 +233,7 @@ export const fetchStripeMetrics = internalAction({
     if (!connection?.accessToken) return
 
     const Stripe = (await import('stripe')).default
-    const { calculateMrrSnapshot, computeMrrMovements } = await import('./lib/stripe-mrr')
+    const { calculateMrrSnapshot, computeMrrMovements } = await import('./lib/stripeMrr')
 
     const stripe = new Stripe(connection.accessToken, {
       apiVersion: '2025-11-17.clover',
@@ -1375,6 +1375,12 @@ export const backfillStripeHistory = internalAction({
     for (let i = 0; i < sortedMonths.length; i++) {
       const month = sortedMonths[i]
       const prevMonth = i > 0 ? sortedMonths[i - 1] : null
+
+      // Clear existing movements for idempotent re-backfill
+      await ctx.runMutation(internal.metrics.clearMrrMovementsForMonth, {
+        startupId: args.startupId,
+        month,
+      })
 
       for (const customerId of allCustomerIds) {
         const currentMrr = monthlyMrr.get(customerId)?.get(month) ?? 0
