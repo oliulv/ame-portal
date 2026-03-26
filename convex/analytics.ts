@@ -13,13 +13,17 @@ export const realtimeActiveUsers = query({
     const fiveMinAgo = Date.now() - 5 * 60 * 1000
     const activeSessions = new Set<string>()
 
-    for (const websiteId of args.websiteIds) {
-      const events = await ctx.db
-        .query('trackerEvents')
-        .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
-        .order('desc')
-        .collect()
+    const eventSets = await Promise.all(
+      args.websiteIds.map((websiteId) =>
+        ctx.db
+          .query('trackerEvents')
+          .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
+          .order('desc')
+          .collect()
+      )
+    )
 
+    for (const events of eventSets) {
       for (const event of events) {
         if (event._creationTime < fiveMinAgo) break
         if (event.sessionId) activeSessions.add(event.sessionId)
@@ -47,14 +51,15 @@ export const statsSummary = query({
     const startTime = new Date(args.startDate).getTime()
     const endTime = new Date(args.endDate).getTime()
 
-    const allEvents = []
-    for (const websiteId of args.websiteIds) {
-      const events = await ctx.db
-        .query('trackerEvents')
-        .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
-        .collect()
-      allEvents.push(...events)
-    }
+    const eventSets = await Promise.all(
+      args.websiteIds.map((websiteId) =>
+        ctx.db
+          .query('trackerEvents')
+          .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
+          .collect()
+      )
+    )
+    const allEvents = eventSets.flat()
 
     const currentEvents = allEvents.filter(
       (e) => e._creationTime >= startTime && e._creationTime < endTime
@@ -111,14 +116,15 @@ export const pageviewsByTime = query({
     const startTime = new Date(args.startDate).getTime()
     const endTime = new Date(args.endDate).getTime()
 
-    const allEvents = []
-    for (const websiteId of args.websiteIds) {
-      const events = await ctx.db
-        .query('trackerEvents')
-        .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
-        .collect()
-      allEvents.push(...events)
-    }
+    const eventSets = await Promise.all(
+      args.websiteIds.map((websiteId) =>
+        ctx.db
+          .query('trackerEvents')
+          .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
+          .collect()
+      )
+    )
+    const allEvents = eventSets.flat()
 
     const filtered = allEvents.filter(
       (e) => !e.eventName && e._creationTime >= startTime && e._creationTime < endTime
@@ -169,14 +175,15 @@ export const dimensionBreakdown = query({
     const endTime = new Date(args.endDate).getTime()
     const maxItems = args.limit ?? 10
 
-    const allEvents = []
-    for (const websiteId of args.websiteIds) {
-      const events = await ctx.db
-        .query('trackerEvents')
-        .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
-        .collect()
-      allEvents.push(...events)
-    }
+    const eventSets = await Promise.all(
+      args.websiteIds.map((websiteId) =>
+        ctx.db
+          .query('trackerEvents')
+          .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
+          .collect()
+      )
+    )
+    const allEvents = eventSets.flat()
 
     const filtered = allEvents.filter(
       (e) => !e.eventName && e._creationTime >= startTime && e._creationTime < endTime
@@ -214,14 +221,15 @@ export const sessionList = query({
     const endTime = new Date(args.endDate).getTime()
     const maxItems = args.limit ?? 50
 
-    const allEvents = []
-    for (const websiteId of args.websiteIds) {
-      const events = await ctx.db
-        .query('trackerEvents')
-        .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
-        .collect()
-      allEvents.push(...events)
-    }
+    const eventSets = await Promise.all(
+      args.websiteIds.map((websiteId) =>
+        ctx.db
+          .query('trackerEvents')
+          .withIndex('by_websiteId', (q) => q.eq('websiteId', websiteId))
+          .collect()
+      )
+    )
+    const allEvents = eventSets.flat()
 
     const filtered = allEvents.filter(
       (e) => e._creationTime >= startTime && e._creationTime < endTime && e.sessionId

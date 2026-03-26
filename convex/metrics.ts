@@ -491,10 +491,12 @@ export const updateConnectionSyncStatus = internalMutation({
  * Sync metrics from all active integrations (Stripe + Tracker + GitHub).
  * Called by cron every 12 hours. Fans out per-startup syncs as separate scheduled actions.
  */
-export const syncAllMetrics = internalAction({
+/**
+ * Sync all Stripe metrics (separate cron). Fans out per-startup.
+ */
+export const syncAllStripeMetrics = internalAction({
   args: {},
   handler: async (ctx) => {
-    // Fan out Stripe syncs
     const connections = await ctx.runQuery(internal.metrics.getAllActiveStripeConnections)
     for (const connection of connections) {
       await ctx.scheduler.runAfter(0, internal.metrics.syncStripeForStartup, {
@@ -502,16 +504,15 @@ export const syncAllMetrics = internalAction({
         connectionId: connection._id,
       })
     }
+  },
+})
 
-    // Fan out tracker syncs
-    const trackerStartupIds = await ctx.runQuery(internal.metrics.getStartupsWithTrackers)
-    for (const startupId of trackerStartupIds) {
-      await ctx.scheduler.runAfter(0, internal.metrics.syncTrackerForStartup, {
-        startupId,
-      })
-    }
-
-    // Fan out GitHub syncs (per-startup, not per-connection, since we aggregate)
+/**
+ * Sync all GitHub metrics (separate cron). Fans out per-startup (deduplicated).
+ */
+export const syncAllGithubMetrics = internalAction({
+  args: {},
+  handler: async (ctx) => {
     const githubConnections = await ctx.runQuery(internal.metrics.getAllActiveGithubConnections)
     const githubStartupIds = new Set(githubConnections.map((c: any) => c.startupId))
     for (const startupId of githubStartupIds) {
@@ -519,6 +520,21 @@ export const syncAllMetrics = internalAction({
       await ctx.scheduler.runAfter(0, internal.metrics.syncGithubForStartup, {
         startupId,
         connectionId: firstConnection!._id,
+      })
+    }
+  },
+})
+
+/**
+ * Sync all tracker metrics (separate cron). Fans out per-startup.
+ */
+export const syncAllTrackerMetrics = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const trackerStartupIds = await ctx.runQuery(internal.metrics.getStartupsWithTrackers)
+    for (const startupId of trackerStartupIds) {
+      await ctx.scheduler.runAfter(0, internal.metrics.syncTrackerForStartup, {
+        startupId,
       })
     }
   },
