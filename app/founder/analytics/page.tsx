@@ -798,16 +798,38 @@ export default function FounderAnalyticsPage() {
                     totalScore={latestVelocity}
                   />
 
-                  {velocityScore && velocityScore.length > 0 && (
+                  {/* Velocity Over Time — computed as 28-day rolling sum from contribution calendar */}
+                  {contributionCalendar && contributionCalendar.length > 4 && (
                     <MetricAreaChart
-                      title="Velocity Over Time"
-                      description="Velocity score per sync — higher = more shipping activity"
-                      data={velocityScore.map((d) => ({
-                        timestamp: d.timestamp,
-                        value: d.value,
-                      }))}
-                      color="hsl(var(--chart-3))"
-                      formatValue={(v) => `${v.toLocaleString()} pts`}
+                      title="Shipping Activity Over Time"
+                      description="28-day rolling contribution count — how much your team is shipping"
+                      data={(() => {
+                        // Flatten all days from the calendar
+                        const allDays = contributionCalendar
+                          .flatMap((w: any) =>
+                            (w.contributionDays ?? []).map((d: any) => ({
+                              date: d.date,
+                              count: d.contributionCount ?? 0,
+                            }))
+                          )
+                          .sort((a: any, b: any) => a.date.localeCompare(b.date))
+
+                        // Compute 28-day rolling sum for each day
+                        const rollingData: { timestamp: string; value: number }[] = []
+                        for (let i = 27; i < allDays.length; i++) {
+                          let sum = 0
+                          for (let j = i - 27; j <= i; j++) {
+                            sum += allDays[j].count
+                          }
+                          rollingData.push({
+                            timestamp: allDays[i].date + 'T00:00:00.000Z',
+                            value: sum,
+                          })
+                        }
+                        return rollingData
+                      })()}
+                      color="hsl(var(--primary))"
+                      formatValue={(v) => `${v} contributions`}
                     />
                   )}
 

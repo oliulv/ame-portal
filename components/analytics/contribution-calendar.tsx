@@ -18,12 +18,12 @@ interface ContributionCalendarProps {
 }
 
 function getColor(count: number): string {
-  // Darker = more contributions (consistent in both light and dark mode)
-  if (count === 0) return 'bg-muted/40'
-  if (count <= 3) return 'bg-emerald-300 dark:bg-emerald-900/80'
-  if (count <= 8) return 'bg-emerald-500 dark:bg-emerald-700'
-  if (count <= 15) return 'bg-emerald-600 dark:bg-emerald-500'
-  return 'bg-emerald-800 dark:bg-emerald-300'
+  // More contributions = more saturated/vivid green (both light and dark mode)
+  if (count === 0) return 'bg-zinc-100 dark:bg-zinc-800'
+  if (count <= 3) return 'bg-emerald-200 dark:bg-emerald-950'
+  if (count <= 8) return 'bg-emerald-400 dark:bg-emerald-800'
+  if (count <= 15) return 'bg-emerald-500 dark:bg-emerald-600'
+  return 'bg-emerald-700 dark:bg-emerald-400'
 }
 
 const DAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', '']
@@ -162,11 +162,11 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>Less</span>
             <div className="flex gap-0.5">
-              <div className="h-[11px] w-[11px] rounded-sm bg-muted/40" />
-              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-300 dark:bg-emerald-900/80" />
-              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-500 dark:bg-emerald-700" />
-              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-600 dark:bg-emerald-500" />
-              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-800 dark:bg-emerald-300" />
+              <div className="h-[11px] w-[11px] rounded-sm bg-zinc-100 dark:bg-zinc-800" />
+              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-200 dark:bg-emerald-950" />
+              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-400 dark:bg-emerald-800" />
+              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-500 dark:bg-emerald-600" />
+              <div className="h-[11px] w-[11px] rounded-sm bg-emerald-700 dark:bg-emerald-400" />
             </div>
             <span>More</span>
           </div>
