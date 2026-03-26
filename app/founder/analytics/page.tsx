@@ -360,25 +360,23 @@ export default function FounderAnalyticsPage() {
                 />
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {hasTracker && sessions && sessions.length > 0 && (
-                  <MetricAreaChart
-                    title="Website Traffic"
-                    description="Sessions over time"
-                    data={sessions.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
-                    color="hsl(var(--chart-2))"
-                    height={250}
-                  />
-                )}
-                {hasGithub && (
-                  <VelocityScore
-                    commits={commits ?? 0}
-                    prsOpened={prsOpened ?? 0}
-                    reviews={reviews ?? 0}
-                    totalScore={latestVelocity}
-                  />
-                )}
-              </div>
+              {hasTracker && sessions && sessions.length > 0 && (
+                <MetricAreaChart
+                  title="Website Traffic"
+                  description="Sessions over time"
+                  data={sessions.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
+                  color="hsl(var(--chart-2))"
+                  height={250}
+                />
+              )}
+              {hasGithub && (
+                <VelocityScore
+                  commits={commits ?? 0}
+                  prsOpened={prsOpened ?? 0}
+                  reviews={reviews ?? 0}
+                  totalScore={latestVelocity}
+                />
+              )}
 
               {hasSocial && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
