@@ -225,53 +225,8 @@ async function paginateStripe<T extends { id: string }>(
 }
 
 /**
- * Normalize a subscription item to monthly GBP pence.
- * Handles: month, year, week, day intervals with interval_count.
- * Applies coupon discounts (percent_off or amount_off with "forever" duration).
- */
-function normalizeToMonthlyPence(
-  unitAmount: number,
-  quantity: number,
-  interval: string,
-  intervalCount: number,
-  coupon?: { percent_off?: number | null; amount_off?: number | null; duration?: string | null }
-): number {
-  let monthlyAmount: number
-  switch (interval) {
-    case 'month':
-      monthlyAmount = (unitAmount * quantity) / intervalCount
-      break
-    case 'year':
-      monthlyAmount = (unitAmount * quantity) / (12 * intervalCount)
-      break
-    case 'week':
-      monthlyAmount = (unitAmount * quantity * (52 / 12)) / intervalCount
-      break
-    case 'day':
-      monthlyAmount = (unitAmount * quantity * (365 / 12)) / intervalCount
-      break
-    default:
-      monthlyAmount = unitAmount * quantity
-  }
-
-  // Apply "forever" coupon discounts only (temporary coupons are revenue timing, not MRR)
-  if (coupon?.duration === 'forever') {
-    if (coupon.percent_off) {
-      monthlyAmount *= 1 - coupon.percent_off / 100
-    } else if (coupon.amount_off) {
-      // Normalize fixed-amount coupon to monthly if applied to non-monthly interval
-      let monthlyCouponAmount = coupon.amount_off
-      if (interval === 'year') monthlyCouponAmount = coupon.amount_off / 12
-      monthlyAmount = Math.max(0, monthlyAmount - monthlyCouponAmount)
-    }
-  }
-
-  return Math.round(monthlyAmount)
-}
-
-/**
  * Fetch and store Stripe metrics for a startup (action).
- * MRR from subscriptions (not charges). Revenue from invoices (not charges).
+ * Uses stripe-mrr lib for MRR calculation and movement detection.
  */
 export const fetchStripeMetrics = internalAction({
   args: { startupId: v.id('startups') },
@@ -283,6 +238,8 @@ export const fetchStripeMetrics = internalAction({
     if (!connection?.accessToken) return
 
     const Stripe = (await import('stripe')).default
+    const { calculateMrrSnapshot, computeMrrMovements } = await import('./lib/stripe-mrr')
+
     const stripe = new Stripe(connection.accessToken, {
       apiVersion: '2025-11-17.clover',
     })
@@ -290,64 +247,17 @@ export const fetchStripeMetrics = internalAction({
     const now = new Date()
     const timestamp = now.toISOString()
 
-    // ── MRR from subscriptions ──────────────────────────────────────
+    // ── MRR from subscriptions (using stripe-mrr lib) ─────────────
     const activeSubs = await paginateStripe((p) =>
       stripe.subscriptions.list({ ...p, status: 'active' })
     )
     const pastDueSubs = await paginateStripe((p) =>
       stripe.subscriptions.list({ ...p, status: 'past_due' })
     )
-    const allMrrSubs = [...activeSubs, ...pastDueSubs]
+    const allSubs = [...activeSubs, ...pastDueSubs]
+    const { totalMrrCents, activeSubscriptionCount, customerMrrMap } = calculateMrrSnapshot(allSubs)
 
-    let mrrPence = 0
-    let activeSubscriptionCount = 0
-    const customerMrrMap = new Map<string, number>()
-
-    for (const sub of allMrrSubs) {
-      // Skip trialing subs
-      if (sub.trial_end && sub.trial_end * 1000 > now.getTime()) continue
-
-      const customerId = typeof sub.customer === 'string' ? sub.customer : (sub.customer as any)?.id
-
-      let subMrr = 0
-      for (const item of sub.items.data) {
-        const price = item.price
-        if (!price?.recurring) continue
-        // Skip free plans
-        if (!price.unit_amount || price.unit_amount === 0) continue
-        // Skip metered billing (usage-based, not predictable MRR)
-        if (price.recurring.usage_type === 'metered') continue
-
-        const firstDiscount = Array.isArray(sub.discounts) ? sub.discounts[0] : undefined
-        const discountObj =
-          firstDiscount && typeof firstDiscount === 'object' ? (firstDiscount as any) : undefined
-        const coupon = discountObj?.coupon
-          ? {
-              percent_off: discountObj.coupon.percent_off as number | null,
-              amount_off: discountObj.coupon.amount_off as number | null,
-              duration: discountObj.coupon.duration as string | null,
-            }
-          : undefined
-
-        subMrr += normalizeToMonthlyPence(
-          price.unit_amount,
-          item.quantity ?? 1,
-          price.recurring.interval,
-          price.recurring.interval_count ?? 1,
-          coupon
-        )
-      }
-
-      if (subMrr > 0) {
-        activeSubscriptionCount++
-        mrrPence += subMrr
-        if (customerId) {
-          customerMrrMap.set(customerId, (customerMrrMap.get(customerId) ?? 0) + subMrr)
-        }
-      }
-    }
-
-    const mrr = mrrPence / 100 // Convert pence to pounds
+    const mrr = totalMrrCents / 100
     const arr = mrr * 12
     const arpu = activeSubscriptionCount > 0 ? mrr / activeSubscriptionCount : 0
 
@@ -377,7 +287,7 @@ export const fetchStripeMetrics = internalAction({
       })
     }
 
-    // ── Compute MRR movements by diffing with previous month ────────
+    // ── Compute MRR movements (using stripe-mrr lib) ────────────────
     const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
     const prevCustomerMrrs: any[] = await ctx.runQuery(internal.metrics.getCustomerMrrForMonth, {
@@ -390,47 +300,13 @@ export const fetchStripeMetrics = internalAction({
       prevMrrMap.set(row.stripeCustomerId, row.mrr)
     }
 
-    // Detect all customers across both months
-    const allCustomers = new Set([...customerMrrMap.keys(), ...prevMrrMap.keys()])
-    const movements: Array<{
-      type: 'new' | 'expansion' | 'contraction' | 'churn' | 'reactivation'
-      amount: number
-      stripeCustomerId: string
-    }> = []
-
-    // We need to check historical churn to detect reactivations
+    // All-time customer IDs for reactivation detection (fixed: no longer depends on prevMrrMap.size)
     const allTimeCustomers: any[] = await ctx.runQuery(internal.metrics.getDistinctCustomerIds, {
       startupId: args.startupId,
     })
-    const allTimeCustomerSet = new Set(allTimeCustomers.map((c: any) => c.stripeCustomerId))
+    const allTimeCustomerIds = new Set(allTimeCustomers.map((c: any) => c.stripeCustomerId))
 
-    for (const customerId of allCustomers) {
-      const currentMrr = customerMrrMap.get(customerId) ?? 0
-      const previousMrr = prevMrrMap.get(customerId) ?? 0
-
-      if (currentMrr > 0 && previousMrr === 0) {
-        // Was this customer ever seen before?
-        if (allTimeCustomerSet.has(customerId) && prevMrrMap.size > 0) {
-          movements.push({ type: 'reactivation', amount: currentMrr, stripeCustomerId: customerId })
-        } else {
-          movements.push({ type: 'new', amount: currentMrr, stripeCustomerId: customerId })
-        }
-      } else if (currentMrr === 0 && previousMrr > 0) {
-        movements.push({ type: 'churn', amount: previousMrr, stripeCustomerId: customerId })
-      } else if (currentMrr > previousMrr) {
-        movements.push({
-          type: 'expansion',
-          amount: currentMrr - previousMrr,
-          stripeCustomerId: customerId,
-        })
-      } else if (currentMrr < previousMrr && currentMrr > 0) {
-        movements.push({
-          type: 'contraction',
-          amount: previousMrr - currentMrr,
-          stripeCustomerId: customerId,
-        })
-      }
-    }
+    const movements = computeMrrMovements(customerMrrMap, prevMrrMap, allTimeCustomerIds)
 
     // Clear existing movements for this month before inserting (idempotent)
     await ctx.runMutation(internal.metrics.clearMrrMovementsForMonth, {
@@ -438,7 +314,6 @@ export const fetchStripeMetrics = internalAction({
       month: currentMonth,
     })
 
-    // Store movements
     for (const movement of movements) {
       await ctx.runMutation(internal.metrics.insertMrrMovement, {
         startupId: args.startupId,
@@ -450,23 +325,17 @@ export const fetchStripeMetrics = internalAction({
     }
 
     // ── Derived metrics ─────────────────────────────────────────────
-    // Trial conversion: only meaningful when trialing subs exist
     const trialingSubs = await paginateStripe((p) =>
       stripe.subscriptions.list({ ...p, status: 'trialing' })
     )
     const totalTrialing = trialingSubs.length
-    // -1 means "not applicable" (no trial flow detected)
     const trialConversionRate =
       totalTrialing > 0
         ? (activeSubscriptionCount / (totalTrialing + activeSubscriptionCount)) * 100
         : -1
 
-    // Payment failure rate from last 90 days of invoices
     const recentAllInvoices = await paginateStripe((p) =>
-      stripe.invoices.list({
-        ...p,
-        created: { gte: ninetyDaysAgo },
-      })
+      stripe.invoices.list({ ...p, created: { gte: ninetyDaysAgo } })
     )
     const failedPayments = recentAllInvoices.filter(
       (inv) => inv.status === 'uncollectible' || inv.status === 'void'
@@ -474,110 +343,28 @@ export const fetchStripeMetrics = internalAction({
     const paymentFailureRate =
       recentAllInvoices.length > 0 ? (failedPayments / recentAllInvoices.length) * 100 : -1
 
-    // Monthly churn rate (needs previous month MRR to compute)
     const churnAmount = movements
       .filter((m) => m.type === 'churn')
       .reduce((sum, m) => sum + m.amount, 0)
     const prevTotalMrr = Array.from(prevMrrMap.values()).reduce((sum, v) => sum + v, 0)
     const monthlyChurnRate = prevTotalMrr > 0 ? (churnAmount / prevTotalMrr) * 100 : -1
-
-    // Net Revenue Retention (needs previous month)
-    const nrr = prevTotalMrr > 0 ? (mrrPence / prevTotalMrr) * 100 : -1
-
-    // LTV (ARPU / monthly churn rate) — only if we have churn data
+    const nrr = prevTotalMrr > 0 ? (totalMrrCents / prevTotalMrr) * 100 : -1
     const ltv = monthlyChurnRate > 0 ? arpu / (monthlyChurnRate / 100) : -1
 
     // ── Store all metric snapshots ──────────────────────────────────
     await ctx.runMutation(internal.metrics.storeInternal, {
       snapshots: [
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'mrr',
-          value: mrr,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'arr',
-          value: arr,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'total_revenue',
-          value: totalRevenue,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'active_customers',
-          value: uniqueCustomers,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'active_subscriptions',
-          value: activeSubscriptionCount,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'arpu',
-          value: arpu,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'nrr',
-          value: nrr,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'ltv',
-          value: ltv,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'trial_conversion_rate',
-          value: trialConversionRate,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'payment_failure_rate',
-          value: paymentFailureRate,
-          timestamp,
-          window: 'daily',
-        },
-        {
-          startupId: args.startupId,
-          provider: 'stripe',
-          metricKey: 'monthly_churn_rate',
-          value: monthlyChurnRate,
-          timestamp,
-          window: 'daily',
-        },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'mrr', value: mrr, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'arr', value: arr, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'total_revenue', value: totalRevenue, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'active_customers', value: uniqueCustomers, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'active_subscriptions', value: activeSubscriptionCount, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'arpu', value: arpu, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'nrr', value: nrr, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'ltv', value: ltv, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'trial_conversion_rate', value: trialConversionRate, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'payment_failure_rate', value: paymentFailureRate, timestamp, window: 'daily' },
+        { startupId: args.startupId, provider: 'stripe', metricKey: 'monthly_churn_rate', value: monthlyChurnRate, timestamp, window: 'daily' },
       ],
     })
 
