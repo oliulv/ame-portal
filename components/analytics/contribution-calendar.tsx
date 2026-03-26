@@ -95,7 +95,6 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
           >
             {/* Month labels row */}
             {monthLabels.map((m, i) => {
-              const nextCol = monthLabels[i + 1]?.colStart ?? cols + 2
               return (
                 <div
                   key={i}

@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireAuth, requireSuperAdmin } from './auth'
+import { requireAdmin, requireAuth, requireStartupAccess, requireSuperAdmin } from './auth'
 import type { Doc, Id } from './_generated/dataModel'
 import { getWeekBoundaries } from './lib/dateUtils'
 import {
@@ -521,7 +521,7 @@ export const getScoreBreakdown = query({
     startupId: v.id('startups'),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireStartupAccess(ctx, args.startupId)
 
     const startup = await ctx.db.get(args.startupId)
     if (!startup) throw new Error('Startup not found')

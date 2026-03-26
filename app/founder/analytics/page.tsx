@@ -247,9 +247,11 @@ export default function FounderAnalyticsPage() {
   }, [integrationStatus, mountTime])
 
   const trackerDaysAvailable = useMemo(() => {
-    if (!sessions?.length) return 0
-    return Math.floor((mountTime - new Date(sessions[0].timestamp).getTime()) / 86400000)
-  }, [sessions, mountTime])
+    if (!trackerWebsites?.length) return 0
+    // Use tracker website creation time (stable, not affected by range filter)
+    const earliest = Math.min(...trackerWebsites.map((w: any) => w._creationTime))
+    return Math.floor((mountTime - earliest) / 86400000)
+  }, [trackerWebsites, mountTime])
 
   // GitHub contribution calendar always has ~365 days
   const githubDaysAvailable = 365
