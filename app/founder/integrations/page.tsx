@@ -52,7 +52,7 @@ type StripeConnectFormData = z.infer<typeof stripeConnectSchema>
 type TrackerWebsiteFormData = z.infer<typeof trackerWebsiteSchema>
 
 type IntegrationTab = 'stripe' | 'tracker' | 'github' | 'social'
-const validIntegrationTabs: IntegrationTab[] = ['stripe', 'tracker', 'github', 'social']
+const validIntegrationTabs: IntegrationTab[] = ['stripe', 'tracker', 'github'] // Social excluded from v1
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -252,12 +252,6 @@ function IntegrationsPageInner() {
       label: 'GitHub',
       icon: <Github className="h-4 w-4" />,
       connected: fullStatus?.github?.status === 'active',
-    },
-    {
-      key: 'social',
-      label: 'Social',
-      icon: <Share2 className="h-4 w-4" />,
-      connected: (fullStatus?.social?.length ?? 0) > 0,
     },
   ]
 

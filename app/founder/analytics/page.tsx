@@ -243,7 +243,6 @@ export default function FounderAnalyticsPage() {
     { key: 'overview', label: 'Overview', icon: <LayoutDashboard className="h-4 w-4" /> },
     { key: 'stripe', label: 'Revenue', icon: <CreditCard className="h-4 w-4" /> },
     { key: 'traffic', label: 'Traffic', icon: <Eye className="h-4 w-4" /> },
-    { key: 'social', label: 'Social', icon: <Share2 className="h-4 w-4" /> },
     { key: 'shipping', label: 'Shipping', icon: <Ship className="h-4 w-4" /> },
   ]
 
