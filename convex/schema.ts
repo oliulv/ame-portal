@@ -1,5 +1,11 @@
 import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
+import {
+  providerValidator,
+  connectionProviderValidator,
+  socialPlatformValidator,
+  mrrMovementTypeValidator,
+} from './lib/providers'
 
 export default defineSchema({
   // ── Users ──────────────────────────────────────────────────────────
@@ -21,6 +27,11 @@ export default defineSchema({
     isActive: v.boolean(),
     fundingBudget: v.optional(v.number()),
     baseFunding: v.optional(v.number()),
+    leaderboardConfig: v.optional(
+      v.object({
+        normalizationPower: v.number(), // default 0.7, range 0.3–1.0
+      })
+    ),
   }).index('by_slug', ['slug']),
 
   // ── Admin ↔ Cohort assignments ────────────────────────────────────
@@ -63,6 +74,7 @@ export default defineSchema({
     ),
     fundingDeployed: v.optional(v.number()),
     excludeFromMetrics: v.optional(v.boolean()),
+    updateStreak: v.optional(v.number()),
   })
     .index('by_cohortId', ['cohortId'])
     .index('by_slug', ['slug']),
@@ -95,6 +107,7 @@ export default defineSchema({
     bio: v.optional(v.string()),
     linkedinUrl: v.optional(v.string()),
     xUrl: v.optional(v.string()),
+    githubUsername: v.optional(v.string()),
     onboardingStatus: v.union(
       v.literal('pending'),
       v.literal('in_progress'),
@@ -244,7 +257,7 @@ export default defineSchema({
   // ── Integration Connections ────────────────────────────────────────
   integrationConnections: defineTable({
     startupId: v.id('startups'),
-    provider: v.union(v.literal('stripe'), v.literal('tracker')),
+    provider: connectionProviderValidator,
     accountId: v.optional(v.string()),
     accountName: v.optional(v.string()),
     status: v.union(v.literal('active'), v.literal('error'), v.literal('disconnected')),
@@ -264,7 +277,7 @@ export default defineSchema({
   // ── Metrics Data ───────────────────────────────────────────────────
   metricsData: defineTable({
     startupId: v.id('startups'),
-    provider: v.union(v.literal('stripe'), v.literal('tracker'), v.literal('manual')),
+    provider: providerValidator,
     metricKey: v.string(),
     value: v.number(),
     timestamp: v.string(),
@@ -274,6 +287,73 @@ export default defineSchema({
     .index('by_startupId', ['startupId'])
     .index('by_startupId_provider_metricKey', ['startupId', 'provider', 'metricKey'])
     .index('by_startupId_metricKey_timestamp', ['startupId', 'metricKey', 'timestamp']),
+
+  // ── Customer MRR (per-customer per-month time-series) ─────────────
+  customerMrr: defineTable({
+    startupId: v.id('startups'),
+    stripeCustomerId: v.string(),
+    month: v.string(), // YYYY-MM
+    mrr: v.number(), // GBP pence
+    currencyOriginal: v.optional(v.string()),
+    mrrOriginal: v.optional(v.number()), // original currency pence
+    exchangeRate: v.optional(v.number()),
+    subscriptionId: v.optional(v.string()),
+  })
+    .index('by_startupId', ['startupId'])
+    .index('by_startupId_month', ['startupId', 'month'])
+    .index('by_startupId_customerId_month', ['startupId', 'stripeCustomerId', 'month']),
+
+  // ── MRR Movements ─────────────────────────────────────────────────
+  mrrMovements: defineTable({
+    startupId: v.id('startups'),
+    month: v.string(), // YYYY-MM
+    type: mrrMovementTypeValidator,
+    amount: v.number(), // GBP pence
+    stripeCustomerId: v.string(),
+    subscriptionId: v.optional(v.string()),
+  })
+    .index('by_startupId', ['startupId'])
+    .index('by_startupId_month', ['startupId', 'month']),
+
+  // ── Stripe Webhook Events (idempotency log) ───────────────────────
+  stripeWebhookEvents: defineTable({
+    stripeEventId: v.string(),
+    type: v.string(),
+    processedAt: v.string(),
+    payload: v.optional(v.any()),
+  }).index('by_stripeEventId', ['stripeEventId']),
+
+  // ── Social Profiles (for Apify scraping) ──────────────────────────
+  socialProfiles: defineTable({
+    startupId: v.id('startups'),
+    platform: socialPlatformValidator,
+    handle: v.string(),
+    profileUrl: v.optional(v.string()),
+    lastScrapedAt: v.optional(v.string()),
+    scrapeError: v.optional(v.string()),
+  })
+    .index('by_startupId', ['startupId'])
+    .index('by_startupId_platform', ['startupId', 'platform']),
+
+  // ── Weekly Updates ────────────────────────────────────────────────
+  weeklyUpdates: defineTable({
+    startupId: v.id('startups'),
+    founderId: v.id('users'),
+    weekOf: v.string(), // Monday ISO date (YYYY-MM-DD)
+    highlight: v.string(), // Brief 2-4 line update — what happened, craziest thing
+    primaryMetric: v.optional(
+      v.object({
+        label: v.string(),
+        value: v.number(),
+      })
+    ),
+    isFavorite: v.boolean(),
+    favoritedBy: v.optional(v.id('users')),
+    createdAt: v.string(),
+  })
+    .index('by_startupId', ['startupId'])
+    .index('by_startupId_weekOf', ['startupId', 'weekOf'])
+    .index('by_weekOf', ['weekOf']),
 
   // ── Tracker Websites ───────────────────────────────────────────────
   trackerWebsites: defineTable({
@@ -290,6 +370,7 @@ export default defineSchema({
     eventName: v.optional(v.string()),
     url: v.string(),
     referrer: v.optional(v.string()),
+    tag: v.optional(v.string()),
     utmSource: v.optional(v.string()),
     utmMedium: v.optional(v.string()),
     utmCampaign: v.optional(v.string()),

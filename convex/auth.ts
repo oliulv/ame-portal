@@ -128,3 +128,28 @@ export async function getFounderStartupIds(
 
   return profiles.map((p) => p.startupId)
 }
+
+/**
+ * Require the current user to have access to a specific startup.
+ * Admins/super_admins have access to all startups.
+ * Founders only have access to startups linked via their founderProfiles.
+ */
+export async function requireStartupAccess(
+  ctx: QueryCtx | MutationCtx,
+  startupId: Doc<'startups'>['_id']
+): Promise<Doc<'users'>> {
+  const user = await requireAuth(ctx)
+
+  // Admins and super_admins can access any startup
+  if (user.role === 'admin' || user.role === 'super_admin') {
+    return user
+  }
+
+  // Founders must own the startup
+  const startupIds = await getFounderStartupIds(ctx, user._id)
+  if (!startupIds.includes(startupId)) {
+    throw new Error('Not authorized for this startup')
+  }
+
+  return user
+}

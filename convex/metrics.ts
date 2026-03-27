@@ -1,25 +1,22 @@
-import {
-  query,
-  mutation,
-  action,
-  internalAction,
-  internalMutation,
-  internalQuery,
-} from './functions'
+import { query, action, internalAction, internalMutation, internalQuery } from './functions'
 import { api, internal } from './_generated/api'
 import { v } from 'convex/values'
-import { requireAuth } from './auth'
+import { requireStartupAccess } from './auth'
 import { logConvexError } from './lib/logging'
+import { providerValidator } from './lib/providers'
+import { normalizeToMonthlyCents } from './lib/stripeMrr'
+import { DECAY_RATE } from './lib/scoring'
 
 /**
  * Store metric snapshots (upserts by day to avoid duplicates).
+ * Internal only — not exposed as a public API.
  */
-export const store = mutation({
+export const store = internalMutation({
   args: {
     snapshots: v.array(
       v.object({
         startupId: v.id('startups'),
-        provider: v.union(v.literal('stripe'), v.literal('tracker'), v.literal('manual')),
+        provider: providerValidator,
         metricKey: v.string(),
         value: v.number(),
         timestamp: v.string(),
@@ -58,12 +55,12 @@ export const store = mutation({
 export const getLatest = query({
   args: {
     startupId: v.id('startups'),
-    provider: v.union(v.literal('stripe'), v.literal('tracker'), v.literal('manual')),
+    provider: providerValidator,
     metricKey: v.string(),
     window: v.union(v.literal('daily'), v.literal('weekly'), v.literal('monthly')),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireStartupAccess(ctx, args.startupId)
 
     const metrics = await ctx.db
       .query('metricsData')
@@ -90,14 +87,14 @@ export const getLatest = query({
 export const timeSeries = query({
   args: {
     startupId: v.id('startups'),
-    provider: v.union(v.literal('stripe'), v.literal('tracker'), v.literal('manual')),
+    provider: providerValidator,
     metricKey: v.string(),
     window: v.union(v.literal('daily'), v.literal('weekly'), v.literal('monthly')),
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireStartupAccess(ctx, args.startupId)
 
     let metrics = await ctx.db
       .query('metricsData')
@@ -133,8 +130,126 @@ export const timeSeries = query({
 })
 
 /**
+ * Get velocity score time series with 28-day rolling window and temporal decay.
+ * Server-side computation — single source of truth for both KPI and chart.
+ *
+ * Computes from the GitHub contribution calendar (has a full year of daily data).
+ * For each day in the requested range, looks back 28 days and sums:
+ *   contribution_count × 10 × e^(-0.03 × days_ago)
+ *
+ * The contribution calendar gives us total contributions per day (commits + PRs + reviews
+ * combined). We multiply by 10 as the base score unit, consistent with the velocity
+ * scoring in the sync cron.
+ */
+export const getVelocityTimeSeries = query({
+  args: {
+    startupId: v.id('startups'),
+    startDate: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireStartupAccess(ctx, args.startupId)
+
+    // Read the contribution calendar (stored by GitHub sync, contains ~1 year of daily data)
+    const calendarMetric = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'contribution_calendar')
+      )
+      .order('desc')
+      .first()
+
+    const calendar = calendarMetric?.meta as
+      | Array<{ contributionDays?: Array<{ date: string; contributionCount?: number }> }>
+      | undefined
+
+    if (!calendar || calendar.length === 0) return []
+
+    // Flatten calendar into a date→count map
+    const countByDay = new Map<string, number>()
+    for (const week of calendar) {
+      for (const day of week.contributionDays ?? []) {
+        countByDay.set(day.date, day.contributionCount ?? 0)
+      }
+    }
+
+    if (countByDay.size === 0) return []
+
+    // Find the data range from the calendar
+    const allDates = Array.from(countByDay.keys()).sort()
+    const earliestDay = allDates[0]
+
+    // Determine output range — start 28 days after earliest data (need lookback window)
+    const earliestOutput = new Date(earliestDay + 'T00:00:00.000Z')
+    earliestOutput.setDate(earliestOutput.getDate() + 28)
+
+    // If no startDate provided (max), use earliest possible output date
+    const requestedStart = args.startDate ? new Date(args.startDate) : earliestOutput
+
+    const outputStart =
+      requestedStart.getTime() > earliestOutput.getTime() ? requestedStart : earliestOutput
+
+    const today = new Date()
+    today.setUTCHours(0, 0, 0, 0)
+
+    const result: { timestamp: string; value: number }[] = []
+    const current = new Date(outputStart)
+    current.setUTCHours(0, 0, 0, 0)
+
+    while (current <= today) {
+      let score = 0
+
+      // Sum contributions in the 28-day lookback window with temporal decay
+      for (let daysAgo = 0; daysAgo < 28; daysAgo++) {
+        const lookbackDate = new Date(current)
+        lookbackDate.setDate(lookbackDate.getDate() - daysAgo)
+        const dayStr = lookbackDate.toISOString().slice(0, 10)
+        const count = countByDay.get(dayStr) ?? 0
+        if (count > 0) {
+          score += count * 10 * Math.exp(-DECAY_RATE * daysAgo)
+        }
+      }
+
+      result.push({
+        timestamp: current.toISOString().slice(0, 10) + 'T00:00:00.000Z',
+        value: Math.round(score),
+      })
+
+      current.setDate(current.getDate() + 1)
+    }
+
+    return result
+  },
+})
+
+/**
+ * Get the latest GitHub contribution calendar data for a startup.
+ */
+export const getContributionCalendar = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireStartupAccess(ctx, args.startupId)
+
+    const metric = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'contribution_calendar')
+      )
+      .order('desc')
+      .first()
+
+    return metric?.meta ?? null
+  },
+})
+
+/**
  * Manually sync metrics for a startup (admin-only).
- * Triggers both Stripe and tracker metric fetches.
+ * Triggers Stripe, tracker, and GitHub metric fetches.
  */
 export const syncMetricsForStartup = action({
   args: { startupId: v.id('startups') },
@@ -160,6 +275,14 @@ export const syncMetricsForStartup = action({
       })
     } catch (error) {
       errors.push(`Tracker: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+
+    try {
+      await ctx.runAction(internal.metrics.fetchGithubMetrics, {
+        startupId: args.startupId,
+      })
+    } catch (error) {
+      errors.push(`GitHub: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
 
     if (errors.length > 0) {
@@ -194,11 +317,11 @@ async function paginateStripe<T extends { id: string }>(
 
 /**
  * Fetch and store Stripe metrics for a startup (action).
+ * Uses stripe-mrr lib for MRR calculation and movement detection.
  */
 export const fetchStripeMetrics = internalAction({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    // Get the connection
     const connection: any = await ctx.runQuery(internal.metrics.getStripeConnection, {
       startupId: args.startupId,
     })
@@ -206,47 +329,138 @@ export const fetchStripeMetrics = internalAction({
     if (!connection?.accessToken) return
 
     const Stripe = (await import('stripe')).default
+    const { calculateMrrSnapshot, computeMrrMovements } = await import('./lib/stripeMrr')
+
     const stripe = new Stripe(connection.accessToken, {
       apiVersion: '2025-11-17.clover',
     })
 
     const now = new Date()
-
-    // Revenue: all-time charges, net of refunds
-    const allCharges = await paginateStripe((p) => stripe.charges.list(p))
-    const succeededCharges = allCharges.filter((c) => c.status === 'succeeded')
-    const totalRevenue =
-      succeededCharges.reduce((sum, c) => sum + ((c.amount || 0) - (c.amount_refunded || 0)), 0) /
-      100
-
-    // Active customers: unique customers from last 90 days
-    const ninetyDaysAgo = Math.floor((now.getTime() - 90 * 24 * 60 * 60 * 1000) / 1000)
-    const recentCharges = succeededCharges.filter((c) => c.created >= ninetyDaysAgo)
-    const uniqueCustomers = new Set(
-      recentCharges.map((c) => c.customer).filter((c): c is string => Boolean(c))
-    ).size
-
-    // MRR: all active subscriptions, all line items, multiply by quantity
-    const allSubs = await paginateStripe((p) =>
-      stripe.subscriptions.list({ ...p, status: 'active' })
-    )
-    let mrr = 0
-    for (const sub of allSubs) {
-      for (const item of sub.items.data) {
-        const price = item.price
-        const quantity = item.quantity ?? 1
-        if (price?.recurring?.interval === 'month') {
-          mrr += ((price.unit_amount || 0) * quantity) / 100
-        } else if (price?.recurring?.interval === 'year') {
-          mrr += ((price.unit_amount || 0) * quantity) / 100 / 12
-        }
-      }
-    }
-
     const timestamp = now.toISOString()
 
+    // ── MRR from subscriptions (using stripe-mrr lib) ─────────────
+    const activeSubs = await paginateStripe((p) =>
+      stripe.subscriptions.list({ ...p, status: 'active' })
+    )
+    const pastDueSubs = await paginateStripe((p) =>
+      stripe.subscriptions.list({ ...p, status: 'past_due' })
+    )
+    const allSubs = [...activeSubs, ...pastDueSubs]
+    const { totalMrrCents, activeSubscriptionCount, customerMrrMap } = calculateMrrSnapshot(allSubs)
+
+    const mrr = totalMrrCents / 100
+    const arr = mrr * 12
+    const arpu = activeSubscriptionCount > 0 ? mrr / activeSubscriptionCount : 0
+
+    // ── Revenue from paid invoices ──────────────────────────────────
+    const paidInvoices = await paginateStripe((p) => stripe.invoices.list({ ...p, status: 'paid' }))
+    const totalRevenue = paidInvoices.reduce((sum, inv) => sum + (inv.amount_paid ?? 0), 0) / 100
+
+    // Active customers: unique customers from paid invoices in last 90 days
+    const ninetyDaysAgo = Math.floor((now.getTime() - 90 * 24 * 60 * 60 * 1000) / 1000)
+    const recentInvoices = paidInvoices.filter(
+      (inv) => inv.status_transitions?.paid_at && inv.status_transitions.paid_at >= ninetyDaysAgo
+    )
+    const uniqueCustomers = new Set(
+      recentInvoices
+        .map((inv) => (typeof inv.customer === 'string' ? inv.customer : null))
+        .filter((c): c is string => Boolean(c))
+    ).size
+
+    // ── Store customerMrr time-series ───────────────────────────────
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    for (const [customerId, mrrValue] of customerMrrMap) {
+      await ctx.runMutation(internal.metrics.upsertCustomerMrr, {
+        startupId: args.startupId,
+        stripeCustomerId: customerId,
+        month: currentMonth,
+        mrr: mrrValue,
+      })
+    }
+
+    // ── Compute MRR movements (using stripe-mrr lib) ────────────────
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
+    const prevCustomerMrrs: any[] = await ctx.runQuery(internal.metrics.getCustomerMrrForMonth, {
+      startupId: args.startupId,
+      month: prevMonth,
+    })
+
+    const prevMrrMap = new Map<string, number>()
+    for (const row of prevCustomerMrrs) {
+      prevMrrMap.set(row.stripeCustomerId, row.mrr)
+    }
+
+    // All-time customer IDs for reactivation detection (fixed: no longer depends on prevMrrMap.size)
+    const allTimeCustomers: any[] = await ctx.runQuery(internal.metrics.getDistinctCustomerIds, {
+      startupId: args.startupId,
+    })
+    const allTimeCustomerIds = new Set(allTimeCustomers.map((c: any) => c.stripeCustomerId))
+
+    const movements = computeMrrMovements(customerMrrMap, prevMrrMap, allTimeCustomerIds)
+
+    // Clear existing movements for this month before inserting (idempotent)
+    await ctx.runMutation(internal.metrics.clearMrrMovementsForMonth, {
+      startupId: args.startupId,
+      month: currentMonth,
+    })
+
+    for (const movement of movements) {
+      await ctx.runMutation(internal.metrics.insertMrrMovement, {
+        startupId: args.startupId,
+        month: currentMonth,
+        type: movement.type,
+        amount: movement.amount,
+        stripeCustomerId: movement.stripeCustomerId,
+      })
+    }
+
+    // ── Derived metrics ─────────────────────────────────────────────
+    const trialingSubs = await paginateStripe((p) =>
+      stripe.subscriptions.list({ ...p, status: 'trialing' })
+    )
+    const totalTrialing = trialingSubs.length
+    const trialConversionRate =
+      totalTrialing > 0
+        ? (activeSubscriptionCount / (totalTrialing + activeSubscriptionCount)) * 100
+        : -1
+
+    const recentAllInvoices = await paginateStripe((p) =>
+      stripe.invoices.list({ ...p, created: { gte: ninetyDaysAgo } })
+    )
+    const failedPayments = recentAllInvoices.filter(
+      (inv) => inv.status === 'uncollectible' || inv.status === 'void'
+    ).length
+    const paymentFailureRate =
+      recentAllInvoices.length > 0 ? (failedPayments / recentAllInvoices.length) * 100 : -1
+
+    const churnAmount = movements
+      .filter((m) => m.type === 'churn')
+      .reduce((sum, m) => sum + m.amount, 0)
+    const prevTotalMrr = Array.from(prevMrrMap.values()).reduce((sum, v) => sum + v, 0)
+    const monthlyChurnRate = prevTotalMrr > 0 ? (churnAmount / prevTotalMrr) * 100 : -1
+    const nrr = prevTotalMrr > 0 ? (totalMrrCents / prevTotalMrr) * 100 : -1
+    const ltv = monthlyChurnRate > 0 ? arpu / (monthlyChurnRate / 100) : -1
+
+    // ── Store all metric snapshots ──────────────────────────────────
     await ctx.runMutation(internal.metrics.storeInternal, {
       snapshots: [
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'mrr',
+          value: mrr,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'arr',
+          value: arr,
+          timestamp,
+          window: 'daily',
+        },
         {
           startupId: args.startupId,
           provider: 'stripe',
@@ -266,12 +480,66 @@ export const fetchStripeMetrics = internalAction({
         {
           startupId: args.startupId,
           provider: 'stripe',
-          metricKey: 'mrr',
-          value: mrr,
+          metricKey: 'active_subscriptions',
+          value: activeSubscriptionCount,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'arpu',
+          value: arpu,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'nrr',
+          value: nrr,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'ltv',
+          value: ltv,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'trial_conversion_rate',
+          value: trialConversionRate,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'payment_failure_rate',
+          value: paymentFailureRate,
+          timestamp,
+          window: 'daily',
+        },
+        {
+          startupId: args.startupId,
+          provider: 'stripe',
+          metricKey: 'monthly_churn_rate',
+          value: monthlyChurnRate,
           timestamp,
           window: 'daily',
         },
       ],
+    })
+
+    // Update connection sync timestamp
+    await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+      connectionId: connection._id,
+      lastSyncedAt: timestamp,
     })
   },
 })
@@ -301,7 +569,7 @@ export const storeInternal = internalMutation({
     snapshots: v.array(
       v.object({
         startupId: v.id('startups'),
-        provider: v.union(v.literal('stripe'), v.literal('tracker'), v.literal('manual')),
+        provider: providerValidator,
         metricKey: v.string(),
         value: v.number(),
         timestamp: v.string(),
@@ -388,47 +656,396 @@ export const updateConnectionSyncStatus = internalMutation({
 // ── Sync all metrics (cron job) ─────────────────────────────────────
 
 /**
- * Sync metrics from all active integrations (Stripe + Tracker).
- * Called by cron every 12 hours.
+ * Sync metrics from all active integrations (Stripe + Tracker + GitHub).
+ * Called by cron every 12 hours. Fans out per-startup syncs as separate scheduled actions.
  */
-export const syncAllMetrics = internalAction({
+/**
+ * Sync all Stripe metrics (separate cron). Fans out per-startup.
+ */
+export const syncAllStripeMetrics = internalAction({
   args: {},
   handler: async (ctx) => {
-    // Fetch all active Stripe connections
     const connections = await ctx.runQuery(internal.metrics.getAllActiveStripeConnections)
-
-    // Sync Stripe metrics for each connection
     for (const connection of connections) {
+      await ctx.scheduler.runAfter(0, internal.metrics.syncStripeForStartup, {
+        startupId: connection.startupId,
+        connectionId: connection._id,
+      })
+    }
+  },
+})
+
+/**
+ * Sync all GitHub metrics (separate cron). Fans out per-startup (deduplicated).
+ */
+export const syncAllGithubMetrics = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const githubConnections = await ctx.runQuery(internal.metrics.getAllActiveGithubConnections)
+    const githubStartupIds = new Set(githubConnections.map((c: any) => c.startupId))
+    for (const startupId of githubStartupIds) {
+      const firstConnection = githubConnections.find((c: any) => c.startupId === startupId)
+      await ctx.scheduler.runAfter(0, internal.metrics.syncGithubForStartup, {
+        startupId,
+        connectionId: firstConnection!._id,
+      })
+    }
+  },
+})
+
+/**
+ * Sync all tracker metrics (separate cron). Fans out per-startup.
+ */
+export const syncAllTrackerMetrics = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const trackerStartupIds = await ctx.runQuery(internal.metrics.getStartupsWithTrackers)
+    for (const startupId of trackerStartupIds) {
+      await ctx.scheduler.runAfter(0, internal.metrics.syncTrackerForStartup, {
+        startupId,
+      })
+    }
+  },
+})
+
+/**
+ * Sync Stripe metrics for a single startup (fan-out target).
+ */
+export const syncStripeForStartup = internalAction({
+  args: { startupId: v.id('startups'), connectionId: v.id('integrationConnections') },
+  handler: async (ctx, args) => {
+    try {
+      await ctx.runAction(internal.metrics.fetchStripeMetrics, {
+        startupId: args.startupId,
+      })
+    } catch (error) {
+      logConvexError(`Error syncing Stripe for startup ${args.startupId}:`, error)
+      await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+        connectionId: args.connectionId,
+        status: 'error',
+        syncError: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  },
+})
+
+/**
+ * Sync tracker metrics for a single startup (fan-out target).
+ */
+export const syncTrackerForStartup = internalAction({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    try {
+      await ctx.runAction(internal.metrics.fetchTrackerMetrics_cron, {
+        startupId: args.startupId,
+      })
+    } catch (error) {
+      logConvexError(`Error syncing tracker metrics for startup ${args.startupId}:`, error)
+    }
+  },
+})
+
+/**
+ * Sync GitHub metrics for a single startup (fan-out target).
+ * Refreshes tokens before fetching if needed.
+ */
+export const syncGithubForStartup = internalAction({
+  args: { startupId: v.id('startups'), connectionId: v.id('integrationConnections') },
+  handler: async (ctx, args) => {
+    try {
+      // Refresh tokens for all GitHub connections on this startup before fetching
+      const connections: any[] = await ctx.runQuery(
+        internal.metrics.getAllGithubConnectionsForStartup,
+        { startupId: args.startupId }
+      )
+      for (const conn of connections) {
+        await ctx.runAction(internal.integrations.refreshGithubToken, {
+          connectionId: conn._id,
+        })
+      }
+
+      await ctx.runAction(internal.metrics.fetchGithubMetrics, {
+        startupId: args.startupId,
+      })
+      await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+        connectionId: args.connectionId,
+        lastSyncedAt: new Date().toISOString(),
+      })
+    } catch (error) {
+      logConvexError(`Error syncing GitHub for startup ${args.startupId}:`, error)
+      await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+        connectionId: args.connectionId,
+        status: 'error',
+        syncError: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  },
+})
+
+/**
+ * Get all active GitHub integration connections.
+ */
+export const getAllActiveGithubConnections = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query('integrationConnections')
+      .filter((q) =>
+        q.and(
+          q.eq(q.field('provider'), 'github'),
+          q.eq(q.field('isActive'), true),
+          q.eq(q.field('status'), 'active')
+        )
+      )
+      .collect()
+  },
+})
+
+/**
+ * Fetch and store GitHub metrics for a startup.
+ * Aggregates contributions across ALL connected founders (summed, not averaged).
+ * Uses GraphQL contributionsCollection with Git Velocity scoring.
+ */
+export const fetchGithubMetrics = internalAction({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    // Get ALL GitHub connections for this startup (one per founder)
+    const connections: any[] = await ctx.runQuery(
+      internal.metrics.getAllGithubConnectionsForStartup,
+      { startupId: args.startupId }
+    )
+    if (connections.length === 0) return
+
+    const now = new Date()
+    // Fetch 1 year of data for the contribution calendar (scoring only uses last 4 weeks)
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+
+    const graphqlQuery = `query($from: DateTime!, $to: DateTime!) {
+      viewer {
+        login
+        contributionsCollection(from: $from, to: $to) {
+          totalCommitContributions
+          totalPullRequestContributions
+          totalPullRequestReviewContributions
+          totalIssueContributions
+          contributionCalendar {
+            weeks {
+              contributionDays {
+                date
+                contributionCount
+              }
+            }
+          }
+        }
+      }
+    }`
+
+    // Aggregate across all founders
+    let totalCommits = 0
+    let totalPrsOpened = 0
+    let totalReviews = 0
+    let totalIssues = 0
+    const calendarMap = new Map<string, number>() // date → sum of contributions
+
+    for (const connection of connections) {
+      if (!connection.accessToken) continue
+
       try {
-        await ctx.runAction(internal.metrics.fetchStripeMetrics, {
-          startupId: connection.startupId,
+        const response = await fetch('https://api.github.com/graphql', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${connection.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: graphqlQuery,
+            variables: {
+              from: oneYearAgo.toISOString(),
+              to: now.toISOString(),
+            },
+          }),
         })
-        await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
-          connectionId: connection._id,
-          lastSyncedAt: new Date().toISOString(),
-        })
+
+        if (!response.ok) {
+          logConvexError(
+            `GitHub API error for startup ${args.startupId}, connection ${connection._id}:`,
+            new Error(`HTTP ${response.status}`)
+          )
+          continue // Don't fail the whole startup — skip this founder
+        }
+
+        const data = await response.json()
+        const contrib = data.data?.viewer?.contributionsCollection
+        if (!contrib) continue
+
+        // Sum across founders (not average)
+        totalCommits += contrib.totalCommitContributions ?? 0
+        totalPrsOpened += contrib.totalPullRequestContributions ?? 0
+        totalReviews += contrib.totalPullRequestReviewContributions ?? 0
+        totalIssues += contrib.totalIssueContributions ?? 0
+
+        // Merge contribution calendars (sum per day)
+        const weeks = contrib.contributionCalendar?.weeks ?? []
+        for (const week of weeks) {
+          for (const day of week.contributionDays ?? []) {
+            calendarMap.set(
+              day.date,
+              (calendarMap.get(day.date) ?? 0) + (day.contributionCount ?? 0)
+            )
+          }
+        }
       } catch (error) {
-        logConvexError(`Error syncing Stripe for startup ${connection.startupId}:`, error)
-        await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
-          connectionId: connection._id,
-          status: 'error',
-          syncError: error instanceof Error ? error.message : 'Unknown error',
-        })
+        logConvexError(
+          `GitHub fetch error for startup ${args.startupId}, connection ${connection._id}:`,
+          error
+        )
+        continue
       }
     }
 
-    // Fetch all startups with tracker websites
-    const startupIds = await ctx.runQuery(internal.metrics.getStartupsWithTrackers)
+    // Git Velocity scoring (summed across all founders)
+    const velocityScore = totalCommits * 10 + totalPrsOpened * 25 + totalReviews * 30
+    const timestamp = now.toISOString()
 
-    // Sync tracker metrics for each startup
-    for (const startupId of startupIds) {
-      try {
-        await ctx.runAction(internal.metrics.fetchTrackerMetrics_cron, {
-          startupId,
-        })
-      } catch (error) {
-        logConvexError(`Error syncing tracker metrics for startup ${startupId}:`, error)
+    // Reconstruct merged calendar in GitHub's format
+    const mergedCalendarWeeks: Array<{
+      contributionDays: Array<{ date: string; contributionCount: number }>
+    }> = []
+    const sortedDates = Array.from(calendarMap.entries()).sort(([a], [b]) => a.localeCompare(b))
+    let currentWeek: Array<{ date: string; contributionCount: number }> = []
+    for (const [date, count] of sortedDates) {
+      currentWeek.push({ date, contributionCount: count })
+      if (currentWeek.length === 7) {
+        mergedCalendarWeeks.push({ contributionDays: currentWeek })
+        currentWeek = []
       }
+    }
+    if (currentWeek.length > 0) {
+      mergedCalendarWeeks.push({ contributionDays: currentWeek })
+    }
+
+    await ctx.runMutation(internal.metrics.storeInternal, {
+      snapshots: [
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'velocity_score',
+          value: velocityScore,
+          timestamp,
+          window: 'daily' as const,
+        },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'commits',
+          value: totalCommits,
+          timestamp,
+          window: 'daily' as const,
+        },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'prs_opened',
+          value: totalPrsOpened,
+          timestamp,
+          window: 'daily' as const,
+        },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'reviews',
+          value: totalReviews,
+          timestamp,
+          window: 'daily' as const,
+        },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'total_contributions',
+          value: totalCommits + totalPrsOpened + totalReviews + totalIssues,
+          timestamp,
+          window: 'daily' as const,
+        },
+      ],
+    })
+
+    // Store merged calendar data
+    await ctx.runMutation(internal.metrics.storeInternalWithMeta, {
+      startupId: args.startupId,
+      provider: 'github' as const,
+      metricKey: 'contribution_calendar',
+      value: 0,
+      timestamp,
+      window: 'daily' as const,
+      meta: mergedCalendarWeeks,
+    })
+  },
+})
+
+/**
+ * Get a single GitHub connection for a startup (legacy, used by integrations page).
+ */
+export const getGithubConnection = internalQuery({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('integrationConnections')
+      .withIndex('by_startupId_provider', (q) =>
+        q.eq('startupId', args.startupId).eq('provider', 'github')
+      )
+      .filter((q) => q.and(q.eq(q.field('isActive'), true), q.eq(q.field('status'), 'active')))
+      .first()
+  },
+})
+
+/**
+ * Get ALL active GitHub connections for a startup (one per connected founder).
+ * Used by fetchGithubMetrics to aggregate contributions across the team.
+ */
+export const getAllGithubConnectionsForStartup = internalQuery({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('integrationConnections')
+      .withIndex('by_startupId_provider', (q) =>
+        q.eq('startupId', args.startupId).eq('provider', 'github')
+      )
+      .filter((q) => q.and(q.eq(q.field('isActive'), true), q.eq(q.field('status'), 'active')))
+      .collect()
+  },
+})
+
+/**
+ * Store a single metric with meta (used for contribution calendar data).
+ */
+export const storeInternalWithMeta = internalMutation({
+  args: {
+    startupId: v.id('startups'),
+    provider: providerValidator,
+    metricKey: v.string(),
+    value: v.number(),
+    timestamp: v.string(),
+    window: v.union(v.literal('daily'), v.literal('weekly'), v.literal('monthly')),
+    meta: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const dayTs = args.timestamp.slice(0, 10) + 'T00:00:00.000Z'
+
+    const existing = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', args.provider)
+          .eq('metricKey', args.metricKey)
+      )
+      .filter((q) => q.eq(q.field('timestamp'), dayTs))
+      .first()
+
+    if (existing) {
+      await ctx.db.patch(existing._id, { value: args.value, meta: args.meta })
+    } else {
+      await ctx.db.insert('metricsData', { ...args, timestamp: dayTs })
     }
   },
 })
@@ -559,6 +1176,354 @@ export const getTrackerEventsForWebsites = internalQuery({
     }
 
     return allEvents
+  },
+})
+
+// ── Customer MRR helpers ─────────────────────────────────────────────
+
+/**
+ * Upsert a customer's MRR for a given month.
+ */
+export const upsertCustomerMrr = internalMutation({
+  args: {
+    startupId: v.id('startups'),
+    stripeCustomerId: v.string(),
+    month: v.string(),
+    mrr: v.number(),
+    currencyOriginal: v.optional(v.string()),
+    mrrOriginal: v.optional(v.number()),
+    exchangeRate: v.optional(v.number()),
+    subscriptionId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('customerMrr')
+      .withIndex('by_startupId_customerId_month', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('stripeCustomerId', args.stripeCustomerId)
+          .eq('month', args.month)
+      )
+      .first()
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        mrr: args.mrr,
+        currencyOriginal: args.currencyOriginal,
+        mrrOriginal: args.mrrOriginal,
+        exchangeRate: args.exchangeRate,
+        subscriptionId: args.subscriptionId,
+      })
+    } else {
+      await ctx.db.insert('customerMrr', {
+        startupId: args.startupId,
+        stripeCustomerId: args.stripeCustomerId,
+        month: args.month,
+        mrr: args.mrr,
+        currencyOriginal: args.currencyOriginal,
+        mrrOriginal: args.mrrOriginal,
+        exchangeRate: args.exchangeRate,
+        subscriptionId: args.subscriptionId,
+      })
+    }
+  },
+})
+
+/**
+ * Get customer MRR rows for a specific month.
+ */
+export const getCustomerMrrForMonth = internalQuery({
+  args: {
+    startupId: v.id('startups'),
+    month: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('customerMrr')
+      .withIndex('by_startupId_month', (q) =>
+        q.eq('startupId', args.startupId).eq('month', args.month)
+      )
+      .collect()
+  },
+})
+
+/**
+ * Get distinct customer IDs that have ever had MRR for a startup.
+ */
+export const getDistinctCustomerIds = internalQuery({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query('customerMrr')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+    const seen = new Set<string>()
+    return rows.filter((r) => {
+      if (seen.has(r.stripeCustomerId)) return false
+      seen.add(r.stripeCustomerId)
+      return true
+    })
+  },
+})
+
+/**
+ * Insert an MRR movement record.
+ */
+/**
+ * Clear MRR movements for a month (idempotent re-computation).
+ */
+export const clearMrrMovementsForMonth = internalMutation({
+  args: {
+    startupId: v.id('startups'),
+    month: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('mrrMovements')
+      .withIndex('by_startupId_month', (q) =>
+        q.eq('startupId', args.startupId).eq('month', args.month)
+      )
+      .collect()
+    for (const row of existing) {
+      await ctx.db.delete(row._id)
+    }
+  },
+})
+
+export const insertMrrMovement = internalMutation({
+  args: {
+    startupId: v.id('startups'),
+    month: v.string(),
+    type: v.union(
+      v.literal('new'),
+      v.literal('expansion'),
+      v.literal('contraction'),
+      v.literal('churn'),
+      v.literal('reactivation')
+    ),
+    amount: v.number(),
+    stripeCustomerId: v.string(),
+    subscriptionId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert('mrrMovements', {
+      startupId: args.startupId,
+      month: args.month,
+      type: args.type,
+      amount: args.amount,
+      stripeCustomerId: args.stripeCustomerId,
+      subscriptionId: args.subscriptionId,
+    })
+  },
+})
+
+/**
+ * Get MRR movements for a startup and month (used by waterfall chart).
+ */
+export const getMrrMovements = query({
+  args: {
+    startupId: v.id('startups'),
+    month: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireStartupAccess(ctx, args.startupId)
+
+    const q = ctx.db
+      .query('mrrMovements')
+      .withIndex('by_startupId', (qb) => qb.eq('startupId', args.startupId))
+
+    const rows = await q.collect()
+
+    if (args.month) {
+      return rows.filter((r) => r.month === args.month)
+    }
+    return rows
+  },
+})
+
+/**
+ * Check if a Stripe webhook event has been processed (idempotency).
+ */
+export const getWebhookEvent = internalQuery({
+  args: { stripeEventId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('stripeWebhookEvents')
+      .withIndex('by_stripeEventId', (q) => q.eq('stripeEventId', args.stripeEventId))
+      .first()
+  },
+})
+
+/**
+ * Record a processed Stripe webhook event.
+ */
+export const insertWebhookEvent = internalMutation({
+  args: {
+    stripeEventId: v.string(),
+    type: v.string(),
+    payload: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert('stripeWebhookEvents', {
+      stripeEventId: args.stripeEventId,
+      type: args.type,
+      processedAt: new Date().toISOString(),
+      payload: args.payload,
+    })
+  },
+})
+
+/**
+ * Find the integration connection for a Stripe account ID (used by webhooks).
+ */
+export const getConnectionByStripeAccountId = internalQuery({
+  args: { accountId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('integrationConnections')
+      .filter((q) =>
+        q.and(
+          q.eq(q.field('provider'), 'stripe'),
+          q.eq(q.field('accountId'), args.accountId),
+          q.eq(q.field('isActive'), true)
+        )
+      )
+      .first()
+  },
+})
+
+/**
+ * Backfill Stripe historical data when a founder first connects.
+ * Reconstructs customerMrr time-series from invoice line items.
+ */
+export const backfillStripeHistory = internalAction({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    const connection: any = await ctx.runQuery(internal.metrics.getStripeConnection, {
+      startupId: args.startupId,
+    })
+    if (!connection?.accessToken) return
+
+    const Stripe = (await import('stripe')).default
+    const stripe = new Stripe(connection.accessToken, {
+      apiVersion: '2025-11-17.clover',
+    })
+
+    // Get all paid invoices and reconstruct monthly MRR per customer
+    const allInvoices = await paginateStripe((p) => stripe.invoices.list({ ...p, status: 'paid' }))
+
+    // Group by customer + month, sum recurring line items (exclude prorations)
+    const monthlyMrr = new Map<string, Map<string, number>>() // customerId -> month -> mrr
+
+    for (const invoice of allInvoices) {
+      const customerId = typeof invoice.customer === 'string' ? invoice.customer : null
+      if (!customerId) continue
+
+      const paidAt = invoice.status_transitions?.paid_at
+      if (!paidAt) continue
+
+      const date = new Date(paidAt * 1000)
+      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+
+      if (!monthlyMrr.has(customerId)) monthlyMrr.set(customerId, new Map())
+      const customerMap = monthlyMrr.get(customerId)!
+
+      for (const rawLine of invoice.lines?.data ?? []) {
+        // Cast to any — Stripe API shape varies across versions
+        const line = rawLine as any
+        // Skip prorations
+        if (line.proration) continue
+        // Only recurring items
+        if (!line.price?.recurring) continue
+        if (!line.price.unit_amount || line.price.unit_amount === 0) continue
+
+        const lineMrr = normalizeToMonthlyCents(
+          line.price.unit_amount * (line.quantity ?? 1),
+          line.price.recurring.interval,
+          line.price.recurring.interval_count ?? 1
+        )
+
+        customerMap.set(month, (customerMap.get(month) ?? 0) + lineMrr)
+      }
+    }
+
+    // Store all historical customerMrr
+    for (const [customerId, months] of monthlyMrr) {
+      for (const [month, mrr] of months) {
+        await ctx.runMutation(internal.metrics.upsertCustomerMrr, {
+          startupId: args.startupId,
+          stripeCustomerId: customerId,
+          month,
+          mrr,
+        })
+      }
+    }
+
+    // Compute MRR movements by diffing consecutive months
+    const allMonths = new Set<string>()
+    for (const months of monthlyMrr.values()) {
+      for (const month of months.keys()) allMonths.add(month)
+    }
+    const sortedMonths = Array.from(allMonths).sort()
+
+    const allCustomerIds = Array.from(monthlyMrr.keys())
+    const seenCustomers = new Set<string>()
+
+    for (let i = 0; i < sortedMonths.length; i++) {
+      const month = sortedMonths[i]
+      const prevMonth = i > 0 ? sortedMonths[i - 1] : null
+
+      // Clear existing movements for idempotent re-backfill
+      await ctx.runMutation(internal.metrics.clearMrrMovementsForMonth, {
+        startupId: args.startupId,
+        month,
+      })
+
+      for (const customerId of allCustomerIds) {
+        const currentMrr = monthlyMrr.get(customerId)?.get(month) ?? 0
+        const previousMrr = prevMonth ? (monthlyMrr.get(customerId)?.get(prevMonth) ?? 0) : 0
+
+        if (currentMrr > 0 && previousMrr === 0) {
+          const type = seenCustomers.has(customerId) ? 'reactivation' : 'new'
+          seenCustomers.add(customerId)
+          await ctx.runMutation(internal.metrics.insertMrrMovement, {
+            startupId: args.startupId,
+            month,
+            type,
+            amount: currentMrr,
+            stripeCustomerId: customerId,
+          })
+        } else if (currentMrr === 0 && previousMrr > 0) {
+          await ctx.runMutation(internal.metrics.insertMrrMovement, {
+            startupId: args.startupId,
+            month,
+            type: 'churn',
+            amount: previousMrr,
+            stripeCustomerId: customerId,
+          })
+        } else if (currentMrr > previousMrr) {
+          seenCustomers.add(customerId)
+          await ctx.runMutation(internal.metrics.insertMrrMovement, {
+            startupId: args.startupId,
+            month,
+            type: 'expansion',
+            amount: currentMrr - previousMrr,
+            stripeCustomerId: customerId,
+          })
+        } else if (currentMrr < previousMrr && currentMrr > 0) {
+          seenCustomers.add(customerId)
+          await ctx.runMutation(internal.metrics.insertMrrMovement, {
+            startupId: args.startupId,
+            month,
+            type: 'contraction',
+            amount: previousMrr - currentMrr,
+            stripeCustomerId: customerId,
+          })
+        } else if (currentMrr > 0) {
+          seenCustomers.add(customerId)
+        }
+      }
+    }
   },
 })
 

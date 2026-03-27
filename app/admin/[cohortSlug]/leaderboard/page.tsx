@@ -1,16 +1,181 @@
 'use client'
 
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useParams, useRouter } from 'next/navigation'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import { Users, Plus } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Users,
+  Plus,
+  ChevronDown,
+  ChevronUp,
+  Star,
+  StarOff,
+  Flame,
+  AlertCircle,
+  Info,
+  Settings2,
+} from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import { toast } from 'sonner'
+import type { Id } from '@/convex/_generated/dataModel'
+import { MomentumArrow } from '@/components/leaderboard/momentum-arrow'
+import {
+  ScoringExplainerContent,
+  CATEGORY_COLORS,
+  CATEGORY_LABELS,
+  CATEGORY_WEIGHTS,
+} from '@/components/leaderboard/scoring-explainer'
+
+function ScoreBar({ value, maxValue, color }: { value: number; maxValue: number; color: string }) {
+  const width = maxValue > 0 ? Math.min((value / maxValue) * 100, 100) : 0
+  return (
+    <div className="h-2 w-full bg-muted overflow-hidden">
+      <div
+        className={`h-full ${color} transition-all duration-500`}
+        style={{ width: `${width}%` }}
+      />
+    </div>
+  )
+}
+
+function ExpandableRow({ entry, maxScore }: { entry: any; maxScore: number }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <>
+      <tr
+        className={`cursor-pointer hover:bg-muted/50 transition-colors ${
+          entry.excludeFromMetrics ? 'opacity-50' : ''
+        }`}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+          {entry.rank ? (
+            <span className="inline-flex h-7 w-7 items-center justify-center bg-primary text-primary-foreground text-xs font-bold">
+              {entry.rank}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap">
+          <div className="flex items-center gap-3">
+            {entry.startupLogoUrl && (
+              <Image
+                src={entry.startupLogoUrl}
+                alt={entry.startupName}
+                width={32}
+                height={32}
+                className="h-8 w-8 rounded-full"
+              />
+            )}
+            <span className="text-sm font-medium">{entry.startupName}</span>
+            {entry.qualified && (
+              <Badge
+                variant="default"
+                className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+              >
+                Qualified
+              </Badge>
+            )}
+            {entry.excludeFromMetrics && (
+              <Badge variant="warning" className="text-xs">
+                Excluded
+              </Badge>
+            )}
+          </div>
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex gap-1 items-center">
+            {Object.entries(entry.categories).map(([key, cat]: [string, any]) => (
+              <div
+                key={key}
+                className="w-12"
+                title={`${CATEGORY_LABELS[key]}: ${cat.weighted.toFixed(1)}`}
+              >
+                <ScoreBar
+                  value={cat.weighted}
+                  maxValue={maxScore * 0.4}
+                  color={CATEGORY_COLORS[key]}
+                />
+              </div>
+            ))}
+          </div>
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-right">
+          <span className="inline-flex items-center gap-1.5">
+            {entry.totalScore.toFixed(1)}
+            <MomentumArrow momentum={entry.momentum} />
+          </span>
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap text-center">
+          {entry.isFavoriteThisWeek && (
+            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 inline" />
+          )}
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap text-center text-sm">
+          {entry.updateStreak > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <Flame className="h-3.5 w-3.5 text-orange-500" />
+              {entry.updateStreak}
+            </span>
+          )}
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap text-center">
+          {expanded ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground inline ml-1" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground inline ml-1" />
+          )}
+        </td>
+      </tr>
+      {expanded && (
+        <tr>
+          <td colSpan={7} className="px-4 py-4 bg-muted/30">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {Object.entries(entry.categories).map(([key, cat]: [string, any]) => (
+                <div key={key} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-2.5 w-2.5 ${CATEGORY_COLORS[key]}`} />
+                    <span className="text-xs font-medium">{CATEGORY_LABELS[key]}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {CATEGORY_WEIGHTS[key]}%
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Raw: {cat.raw.toFixed(1)} | Norm: {cat.normalized.toFixed(1)} | Score:{' '}
+                    {cat.weighted.toFixed(2)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
+              <span>Active categories: {entry.activeCategories}/5</span>
+              <span>Consistency bonus: +{entry.consistencyBonus.toFixed(1)}%</span>
+              {entry.favoriteMultiplier > 1 && (
+                <span className="text-yellow-600">Favorite boost: x{entry.favoriteMultiplier}</span>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
 
 export default function LeaderboardPage() {
   const params = useParams()
@@ -18,17 +183,52 @@ export default function LeaderboardPage() {
   const cohortSlug = params.cohortSlug as string
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
-  const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
+  const leaderboard = useQuery(
+    api.leaderboard.computeLeaderboard,
+    cohort ? { cohortId: cohort._id } : 'skip'
+  )
 
-  // Sort startups alphabetically by name
-  const sortedStartups = useMemo(() => {
-    if (!startups) return undefined
-    return [...startups].sort((a, b) => a.name.localeCompare(b.name))
-  }, [startups])
+  const [activeTab, setActiveTab] = useState<'rankings' | 'updates'>('rankings')
+  const [showExplainer, setShowExplainer] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
+  const [pValue, setPValue] = useState(0.7)
+  const updateP = useMutation(api.leaderboard.updateNormalizationPower)
 
-  const isLoading = cohort === undefined || startups === undefined
+  // Weekly updates data
+  const currentWeek = useMemo(() => {
+    const d = new Date()
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    d.setDate(diff)
+    return d.toISOString().slice(0, 10)
+  }, [])
+  const [selectedWeek, setSelectedWeek] = useState(currentWeek)
+  const updates = useQuery(
+    api.weeklyUpdates.list,
+    cohort && activeTab === 'updates' ? { cohortId: cohort._id, weekOf: selectedWeek } : 'skip'
+  )
+  const summary = useQuery(
+    api.weeklyUpdates.getWeeklySummary,
+    cohort && activeTab === 'updates' ? { cohortId: cohort._id, weekOf: selectedWeek } : 'skip'
+  )
+  const setFavorite = useMutation(api.weeklyUpdates.setFavorite)
 
-  // Redirect if cohort not found (returned null)
+  const handleToggleFavorite = async (updateId: Id<'weeklyUpdates'>, currentValue: boolean) => {
+    try {
+      await setFavorite({ updateId, isFavorite: !currentValue })
+      toast.success(!currentValue ? 'Marked as favourite' : 'Removed from favourites')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update')
+    }
+  }
+
+  const maxScore = useMemo(() => {
+    if (!leaderboard?.ranked?.length) return 10
+    return Math.max(...leaderboard.ranked.map((r: any) => r.totalScore), 1)
+  }, [leaderboard])
+
+  const isLoading = cohort === undefined || leaderboard === undefined
+
   if (cohort === null) {
     router.push('/admin/cohorts')
     return null
@@ -37,31 +237,28 @@ export default function LeaderboardPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div>
-          <Skeleton className="h-9 w-48 mb-2" />
-          <Skeleton className="h-5 w-64" />
-        </div>
-        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-9 w-48 mb-2" />
+        <Skeleton className="h-5 w-64" />
+        <Skeleton className="h-96 w-full" />
       </div>
     )
   }
 
-  if (!sortedStartups || sortedStartups.length === 0) {
+  const totalStartups = (leaderboard?.ranked?.length ?? 0) + (leaderboard?.unranked?.length ?? 0)
+
+  if (totalStartups === 0) {
     return (
       <div className="space-y-6">
-        {/* Header */}
         <div>
           <h1 className="text-3xl font-bold tracking-tight font-display">Leaderboard</h1>
           <p className="text-muted-foreground">
-            Track startup progress and performance for {cohort.label}
+            Track startup progress and performance for {cohort?.label}
           </p>
         </div>
-
-        {/* Empty State */}
         <EmptyState
           icon={<Users className="h-6 w-6" />}
           title="No startups enrolled"
-          description="There are no startups enrolled in this cohort yet. Invite startups to start tracking their progress on the leaderboard."
+          description="Invite startups to start tracking their progress."
           action={
             <Link href={`/admin/${cohortSlug}/startups`}>
               <Button>
@@ -78,131 +275,322 @@ export default function LeaderboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight font-display">Leaderboard</h1>
-        <p className="text-muted-foreground">
-          Track startup progress and performance for {cohort.label}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight font-display">Leaderboard</h1>
+          <p className="text-muted-foreground">
+            Track startup progress and performance for {cohort?.label}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowExplainer(!showExplainer)}>
+            <Info className="mr-2 h-4 w-4" />
+            How scoring works
+            {showExplainer ? (
+              <ChevronUp className="ml-2 h-4 w-4" />
+            ) : (
+              <ChevronDown className="ml-2 h-4 w-4" />
+            )}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowConfig(!showConfig)}>
+            <Settings2 className="mr-2 h-4 w-4" />
+            Config
+          </Button>
+        </div>
       </div>
 
-      <div className="bg-card  border overflow-hidden">
-        <table className="min-w-full divide-y divide-border">
-          <thead className="bg-muted">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Rank
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Startup
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Goals Completion
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Revenue
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Traffic
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Score
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-card divide-y divide-border">
-            {sortedStartups.map((startup, index) => (
-              <tr
-                key={startup._id}
-                className={startup.excludeFromMetrics === true ? 'opacity-50' : ''}
-              >
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
-                  #{index + 1}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    {startup.logoUrl && (
-                      <Image
-                        src={startup.logoUrl}
-                        alt={startup.name}
-                        width={40}
-                        height={40}
-                        className="h-10 w-10 rounded-full mr-3"
-                      />
-                    )}
-                    <div>
-                      <div className="text-sm font-medium text-foreground">
-                        {startup.name}
-                        {startup.excludeFromMetrics === true && (
-                          <Badge variant="warning" className="ml-2">
-                            Excluded
+      {/* Tabs */}
+      <div className="border-b">
+        <nav className="flex gap-4">
+          <button
+            onClick={() => setActiveTab('rankings')}
+            className={`px-4 py-3 border-b-2 text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === 'rankings'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Rankings
+          </button>
+          <button
+            onClick={() => setActiveTab('updates')}
+            className={`px-4 py-3 border-b-2 text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === 'updates'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Weekly Updates
+            {summary && (
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {summary.submittedCount}/{summary.totalStartups}
+              </Badge>
+            )}
+          </button>
+        </nav>
+      </div>
+
+      {/* Rankings tab */}
+      {activeTab === 'rankings' && (
+        <>
+          {/* Scoring explainer — rendered below header */}
+          {showExplainer && <ScoringExplainerContent />}
+
+          {/* Scoring config (super_admin) */}
+          {showConfig && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Normalization Power (p)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    More compressed
+                  </span>
+                  <input
+                    type="range"
+                    min={0.3}
+                    max={1.0}
+                    step={0.05}
+                    value={pValue}
+                    onChange={(e) => setPValue(Number(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    More linear
+                  </span>
+                  <span className="text-sm font-mono font-bold w-10 text-right">
+                    {pValue.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await updateP({ cohortId: cohort!._id, normalizationPower: pValue })
+                        toast.success('Normalization power updated')
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'Failed')
+                      }
+                    }}
+                  >
+                    Apply
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setPValue(0.7)}>
+                    Reset to default (0.70)
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Current: {leaderboard?.normalizationPower?.toFixed(2) ?? '0.70'}. Changes
+                  recalculate all scores retroactively.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Leaderboard table */}
+          <div className="bg-card border overflow-hidden overflow-x-auto">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-12">
+                    Rank
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Startup
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Score Breakdown
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
+                    Score
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">
+                    Fav
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-16">
+                    Streak
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-12" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {leaderboard?.ranked?.map((entry: any) => (
+                  <ExpandableRow key={entry.startupId} entry={entry} maxScore={maxScore} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Unranked section */}
+          {leaderboard?.unranked && leaderboard.unranked.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                Unranked ({leaderboard.unranked.length})
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                These startups don&apos;t yet meet the 3-of-5 category activity requirement for the
+                Qualified tag.
+              </p>
+              <div className="bg-card border overflow-hidden">
+                <table className="min-w-full divide-y divide-border">
+                  <tbody className="divide-y divide-border">
+                    {leaderboard.unranked.map((entry: any) => (
+                      <tr key={entry.startupId} className="opacity-60">
+                        <td className="px-4 py-3 w-12">
+                          <span className="text-muted-foreground text-sm">-</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            {entry.startupLogoUrl && (
+                              <Image
+                                src={entry.startupLogoUrl}
+                                alt={entry.startupName}
+                                width={32}
+                                height={32}
+                                className="h-8 w-8 rounded-full"
+                              />
+                            )}
+                            <span className="text-sm">{entry.startupName}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {entry.activeCategories}/5 active
+                            </Badge>
+                            {entry.excludeFromMetrics && (
+                              <Badge variant="warning" className="text-xs">
+                                Excluded
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-muted-foreground">
+                          {entry.totalScore.toFixed(1)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Legend */}
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+              <div key={key} className="flex items-center gap-1.5">
+                <div className={`h-2 w-2 ${CATEGORY_COLORS[key]}`} />
+                {label} ({CATEGORY_WEIGHTS[key]}%)
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Weekly Updates tab */}
+      {activeTab === 'updates' && (
+        <div className="space-y-4">
+          {/* Week selector */}
+          <div className="flex items-center gap-4">
+            <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={currentWeek}>{currentWeek}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Summary */}
+          {summary && (
+            <div className="grid grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-2xl font-bold">
+                    {summary.submittedCount}/{summary.totalStartups}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Submitted</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-2xl font-bold">{summary.missingCount}</div>
+                  <p className="text-sm text-muted-foreground">Missing</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-2xl font-bold">{summary.favoriteCount}/2</div>
+                  <p className="text-sm text-muted-foreground">Favourites</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Updates */}
+          {updates && updates.length > 0 ? (
+            updates.map((update: any) => (
+              <Card key={update._id} className={update.isFavorite ? 'ring-2 ring-yellow-400' : ''}>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-sm font-semibold">{update.startupName}</span>
+                        {update.primaryMetric && (
+                          <Badge variant="outline" className="text-xs">
+                            {update.primaryMetric.label}:{' '}
+                            {update.primaryMetric.value.toLocaleString()}
                           </Badge>
                         )}
                       </div>
-                      {startup.websiteUrl && (
-                        <a
-                          href={startup.websiteUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline"
-                        >
-                          {startup.websiteUrl}
-                        </a>
-                      )}
+                      <p className="text-sm text-muted-foreground">{update.highlight}</p>
                     </div>
+                    <Button
+                      variant={update.isFavorite ? 'default' : 'outline'}
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => handleToggleFavorite(update._id, update.isFavorite)}
+                    >
+                      {update.isFavorite ? (
+                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      ) : (
+                        <StarOff className="h-4 w-4" />
+                      )}
+                    </Button>
                   </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  <span className="text-xs text-muted-foreground/60 italic">
-                    Scoring data loading...
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  <span className="text-xs text-muted-foreground/60 italic">
-                    Scoring data loading...
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  <span className="text-xs text-muted-foreground/60 italic">
-                    Scoring data loading...
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
-                  <span className="text-xs text-muted-foreground/60 italic">
-                    Scoring data loading...
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No updates submitted this week yet.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
-      <div className="mt-6 bg-muted p-4 ">
-        <p className="text-sm text-muted-foreground mb-2">
-          <strong className="text-foreground">Scoring Formula:</strong> Leaderboard score combines
-          multiple factors:
-        </p>
-        <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-          <li>
-            <strong>Goal Completion (40%):</strong> Percentage of completed goals
-          </li>
-          <li>
-            <strong>Revenue (30%):</strong> From Stripe integration or manual entry (£1000 = 30
-            points, capped)
-          </li>
-          <li>
-            <strong>Traffic (20%):</strong> Sessions from Accelerate ME Tracker (1000 sessions = 20
-            points, capped)
-          </li>
-          <li>
-            <strong>Automation Bonus (10%):</strong> Bonus for goals auto-completed via metric
-            tracking
-          </li>
-        </ul>
-        <p className="text-sm text-muted-foreground mt-2">
-          Detailed scoring will be available once Convex metric queries are implemented.
-        </p>
-      </div>
+          {/* Missing startups */}
+          {summary && summary.missing.length > 0 && (
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Missing ({summary.missingCount})</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {summary.missing.map((s: any) => (
+                    <Badge key={s._id} variant="outline" className="text-muted-foreground">
+                      {s.name}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   )
 }
