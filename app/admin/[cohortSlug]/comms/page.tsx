@@ -5,12 +5,13 @@ import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useParams } from 'next/navigation'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Megaphone, Bell } from 'lucide-react'
+import { Megaphone, Bell, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AnnouncementsTab } from './_components/announcements-tab'
 import { NotificationsTab } from './_components/notifications-tab'
+import { WeeklyUpdatesTab } from './_components/weekly-updates-tab'
 
-type CommsTab = 'announcements' | 'notifications'
+type CommsTab = 'announcements' | 'notifications' | 'updates'
 
 export default function CommsPage() {
   const params = useParams()
@@ -46,13 +47,16 @@ export default function CommsPage() {
   const tabs: { id: CommsTab; label: string; icon: typeof Megaphone; visible: boolean }[] = [
     { id: 'announcements', label: 'Announcements', icon: Megaphone, visible: showAnnouncementsTab },
     { id: 'notifications', label: 'Notifications', icon: Bell, visible: showNotificationsTab },
+    { id: 'updates', label: 'Weekly Updates', icon: FileText, visible: true },
   ]
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight font-display">Comms</h1>
-        <p className="text-muted-foreground">Announcements and notification management</p>
+        <p className="text-muted-foreground">
+          Announcements, notifications, and weekly updates for {cohort.label}
+        </p>
       </div>
 
       {/* Tab bar — only show if there are multiple visible tabs */}
@@ -85,6 +89,7 @@ export default function CommsPage() {
       {activeTab === 'notifications' && showNotificationsTab && (
         <NotificationsTab cohortSlug={cohortSlug} cohortId={cohort._id} />
       )}
+      {activeTab === 'updates' && <WeeklyUpdatesTab cohortId={cohort._id} />}
     </div>
   )
 }

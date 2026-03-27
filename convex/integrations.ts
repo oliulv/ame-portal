@@ -538,3 +538,37 @@ export const updateConnectionToken = internalMutation({
     })
   },
 })
+
+/**
+ * Get integration connection status for all startups in a cohort.
+ * Returns a map of startupId → { stripe, github, tracker } booleans.
+ */
+export const statusByCohort = query({
+  args: { cohortId: v.id('cohorts') },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx)
+
+    const startups = await ctx.db
+      .query('startups')
+      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
+      .collect()
+
+    const result: Record<string, { stripe: boolean; github: boolean; tracker: boolean }> = {}
+
+    for (const startup of startups) {
+      const connections = await ctx.db
+        .query('integrationConnections')
+        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+        .collect()
+
+      const active = connections.filter((c) => c.isActive && c.status === 'active')
+      result[startup._id] = {
+        stripe: active.some((c) => c.provider === 'stripe'),
+        github: active.some((c) => c.provider === 'github'),
+        tracker: active.some((c) => c.provider === 'tracker'),
+      }
+    }
+
+    return result
+  },
+})

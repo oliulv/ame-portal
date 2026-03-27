@@ -33,6 +33,7 @@ import {
   CheckCircle2,
   Clock,
   Github,
+  FileText,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
@@ -89,6 +90,7 @@ function IntegrationsPageInner() {
     : 'stripe'
   const [activeTab, setActiveTab] = useState<IntegrationTab>(initialTab)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedMarkdownId, setCopiedMarkdownId] = useState<string | null>(null)
   const [isConnectingStripe, setIsConnectingStripe] = useState(false)
   const [isCreatingTracker, setIsCreatingTracker] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -185,6 +187,21 @@ function IntegrationsPageInner() {
     navigator.clipboard.writeText(text)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
+  }
+
+  const copyAsMarkdown = (snippet: string, id: string) => {
+    const markdown = `## Analytics Tracker Setup
+
+Add this tracking script to your website's \`<head>\` tag, before the closing \`</head>\`:
+
+\`\`\`html
+${snippet}
+\`\`\`
+
+This enables session and pageview tracking. Place it on every page you want to track.`
+    navigator.clipboard.writeText(markdown)
+    setCopiedMarkdownId(id)
+    setTimeout(() => setCopiedMarkdownId(null), 2000)
   }
 
   const handleConnectStripe = async (data: StripeConnectFormData) => {
@@ -401,11 +418,24 @@ function IntegrationsPageInner() {
                           variant="outline"
                           size="sm"
                           onClick={() => copyToClipboard(snippet, website._id)}
+                          title="Copy script tag"
                         >
                           {copiedId === website._id ? (
                             <Check className="h-4 w-4" />
                           ) : (
                             <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyAsMarkdown(snippet, website._id)}
+                          title="Copy as Markdown (for agents)"
+                        >
+                          {copiedMarkdownId === website._id ? (
+                            <Check className="h-4 w-4" />
+                          ) : (
+                            <FileText className="h-4 w-4" />
                           )}
                         </Button>
                       </div>
