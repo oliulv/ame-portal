@@ -561,11 +561,16 @@ export const statusByCohort = query({
         .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
         .collect()
 
+      const trackerWebsites = await ctx.db
+        .query('trackerWebsites')
+        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
+        .collect()
+
       const active = connections.filter((c) => c.isActive && c.status === 'active')
       result[startup._id] = {
         stripe: active.some((c) => c.provider === 'stripe'),
         github: active.some((c) => c.provider === 'github'),
-        tracker: active.some((c) => c.provider === 'tracker'),
+        tracker: trackerWebsites.length > 0,
       }
     }
 

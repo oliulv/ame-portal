@@ -17,16 +17,28 @@ import { Star, StarOff, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
 
-export function WeeklyUpdatesTab({ cohortId }: { cohortId: Id<'cohorts'> }) {
-  const currentWeek = useMemo(() => {
-    const d = new Date()
-    const day = d.getDay()
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-    d.setDate(diff)
-    return d.toISOString().slice(0, 10)
-  }, [])
+// Weekly updates launched 2026-03-16
+const WEEKLY_UPDATES_START = '2026-03-16'
 
-  const [selectedWeek, setSelectedWeek] = useState(currentWeek)
+function getAvailableWeeks(): string[] {
+  const weeks: string[] = []
+  const now = new Date()
+  const day = now.getDay()
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+  now.setDate(diff)
+  const current = now.toISOString().slice(0, 10)
+  const d = new Date(current + 'T00:00:00Z')
+  const start = new Date(WEEKLY_UPDATES_START + 'T00:00:00Z')
+  while (d >= start) {
+    weeks.push(d.toISOString().slice(0, 10))
+    d.setDate(d.getDate() - 7)
+  }
+  return weeks
+}
+
+export function WeeklyUpdatesTab({ cohortId }: { cohortId: Id<'cohorts'> }) {
+  const weeks = useMemo(() => getAvailableWeeks(), [])
+  const [selectedWeek, setSelectedWeek] = useState(weeks[0])
 
   const updates = useQuery(api.weeklyUpdates.list, {
     cohortId,
@@ -56,7 +68,11 @@ export function WeeklyUpdatesTab({ cohortId }: { cohortId: Id<'cohorts'> }) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={currentWeek}>{currentWeek}</SelectItem>
+            {weeks.map((week) => (
+              <SelectItem key={week} value={week}>
+                {week}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
