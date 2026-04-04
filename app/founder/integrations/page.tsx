@@ -378,11 +378,8 @@ This enables session and pageview tracking. Place it on every page you want to t
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge
-                      variant={fullStatus.stripe.status === 'error' ? 'destructive' : 'secondary'}
-                      className="h-8 px-3"
-                    >
-                      {fullStatus.stripe.status === 'error' ? 'Sync Error' : 'Active'}
+                    <Badge variant="secondary" className="h-8 px-3">
+                      Active
                     </Badge>
                     <Button
                       variant="outline"
@@ -636,11 +633,8 @@ This enables session and pageview tracking. Place it on every page you want to t
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge
-                      variant={fullStatus.github.status === 'error' ? 'destructive' : 'secondary'}
-                      className="h-8 px-3"
-                    >
-                      {fullStatus.github.status === 'error' ? 'Sync Error' : 'Active'}
+                    <Badge variant="secondary" className="h-8 px-3">
+                      Active
                     </Badge>
                     <Button
                       variant="outline"
