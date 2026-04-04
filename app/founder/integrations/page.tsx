@@ -380,6 +380,7 @@ This enables session and pageview tracking. Place it on every page you want to t
                   <div className="flex items-center gap-2">
                     <Badge
                       variant={fullStatus.stripe.status === 'error' ? 'destructive' : 'secondary'}
+                      className="h-8 px-3"
                     >
                       {fullStatus.stripe.status === 'error' ? 'Sync Error' : 'Active'}
                     </Badge>
