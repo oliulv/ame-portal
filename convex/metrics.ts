@@ -536,9 +536,10 @@ export const fetchStripeMetrics = internalAction({
       ],
     })
 
-    // Update connection sync timestamp
+    // Update connection sync timestamp and restore active status
     await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
       connectionId: connection._id,
+      status: 'active',
       lastSyncedAt: timestamp,
     })
   },
@@ -555,7 +556,7 @@ export const getStripeConnection = internalQuery({
       .withIndex('by_startupId_provider', (q) =>
         q.eq('startupId', args.startupId).eq('provider', 'stripe')
       )
-      .filter((q) => q.and(q.eq(q.field('isActive'), true), q.eq(q.field('status'), 'active')))
+      .filter((q) => q.eq(q.field('isActive'), true))
       .first()
   },
 })
@@ -611,13 +612,7 @@ export const getAllActiveStripeConnections = internalQuery({
   handler: async (ctx) => {
     return await ctx.db
       .query('integrationConnections')
-      .filter((q) =>
-        q.and(
-          q.eq(q.field('provider'), 'stripe'),
-          q.eq(q.field('isActive'), true),
-          q.eq(q.field('status'), 'active')
-        )
-      )
+      .filter((q) => q.and(q.eq(q.field('provider'), 'stripe'), q.eq(q.field('isActive'), true)))
       .collect()
   },
 })
@@ -649,6 +644,10 @@ export const updateConnectionSyncStatus = internalMutation({
     if (args.status !== undefined) patch.status = args.status
     if (args.syncError !== undefined) patch.syncError = args.syncError
     if (args.lastSyncedAt !== undefined) patch.lastSyncedAt = args.lastSyncedAt
+    // Clear syncError when status recovers to active
+    if (args.status === 'active' && args.syncError === undefined) {
+      patch.syncError = undefined
+    }
     await ctx.db.patch(args.connectionId, patch)
   },
 })
@@ -769,6 +768,7 @@ export const syncGithubForStartup = internalAction({
       })
       await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
         connectionId: args.connectionId,
+        status: 'active',
         lastSyncedAt: new Date().toISOString(),
       })
     } catch (error) {
@@ -790,13 +790,7 @@ export const getAllActiveGithubConnections = internalQuery({
   handler: async (ctx) => {
     return await ctx.db
       .query('integrationConnections')
-      .filter((q) =>
-        q.and(
-          q.eq(q.field('provider'), 'github'),
-          q.eq(q.field('isActive'), true),
-          q.eq(q.field('status'), 'active')
-        )
-      )
+      .filter((q) => q.and(q.eq(q.field('provider'), 'github'), q.eq(q.field('isActive'), true)))
       .collect()
   },
 })
@@ -993,7 +987,7 @@ export const getGithubConnection = internalQuery({
       .withIndex('by_startupId_provider', (q) =>
         q.eq('startupId', args.startupId).eq('provider', 'github')
       )
-      .filter((q) => q.and(q.eq(q.field('isActive'), true), q.eq(q.field('status'), 'active')))
+      .filter((q) => q.eq(q.field('isActive'), true))
       .first()
   },
 })
@@ -1010,7 +1004,7 @@ export const getAllGithubConnectionsForStartup = internalQuery({
       .withIndex('by_startupId_provider', (q) =>
         q.eq('startupId', args.startupId).eq('provider', 'github')
       )
-      .filter((q) => q.and(q.eq(q.field('isActive'), true), q.eq(q.field('status'), 'active')))
+      .filter((q) => q.eq(q.field('isActive'), true))
       .collect()
   },
 })

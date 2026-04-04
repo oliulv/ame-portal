@@ -13,12 +13,12 @@ export async function GET(request: Request) {
   // Create client per-request to avoid auth leaking between concurrent requests
   const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
 
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')
+
   try {
     const { userId, getToken } = await auth()
     if (!userId) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=not_authenticated`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/integrations?error=not_authenticated`)
     }
 
     const { searchParams } = new URL(request.url)
@@ -31,29 +31,21 @@ export async function GET(request: Request) {
     const savedState = cookieStore.get('github_oauth_state')?.value
     cookieStore.delete('github_oauth_state')
     if (!state || !savedState || state !== savedState) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=invalid_state`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/integrations?error=invalid_state`)
     }
 
     if (error) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=github_connection_failed`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_connection_failed`)
     }
 
     if (!code) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=github_missing_code`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_missing_code`)
     }
 
     const clientId = process.env.GITHUB_APP_CLIENT_ID
     const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET
     if (!clientId || !clientSecret) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=github_config_missing`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_config_missing`)
     }
 
     // Exchange code for access token
@@ -73,9 +65,7 @@ export async function GET(request: Request) {
     const tokenData = await tokenResponse.json()
 
     if (tokenData.error || !tokenData.access_token) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=github_token_failed`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_token_failed`)
     }
 
     // Get user info from GitHub
@@ -97,9 +87,7 @@ export async function GET(request: Request) {
     // Get founder's startup ID
     const startupId = await convex.query(api.integrations.getFounderStartupId)
     if (!startupId) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=no_startup`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/integrations?error=no_startup`)
     }
 
     // Store connection
@@ -114,13 +102,9 @@ export async function GET(request: Request) {
       accountName: userData.login,
     })
 
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?success=github_connected`
-    )
+    return NextResponse.redirect(`${appUrl}/founder/integrations?success=github_connected`)
   } catch (error) {
     logServerError('Error handling GitHub callback:', error)
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=github_connection_error`
-    )
+    return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_connection_error`)
   }
 }
