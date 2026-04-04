@@ -183,13 +183,17 @@ function IntegrationsPageInner() {
     return `<script defer src="${src}" data-website-id="${websiteId}"></script>`
   }
 
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
+  const copyToClipboard = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch {
+      toast.error('Failed to copy to clipboard')
+    }
   }
 
-  const copyAsMarkdown = (snippet: string, id: string) => {
+  const copyAsMarkdown = async (snippet: string, id: string) => {
     const markdown = `## Analytics Tracker Setup
 
 Add this tracking script to your website's \`<head>\` tag, before the closing \`</head>\`:
@@ -199,9 +203,13 @@ ${snippet}
 \`\`\`
 
 This enables session and pageview tracking. Place it on every page you want to track.`
-    navigator.clipboard.writeText(markdown)
-    setCopiedMarkdownId(id)
-    setTimeout(() => setCopiedMarkdownId(null), 2000)
+    try {
+      await navigator.clipboard.writeText(markdown)
+      setCopiedMarkdownId(id)
+      setTimeout(() => setCopiedMarkdownId(null), 2000)
+    } catch {
+      toast.error('Failed to copy to clipboard')
+    }
   }
 
   const handleConnectStripe = async (data: StripeConnectFormData) => {

@@ -613,10 +613,10 @@ export default function StartupsPage() {
               title="No startups enrolled"
               description="Invite startups to start tracking their progress."
               action={
-                <Link href={`/admin/${cohortSlug}/startups`}>
+                <Link href={`/admin/${cohortSlug}/startups/new`}>
                   <Button>
                     <Plus className="mr-2 h-4 w-4" />
-                    View Startups
+                    Create Startup
                   </Button>
                 </Link>
               }
