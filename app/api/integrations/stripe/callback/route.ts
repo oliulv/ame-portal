@@ -12,12 +12,12 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
  * Handles Stripe OAuth callback and stores connection via Convex mutation.
  */
 export async function GET(request: Request) {
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')
+
   try {
     const { userId } = await auth()
     if (!userId) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?error=not_authenticated`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/settings?error=not_authenticated`)
     }
 
     const { searchParams } = new URL(request.url)
@@ -26,22 +26,16 @@ export async function GET(request: Request) {
     const error = searchParams.get('error')
 
     if (error) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?error=stripe_connection_failed`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/settings?error=stripe_connection_failed`)
     }
 
     if (!code || !state) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?error=stripe_connection_invalid`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/settings?error=stripe_connection_invalid`)
     }
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY
     if (!stripeSecretKey) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?error=stripe_config_missing`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/settings?error=stripe_config_missing`)
     }
 
     // Exchange authorization code for access token
@@ -59,9 +53,7 @@ export async function GET(request: Request) {
     const accessToken = response.access_token
 
     if (!accessToken) {
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?error=stripe_token_missing`
-      )
+      return NextResponse.redirect(`${appUrl}/founder/settings?error=stripe_token_missing`)
     }
 
     // Store connection via Convex mutation
@@ -72,13 +64,9 @@ export async function GET(request: Request) {
       accountName,
     })
 
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?success=stripe_connected`
-    )
+    return NextResponse.redirect(`${appUrl}/founder/settings?success=stripe_connected`)
   } catch (error) {
     logServerError('Error handling Stripe callback:', error)
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/founder/settings?error=stripe_connection_error`
-    )
+    return NextResponse.redirect(`${appUrl}/founder/settings?error=stripe_connection_error`)
   }
 }

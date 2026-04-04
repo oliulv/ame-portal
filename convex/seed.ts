@@ -8,7 +8,7 @@ import { v } from 'convex/values'
 const CLERK_IDS = {
   super_admin: 'user_3A6qOM3s1o7PGR61JPGkX7CgzKo',
   admin: 'user_3AZadW7ezwPpAhPnzlOlG1D4zMN',
-  founder: 'user_3AZbJ2xxRdUY1DeQP3CUVZK3Qj5',
+  founder: 'user_3AnkoO5kRQnKeQ3UrMfJPohVbxz',
 }
 
 // ── Startup definitions ──────────────────────────────────────────────

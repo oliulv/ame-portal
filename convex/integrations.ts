@@ -372,6 +372,7 @@ export const fullStatus = query({
             accountName: stripe.accountName,
             connectedAt: stripe.connectedAt,
             lastSyncedAt: stripe.lastSyncedAt,
+            syncError: stripe.syncError,
           }
         : null,
       github: github
@@ -381,6 +382,7 @@ export const fullStatus = query({
             accountName: github.accountName,
             connectedAt: github.connectedAt,
             lastSyncedAt: github.lastSyncedAt,
+            syncError: github.syncError,
           }
         : null,
       social: socialProfiles,

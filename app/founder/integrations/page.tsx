@@ -31,6 +31,7 @@ import {
   BookOpen,
   ChevronRight,
   CheckCircle2,
+  AlertTriangle,
   Clock,
   Github,
   FileText,
@@ -109,8 +110,47 @@ function IntegrationsPageInner() {
   const createTrackerWebsite = useMutation(api.trackerWebsites.create)
   const removeTrackerWebsite = useMutation(api.trackerWebsites.remove)
   const connectStripe = useAction(api.integrations.connectStripe)
+  const disconnectStripe = useMutation(api.integrations.disconnectStripe)
   const disconnectGithub = useMutation(api.integrations.disconnectGithub)
   const saveSocialProfile = useMutation(api.integrations.saveSocialProfile)
+
+  // Display OAuth error/success toasts from URL params
+  useEffect(() => {
+    const error = searchParams.get('error')
+    const success = searchParams.get('success')
+
+    if (error) {
+      const errorMessages: Record<string, string> = {
+        github_not_configured:
+          'GitHub integration is not configured. Please contact an administrator.',
+        not_authenticated: 'Please sign in to connect integrations.',
+        invalid_state: 'Session expired. Please try connecting again.',
+        github_connection_failed: 'GitHub denied the connection request.',
+        github_missing_code: 'GitHub authorization failed. Please try again.',
+        github_config_missing:
+          'GitHub integration is not configured. Please contact an administrator.',
+        github_token_failed: 'Failed to complete GitHub authorization. Please try again.',
+        no_startup: 'No startup found for your account.',
+        github_connection_error: 'Something went wrong connecting GitHub. Please try again.',
+        stripe_connection_failed: 'Stripe connection was denied.',
+        stripe_connection_invalid: 'Invalid Stripe connection response.',
+        stripe_config_missing: 'Stripe is not configured. Please contact an administrator.',
+        stripe_token_missing: 'Failed to get Stripe access token.',
+        stripe_connection_error: 'Something went wrong connecting Stripe. Please try again.',
+      }
+      toast.error(errorMessages[error] || `Integration error: ${error}`)
+      router.replace('/founder/integrations' + (tabParam ? `?tab=${tabParam}` : ''))
+    }
+
+    if (success) {
+      const successMessages: Record<string, string> = {
+        github_connected: 'GitHub connected successfully!',
+        stripe_connected: 'Stripe connected successfully!',
+      }
+      toast.success(successMessages[success] || 'Integration connected!')
+      router.replace('/founder/integrations' + (tabParam ? `?tab=${tabParam}` : ''))
+    }
+  }, [searchParams, router, tabParam])
 
   useEffect(() => {
     if (newTrackerId && trackerWebsites?.some((w) => w._id === newTrackerId)) {
@@ -315,12 +355,21 @@ This enables session and pageview tracking. Place it on every page you want to t
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    {fullStatus.stripe.status === 'error' ? (
+                      <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    ) : (
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    )}
                     <div>
                       <p className="font-medium">
                         Connected
                         {fullStatus.stripe.accountName ? ` — ${fullStatus.stripe.accountName}` : ''}
                       </p>
+                      {fullStatus.stripe.status === 'error' && fullStatus.stripe.syncError && (
+                        <p className="text-xs text-amber-600">
+                          Sync error: {fullStatus.stripe.syncError}
+                        </p>
+                      )}
                       {fullStatus.stripe.lastSyncedAt && (
                         <p className="text-xs text-muted-foreground">
                           Last synced {formatRelativeTime(fullStatus.stripe.lastSyncedAt)}
@@ -328,7 +377,29 @@ This enables session and pageview tracking. Place it on every page you want to t
                       )}
                     </div>
                   </div>
-                  <Badge variant="secondary">Active</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={fullStatus.stripe.status === 'error' ? 'destructive' : 'secondary'}
+                      className="h-8 px-3"
+                    >
+                      {fullStatus.stripe.status === 'error' ? 'Sync Error' : 'Active'}
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={async () => {
+                        try {
+                          await disconnectStripe()
+                          toast.success('Stripe disconnected')
+                        } catch {
+                          toast.error('Failed to disconnect Stripe')
+                        }
+                      }}
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -545,9 +616,18 @@ This enables session and pageview tracking. Place it on every page you want to t
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    {fullStatus.github.status === 'error' ? (
+                      <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    ) : (
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    )}
                     <div>
                       <p className="font-medium">Connected — @{fullStatus.github.accountName}</p>
+                      {fullStatus.github.status === 'error' && fullStatus.github.syncError && (
+                        <p className="text-xs text-amber-600">
+                          Sync error: {fullStatus.github.syncError}
+                        </p>
+                      )}
                       {fullStatus.github.lastSyncedAt && (
                         <p className="text-xs text-muted-foreground">
                           Last synced {formatRelativeTime(fullStatus.github.lastSyncedAt)}
@@ -556,8 +636,11 @@ This enables session and pageview tracking. Place it on every page you want to t
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="h-8 px-3">
-                      Active
+                    <Badge
+                      variant={fullStatus.github.status === 'error' ? 'destructive' : 'secondary'}
+                      className="h-8 px-3"
+                    >
+                      {fullStatus.github.status === 'error' ? 'Sync Error' : 'Active'}
                     </Badge>
                     <Button
                       variant="outline"

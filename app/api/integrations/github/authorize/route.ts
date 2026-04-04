@@ -7,18 +7,16 @@ import { cookies } from 'next/headers'
  * Redirects to GitHub OAuth with CSRF state parameter.
  */
 export async function GET() {
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')
+
   const { userId } = await auth()
   if (!userId) {
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=not_authenticated`
-    )
+    return NextResponse.redirect(`${appUrl}/founder/integrations?error=not_authenticated`)
   }
 
   const clientId = process.env.GITHUB_APP_CLIENT_ID
   if (!clientId) {
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/founder/integrations?error=github_not_configured`
-    )
+    return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_not_configured`)
   }
 
   // Generate CSRF state token
@@ -32,7 +30,7 @@ export async function GET() {
     path: '/api/integrations/github',
   })
 
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/github/callback`
+  const redirectUri = `${appUrl}/api/integrations/github/callback`
   const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`
 
   return NextResponse.redirect(url)
