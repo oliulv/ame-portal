@@ -547,8 +547,8 @@ export const sendToXero = internalAction({
     // Rename original invoices so it's clear which batch they belong to in Xero
     const renamedOriginalNames = originalNames.map((name) => {
       const origMatch = name.match(/Invoice (\d+)\.pdf$/i)
-      const origNum = origMatch?.[1] ?? '?'
-      return `${startupName} Batch ${invoiceNum} - Original Invoice ${origNum}.pdf`
+      if (!origMatch) return name // preserve original name if pattern doesn't match
+      return `${startupName} Batch ${invoiceNum} - Original Invoice ${origMatch[1]}.pdf`
     })
 
     const receiptIds: string[] = [

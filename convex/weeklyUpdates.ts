@@ -189,8 +189,8 @@ export const setFavorite = mutation({
       favoritedBy: args.isFavorite ? user._id : undefined,
     })
 
-    // Notify founder when their update is favorited
-    if (args.isFavorite) {
+    // Notify founder when their update is favorited (only on false→true transition)
+    if (args.isFavorite && !update.isFavorite) {
       const startup = await ctx.db.get(update.startupId)
       if (startup) {
         await ctx.scheduler.runAfter(0, internal.notifications.notifyWeeklyUpdateFavorited, {
