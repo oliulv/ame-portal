@@ -15,11 +15,11 @@ import {
 } from 'recharts'
 
 const FOUNDER_COLORS = [
+  'hsl(var(--primary))',
+  'hsl(var(--primary) / 0.55)',
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
   'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5, 280 65% 60%))',
 ]
 
 interface VelocityScoreProps {
