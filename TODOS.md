@@ -23,3 +23,27 @@
 **Depends on:** Leaderboard + analytics PR landing first; design decision on data visibility.
 
 **Blocked by:** Need to decide privacy model — opt-in detailed metrics vs. score-only default.
+
+## API Route Integration Tests
+
+**What:** Add integration tests for Next.js API routes (e.g. `/api/webhooks/stripe`, `/api/cron/*`). Requires mocking HTTP requests and Convex client calls.
+
+**Why:** API routes contain auth checks, webhook signature verification, and orchestration logic that unit tests can't cover. Currently untested.
+
+**Depends on:** Test infrastructure for mocking `NextRequest`/`NextResponse` and Convex client.
+
+## Convex Handler Tests
+
+**What:** Add tests for Convex mutations/queries/actions using the `convex-test` package. Covers handler-level logic (auth guards, DB reads/writes, scheduler calls).
+
+**Why:** Business logic in Convex handlers (invoice creation, milestone approval, notification triggers) is only testable with a Convex test harness that simulates the DB and scheduler.
+
+**Depends on:** `convex-test` package installation and configuration.
+
+## React Component + E2E Tests
+
+**What:** Add component tests (happy-dom + React Testing Library) for key UI components and E2E tests (Playwright) for critical user flows (login, invoice submission, leaderboard).
+
+**Why:** UI regressions are currently caught only by manual QA. Component tests catch rendering bugs; E2E tests catch integration issues across the full stack.
+
+**Depends on:** `happy-dom`, `@testing-library/react`, and Playwright setup.
