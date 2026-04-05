@@ -8,6 +8,7 @@ export type NotificationGroup =
   | 'announcements'
   | 'team'
   | 'perks'
+  | 'weeklyUpdates'
 
 export interface NotificationType {
   key: string
@@ -21,6 +22,7 @@ export interface NotificationType {
 export const GROUP_LABELS: Record<NotificationGroup, string> = {
   invoices: 'Invoices',
   milestones: 'Milestones',
+  weeklyUpdates: 'Weekly Updates',
   events: 'Events',
   announcements: 'Announcements',
   resources: 'Resources',
@@ -32,6 +34,7 @@ export const GROUP_LABELS: Record<NotificationGroup, string> = {
 export const GROUP_ORDER: NotificationGroup[] = [
   'invoices',
   'milestones',
+  'weeklyUpdates',
   'events',
   'announcements',
   'resources',
@@ -111,6 +114,24 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     description: 'When an admin deletes a milestone',
     status: 'active',
     group: 'milestones',
+  },
+
+  // ── Weekly Updates ──────────────────────────────────────────
+  {
+    key: 'weeklyUpdateSubmitted',
+    label: 'Weekly Update Submitted',
+    audience: 'admins',
+    description: 'When a founder submits their weekly update',
+    status: 'active',
+    group: 'weeklyUpdates',
+  },
+  {
+    key: 'weeklyUpdateFavorited',
+    label: 'Weekly Update Favourited',
+    audience: 'founders',
+    description: 'When your weekly update is marked as a favourite',
+    status: 'active',
+    group: 'weeklyUpdates',
   },
 
   // ── Events ──────────────────────────────────────────────────

@@ -232,6 +232,8 @@ export const updatePreferences = mutation({
     bankDetailsAdded: v.optional(v.boolean()),
     perkCreated: v.optional(v.boolean()),
     founderRemoved: v.optional(v.boolean()),
+    weeklyUpdateSubmitted: v.optional(v.boolean()),
+    weeklyUpdateFavorited: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireAuth(ctx)
@@ -1373,6 +1375,70 @@ export const notifyFounderRemoved = internalAction({
         message,
         type: 'founderRemoved',
         metadata: { startupName: args.startupName },
+      })
+    }
+  },
+})
+
+/**
+ * Notify admins when a founder submits a weekly update.
+ */
+export const notifyWeeklyUpdateSubmitted = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    startupName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminIds = await ctx.runQuery(internal.notifications.getAdminUserIdsForCohort, {
+      cohortId: args.cohortId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: adminIds,
+      notificationType: 'weeklyUpdateSubmitted',
+      cohortId: args.cohortId,
+    })
+
+    const message = `${args.startupName} submitted their weekly update`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'weeklyUpdateSubmitted',
+        metadata: { startupName: args.startupName },
+      })
+    }
+  },
+})
+
+/**
+ * Notify founder when their weekly update is favourited.
+ */
+export const notifyWeeklyUpdateFavorited = internalAction({
+  args: {
+    founderId: v.id('users'),
+    startupName: v.string(),
+    weekOf: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: [args.founderId],
+      notificationType: 'weeklyUpdateFavorited',
+    })
+
+    if (recipients.length === 0) return
+
+    const message = `Your weekly update for ${args.startupName} was marked as a favourite!`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'weeklyUpdateFavorited',
+        metadata: { startupName: args.startupName, weekOf: args.weekOf },
       })
     }
   },
