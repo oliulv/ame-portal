@@ -245,7 +245,11 @@ export const disconnectGithub = mutation({
       )
       .collect()
 
-    const myConnection = connections.find((c) => c.connectedByUserId === user._id) ?? connections[0]
+    // Only disconnect the current user's own connection — never touch other founders' connections.
+    // Fallback to first connection only for legacy rows that don't have connectedByUserId set.
+    const myConnection =
+      connections.find((c) => c.connectedByUserId === user._id) ??
+      (connections.length === 1 ? connections[0] : null)
 
     if (myConnection) {
       await ctx.db.patch(myConnection._id, { status: 'disconnected', isActive: false })

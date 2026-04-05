@@ -611,48 +611,57 @@ This enables session and pageview tracking. Place it on every page you want to t
           {/* Show all connected GitHub accounts */}
           {fullStatus?.githubConnections && fullStatus.githubConnections.length > 0 && (
             <>
-              {fullStatus.githubConnections.map((conn: any) => (
-                <Card key={conn._id}>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {conn.status === 'error' ? (
-                          <AlertTriangle className="h-5 w-5 text-amber-500" />
-                        ) : (
-                          <CheckCircle2 className="h-5 w-5 text-green-600" />
-                        )}
-                        <div>
-                          <p className="font-medium">Connected — @{conn.accountName}</p>
-                          {conn.status === 'error' && conn.syncError && (
-                            <p className="text-xs text-amber-600">Sync error: {conn.syncError}</p>
+              {fullStatus.githubConnections.map((conn: any) => {
+                const isMine = conn._id === fullStatus.github?._id
+                return (
+                  <Card key={conn._id}>
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {conn.status === 'error' ? (
+                            <AlertTriangle className="h-5 w-5 text-amber-500" />
+                          ) : (
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
                           )}
-                          {conn.lastSyncedAt && (
-                            <p className="text-xs text-muted-foreground">
-                              Last synced {formatRelativeTime(conn.lastSyncedAt)}
-                            </p>
+                          <div>
+                            <p className="font-medium">Connected — @{conn.accountName}</p>
+                            {conn.status === 'error' && conn.syncError && (
+                              <p className="text-xs text-amber-600">Sync error: {conn.syncError}</p>
+                            )}
+                            {conn.lastSyncedAt && (
+                              <p className="text-xs text-muted-foreground">
+                                Last synced {formatRelativeTime(conn.lastSyncedAt)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="h-8 px-3">
+                            Active
+                          </Badge>
+                          {isMine && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8"
+                              onClick={async () => {
+                                try {
+                                  await disconnectGithub()
+                                  toast.success('GitHub disconnected')
+                                } catch {
+                                  toast.error('Failed to disconnect GitHub')
+                                }
+                              }}
+                            >
+                              Disconnect
+                            </Button>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="h-8 px-3">
-                          Active
-                        </Badge>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8"
-                          onClick={async () => {
-                            await disconnectGithub()
-                            toast.success('GitHub disconnected')
-                          }}
-                        >
-                          Disconnect
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </>
           )}
 
