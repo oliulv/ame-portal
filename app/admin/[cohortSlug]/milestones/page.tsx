@@ -8,6 +8,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -89,6 +90,132 @@ type MilestoneTemplate = Doc<'milestoneTemplates'>
 type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved' | 'changes_requested'
 type ViewTab = 'milestones' | 'templates'
 type MilestoneViewMode = 'list' | 'wave'
+
+const STATUS_COLORS: Record<string, string> = {
+  approved: 'bg-green-500',
+  submitted: 'bg-amber-500',
+  changes_requested: 'bg-orange-500',
+  waiting: 'bg-gray-300',
+}
+
+// --- Wave Reorder DnD row ---
+function SortableWaveMilestoneRow({
+  milestone,
+  cohortSlug,
+}: {
+  milestone: MilestoneWithStartup
+  cohortSlug: string
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: milestone._id,
+  })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-3 border rounded px-3 py-2 bg-background"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label={`Drag to reorder ${milestone.title}`}
+        className="cursor-grab active:cursor-grabbing touch-none p-1 hover:bg-muted rounded shrink-0"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </button>
+      <div
+        className={`h-5 w-5 rounded shrink-0 ${STATUS_COLORS[milestone.status] || 'bg-gray-200'}`}
+      />
+      <Link
+        href={`/admin/${cohortSlug}/milestones/${milestone._id}`}
+        className="text-sm font-medium truncate hover:underline"
+      >
+        {milestone.title}
+      </Link>
+      <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
+        {milestone.status === 'changes_requested' ? 'changes requested' : milestone.status}
+      </Badge>
+    </div>
+  )
+}
+
+// --- Wave Reorder Dialog ---
+function WaveReorderDialog({
+  startupId,
+  startupName,
+  milestones,
+  onClose,
+  onReorder,
+  cohortSlug,
+}: {
+  startupId: string
+  startupName: string
+  milestones: MilestoneWithStartup[]
+  onClose: () => void
+  onReorder: (ids: Id<'milestones'>[]) => Promise<void>
+  cohortSlug: string
+}) {
+  const [items, setItems] = useState(milestones)
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setItems((prev) => {
+      const oldIndex = prev.findIndex((m) => m._id === active.id)
+      const newIndex = prev.findIndex((m) => m._id === over.id)
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Reorder Custom Milestones</DialogTitle>
+          <DialogDescription>
+            Drag to reorder {startupName}&apos;s custom milestones in the wave view.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={items.map((m) => m._id)} strategy={verticalListSortingStrategy}>
+              {items.map((m) => (
+                <SortableWaveMilestoneRow key={m._id} milestone={m} cohortSlug={cohortSlug} />
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={async () => {
+              await onReorder(items.map((m) => m._id))
+              onClose()
+            }}
+          >
+            Save Order
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 // --- Template DnD row ---
 function SortableTemplateRow({
@@ -177,6 +304,7 @@ export default function MilestonesAggregatePage() {
   const [startupFilter, setStartupFilter] = useState<string>('all')
   const [startupFilterOpen, setStartupFilterOpen] = useState(false)
   const [viewMode, setViewMode] = useState<MilestoneViewMode>('list')
+  const [waveReorderStartupId, setWaveReorderStartupId] = useState<string | null>(null)
 
   // Template form state
   const [editingTemplate, setEditingTemplate] = useState<MilestoneTemplate | null>(null)
@@ -227,18 +355,70 @@ export default function MilestonesAggregatePage() {
       ? startupFilter
       : null
 
-  // Wave view data: group milestones by template
+  // Wave view data: build unified interleaved rows (templates + customs by creation order)
   const waveData = useMemo(() => {
     if (!allMilestones || !templates || !startups) return null
 
     const startupList = startups.filter((s) => s.excludeFromMetrics !== true)
-    const templateGroups = templates.map((tpl) => {
-      const milestones = allMilestones.filter((m) => m.milestoneTemplateId === tpl._id)
-      return { template: tpl, milestones }
-    })
-    const customMilestones = allMilestones.filter((m) => !m.milestoneTemplateId)
 
-    return { startupList, templateGroups, customMilestones }
+    // Build unified row list: templates and custom milestone positions, interleaved by creation time
+    type WaveRow =
+      | {
+          type: 'template'
+          template: MilestoneTemplate
+          milestones: MilestoneWithStartup[]
+          createdAt: number
+        }
+      | {
+          type: 'custom'
+          position: number
+          milestonesByStartup: Map<string, MilestoneWithStartup>
+          createdAt: number
+        }
+
+    const rows: WaveRow[] = []
+
+    // Add template rows
+    for (const tpl of templates) {
+      const milestones = allMilestones.filter((m) => m.milestoneTemplateId === tpl._id)
+      rows.push({ type: 'template', template: tpl, milestones, createdAt: tpl._creationTime })
+    }
+
+    // Collect custom milestones per startup, sorted by creation time
+    const customByStartup = new Map<string, MilestoneWithStartup[]>()
+    for (const m of allMilestones) {
+      if (m.milestoneTemplateId) continue
+      const list = customByStartup.get(m.startupId) ?? []
+      list.push(m)
+      customByStartup.set(m.startupId, list)
+    }
+    for (const [, list] of customByStartup) {
+      list.sort((a, b) => a._creationTime - b._creationTime)
+    }
+
+    // Build custom position rows: group the Nth custom milestone across startups
+    const maxCustom = Math.max(0, ...Array.from(customByStartup.values()).map((l) => l.length))
+    for (let i = 0; i < maxCustom; i++) {
+      const milestonesByStartup = new Map<string, MilestoneWithStartup>()
+      let earliestCreation = Infinity
+      for (const [startupId, list] of customByStartup) {
+        if (list[i]) {
+          milestonesByStartup.set(startupId, list[i])
+          earliestCreation = Math.min(earliestCreation, list[i]._creationTime)
+        }
+      }
+      rows.push({
+        type: 'custom',
+        position: i,
+        milestonesByStartup,
+        createdAt: earliestCreation === Infinity ? Date.now() : earliestCreation,
+      })
+    }
+
+    // Sort all rows by creation time (interleaves templates and customs chronologically)
+    rows.sort((a, b) => a.createdAt - b.createdAt)
+
+    return { startupList, rows, customByStartup, maxCustom }
   }, [allMilestones, templates, startups])
 
   const isLoading =
@@ -397,18 +577,18 @@ export default function MilestonesAggregatePage() {
     )
   }
 
-  function getWaveStatusIndicator(status: string) {
-    const colors: Record<string, string> = {
-      approved: 'bg-green-500',
-      submitted: 'bg-amber-500',
-      changes_requested: 'bg-orange-500',
-      waiting: 'bg-gray-300',
-    }
+  function getWaveStatusIndicator(status: string, title?: string) {
+    const statusLabel = status === 'changes_requested' ? 'changes requested' : status
+    const tooltipText = title ? `${title} (${statusLabel})` : statusLabel
     return (
-      <div
-        className={`h-6 w-6 rounded ${colors[status] || 'bg-gray-200'}`}
-        title={status === 'changes_requested' ? 'changes requested' : status}
-      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={`h-6 w-6 rounded ${STATUS_COLORS[status] || 'bg-gray-200'}`} />
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltipText}</p>
+        </TooltipContent>
+      </Tooltip>
     )
   }
 
@@ -689,11 +869,11 @@ export default function MilestonesAggregatePage() {
               <CardHeader>
                 <CardTitle>Wave View</CardTitle>
                 <CardDescription>
-                  Milestones grouped by template. Each column is a startup.
+                  Milestone progress across startups. Each column is a startup.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {waveData.templateGroups.length === 0 && waveData.customMilestones.length === 0 ? (
+                {waveData.rows.length === 0 ? (
                   <EmptyState
                     noCard
                     icon={<Target className="h-6 w-6" />}
@@ -718,107 +898,130 @@ export default function MilestonesAggregatePage() {
                       </span>
                     </div>
 
-                    {/* Template rows */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-left py-2 pr-4 font-medium text-muted-foreground min-w-[180px]">
-                              Template
-                            </th>
-                            {waveData.startupList.map((s) => (
-                              <th
-                                key={s._id}
-                                className="text-center py-2 px-2 font-medium text-muted-foreground"
-                              >
-                                <Link
-                                  href={`/admin/${cohortSlug}/startups/${s.slug}`}
-                                  className="hover:text-foreground hover:underline"
-                                >
-                                  {s.name}
-                                </Link>
+                    <TooltipProvider>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-2 pr-4 font-medium text-muted-foreground min-w-[180px]">
+                                Milestone
                               </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {waveData.templateGroups.map((group) => (
-                            <tr key={group.template._id} className="border-b">
-                              <td className="py-3 pr-4 font-medium">{group.template.title}</td>
-                              {waveData.startupList.map((s) => {
-                                const milestone = group.milestones.find(
-                                  (m) => m.startupId === s._id
-                                )
+                              {waveData.startupList.map((s) => (
+                                <th
+                                  key={s._id}
+                                  className="text-center py-2 px-2 font-medium text-muted-foreground"
+                                >
+                                  <Link
+                                    href={`/admin/${cohortSlug}/startups/${s.slug}`}
+                                    className="hover:text-foreground hover:underline"
+                                  >
+                                    {s.name}
+                                  </Link>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {waveData.rows.map((row, rowIndex) => {
+                              if (row.type === 'template') {
                                 return (
-                                  <td key={s._id} className="text-center py-3 px-2">
-                                    {milestone ? (
-                                      <Link
-                                        href={`/admin/${cohortSlug}/milestones/${milestone._id}`}
-                                        className="inline-block"
-                                      >
-                                        {getWaveStatusIndicator(milestone.status)}
-                                      </Link>
-                                    ) : (
-                                      <span className="text-muted-foreground">-</span>
-                                    )}
-                                  </td>
+                                  <tr key={row.template._id} className="border-b">
+                                    <td className="py-3 pr-4 font-medium">{row.template.title}</td>
+                                    {waveData.startupList.map((s) => {
+                                      const milestone = row.milestones.find(
+                                        (m) => m.startupId === s._id
+                                      )
+                                      return (
+                                        <td key={s._id} className="text-center py-3 px-2">
+                                          {milestone ? (
+                                            <Link
+                                              href={`/admin/${cohortSlug}/milestones/${milestone._id}`}
+                                              className="inline-block"
+                                            >
+                                              {getWaveStatusIndicator(
+                                                milestone.status,
+                                                milestone.title
+                                              )}
+                                            </Link>
+                                          ) : (
+                                            <span className="text-muted-foreground">-</span>
+                                          )}
+                                        </td>
+                                      )
+                                    })}
+                                  </tr>
                                 )
-                              })}
-                            </tr>
-                          ))}
-                          {waveData.customMilestones.length > 0 && (
-                            <tr className="border-b bg-muted/30">
-                              <td
-                                colSpan={waveData.startupList.length + 1}
-                                className="py-2 px-4 text-xs font-medium text-muted-foreground"
-                              >
-                                Custom milestones (no template)
-                              </td>
-                            </tr>
-                          )}
-                          {waveData.customMilestones.length > 0 &&
-                            (() => {
-                              // Group custom milestones by startup
-                              const byStartup = new Map<string, MilestoneWithStartup[]>()
-                              for (const m of waveData.customMilestones) {
-                                const list = byStartup.get(m.startupId) ?? []
-                                list.push(m)
-                                byStartup.set(m.startupId, list)
                               }
-                              return Array.from(byStartup.entries()).map(
-                                ([startupId, milestones]) => (
-                                  <tr key={startupId} className="border-b">
-                                    <td className="py-3 pr-4 text-muted-foreground text-sm">
-                                      Custom
-                                    </td>
-                                    {waveData.startupList.map((s) => (
+                              // Custom position row
+                              return (
+                                <tr key={`custom-${rowIndex}`} className="border-b">
+                                  <td className="py-3 pr-4 text-sm text-muted-foreground italic">
+                                    Custom {row.position + 1}
+                                  </td>
+                                  {waveData.startupList.map((s) => {
+                                    const milestone = row.milestonesByStartup.get(s._id)
+                                    const hasMultipleCustoms =
+                                      (waveData.customByStartup.get(s._id)?.length ?? 0) > 1
+                                    return (
                                       <td key={s._id} className="text-center py-3 px-2">
-                                        {s._id === startupId ? (
-                                          <div className="flex justify-center gap-1">
-                                            {milestones.map((m) => (
-                                              <Link
-                                                key={m._id}
-                                                href={`/admin/${cohortSlug}/milestones/${m._id}`}
-                                                className="inline-block"
+                                        {milestone ? (
+                                          <div className="inline-flex items-center gap-1">
+                                            <Link
+                                              href={`/admin/${cohortSlug}/milestones/${milestone._id}`}
+                                              className="inline-block"
+                                            >
+                                              {getWaveStatusIndicator(
+                                                milestone.status,
+                                                milestone.title
+                                              )}
+                                            </Link>
+                                            {hasMultipleCustoms && row.position === 0 && (
+                                              <button
+                                                onClick={() => setWaveReorderStartupId(s._id)}
+                                                aria-label={`Reorder ${s.name}'s custom milestones`}
+                                                className="text-muted-foreground/50 hover:text-foreground cursor-pointer"
                                               >
-                                                {getWaveStatusIndicator(m.status)}
-                                              </Link>
-                                            ))}
+                                                <GripVertical className="h-3 w-3" />
+                                              </button>
+                                            )}
                                           </div>
                                         ) : null}
                                       </td>
-                                    ))}
-                                  </tr>
-                                )
+                                    )
+                                  })}
+                                </tr>
                               )
-                            })()}
-                        </tbody>
-                      </table>
-                    </div>
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </TooltipProvider>
                   </div>
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {/* Wave Reorder Dialog */}
+          {waveData && waveReorderStartupId && (
+            <WaveReorderDialog
+              startupId={waveReorderStartupId}
+              startupName={
+                waveData.startupList.find((s) => s._id === waveReorderStartupId)?.name ?? 'Startup'
+              }
+              milestones={waveData.customByStartup.get(waveReorderStartupId) ?? []}
+              onClose={() => setWaveReorderStartupId(null)}
+              onReorder={async (ids) => {
+                try {
+                  await reorderMilestones({ milestoneIds: ids })
+                  toast.success('Custom milestones reordered')
+                } catch (error) {
+                  logClientError('Failed to reorder:', error)
+                  toast.error('Failed to reorder milestones')
+                }
+              }}
+              cohortSlug={cohortSlug}
+            />
           )}
         </>
       )}

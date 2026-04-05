@@ -502,6 +502,8 @@ export default defineSchema({
     bankDetailsAdded: v.optional(v.boolean()),
     perkCreated: v.optional(v.boolean()),
     founderRemoved: v.optional(v.boolean()),
+    weeklyUpdateSubmitted: v.optional(v.boolean()),
+    weeklyUpdateFavorited: v.optional(v.boolean()),
   }).index('by_userId', ['userId']),
 
   // ── Announcements ────────────────────────────────────────────

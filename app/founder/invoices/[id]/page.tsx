@@ -17,7 +17,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ArrowLeft, ExternalLink, Eye, FileText } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Eye, FileText, Landmark } from 'lucide-react'
+import { BankDetailsDialog } from '@/components/bank-details-dialog'
 import {
   getInvoiceStatusLabel,
   getInvoiceStatusVariant,
@@ -74,8 +75,10 @@ export default function FounderInvoiceDetailPage() {
   const params = useParams<{ id: string }>()
   const invoiceId = params.id as Id<'invoices'>
   const invoicesData = useQuery(api.invoices.listForFounder)
+  const bankDetails = useQuery(api.bankDetails.get)
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null)
   const [pdfViewerTitle, setPdfViewerTitle] = useState('')
+  const [showBankDetails, setShowBankDetails] = useState(false)
 
   const invoice = useMemo(() => {
     if (!invoicesData?.invoices) return null
@@ -147,7 +150,15 @@ export default function FounderInvoiceDetailPage() {
             <h1 className="text-3xl font-bold tracking-tight font-display">{invoice.vendorName}</h1>
             <p className="text-muted-foreground">Invoice details and review status</p>
           </div>
-          <Badge variant={getInvoiceStatusVariant(status)}>{getInvoiceStatusLabel(status)}</Badge>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowBankDetails(true)}>
+              <Landmark className="mr-2 h-4 w-4" />
+              Bank Details
+            </Button>
+            <Badge variant={getInvoiceStatusVariant(status)} className="h-8 px-3 flex items-center">
+              {getInvoiceStatusLabel(status)}
+            </Badge>
+          </div>
         </div>
       </div>
 
@@ -318,6 +329,13 @@ export default function FounderInvoiceDetailPage() {
           )}
         </div>
       </div>
+
+      <BankDetailsDialog
+        open={showBankDetails}
+        onOpenChange={setShowBankDetails}
+        bankDetails={bankDetails}
+        startupName="Your startup"
+      />
 
       {/* PDF Preview Modal */}
       <Dialog open={!!pdfViewerUrl} onOpenChange={(open) => !open && setPdfViewerUrl(null)}>

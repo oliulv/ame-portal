@@ -157,14 +157,6 @@ function ExpandableRow({
               />
             )}
             <span className="text-sm font-medium">{entry.startupName}</span>
-            {entry.qualified && (
-              <Badge
-                variant="default"
-                className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-              >
-                Qualified
-              </Badge>
-            )}
             {entry.excludeFromMetrics && (
               <Badge variant="warning" className="text-xs">
                 Excluded

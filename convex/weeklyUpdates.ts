@@ -1,4 +1,5 @@
 import { query, mutation, internalMutation } from './functions'
+import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAuth, requireFounder, requireAdmin, getFounderStartupIds } from './auth'
 import { getMonday } from './lib/dateUtils'
@@ -56,6 +57,15 @@ export const submit = mutation({
         isFavorite: false,
         createdAt: now.toISOString(),
       })
+
+      // Notify admins of new submission
+      const startup = await ctx.db.get(startupId)
+      if (startup) {
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyWeeklyUpdateSubmitted, {
+          cohortId: startup.cohortId,
+          startupName: startup.name,
+        })
+      }
     }
   },
 })
@@ -178,6 +188,19 @@ export const setFavorite = mutation({
       isFavorite: args.isFavorite,
       favoritedBy: args.isFavorite ? user._id : undefined,
     })
+
+    // Notify founder when their update is favorited (only on false→true transition)
+    if (args.isFavorite && !update.isFavorite) {
+      const startup = await ctx.db.get(update.startupId)
+      if (startup) {
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyWeeklyUpdateFavorited, {
+          founderId: update.founderId,
+          startupName: startup.name,
+          weekOf: update.weekOf,
+          cohortId: startup.cohortId,
+        })
+      }
+    }
   },
 })
 
