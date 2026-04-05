@@ -33,7 +33,7 @@ export function getInvoiceStatusLabel(status: string): string {
     case 'paid':
       return 'Paid'
     default:
-      return status.replace('_', ' ')
+      return status.replace(/_/g, ' ')
   }
 }
 
