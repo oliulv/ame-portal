@@ -154,17 +154,10 @@ export default function AdminStartupAnalyticsPage() {
     tsArgs ? { ...tsArgs, provider: 'tracker' as const, metricKey: 'pageviews' } : 'skip'
   )
 
-  // GitHub — use getVelocityTimeSeries (computes from contribution calendar, has ~365 days)
-  const shippingStartDate = useMemo(() => {
-    if (shippingRange === 'max') return undefined
-    const d = new Date(mountTime)
-    d.setDate(d.getDate() - parseInt(shippingRange))
-    return d.toISOString()
-  }, [shippingRange, mountTime])
-
-  const velocityTimeSeries = useQuery(
+  // GitHub — always fetch max, filter client-side for instant range switching
+  const velocityTimeSeriesRaw = useQuery(
     api.metrics.getVelocityTimeSeries,
-    startupId ? { startupId, startDate: shippingStartDate } : 'skip'
+    startupId ? { startupId } : 'skip'
   )
   const commits = useQuery(
     api.metrics.getLatest,
@@ -179,15 +172,38 @@ export default function AdminStartupAnalyticsPage() {
     startupId ? { startupId } : 'skip'
   )
 
-  // Per-founder GitHub data
-  const velocityPerFounder = useQuery(
+  // Per-founder GitHub data — always fetch max, filter client-side
+  const velocityPerFounderRaw = useQuery(
     api.metrics.getVelocityTimeSeriesPerFounder,
-    startupId ? { startupId, startDate: shippingStartDate } : 'skip'
+    startupId ? { startupId } : 'skip'
   )
   const perFounderStats = useQuery(
     api.metrics.getPerFounderGithubStats,
     startupId ? { startupId } : 'skip'
   )
+
+  // Client-side range filtering for instant dropdown switching
+  const velocityTimeSeries = useMemo(() => {
+    if (!velocityTimeSeriesRaw) return velocityTimeSeriesRaw
+    if (shippingRange === 'max') return velocityTimeSeriesRaw
+    const cutoff = new Date(mountTime)
+    cutoff.setDate(cutoff.getDate() - parseInt(shippingRange))
+    const cutoffStr = cutoff.toISOString()
+    return velocityTimeSeriesRaw.filter((d) => d.timestamp >= cutoffStr)
+  }, [velocityTimeSeriesRaw, shippingRange, mountTime])
+
+  const velocityPerFounder = useMemo(() => {
+    if (!velocityPerFounderRaw) return velocityPerFounderRaw
+    if (shippingRange === 'max') return velocityPerFounderRaw
+    const cutoff = new Date(mountTime)
+    cutoff.setDate(cutoff.getDate() - parseInt(shippingRange))
+    const cutoffStr = cutoff.toISOString()
+    const filtered: Record<string, Array<{ timestamp: string; value: number }>> = {}
+    for (const [name, series] of Object.entries(velocityPerFounderRaw)) {
+      filtered[name] = series.filter((d) => d.timestamp >= cutoffStr)
+    }
+    return filtered
+  }, [velocityPerFounderRaw, shippingRange, mountTime])
 
   // Social — latest
   const twitterFollowers = useQuery(

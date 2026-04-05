@@ -23,9 +23,11 @@ interface GithubTeamStatusProps {
 }
 
 export function GithubTeamStatus({ founders, githubConnections }: GithubTeamStatusProps) {
-  if (founders.length === 0) return null
+  if (githubConnections.length === 0 && founders.length === 0) return null
 
-  const connectedCount = founders.filter((f) => f.hasGithub).length
+  // Show connected accounts (from connection data, not from founder profile matching)
+  // and unconnected founders (those whose userId doesn't appear in any connection)
+  const unconnectedFounders = founders.filter((f) => !f.hasGithub)
 
   return (
     <Card>
@@ -36,40 +38,47 @@ export function GithubTeamStatus({ founders, githubConnections }: GithubTeamStat
             Team GitHub Connections
           </CardTitle>
           <span className="text-sm text-muted-foreground">
-            {connectedCount}/{founders.length} connected
+            {githubConnections.length} connected
+            {unconnectedFounders.length > 0 && <>, {unconnectedFounders.length} pending</>}
           </span>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {founders.map((founder) => {
-            const connection = githubConnections.find((c) => c.connectedByUserId === founder.userId)
-            return (
-              <div
-                key={founder.userId}
-                className="flex items-center justify-between py-1.5 border-b last:border-0"
-              >
-                <div className="flex items-center gap-2">
-                  {founder.hasGithub ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <span className="text-sm font-medium">{founder.name}</span>
-                </div>
-                {connection ? (
-                  <span className="text-xs text-muted-foreground">
-                    @{connection.accountName}
-                    {connection.lastSyncedAt && (
-                      <> &middot; synced {new Date(connection.lastSyncedAt).toLocaleDateString()}</>
-                    )}
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">Not connected</span>
-                )}
+          {/* Connected accounts — show directly from connection data */}
+          {githubConnections.map((conn) => (
+            <div
+              key={conn.accountName ?? conn.connectedByUserId}
+              className="flex items-center justify-between py-1.5 border-b last:border-0"
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <span className="text-sm font-medium">
+                  {conn.userName ?? `@${conn.accountName}`}
+                </span>
               </div>
-            )
-          })}
+              <span className="text-xs text-muted-foreground">
+                @{conn.accountName}
+                {conn.lastSyncedAt && (
+                  <> &middot; synced {new Date(conn.lastSyncedAt).toLocaleDateString()}</>
+                )}
+              </span>
+            </div>
+          ))}
+
+          {/* Unconnected founders */}
+          {unconnectedFounders.map((founder) => (
+            <div
+              key={founder.userId}
+              className="flex items-center justify-between py-1.5 border-b last:border-0"
+            >
+              <div className="flex items-center gap-2">
+                <XCircle className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">{founder.name}</span>
+              </div>
+              <span className="text-xs text-muted-foreground">Not connected</span>
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>

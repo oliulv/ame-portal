@@ -111,7 +111,6 @@ export default function FounderAnalyticsPage() {
   const revenueStartDate = useStartDate(revenueRange, mountTime)
   const sessionsStartDate = useStartDate(sessionsRange, mountTime)
   const pageviewsStartDate = useStartDate(pageviewsRange, mountTime)
-  const shippingStartDate = useStartDate(shippingRange, mountTime)
 
   const latestArgs = startupId ? { startupId, window: 'daily' as const } : null
 
@@ -216,10 +215,10 @@ export default function FounderAnalyticsPage() {
       : 'skip'
   )
 
-  // GitHub metrics — velocity computed from contribution calendar (has full year)
-  const velocityTimeSeries = useQuery(
+  // GitHub metrics — always fetch max, filter client-side for instant range switching
+  const velocityTimeSeriesRaw = useQuery(
     api.metrics.getVelocityTimeSeries,
-    startupId ? { startupId, startDate: shippingStartDate } : 'skip'
+    startupId ? { startupId } : 'skip'
   )
   const commits = useQuery(
     api.metrics.getLatest,
@@ -234,15 +233,38 @@ export default function FounderAnalyticsPage() {
     startupId ? { startupId } : 'skip'
   )
 
-  // Per-founder GitHub data
-  const velocityPerFounder = useQuery(
+  // Per-founder GitHub data — always fetch max, filter client-side
+  const velocityPerFounderRaw = useQuery(
     api.metrics.getVelocityTimeSeriesPerFounder,
-    startupId ? { startupId, startDate: shippingStartDate } : 'skip'
+    startupId ? { startupId } : 'skip'
   )
   const perFounderStats = useQuery(
     api.metrics.getPerFounderGithubStats,
     startupId ? { startupId } : 'skip'
   )
+
+  // Client-side range filtering for instant dropdown switching
+  const velocityTimeSeries = useMemo(() => {
+    if (!velocityTimeSeriesRaw) return velocityTimeSeriesRaw
+    if (shippingRange === 'max') return velocityTimeSeriesRaw
+    const cutoff = new Date(mountTime)
+    cutoff.setDate(cutoff.getDate() - parseInt(shippingRange))
+    const cutoffStr = cutoff.toISOString()
+    return velocityTimeSeriesRaw.filter((d) => d.timestamp >= cutoffStr)
+  }, [velocityTimeSeriesRaw, shippingRange, mountTime])
+
+  const velocityPerFounder = useMemo(() => {
+    if (!velocityPerFounderRaw) return velocityPerFounderRaw
+    if (shippingRange === 'max') return velocityPerFounderRaw
+    const cutoff = new Date(mountTime)
+    cutoff.setDate(cutoff.getDate() - parseInt(shippingRange))
+    const cutoffStr = cutoff.toISOString()
+    const filtered: Record<string, Array<{ timestamp: string; value: number }>> = {}
+    for (const [name, series] of Object.entries(velocityPerFounderRaw)) {
+      filtered[name] = series.filter((d) => d.timestamp >= cutoffStr)
+    }
+    return filtered
+  }, [velocityPerFounderRaw, shippingRange, mountTime])
 
   // Compute velocity % change vs last week from contribution calendar
   // MUST be before the early return to avoid conditional hook calls

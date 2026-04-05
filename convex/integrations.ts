@@ -419,12 +419,13 @@ export const fullStatus = query({
         syncError: c.syncError,
         connectedByUserId: c.connectedByUserId,
       })),
-      // Founder list with GitHub connection status (fp.fullName is authoritative)
+      // Founder list with GitHub connection status
       founders: await (async () => {
         const founderProfiles = await ctx.db
           .query('founderProfiles')
           .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
           .collect()
+        const connUserIds = new Set(githubConns.map((c) => c.connectedByUserId).filter(Boolean))
         const seen = new Set<string>()
         return founderProfiles
           .filter((fp) => {
@@ -435,7 +436,7 @@ export const fullStatus = query({
           .map((fp) => ({
             userId: fp.userId,
             name: fp.fullName,
-            hasGithub: githubConns.some((c) => c.connectedByUserId === fp.userId),
+            hasGithub: connUserIds.has(fp.userId),
           }))
       })(),
       social: socialProfiles,
@@ -491,8 +492,7 @@ export const statusForAdmin = query({
       })
     )
 
-    // Get all founder profiles for this startup to show who hasn't connected
-    // Use fp.fullName as authoritative name (not user.fullName which may be stale)
+    // Get all founder profiles for this startup
     const founderProfiles = await ctx.db
       .query('founderProfiles')
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
@@ -506,10 +506,16 @@ export const statusForAdmin = query({
       return true
     })
 
+    // Build set of userIds that have a GitHub connection
+    const connectedUserIds = new Set(githubConns.map((c) => c.connectedByUserId).filter(Boolean))
+
+    // A founder "has github" if their userId OR any connection's resolved userName
+    // matches. But userId matching across tables is unreliable (admin vs founder user records).
+    // So we return raw data and let the frontend show connections + unconnected founders separately.
     const founders = uniqueProfiles.map((fp) => ({
       userId: fp.userId,
       name: fp.fullName,
-      hasGithub: githubConns.some((c) => c.connectedByUserId === fp.userId),
+      hasGithub: connectedUserIds.has(fp.userId),
     }))
 
     return {
