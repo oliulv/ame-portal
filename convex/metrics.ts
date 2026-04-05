@@ -844,6 +844,7 @@ export const fetchGithubMetrics = internalAction({
     let totalPrsOpened = 0
     let totalReviews = 0
     let totalIssues = 0
+    let successfulFetches = 0
     const calendarMap = new Map<string, number>() // date → sum of contributions
 
     for (const connection of connections) {
@@ -874,8 +875,37 @@ export const fetchGithubMetrics = internalAction({
         }
 
         const data = await response.json()
+
+        // Check for GraphQL-level errors (returned as HTTP 200)
+        if (data.errors) {
+          logConvexError(
+            `GitHub GraphQL errors for startup ${args.startupId}, connection ${connection._id} (@${connection.accountName}):`,
+            new Error(data.errors.map((e: any) => `${e.type ?? 'ERROR'}: ${e.message}`).join('; '))
+          )
+          // If data is also present (partial response), continue processing it
+          if (!data.data) continue
+        }
+
         const contrib = data.data?.viewer?.contributionsCollection
-        if (!contrib) continue
+        if (!contrib) {
+          logConvexError(
+            `GitHub returned no contributionsCollection for startup ${args.startupId}, connection ${connection._id} (@${connection.accountName}). ` +
+              `viewer login: ${data.data?.viewer?.login ?? 'unknown'}`,
+            null
+          )
+          continue
+        }
+
+        successfulFetches++
+
+        // Log per-connection breakdown for debugging
+        console.log(
+          `GitHub contributions for @${data.data.viewer.login} (startup ${args.startupId}): ` +
+            `commits=${contrib.totalCommitContributions}, ` +
+            `prs=${contrib.totalPullRequestContributions}, ` +
+            `reviews=${contrib.totalPullRequestReviewContributions}, ` +
+            `issues=${contrib.totalIssueContributions}`
+        )
 
         // Sum across founders (not average)
         totalCommits += contrib.totalCommitContributions ?? 0
@@ -900,6 +930,16 @@ export const fetchGithubMetrics = internalAction({
         )
         continue
       }
+    }
+
+    // Don't overwrite stored metrics with zeros if all API calls failed
+    if (successfulFetches === 0) {
+      logConvexError(
+        `All GitHub API calls failed for startup ${args.startupId} (${connections.length} connections). ` +
+          `Skipping metric storage to preserve existing data.`,
+        null
+      )
+      return
     }
 
     // Git Velocity scoring (summed across all founders)
