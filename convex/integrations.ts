@@ -371,7 +371,7 @@ export const fullStatus = query({
     const user = await requireFounder(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
     if (startupIds.length === 0)
-      return { stripe: null, github: null, githubConnections: [], social: [] }
+      return { stripe: null, github: null, githubConnections: [], founders: [], social: [] }
 
     const connections = await ctx.db
       .query('integrationConnections')
@@ -419,6 +419,23 @@ export const fullStatus = query({
         syncError: c.syncError,
         connectedByUserId: c.connectedByUserId,
       })),
+      // Founder list with GitHub connection status
+      founders: await (async () => {
+        const founderProfiles = await ctx.db
+          .query('founderProfiles')
+          .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
+          .collect()
+        return Promise.all(
+          founderProfiles.map(async (fp) => {
+            const u = await ctx.db.get(fp.userId)
+            return {
+              userId: fp.userId,
+              name: u?.fullName ?? fp.fullName,
+              hasGithub: githubConns.some((c) => c.connectedByUserId === fp.userId),
+            }
+          })
+        )
+      })(),
       social: socialProfiles,
     }
   },
@@ -451,6 +468,44 @@ export const statusForAdmin = query({
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
       .collect()
 
+    // Look up user names for GitHub connections
+    const githubConnectionsWithNames = await Promise.all(
+      githubConns.map(async (c) => {
+        let userName: string | undefined
+        if (c.connectedByUserId) {
+          const user = await ctx.db.get(c.connectedByUserId)
+          userName = user?.fullName ?? undefined
+        }
+        return {
+          _id: c._id,
+          status: c.status,
+          accountName: c.accountName,
+          connectedAt: c.connectedAt,
+          lastSyncedAt: c.lastSyncedAt,
+          syncError: c.syncError,
+          connectedByUserId: c.connectedByUserId,
+          userName,
+        }
+      })
+    )
+
+    // Get all founder profiles for this startup to show who hasn't connected
+    const founderProfiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+
+    const founders = await Promise.all(
+      founderProfiles.map(async (fp) => {
+        const user = await ctx.db.get(fp.userId)
+        return {
+          userId: fp.userId,
+          name: user?.fullName ?? fp.fullName ?? 'Unknown',
+          hasGithub: githubConns.some((c) => c.connectedByUserId === fp.userId),
+        }
+      })
+    )
+
     return {
       stripe: stripeConn
         ? {
@@ -480,6 +535,8 @@ export const statusForAdmin = query({
               syncError: githubConns.find((c) => c.syncError)?.syncError,
             }
           : null,
+      githubConnections: githubConnectionsWithNames,
+      founders,
       social: socialProfiles,
     }
   },

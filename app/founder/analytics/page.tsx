@@ -11,7 +11,17 @@ import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { VelocityScore } from '@/components/analytics/velocity-score'
 import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
 import { MrrWaterfall } from '@/components/analytics/mrr-waterfall'
-import { Plug, TrendingUp, Eye, Github, CreditCard, Ship, LayoutDashboard } from 'lucide-react'
+import {
+  Plug,
+  TrendingUp,
+  Eye,
+  Github,
+  CreditCard,
+  Ship,
+  LayoutDashboard,
+  Users,
+  User,
+} from 'lucide-react'
 import Link from 'next/link'
 
 type AnalyticsTab = 'overview' | 'stripe' | 'traffic' | 'shipping'
@@ -71,6 +81,7 @@ export default function FounderAnalyticsPage() {
   const [sessionsRange, setSessionsRange] = useState('max')
   const [pageviewsRange, setPageviewsRange] = useState('max')
   const [shippingRange, setShippingRange] = useState('max')
+  const [shippingView, setShippingView] = useState<'team' | 'individual'>('team')
 
   // Stable mount time to avoid impure Date calls in render
   const [mountTime] = useState(() => Date.now())
@@ -212,6 +223,16 @@ export default function FounderAnalyticsPage() {
   )
   const contributionCalendar = useQuery(
     api.metrics.getContributionCalendar,
+    startupId ? { startupId } : 'skip'
+  )
+
+  // Per-founder GitHub data
+  const velocityPerFounder = useQuery(
+    api.metrics.getVelocityTimeSeriesPerFounder,
+    startupId ? { startupId, startDate: shippingStartDate } : 'skip'
+  )
+  const perFounderStats = useQuery(
+    api.metrics.getPerFounderGithubStats,
     startupId ? { startupId } : 'skip'
   )
 
@@ -722,10 +743,41 @@ export default function FounderAnalyticsPage() {
                 </Card>
               ) : (
                 <>
+                  {/* Team / Individual toggle */}
+                  {(integrationStatus?.githubConnections?.length ?? 0) > 1 && (
+                    <div className="flex items-center gap-1 rounded-lg border p-1 w-fit">
+                      <button
+                        onClick={() => setShippingView('team')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                          shippingView === 'team'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <Users className="h-3.5 w-3.5" />
+                        Team
+                      </button>
+                      <button
+                        onClick={() => setShippingView('individual')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                          shippingView === 'individual'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <User className="h-3.5 w-3.5" />
+                        Per Founder
+                      </button>
+                    </div>
+                  )}
+
                   <VelocityScore
                     commits={commits ?? 0}
                     prsOpened={prsOpened ?? 0}
                     totalScore={latestVelocity}
+                    perFounderStats={
+                      shippingView === 'team' && perFounderStats ? perFounderStats : undefined
+                    }
                   />
 
                   {/* Shipping Activity — computed from contribution calendar, full year available */}
@@ -738,6 +790,9 @@ export default function FounderAnalyticsPage() {
                     range={shippingRange}
                     onRangeChange={setShippingRange}
                     rangeOptions={githubRangeOptions}
+                    multiSeries={
+                      shippingView === 'team' && velocityPerFounder ? velocityPerFounder : undefined
+                    }
                   />
 
                   {contributionCalendar && <ContributionCalendar weeks={contributionCalendar} />}
