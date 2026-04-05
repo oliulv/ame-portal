@@ -35,6 +35,7 @@ import type * as invoiceValidation from "../invoiceValidation.js";
 import type * as invoices from "../invoices.js";
 import type * as leaderboard from "../leaderboard.js";
 import type * as lib_dateUtils from "../lib/dateUtils.js";
+import type * as lib_invoiceLogic from "../lib/invoiceLogic.js";
 import type * as lib_logging from "../lib/logging.js";
 import type * as lib_notificationTypes from "../lib/notificationTypes.js";
 import type * as lib_providers from "../lib/providers.js";
@@ -93,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   invoices: typeof invoices;
   leaderboard: typeof leaderboard;
   "lib/dateUtils": typeof lib_dateUtils;
+  "lib/invoiceLogic": typeof lib_invoiceLogic;
   "lib/logging": typeof lib_logging;
   "lib/notificationTypes": typeof lib_notificationTypes;
   "lib/providers": typeof lib_providers;
