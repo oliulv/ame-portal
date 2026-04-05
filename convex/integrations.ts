@@ -197,6 +197,16 @@ export const storeGithubConnection = mutation({
 
     const existing = allGithubConns.find((c) => c.accountId === args.accountId)
 
+    // Prevent the same GitHub account from being connected by a different user (would double-count)
+    const duplicateByOther = allGithubConns.find(
+      (c) => c.accountId === args.accountId && c.isActive && c.connectedByUserId !== user._id
+    )
+    if (duplicateByOther) {
+      throw new Error(
+        `GitHub account @${args.accountName ?? args.accountId} is already connected by another team member`
+      )
+    }
+
     const data = {
       startupId: args.startupId,
       provider: 'github' as const,
@@ -455,7 +465,10 @@ export const statusForAdmin = query({
         githubConns.length > 0
           ? {
               status: githubConns[0].status,
-              accountName: githubConns.map((c) => c.accountName).join(', '),
+              accountName: githubConns
+                .map((c) => c.accountName)
+                .filter(Boolean)
+                .join(', '),
               lastSyncedAt: githubConns[0].lastSyncedAt,
               syncError: githubConns.find((c) => c.syncError)?.syncError,
             }
