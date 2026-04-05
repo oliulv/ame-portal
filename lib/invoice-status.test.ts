@@ -44,7 +44,7 @@ describe('getInvoiceStatusLabel', () => {
   })
 
   it('should replace underscores with spaces for unknown status', () => {
-    expect(getInvoiceStatusLabel('some_other_status')).toBe('some other_status')
+    expect(getInvoiceStatusLabel('some_other_status')).toBe('some other status')
   })
 })
 

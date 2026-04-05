@@ -35,6 +35,10 @@ export function serializeUnknown(
     }
   }
 
+  // TODO: SECURITY — redaction only fires for object/array values because the
+  // primitive type guards (string, number, boolean) return early above. This means
+  // `{ password: "hunter2" }` will log "hunter2" in plaintext. Move this check
+  // above the primitive guards to redact all value types at sensitive keys.
   if (REDACTED_KEY_PATTERN.test(key)) return '[REDACTED]'
 
   if (Array.isArray(value)) {
