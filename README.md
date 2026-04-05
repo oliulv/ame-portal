@@ -61,8 +61,34 @@ bun run typecheck    # Type check
 bun run lint         # ESLint
 bun run lint:fix     # Auto-fix lint issues
 bun run format       # Prettier
-bun run check        # All checks
+bun test             # Run all tests
+bun run check        # All checks (lint + format + typecheck + test)
 ```
+
+## Testing
+
+Tests use [Bun's test runner](https://bun.sh/docs/cli/test) and are colocated with source files (`.test.ts` alongside the module they test).
+
+```bash
+bun test                        # Run all tests
+bun test convex/lib/scoring     # Run a specific test file
+bun test -- -t "slugify"        # Filter by test name
+```
+
+**What's covered:**
+
+- `convex/lib/scoring.ts` — scoring engine (growth rates, normalization, momentum)
+- `convex/lib/stripeMrr.ts` — MRR normalization from Stripe billing intervals
+- `convex/lib/slugify.ts` — URL slug generation and uniqueness
+- `convex/lib/tokens.ts` — token generation and expiration
+- `convex/lib/invoiceLogic.ts` — invoice numbering, status transitions, balance calculation
+- `convex/invoiceValidation.ts` — invoice filename validation
+- `convex/notifications.ts` — E.164 phone regex and auth checks
+- `lib/schemas.ts` — Zod validation schemas
+- `lib/invoice-status.ts` — status display variants, labels, and filters
+- `lib/logging.ts` — log serialization (truncation, redaction, depth limits)
+
+CI runs all tests automatically on every PR and push to main.
 
 ## Logging
 
