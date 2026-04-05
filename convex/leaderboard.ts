@@ -223,15 +223,7 @@ export const computeLeaderboard = query({
         weeklyTraffic.push(growthPct)
       }
 
-      // ── GitHub Activity (Velocity score, averaged per founder) ─
-      const founderCount =
-        (
-          await ctx.db
-            .query('founderProfiles')
-            .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
-            .collect()
-        ).length || 1
-
+      // ── GitHub Activity (Velocity score, summed across all founders) ─
       const velocityMetrics = await ctx.db
         .query('metricsData')
         .withIndex('by_startupId_provider_metricKey', (q) =>

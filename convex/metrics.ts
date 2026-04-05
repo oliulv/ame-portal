@@ -766,11 +766,16 @@ export const syncGithubForStartup = internalAction({
       await ctx.runAction(internal.metrics.fetchGithubMetrics, {
         startupId: args.startupId,
       })
-      await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
-        connectionId: args.connectionId,
-        status: 'active',
-        lastSyncedAt: new Date().toISOString(),
-      })
+
+      // Update lastSyncedAt on ALL connections for this startup (not just the triggering one)
+      const now = new Date().toISOString()
+      for (const conn of connections) {
+        await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+          connectionId: conn._id,
+          status: 'active',
+          lastSyncedAt: now,
+        })
+      }
     } catch (error) {
       logConvexError(`Error syncing GitHub for startup ${args.startupId}:`, error)
       await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {

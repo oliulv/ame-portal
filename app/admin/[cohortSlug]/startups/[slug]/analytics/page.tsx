@@ -59,8 +59,10 @@ export default function AdminStartupAnalyticsPage() {
   const slug = params.slug as string
 
   const [range, setRange] = useState('30')
+  const [shippingRange, setShippingRange] = useState('max')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('overview')
+  const [mountTime] = useState(() => Date.now())
 
   const startup = useQuery(api.startups.getBySlug, { slug })
   const startupId = startup?._id
@@ -144,10 +146,17 @@ export default function AdminStartupAnalyticsPage() {
     tsArgs ? { ...tsArgs, provider: 'tracker' as const, metricKey: 'pageviews' } : 'skip'
   )
 
-  // GitHub
-  const velocityScore = useQuery(
-    api.metrics.timeSeries,
-    tsArgs ? { ...tsArgs, provider: 'github' as const, metricKey: 'velocity_score' } : 'skip'
+  // GitHub — use getVelocityTimeSeries (computes from contribution calendar, has ~365 days)
+  const shippingStartDate = useMemo(() => {
+    if (shippingRange === 'max') return undefined
+    const d = new Date(mountTime)
+    d.setDate(d.getDate() - parseInt(shippingRange))
+    return d.toISOString()
+  }, [shippingRange, mountTime])
+
+  const velocityTimeSeries = useQuery(
+    api.metrics.getVelocityTimeSeries,
+    startupId ? { startupId, startDate: shippingStartDate } : 'skip'
   )
   const commits = useQuery(
     api.metrics.getLatest,
@@ -218,7 +227,9 @@ export default function AdminStartupAnalyticsPage() {
 
   const latestMrr = mrr?.length ? mrr[mrr.length - 1].value : 0
   const latestSessions = sessions?.length ? sessions[sessions.length - 1].value : 0
-  const latestVelocity = velocityScore?.length ? velocityScore[velocityScore.length - 1].value : 0
+  const latestVelocity = velocityTimeSeries?.length
+    ? velocityTimeSeries[velocityTimeSeries.length - 1].value
+    : 0
   const totalFollowers =
     (twitterFollowers ?? 0) + (instagramFollowers ?? 0) + (linkedinFollowers ?? 0)
 
@@ -272,7 +283,9 @@ export default function AdminStartupAnalyticsPage() {
               <SelectContent>
                 <SelectItem value="7">Last 7 days</SelectItem>
                 <SelectItem value="30">Last 30 days</SelectItem>
-                <SelectItem value="90">Last 90 days</SelectItem>
+                <SelectItem value="90">Last 3 months</SelectItem>
+                <SelectItem value="180">Last 6 months</SelectItem>
+                <SelectItem value="365">Last 12 months</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
@@ -351,8 +364,8 @@ export default function AdminStartupAnalyticsPage() {
                   <KpiCard
                     title="Velocity"
                     value={`${latestVelocity} pts`}
-                    change={computeGrowth(velocityScore)}
-                    sparklineData={toSparkline(velocityScore)}
+                    change={computeGrowth(velocityTimeSeries)}
+                    sparklineData={toSparkline(velocityTimeSeries)}
                     color="hsl(var(--chart-3))"
                   />
                 )}
@@ -692,15 +705,26 @@ export default function AdminStartupAnalyticsPage() {
                     totalScore={latestVelocity}
                   />
 
-                  {velocityScore && velocityScore.length > 0 && (
+                  {velocityTimeSeries && velocityTimeSeries.length > 0 && (
                     <MetricAreaChart
-                      title="Velocity Over Time"
-                      description="Daily velocity score trend"
-                      data={velocityScore.map((d) => ({
+                      title="Shipping Activity"
+                      description="Daily velocity score — 4-week rolling window with temporal decay"
+                      data={velocityTimeSeries.map((d) => ({
                         timestamp: d.timestamp,
                         value: d.value,
                       }))}
                       color="hsl(var(--chart-3))"
+                      formatValue={(v) => `${v.toLocaleString()} pts`}
+                      range={shippingRange}
+                      onRangeChange={setShippingRange}
+                      rangeOptions={[
+                        { value: '7', label: 'Last 7 days' },
+                        { value: '30', label: 'Last 30 days' },
+                        { value: '90', label: 'Last 3 months' },
+                        { value: '180', label: 'Last 6 months' },
+                        { value: '365', label: 'Last 12 months' },
+                        { value: 'max', label: 'Max' },
+                      ]}
                     />
                   )}
 

@@ -31,7 +31,7 @@ export async function GET() {
   })
 
   const redirectUri = `${appUrl}/api/integrations/github/callback`
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user%20repo&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`
 
   return NextResponse.redirect(url)
 }
