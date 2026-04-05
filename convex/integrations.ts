@@ -464,12 +464,19 @@ export const statusForAdmin = query({
       github:
         githubConns.length > 0
           ? {
-              status: githubConns[0].status,
+              // Active if any connection is active, error only if all are in error
+              status: githubConns.some((c) => c.status === 'active')
+                ? 'active'
+                : githubConns[0].status,
               accountName: githubConns
                 .map((c) => c.accountName)
                 .filter(Boolean)
                 .join(', '),
-              lastSyncedAt: githubConns[0].lastSyncedAt,
+              lastSyncedAt: githubConns
+                .map((c) => c.lastSyncedAt)
+                .filter(Boolean)
+                .sort()
+                .pop(),
               syncError: githubConns.find((c) => c.syncError)?.syncError,
             }
           : null,
