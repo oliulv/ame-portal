@@ -185,14 +185,17 @@ export const storeGithubConnection = mutation({
     accountName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireStartupAccess(ctx, args.startupId)
+    const user = await requireStartupAccess(ctx, args.startupId)
 
-    const existing = await ctx.db
+    // Find existing connection for the SAME GitHub account (re-auth), not just any connection
+    const allGithubConns = await ctx.db
       .query('integrationConnections')
       .withIndex('by_startupId_provider', (q) =>
         q.eq('startupId', args.startupId).eq('provider', 'github')
       )
-      .first()
+      .collect()
+
+    const existing = allGithubConns.find((c) => c.accountId === args.accountId)
 
     const data = {
       startupId: args.startupId,
@@ -202,6 +205,7 @@ export const storeGithubConnection = mutation({
       accessToken: args.accessToken,
       refreshToken: args.refreshToken,
       tokenExpiresAt: args.tokenExpiresAt,
+      connectedByUserId: user._id,
       status: 'active' as const,
       isActive: true,
       connectedAt: new Date().toISOString(),
@@ -233,15 +237,18 @@ export const disconnectGithub = mutation({
     const startupIds = await getFounderStartupIds(ctx, user._id)
     if (startupIds.length === 0) throw new Error('No startup found')
 
-    const connection = await ctx.db
+    // Find this user's GitHub connection specifically
+    const connections = await ctx.db
       .query('integrationConnections')
       .withIndex('by_startupId_provider', (q) =>
         q.eq('startupId', startupIds[0]).eq('provider', 'github')
       )
-      .first()
+      .collect()
 
-    if (connection) {
-      await ctx.db.patch(connection._id, { status: 'disconnected', isActive: false })
+    const myConnection = connections.find((c) => c.connectedByUserId === user._id) ?? connections[0]
+
+    if (myConnection) {
+      await ctx.db.patch(myConnection._id, { status: 'disconnected', isActive: false })
     }
   },
 })
@@ -349,7 +356,8 @@ export const fullStatus = query({
   handler: async (ctx) => {
     const user = await requireFounder(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
-    if (startupIds.length === 0) return { stripe: null, github: null, social: [] }
+    if (startupIds.length === 0)
+      return { stripe: null, github: null, githubConnections: [], social: [] }
 
     const connections = await ctx.db
       .query('integrationConnections')
@@ -357,7 +365,8 @@ export const fullStatus = query({
       .collect()
 
     const stripe = connections.find((c) => c.provider === 'stripe' && c.isActive)
-    const github = connections.find((c) => c.provider === 'github' && c.isActive)
+    const githubConns = connections.filter((c) => c.provider === 'github' && c.isActive)
+    const myGithub = githubConns.find((c) => c.connectedByUserId === user._id) ?? githubConns[0]
 
     const socialProfiles = await ctx.db
       .query('socialProfiles')
@@ -375,16 +384,27 @@ export const fullStatus = query({
             syncError: stripe.syncError,
           }
         : null,
-      github: github
+      // Primary connection (current user's, or first found) — for backward compat
+      github: myGithub
         ? {
-            _id: github._id,
-            status: github.status,
-            accountName: github.accountName,
-            connectedAt: github.connectedAt,
-            lastSyncedAt: github.lastSyncedAt,
-            syncError: github.syncError,
+            _id: myGithub._id,
+            status: myGithub.status,
+            accountName: myGithub.accountName,
+            connectedAt: myGithub.connectedAt,
+            lastSyncedAt: myGithub.lastSyncedAt,
+            syncError: myGithub.syncError,
           }
         : null,
+      // All active GitHub connections — for showing team members
+      githubConnections: githubConns.map((c) => ({
+        _id: c._id,
+        status: c.status,
+        accountName: c.accountName,
+        connectedAt: c.connectedAt,
+        lastSyncedAt: c.lastSyncedAt,
+        syncError: c.syncError,
+        connectedByUserId: c.connectedByUserId,
+      })),
       social: socialProfiles,
     }
   },
@@ -410,7 +430,7 @@ export const statusForAdmin = query({
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
       .collect()
 
-    const githubConn = connections.find((c) => c.provider === 'github' && c.isActive)
+    const githubConns = connections.filter((c) => c.provider === 'github' && c.isActive)
 
     const socialProfiles = await ctx.db
       .query('socialProfiles')
@@ -427,14 +447,15 @@ export const statusForAdmin = query({
           }
         : null,
       tracker: trackerWebsites.length > 0 ? { websiteCount: trackerWebsites.length } : null,
-      github: githubConn
-        ? {
-            status: githubConn.status,
-            accountName: githubConn.accountName,
-            lastSyncedAt: githubConn.lastSyncedAt,
-            syncError: githubConn.syncError,
-          }
-        : null,
+      github:
+        githubConns.length > 0
+          ? {
+              status: githubConns[0].status,
+              accountName: githubConns.map((c) => c.accountName).join(', '),
+              lastSyncedAt: githubConns[0].lastSyncedAt,
+              syncError: githubConns.find((c) => c.syncError)?.syncError,
+            }
+          : null,
       social: socialProfiles,
     }
   },

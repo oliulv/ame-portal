@@ -223,7 +223,7 @@ export const computeLeaderboard = query({
         weeklyTraffic.push(growthPct)
       }
 
-      // ── GitHub Activity (Velocity score, averaged per founder) ─
+      // ── GitHub Activity (Velocity score, summed across all founders) ─
       const founderCount =
         (
           await ctx.db
