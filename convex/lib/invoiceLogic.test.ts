@@ -52,6 +52,18 @@ describe('invoiceLogic', () => {
       expect(VALID_TRANSITIONS['rejected']).toEqual([])
       expect(VALID_TRANSITIONS['paid']).toEqual([])
     })
+
+    it('should reject all transitions from terminal states', () => {
+      const allStatuses = Object.keys(VALID_TRANSITIONS)
+      for (const target of allStatuses) {
+        expect(isValidTransition('rejected', target)).toBe(false)
+        expect(isValidTransition('paid', target)).toBe(false)
+      }
+    })
+
+    it('should reject self-transition on submitted', () => {
+      expect(isValidTransition('submitted', 'submitted')).toBe(false)
+    })
   })
 
   describe('computeNextInvoiceNumber', () => {
@@ -107,6 +119,35 @@ describe('invoiceLogic', () => {
       const invoices = [{ fileName: 'invoice 7.PDF', status: 'paid' }]
       expect(computeNextInvoiceNumber(invoices)).toBe(8)
     })
+
+    it('should return 1 when all invoices are rejected', () => {
+      const invoices = [
+        { fileName: 'Invoice 1.pdf', status: 'rejected' },
+        { fileName: 'Invoice 2.pdf', status: 'rejected' },
+        { fileName: 'Invoice 3.pdf', status: 'rejected' },
+      ]
+      expect(computeNextInvoiceNumber(invoices)).toBe(1)
+    })
+
+    it('should return 1 when all invoices are either batched or rejected', () => {
+      const invoices = [
+        { fileName: 'Invoice 1.pdf', status: 'rejected' },
+        { fileName: 'Invoice 2.pdf', status: 'submitted', batchedIntoId: 'batch-xyz' },
+        { fileName: 'Invoice 3.pdf', status: 'rejected' },
+        { fileName: 'Invoice 4.pdf', status: 'approved', batchedIntoId: 'batch-abc' },
+      ]
+      expect(computeNextInvoiceNumber(invoices)).toBe(1)
+    })
+
+    it('should ignore invoices with empty fileName', () => {
+      const invoices = [{ fileName: '', status: 'paid' }]
+      expect(computeNextInvoiceNumber(invoices)).toBe(1)
+    })
+
+    it('should ignore invoices with non-matching fileName like receipt.pdf', () => {
+      const invoices = [{ fileName: 'receipt.pdf', status: 'paid' }]
+      expect(computeNextInvoiceNumber(invoices)).toBe(1)
+    })
   })
 
   describe('computeAvailableBalance', () => {
@@ -132,6 +173,14 @@ describe('invoiceLogic', () => {
 
     it('should handle single milestone and single invoice', () => {
       expect(computeAvailableBalance([50000], [12500])).toBe(37500)
+    })
+
+    it('should clamp to 0 when milestone amounts are negative', () => {
+      expect(computeAvailableBalance([-1000], [])).toBe(0)
+    })
+
+    it('should return 0 when multiple invoices sum exactly to milestone total', () => {
+      expect(computeAvailableBalance([5000], [2000, 3000])).toBe(0)
     })
   })
 })

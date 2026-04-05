@@ -42,6 +42,12 @@ describe('serializeUnknown', () => {
       expect(result).toBe('a'.repeat(500) + '\u2026[truncated]')
       expect(result.length).toBe(500 + '\u2026[truncated]'.length)
     })
+
+    it('should truncate a 501-character string (boundary)', () => {
+      const str = 'a'.repeat(501)
+      const result = serializeUnknown(str) as string
+      expect(result).toBe('a'.repeat(500) + '\u2026[truncated]')
+    })
   })
 
   describe('bigint', () => {

@@ -36,6 +36,27 @@ describe('slugify', () => {
     const mixedResult = slugify(mixedLong)
     expect(mixedResult.length).toBeLessThanOrEqual(50)
     expect(mixedResult.endsWith('-')).toBe(false)
+    expect(mixedResult).toBe('a'.repeat(49))
+  })
+
+  it('should collapse consecutive spaces into a single hyphen', () => {
+    expect(slugify('foo  bar')).toBe('foo-bar')
+  })
+
+  it('should collapse consecutive special chars into a single hyphen', () => {
+    expect(slugify('foo@@bar')).toBe('foo-bar')
+  })
+
+  it('should preserve numbers', () => {
+    expect(slugify('Product 123')).toBe('product-123')
+  })
+
+  it('should replace underscores with hyphens', () => {
+    expect(slugify('foo_bar')).toBe('foo-bar')
+  })
+
+  it('should strip emoji and unicode beyond accents', () => {
+    expect(slugify('hello 🚀 world')).toBe('hello-world')
   })
 
   it('should return empty string for empty input', () => {
@@ -65,5 +86,17 @@ describe('generateUniqueSlug', () => {
 
   it('should return the base slug when existing array has unrelated slugs', () => {
     expect(generateUniqueSlug('my-slug', ['other-slug', 'another-one'])).toBe('my-slug')
+  })
+
+  it('should fill a gap in the collision sequence', () => {
+    expect(generateUniqueSlug('my-slug', ['my-slug', 'my-slug-3'])).toBe('my-slug-2')
+  })
+
+  it('should handle base slug ending with a number', () => {
+    expect(generateUniqueSlug('product-2', ['product-2'])).toBe('product-2-2')
+  })
+
+  it('should handle empty base slug with collision', () => {
+    expect(generateUniqueSlug('', [''])).toBe('-2')
   })
 })

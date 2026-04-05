@@ -74,4 +74,8 @@ describe('matchesInvoiceStatusFilter', () => {
     expect(matchesInvoiceStatusFilter('approved', 'rejected')).toBe(false)
     expect(matchesInvoiceStatusFilter('submitted', 'paid')).toBe(false)
   })
+
+  it('should return false for an invalid/unknown filter value', () => {
+    expect(matchesInvoiceStatusFilter('approved', 'invalid_filter' as any)).toBe(false)
+  })
 })
