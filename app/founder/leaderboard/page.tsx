@@ -368,14 +368,6 @@ export default function FounderLeaderboardPage() {
                         Excluded
                       </Badge>
                     )}
-                    {entry.qualified && !entry.excludeFromMetrics && (
-                      <Badge
-                        variant="default"
-                        className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                      >
-                        Qualified
-                      </Badge>
-                    )}
                     {entry.isFavoriteThisWeek && (
                       <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
                     )}

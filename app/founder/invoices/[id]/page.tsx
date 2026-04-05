@@ -155,7 +155,9 @@ export default function FounderInvoiceDetailPage() {
               <Landmark className="mr-2 h-4 w-4" />
               Bank Details
             </Button>
-            <Badge variant={getInvoiceStatusVariant(status)}>{getInvoiceStatusLabel(status)}</Badge>
+            <Badge variant={getInvoiceStatusVariant(status)} className="h-8 px-3 flex items-center">
+              {getInvoiceStatusLabel(status)}
+            </Badge>
           </div>
         </div>
       </div>

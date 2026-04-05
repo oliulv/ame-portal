@@ -301,7 +301,7 @@ export default function InvoiceDetailPage() {
             </Button>
             <Badge
               variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}
-              className="text-sm"
+              className="text-sm h-8 px-3 flex items-center"
             >
               {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
             </Badge>
