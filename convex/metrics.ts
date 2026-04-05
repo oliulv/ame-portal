@@ -137,7 +137,7 @@ export const timeSeries = query({
  * For each day in the requested range, looks back 28 days and sums:
  *   contribution_count × 10 × e^(-0.03 × days_ago)
  *
- * The contribution calendar gives us total contributions per day (commits + PRs + reviews
+ * The contribution calendar gives us total contributions per day (commits + PRs + issues
  * combined). We multiply by 10 as the base score unit, consistent with the velocity
  * scoring in the sync cron.
  */
@@ -244,6 +244,116 @@ export const getContributionCalendar = query({
       .first()
 
     return metric?.meta ?? null
+  },
+})
+
+/**
+ * Get per-founder velocity time series (one series per connected GitHub account).
+ * Returns { [founderName]: { timestamp, value }[] }
+ */
+export const getVelocityTimeSeriesPerFounder = query({
+  args: {
+    startupId: v.id('startups'),
+    startDate: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireStartupAccess(ctx, args.startupId)
+
+    const calendarMetric = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'contribution_calendar_by_founder')
+      )
+      .order('desc')
+      .first()
+
+    const perFounderCalendars = calendarMetric?.meta as
+      | Record<
+          string,
+          Array<{ contributionDays?: Array<{ date: string; contributionCount?: number }> }>
+        >
+      | undefined
+
+    if (!perFounderCalendars) return {}
+
+    const result: Record<string, Array<{ timestamp: string; value: number }>> = {}
+
+    for (const [founderName, calendar] of Object.entries(perFounderCalendars)) {
+      if (!calendar || calendar.length === 0) continue
+
+      const countByDay = new Map<string, number>()
+      for (const week of calendar) {
+        for (const day of week.contributionDays ?? []) {
+          countByDay.set(day.date, day.contributionCount ?? 0)
+        }
+      }
+      if (countByDay.size === 0) continue
+
+      const allDates = Array.from(countByDay.keys()).sort()
+      const earliestDay = allDates[0]
+      const earliestOutput = new Date(earliestDay + 'T00:00:00.000Z')
+      earliestOutput.setDate(earliestOutput.getDate() + 28)
+
+      const requestedStart = args.startDate ? new Date(args.startDate) : earliestOutput
+      const outputStart =
+        requestedStart.getTime() > earliestOutput.getTime() ? requestedStart : earliestOutput
+
+      const today = new Date()
+      today.setUTCHours(0, 0, 0, 0)
+
+      const series: Array<{ timestamp: string; value: number }> = []
+      const current = new Date(outputStart)
+      current.setUTCHours(0, 0, 0, 0)
+
+      while (current <= today) {
+        let score = 0
+        for (let daysAgo = 0; daysAgo < 28; daysAgo++) {
+          const lookbackDate = new Date(current)
+          lookbackDate.setDate(lookbackDate.getDate() - daysAgo)
+          const dayStr = lookbackDate.toISOString().slice(0, 10)
+          const count = countByDay.get(dayStr) ?? 0
+          if (count > 0) {
+            score += count * 10 * Math.exp(-DECAY_RATE * daysAgo)
+          }
+        }
+        series.push({
+          timestamp: current.toISOString().slice(0, 10) + 'T00:00:00.000Z',
+          value: Math.round(score),
+        })
+        current.setDate(current.getDate() + 1)
+      }
+
+      result[founderName] = series
+    }
+
+    return result
+  },
+})
+
+/**
+ * Get per-founder GitHub stats (commits + PRs per connected account).
+ * Returns { [founderName]: { commits: number, prs: number } }
+ */
+export const getPerFounderGithubStats = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireStartupAccess(ctx, args.startupId)
+
+    const metric = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'github_stats_by_founder')
+      )
+      .order('desc')
+      .first()
+
+    return (metric?.meta as Record<string, { commits: number; prs: number }>) ?? {}
   },
 })
 
@@ -825,7 +935,6 @@ export const fetchGithubMetrics = internalAction({
         contributionsCollection(from: $from, to: $to) {
           totalCommitContributions
           totalPullRequestContributions
-          totalPullRequestReviewContributions
           totalIssueContributions
           contributionCalendar {
             weeks {
@@ -839,12 +948,16 @@ export const fetchGithubMetrics = internalAction({
       }
     }`
 
-    // Aggregate across all founders
+    // Aggregate across all founders + track per-founder breakdown
     let totalCommits = 0
     let totalPrsOpened = 0
-    let totalReviews = 0
     let totalIssues = 0
+    let successfulFetches = 0
     const calendarMap = new Map<string, number>() // date → sum of contributions
+
+    // Per-founder tracking
+    const perFounderCalendars: Record<string, Map<string, number>> = {}
+    const perFounderStats: Record<string, { commits: number; prs: number }> = {}
 
     for (const connection of connections) {
       if (!connection.accessToken) continue
@@ -874,25 +987,52 @@ export const fetchGithubMetrics = internalAction({
         }
 
         const data = await response.json()
+
+        // Check for GraphQL-level errors (returned as HTTP 200)
+        if (data.errors) {
+          logConvexError(
+            `GitHub GraphQL errors for startup ${args.startupId}, connection ${connection._id} (@${connection.accountName}):`,
+            new Error(data.errors.map((e: any) => `${e.type ?? 'ERROR'}: ${e.message}`).join('; '))
+          )
+          // If data is also present (partial response), continue processing it
+          if (!data.data) continue
+        }
+
         const contrib = data.data?.viewer?.contributionsCollection
-        if (!contrib) continue
+        if (!contrib) {
+          logConvexError(
+            `GitHub returned no contributionsCollection for startup ${args.startupId}, connection ${connection._id} (@${connection.accountName}). ` +
+              `viewer login: ${data.data?.viewer?.login ?? 'unknown'}`,
+            null
+          )
+          continue
+        }
+
+        successfulFetches++
+        const founderName = connection.accountName ?? connection._id
+
+        const connCommits = contrib.totalCommitContributions ?? 0
+        const connPrs = contrib.totalPullRequestContributions ?? 0
 
         // Sum across founders (not average)
-        totalCommits += contrib.totalCommitContributions ?? 0
-        totalPrsOpened += contrib.totalPullRequestContributions ?? 0
-        totalReviews += contrib.totalPullRequestReviewContributions ?? 0
+        totalCommits += connCommits
+        totalPrsOpened += connPrs
         totalIssues += contrib.totalIssueContributions ?? 0
 
-        // Merge contribution calendars (sum per day)
+        // Track per-founder stats
+        perFounderStats[founderName] = { commits: connCommits, prs: connPrs }
+
+        // Merge contribution calendars (sum per day) + track per-founder calendar
+        const founderCalendar = new Map<string, number>()
         const weeks = contrib.contributionCalendar?.weeks ?? []
         for (const week of weeks) {
           for (const day of week.contributionDays ?? []) {
-            calendarMap.set(
-              day.date,
-              (calendarMap.get(day.date) ?? 0) + (day.contributionCount ?? 0)
-            )
+            const count = day.contributionCount ?? 0
+            calendarMap.set(day.date, (calendarMap.get(day.date) ?? 0) + count)
+            founderCalendar.set(day.date, count)
           }
         }
+        perFounderCalendars[founderName] = founderCalendar
       } catch (error) {
         logConvexError(
           `GitHub fetch error for startup ${args.startupId}, connection ${connection._id}:`,
@@ -902,8 +1042,18 @@ export const fetchGithubMetrics = internalAction({
       }
     }
 
+    // Don't overwrite stored metrics with zeros if all API calls failed
+    if (successfulFetches === 0) {
+      logConvexError(
+        `All GitHub API calls failed for startup ${args.startupId} (${connections.length} connections). ` +
+          `Skipping metric storage to preserve existing data.`,
+        null
+      )
+      return
+    }
+
     // Git Velocity scoring (summed across all founders)
-    const velocityScore = totalCommits * 10 + totalPrsOpened * 25 + totalReviews * 30
+    const velocityScore = totalCommits * 10 + totalPrsOpened * 25
     const timestamp = now.toISOString()
 
     // Reconstruct merged calendar in GitHub's format
@@ -952,16 +1102,8 @@ export const fetchGithubMetrics = internalAction({
         {
           startupId: args.startupId,
           provider: 'github' as const,
-          metricKey: 'reviews',
-          value: totalReviews,
-          timestamp,
-          window: 'daily' as const,
-        },
-        {
-          startupId: args.startupId,
-          provider: 'github' as const,
           metricKey: 'total_contributions',
-          value: totalCommits + totalPrsOpened + totalReviews + totalIssues,
+          value: totalCommits + totalPrsOpened + totalIssues,
           timestamp,
           window: 'daily' as const,
         },
@@ -978,6 +1120,51 @@ export const fetchGithubMetrics = internalAction({
       window: 'daily' as const,
       meta: mergedCalendarWeeks,
     })
+
+    // Store per-founder breakdown for multi-founder analytics
+    if (Object.keys(perFounderStats).length > 0) {
+      // Convert per-founder calendar Maps to weeks format
+      const perFounderCalendarWeeks: Record<
+        string,
+        Array<{ contributionDays: Array<{ date: string; contributionCount: number }> }>
+      > = {}
+      for (const [name, dayMap] of Object.entries(perFounderCalendars)) {
+        const sorted = Array.from(dayMap.entries()).sort(([a], [b]) => a.localeCompare(b))
+        const weeks: Array<{
+          contributionDays: Array<{ date: string; contributionCount: number }>
+        }> = []
+        let week: Array<{ date: string; contributionCount: number }> = []
+        for (const [date, count] of sorted) {
+          week.push({ date, contributionCount: count })
+          if (week.length === 7) {
+            weeks.push({ contributionDays: week })
+            week = []
+          }
+        }
+        if (week.length > 0) weeks.push({ contributionDays: week })
+        perFounderCalendarWeeks[name] = weeks
+      }
+
+      await ctx.runMutation(internal.metrics.storeInternalWithMeta, {
+        startupId: args.startupId,
+        provider: 'github' as const,
+        metricKey: 'contribution_calendar_by_founder',
+        value: 0,
+        timestamp,
+        window: 'daily' as const,
+        meta: perFounderCalendarWeeks,
+      })
+
+      await ctx.runMutation(internal.metrics.storeInternalWithMeta, {
+        startupId: args.startupId,
+        provider: 'github' as const,
+        metricKey: 'github_stats_by_founder',
+        value: 0,
+        timestamp,
+        window: 'daily' as const,
+        meta: perFounderStats,
+      })
+    }
   },
 })
 

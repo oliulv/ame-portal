@@ -22,6 +22,7 @@ import { VelocityScore } from '@/components/analytics/velocity-score'
 import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
 import { SocialCard } from '@/components/analytics/social-card'
 import { MrrWaterfall } from '@/components/analytics/mrr-waterfall'
+import { GithubTeamStatus } from '@/components/analytics/github-team-status'
 import {
   ArrowLeft,
   RefreshCw,
@@ -31,6 +32,8 @@ import {
   Share2,
   Ship,
   LayoutDashboard,
+  Users,
+  User,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -62,6 +65,8 @@ export default function AdminStartupAnalyticsPage() {
   const [shippingRange, setShippingRange] = useState('max')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('overview')
+  // 'team' = whole team with per-founder breakdown, or a founder name for individual view
+  const [shippingView, setShippingView] = useState<string>('team')
   const [mountTime] = useState(() => Date.now())
 
   const startup = useQuery(api.startups.getBySlug, { slug })
@@ -73,12 +78,15 @@ export default function AdminStartupAnalyticsPage() {
   )
 
   const startDate = useMemo(() => {
+    if (range === 'max') return undefined
     const d = new Date()
     d.setDate(d.getDate() - parseInt(range))
     return d.toISOString()
   }, [range])
 
-  const tsArgs = startupId ? { startupId, window: 'daily' as const, startDate } : null
+  const tsArgs = startupId
+    ? { startupId, window: 'daily' as const, ...(startDate ? { startDate } : {}) }
+    : null
   const latArgs = startupId ? { startupId, window: 'daily' as const } : null
 
   // Stripe
@@ -146,17 +154,10 @@ export default function AdminStartupAnalyticsPage() {
     tsArgs ? { ...tsArgs, provider: 'tracker' as const, metricKey: 'pageviews' } : 'skip'
   )
 
-  // GitHub — use getVelocityTimeSeries (computes from contribution calendar, has ~365 days)
-  const shippingStartDate = useMemo(() => {
-    if (shippingRange === 'max') return undefined
-    const d = new Date(mountTime)
-    d.setDate(d.getDate() - parseInt(shippingRange))
-    return d.toISOString()
-  }, [shippingRange, mountTime])
-
-  const velocityTimeSeries = useQuery(
+  // GitHub — always fetch max, filter client-side for instant range switching
+  const velocityTimeSeriesRaw = useQuery(
     api.metrics.getVelocityTimeSeries,
-    startupId ? { startupId, startDate: shippingStartDate } : 'skip'
+    startupId ? { startupId } : 'skip'
   )
   const commits = useQuery(
     api.metrics.getLatest,
@@ -166,14 +167,43 @@ export default function AdminStartupAnalyticsPage() {
     api.metrics.getLatest,
     latArgs ? { ...latArgs, provider: 'github' as const, metricKey: 'prs_opened' } : 'skip'
   )
-  const reviews = useQuery(
-    api.metrics.getLatest,
-    latArgs ? { ...latArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
-  )
   const contributionCalendar = useQuery(
     api.metrics.getContributionCalendar,
     startupId ? { startupId } : 'skip'
   )
+
+  // Per-founder GitHub data — always fetch max, filter client-side
+  const velocityPerFounderRaw = useQuery(
+    api.metrics.getVelocityTimeSeriesPerFounder,
+    startupId ? { startupId } : 'skip'
+  )
+  const perFounderStats = useQuery(
+    api.metrics.getPerFounderGithubStats,
+    startupId ? { startupId } : 'skip'
+  )
+
+  // Client-side range filtering for instant dropdown switching
+  const velocityTimeSeries = useMemo(() => {
+    if (!velocityTimeSeriesRaw) return velocityTimeSeriesRaw
+    if (shippingRange === 'max') return velocityTimeSeriesRaw
+    const cutoff = new Date(mountTime)
+    cutoff.setDate(cutoff.getDate() - parseInt(shippingRange))
+    const cutoffStr = cutoff.toISOString()
+    return velocityTimeSeriesRaw.filter((d) => d.timestamp >= cutoffStr)
+  }, [velocityTimeSeriesRaw, shippingRange, mountTime])
+
+  const velocityPerFounder = useMemo(() => {
+    if (!velocityPerFounderRaw) return velocityPerFounderRaw
+    if (shippingRange === 'max') return velocityPerFounderRaw
+    const cutoff = new Date(mountTime)
+    cutoff.setDate(cutoff.getDate() - parseInt(shippingRange))
+    const cutoffStr = cutoff.toISOString()
+    const filtered: Record<string, Array<{ timestamp: string; value: number }>> = {}
+    for (const [name, series] of Object.entries(velocityPerFounderRaw)) {
+      filtered[name] = series.filter((d) => d.timestamp >= cutoffStr)
+    }
+    return filtered
+  }, [velocityPerFounderRaw, shippingRange, mountTime])
 
   // Social — latest
   const twitterFollowers = useQuery(
@@ -276,18 +306,28 @@ export default function AdminStartupAnalyticsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Select value={range} onValueChange={setRange}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">Last 7 days</SelectItem>
-                <SelectItem value="30">Last 30 days</SelectItem>
-                <SelectItem value="90">Last 3 months</SelectItem>
-                <SelectItem value="180">Last 6 months</SelectItem>
-                <SelectItem value="365">Last 12 months</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="relative group">
+              <Select value={range} onValueChange={setRange} disabled={activeTab === 'shipping'}>
+                <SelectTrigger
+                  className={`w-[160px] ${activeTab === 'shipping' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">Last 7 days</SelectItem>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="90">Last 3 months</SelectItem>
+                  <SelectItem value="180">Last 6 months</SelectItem>
+                  <SelectItem value="365">Last 12 months</SelectItem>
+                  <SelectItem value="max">Max</SelectItem>
+                </SelectContent>
+              </Select>
+              {activeTab === 'shipping' && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-popover border rounded-md shadow-md text-xs text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                  Shipping has its own time range below
+                </div>
+              )}
+            </div>
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               Sync
@@ -401,7 +441,6 @@ export default function AdminStartupAnalyticsPage() {
                   <VelocityScore
                     commits={commits ?? 0}
                     prsOpened={prsOpened ?? 0}
-                    reviews={reviews ?? 0}
                     totalScore={latestVelocity}
                   />
                 )}
@@ -698,37 +737,100 @@ export default function AdminStartupAnalyticsPage() {
                 />
               ) : (
                 <>
-                  <VelocityScore
-                    commits={commits ?? 0}
-                    prsOpened={prsOpened ?? 0}
-                    reviews={reviews ?? 0}
-                    totalScore={latestVelocity}
-                  />
-
-                  {velocityTimeSeries && velocityTimeSeries.length > 0 && (
-                    <MetricAreaChart
-                      title="Shipping Activity"
-                      description="Daily velocity score — 4-week rolling window with temporal decay"
-                      data={velocityTimeSeries.map((d) => ({
-                        timestamp: d.timestamp,
-                        value: d.value,
-                      }))}
-                      color="hsl(var(--chart-3))"
-                      formatValue={(v) => `${v.toLocaleString()} pts`}
-                      range={shippingRange}
-                      onRangeChange={setShippingRange}
-                      rangeOptions={[
-                        { value: '7', label: 'Last 7 days' },
-                        { value: '30', label: 'Last 30 days' },
-                        { value: '90', label: 'Last 3 months' },
-                        { value: '180', label: 'Last 6 months' },
-                        { value: '365', label: 'Last 12 months' },
-                        { value: 'max', label: 'Max' },
-                      ]}
+                  {/* GitHub connection overview */}
+                  {integrationStatus?.founders && integrationStatus.founders.length > 0 && (
+                    <GithubTeamStatus
+                      founders={integrationStatus.founders}
+                      githubConnections={integrationStatus.githubConnections ?? []}
                     />
                   )}
 
-                  {contributionCalendar && <ContributionCalendar weeks={contributionCalendar} />}
+                  {/* Team / Per Founder selector */}
+                  {(integrationStatus?.githubConnections?.length ?? 0) > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Select value={shippingView} onValueChange={setShippingView}>
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="team">
+                            <span className="flex items-center gap-1.5">
+                              <Users className="h-3.5 w-3.5" />
+                              Whole Team
+                            </span>
+                          </SelectItem>
+                          {integrationStatus?.githubConnections?.map((conn) => (
+                            <SelectItem key={conn._id} value={conn.accountName ?? conn._id}>
+                              <span className="flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5" />@{conn.accountName ?? 'Unknown'}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <VelocityScore
+                    commits={
+                      shippingView !== 'team' && perFounderStats?.[shippingView]
+                        ? perFounderStats[shippingView].commits
+                        : (commits ?? 0)
+                    }
+                    prsOpened={
+                      shippingView !== 'team' && perFounderStats?.[shippingView]
+                        ? perFounderStats[shippingView].prs
+                        : (prsOpened ?? 0)
+                    }
+                    totalScore={
+                      shippingView !== 'team' && perFounderStats?.[shippingView]
+                        ? perFounderStats[shippingView].commits * 10 +
+                          perFounderStats[shippingView].prs * 25
+                        : latestVelocity
+                    }
+                    perFounderStats={
+                      shippingView === 'team' && perFounderStats ? perFounderStats : undefined
+                    }
+                  />
+
+                  <MetricAreaChart
+                    title="Shipping Activity"
+                    description="Daily velocity score — 4-week rolling window with temporal decay"
+                    data={
+                      shippingView !== 'team' && velocityPerFounder?.[shippingView]
+                        ? velocityPerFounder[shippingView]
+                        : (velocityTimeSeries ?? []).map((d) => ({
+                            timestamp: d.timestamp,
+                            value: d.value,
+                          }))
+                    }
+                    color="hsl(var(--chart-3))"
+                    formatValue={(v) => `${v.toLocaleString()} pts`}
+                    range={shippingRange}
+                    onRangeChange={setShippingRange}
+                    rangeOptions={[
+                      { value: '7', label: 'Last 7 days' },
+                      { value: '30', label: 'Last 30 days' },
+                      { value: '90', label: 'Last 3 months' },
+                      { value: '180', label: 'Last 6 months' },
+                      { value: '365', label: 'Last 12 months' },
+                      { value: 'max', label: 'Max' },
+                    ]}
+                    multiSeries={
+                      shippingView === 'team' && velocityPerFounder ? velocityPerFounder : undefined
+                    }
+                  />
+
+                  {shippingView === 'team' && (
+                    <ContributionCalendar
+                      weeks={contributionCalendar ?? []}
+                      title={
+                        (integrationStatus?.githubConnections?.length ?? 0) > 1
+                          ? 'Team Contribution Calendar'
+                          : undefined
+                      }
+                    />
+                  )}
                 </>
               )}
             </div>

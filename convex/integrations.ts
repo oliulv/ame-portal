@@ -371,7 +371,7 @@ export const fullStatus = query({
     const user = await requireFounder(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
     if (startupIds.length === 0)
-      return { stripe: null, github: null, githubConnections: [], social: [] }
+      return { stripe: null, github: null, githubConnections: [], founders: [], social: [] }
 
     const connections = await ctx.db
       .query('integrationConnections')
@@ -380,12 +380,31 @@ export const fullStatus = query({
 
     const stripe = connections.find((c) => c.provider === 'stripe' && c.isActive)
     const githubConns = connections.filter((c) => c.provider === 'github' && c.isActive)
-    const myGithub = githubConns.find((c) => c.connectedByUserId === user._id) ?? githubConns[0]
+    const myGithub = githubConns.find((c) => c.connectedByUserId === user._id) ?? null
 
     const socialProfiles = await ctx.db
       .query('socialProfiles')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
       .collect()
+
+    // Founder list with GitHub connection status
+    const founderProfiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
+      .collect()
+    const connUserIds = new Set(githubConns.map((c) => c.connectedByUserId).filter(Boolean))
+    const seenFounderIds = new Set<string>()
+    const founders = founderProfiles
+      .filter((fp) => {
+        if (seenFounderIds.has(fp.userId)) return false
+        seenFounderIds.add(fp.userId)
+        return true
+      })
+      .map((fp) => ({
+        userId: fp.userId,
+        name: fp.fullName,
+        hasGithub: connUserIds.has(fp.userId),
+      }))
 
     return {
       stripe: stripe
@@ -398,7 +417,7 @@ export const fullStatus = query({
             syncError: stripe.syncError,
           }
         : null,
-      // Primary connection (current user's, or first found) — for backward compat
+      // Current user's own GitHub connection, or null if they haven't connected
       github: myGithub
         ? {
             _id: myGithub._id,
@@ -419,6 +438,7 @@ export const fullStatus = query({
         syncError: c.syncError,
         connectedByUserId: c.connectedByUserId,
       })),
+      founders,
       social: socialProfiles,
     }
   },
@@ -451,6 +471,49 @@ export const statusForAdmin = query({
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
       .collect()
 
+    // Look up user names for GitHub connections
+    const githubConnectionsWithNames = await Promise.all(
+      githubConns.map(async (c) => {
+        let userName: string | undefined
+        if (c.connectedByUserId) {
+          const user = await ctx.db.get(c.connectedByUserId)
+          userName = user?.fullName ?? undefined
+        }
+        return {
+          _id: c._id,
+          status: c.status,
+          accountName: c.accountName,
+          connectedAt: c.connectedAt,
+          lastSyncedAt: c.lastSyncedAt,
+          syncError: c.syncError,
+          connectedByUserId: c.connectedByUserId,
+          userName,
+        }
+      })
+    )
+
+    // Get all founder profiles for this startup
+    const founderProfiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+
+    // Deduplicate by userId (keep first profile per user)
+    const seenUserIds = new Set<string>()
+    const uniqueProfiles = founderProfiles.filter((fp) => {
+      if (seenUserIds.has(fp.userId)) return false
+      seenUserIds.add(fp.userId)
+      return true
+    })
+
+    const connectedUserIds = new Set(githubConns.map((c) => c.connectedByUserId).filter(Boolean))
+
+    const founders = uniqueProfiles.map((fp) => ({
+      userId: fp.userId,
+      name: fp.fullName,
+      hasGithub: connectedUserIds.has(fp.userId),
+    }))
+
     return {
       stripe: stripeConn
         ? {
@@ -480,6 +543,8 @@ export const statusForAdmin = query({
               syncError: githubConns.find((c) => c.syncError)?.syncError,
             }
           : null,
+      githubConnections: githubConnectionsWithNames,
+      founders,
       social: socialProfiles,
     }
   },

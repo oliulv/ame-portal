@@ -6,12 +6,29 @@ import { api } from '@/convex/_generated/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { KpiCard } from '@/components/analytics/kpi-card'
 import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { VelocityScore } from '@/components/analytics/velocity-score'
 import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
 import { MrrWaterfall } from '@/components/analytics/mrr-waterfall'
-import { Plug, TrendingUp, Eye, Github, CreditCard, Ship, LayoutDashboard } from 'lucide-react'
+import {
+  Plug,
+  TrendingUp,
+  Eye,
+  Github,
+  CreditCard,
+  Ship,
+  LayoutDashboard,
+  Users,
+  User,
+} from 'lucide-react'
 import Link from 'next/link'
 
 type AnalyticsTab = 'overview' | 'stripe' | 'traffic' | 'shipping'
@@ -71,6 +88,8 @@ export default function FounderAnalyticsPage() {
   const [sessionsRange, setSessionsRange] = useState('max')
   const [pageviewsRange, setPageviewsRange] = useState('max')
   const [shippingRange, setShippingRange] = useState('max')
+  // 'team' = whole team with per-founder breakdown, or a founder name for individual view
+  const [shippingView, setShippingView] = useState<string>('team')
 
   // Stable mount time to avoid impure Date calls in render
   const [mountTime] = useState(() => Date.now())
@@ -84,7 +103,7 @@ export default function FounderAnalyticsPage() {
 
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
-  const hasGithub = integrationStatus?.github?.status === 'active'
+  const hasGithub = (integrationStatus?.githubConnections?.length ?? 0) > 0
   const hasAnyIntegration = hasStripe || hasTracker || hasGithub
 
   // Per-chart start dates
@@ -92,7 +111,6 @@ export default function FounderAnalyticsPage() {
   const revenueStartDate = useStartDate(revenueRange, mountTime)
   const sessionsStartDate = useStartDate(sessionsRange, mountTime)
   const pageviewsStartDate = useStartDate(pageviewsRange, mountTime)
-  const shippingStartDate = useStartDate(shippingRange, mountTime)
 
   const latestArgs = startupId ? { startupId, window: 'daily' as const } : null
 
@@ -197,10 +215,10 @@ export default function FounderAnalyticsPage() {
       : 'skip'
   )
 
-  // GitHub metrics — velocity computed from contribution calendar (has full year)
-  const velocityTimeSeries = useQuery(
+  // GitHub metrics — always fetch max, filter client-side for instant range switching
+  const velocityTimeSeriesRaw = useQuery(
     api.metrics.getVelocityTimeSeries,
-    startupId ? { startupId, startDate: shippingStartDate } : 'skip'
+    startupId ? { startupId } : 'skip'
   )
   const commits = useQuery(
     api.metrics.getLatest,
@@ -210,14 +228,43 @@ export default function FounderAnalyticsPage() {
     api.metrics.getLatest,
     latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'prs_opened' } : 'skip'
   )
-  const reviews = useQuery(
-    api.metrics.getLatest,
-    latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
-  )
   const contributionCalendar = useQuery(
     api.metrics.getContributionCalendar,
     startupId ? { startupId } : 'skip'
   )
+
+  // Per-founder GitHub data — always fetch max, filter client-side
+  const velocityPerFounderRaw = useQuery(
+    api.metrics.getVelocityTimeSeriesPerFounder,
+    startupId ? { startupId } : 'skip'
+  )
+  const perFounderStats = useQuery(
+    api.metrics.getPerFounderGithubStats,
+    startupId ? { startupId } : 'skip'
+  )
+
+  // Client-side range filtering for instant dropdown switching
+  const velocityTimeSeries = useMemo(() => {
+    if (!velocityTimeSeriesRaw) return velocityTimeSeriesRaw
+    if (shippingRange === 'max') return velocityTimeSeriesRaw
+    const cutoff = new Date(mountTime)
+    cutoff.setDate(cutoff.getDate() - parseInt(shippingRange))
+    const cutoffStr = cutoff.toISOString()
+    return velocityTimeSeriesRaw.filter((d) => d.timestamp >= cutoffStr)
+  }, [velocityTimeSeriesRaw, shippingRange, mountTime])
+
+  const velocityPerFounder = useMemo(() => {
+    if (!velocityPerFounderRaw) return velocityPerFounderRaw
+    if (shippingRange === 'max') return velocityPerFounderRaw
+    const cutoff = new Date(mountTime)
+    cutoff.setDate(cutoff.getDate() - parseInt(shippingRange))
+    const cutoffStr = cutoff.toISOString()
+    const filtered: Record<string, Array<{ timestamp: string; value: number }>> = {}
+    for (const [name, series] of Object.entries(velocityPerFounderRaw)) {
+      filtered[name] = series.filter((d) => d.timestamp >= cutoffStr)
+    }
+    return filtered
+  }, [velocityPerFounderRaw, shippingRange, mountTime])
 
   // Compute velocity % change vs last week from contribution calendar
   // MUST be before the early return to avoid conditional hook calls
@@ -401,7 +448,6 @@ export default function FounderAnalyticsPage() {
                 <VelocityScore
                   commits={commits ?? 0}
                   prsOpened={prsOpened ?? 0}
-                  reviews={reviews ?? 0}
                   totalScore={latestVelocity}
                 />
               )}
@@ -455,7 +501,7 @@ export default function FounderAnalyticsPage() {
                       <div className="flex-1">
                         <p className="text-sm font-medium">Track development velocity</p>
                         <p className="text-sm text-muted-foreground">
-                          Connect GitHub to score commits, PRs, and code reviews on the leaderboard.
+                          Connect GitHub to score commits and PRs on the leaderboard.
                         </p>
                       </div>
                       <Link href="/founder/integrations?tab=github">
@@ -727,26 +773,83 @@ export default function FounderAnalyticsPage() {
                 </Card>
               ) : (
                 <>
+                  {/* Team / Per Founder selector */}
+                  {(integrationStatus?.githubConnections?.length ?? 0) > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Select value={shippingView} onValueChange={setShippingView}>
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="team">
+                            <span className="flex items-center gap-1.5">
+                              <Users className="h-3.5 w-3.5" />
+                              Whole Team
+                            </span>
+                          </SelectItem>
+                          {integrationStatus?.githubConnections?.map((conn) => (
+                            <SelectItem key={conn._id} value={conn.accountName ?? conn._id}>
+                              <span className="flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5" />@{conn.accountName ?? 'Unknown'}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   <VelocityScore
-                    commits={commits ?? 0}
-                    prsOpened={prsOpened ?? 0}
-                    reviews={reviews ?? 0}
-                    totalScore={latestVelocity}
+                    commits={
+                      shippingView !== 'team' && perFounderStats?.[shippingView]
+                        ? perFounderStats[shippingView].commits
+                        : (commits ?? 0)
+                    }
+                    prsOpened={
+                      shippingView !== 'team' && perFounderStats?.[shippingView]
+                        ? perFounderStats[shippingView].prs
+                        : (prsOpened ?? 0)
+                    }
+                    totalScore={
+                      shippingView !== 'team' && perFounderStats?.[shippingView]
+                        ? perFounderStats[shippingView].commits * 10 +
+                          perFounderStats[shippingView].prs * 25
+                        : latestVelocity
+                    }
+                    perFounderStats={
+                      shippingView === 'team' && perFounderStats ? perFounderStats : undefined
+                    }
                   />
 
                   {/* Shipping Activity — computed from contribution calendar, full year available */}
                   <MetricAreaChart
                     title="Shipping Activity"
                     description="Daily velocity score — 4-week rolling window with temporal decay"
-                    data={velocityTimeSeries ?? []}
+                    data={
+                      shippingView !== 'team' && velocityPerFounder?.[shippingView]
+                        ? velocityPerFounder[shippingView]
+                        : (velocityTimeSeries ?? [])
+                    }
                     color="hsl(var(--primary))"
                     formatValue={(v) => `${v.toLocaleString()} pts`}
                     range={shippingRange}
                     onRangeChange={setShippingRange}
                     rangeOptions={githubRangeOptions}
+                    multiSeries={
+                      shippingView === 'team' && velocityPerFounder ? velocityPerFounder : undefined
+                    }
                   />
 
-                  {contributionCalendar && <ContributionCalendar weeks={contributionCalendar} />}
+                  {shippingView === 'team' && (
+                    <ContributionCalendar
+                      weeks={contributionCalendar ?? []}
+                      title={
+                        (integrationStatus?.githubConnections?.length ?? 0) > 1
+                          ? 'Team Contribution Calendar'
+                          : undefined
+                      }
+                    />
+                  )}
                 </>
               )}
             </div>
