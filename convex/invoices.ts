@@ -10,6 +10,11 @@ import {
   getFounderStartupIds,
 } from './auth'
 import { validateInvoiceFileName, extractInvoiceNumber } from './invoiceValidation'
+import {
+  isValidTransition,
+  computeNextInvoiceNumber,
+  computeAvailableBalance,
+} from './lib/invoiceLogic'
 
 /**
  * Generate a pre-signed upload URL for invoice files.
@@ -91,15 +96,7 @@ export const create = mutation({
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
 
-    const existingNumbers = existingInvoices
-      .filter((inv) => inv.status !== 'rejected' && !inv.batchedIntoId)
-      .map((inv) => {
-        const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
-        return match ? parseInt(match[1], 10) : 0
-      })
-      .filter((n) => n > 0)
-    const maxExisting = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
-    const expectedNext = maxExisting + 1
+    const expectedNext = computeNextInvoiceNumber(existingInvoices)
 
     const invoiceNum = extractInvoiceNumber(args.fileName)
     if (!invoiceNum || invoiceNum !== expectedNext) {
@@ -122,13 +119,11 @@ export const create = mutation({
       .query('milestones')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
-    const unlocked = milestones
-      .filter((m) => m.status === 'approved')
-      .reduce((sum, m) => sum + m.amount, 0)
-    const deployed = existingInvoices
+    const unlockedAmounts = milestones.filter((m) => m.status === 'approved').map((m) => m.amount)
+    const deployedAmounts = existingInvoices
       .filter((i) => i.status === 'paid' && !i.batchedIntoId)
-      .reduce((sum, i) => sum + i.amountGbp, 0)
-    const available = Math.max(0, unlocked - deployed)
+      .map((i) => i.amountGbp)
+    const available = computeAvailableBalance(unlockedAmounts, deployedAmounts)
 
     if (available <= 0) {
       throw new ConvexError(
@@ -191,18 +186,9 @@ export const getFounderInvoiceInfo = query({
       .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
       .collect()
 
-    const existingNumbers = invoices
-      .filter((inv) => inv.status !== 'rejected' && !inv.batchedIntoId)
-      .map((inv) => {
-        const match = inv.fileName.match(/Invoice (\d+)\.pdf$/i)
-        return match ? parseInt(match[1], 10) : 0
-      })
-      .filter((n) => n > 0)
-    const maxExisting = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
-
     return {
       startupName: startup.name,
-      nextInvoiceNumber: maxExisting + 1,
+      nextInvoiceNumber: computeNextInvoiceNumber(invoices),
     }
   },
 })
@@ -388,16 +374,7 @@ export const updateStatus = mutation({
     }
 
     // Validate status transitions
-    const validTransitions: Record<string, string[]> = {
-      submitted: ['approved', 'rejected', 'under_review'],
-      under_review: ['approved', 'rejected'],
-      approved: ['paid'],
-      rejected: [],
-      paid: [],
-    }
-
-    const allowed = validTransitions[invoice.status] ?? []
-    if (!allowed.includes(args.status)) {
+    if (!isValidTransition(invoice.status, args.status)) {
       throw new Error(`Cannot change status from "${invoice.status}" to "${args.status}"`)
     }
 
