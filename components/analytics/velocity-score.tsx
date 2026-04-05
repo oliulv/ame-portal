@@ -15,24 +15,21 @@ import {
 interface VelocityScoreProps {
   commits: number
   prsOpened: number
-  reviews: number
   totalScore: number
 }
 
 const BARS = [
   { key: 'Commits', points: 10, color: 'hsl(var(--primary))' },
   { key: 'PRs', points: 25, color: 'hsl(var(--primary) / 0.7)' },
-  { key: 'Reviews', points: 30, color: 'hsl(var(--primary) / 0.5)' },
 ]
 
-export function VelocityScore({ commits, prsOpened, reviews, totalScore }: VelocityScoreProps) {
-  const rawTotal = commits * 10 + prsOpened * 25 + reviews * 30
+export function VelocityScore({ commits, prsOpened, totalScore }: VelocityScoreProps) {
+  const rawTotal = commits * 10 + prsOpened * 25
   const decayPct = rawTotal > 0 ? Math.round(((rawTotal - totalScore) / rawTotal) * 100) : 0
 
   const data = [
     { name: 'Commits', count: commits, points: commits * 10 },
     { name: 'PRs', count: prsOpened, points: prsOpened * 25 },
-    { name: 'Reviews', count: reviews, points: reviews * 30 },
   ]
 
   return (

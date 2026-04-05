@@ -616,7 +616,7 @@ export default function FounderDashboard() {
               <div className="flex-1">
                 <p className="text-sm font-medium">Track development velocity</p>
                 <p className="text-sm text-muted-foreground">
-                  Connect GitHub to score commits, PRs, and reviews on the leaderboard.
+                  Connect GitHub to score commits and PRs on the leaderboard.
                 </p>
               </div>
               <Link href="/founder/integrations?tab=github">

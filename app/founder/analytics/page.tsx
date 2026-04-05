@@ -210,10 +210,6 @@ export default function FounderAnalyticsPage() {
     api.metrics.getLatest,
     latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'prs_opened' } : 'skip'
   )
-  const reviews = useQuery(
-    api.metrics.getLatest,
-    latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
-  )
   const contributionCalendar = useQuery(
     api.metrics.getContributionCalendar,
     startupId ? { startupId } : 'skip'
@@ -401,7 +397,6 @@ export default function FounderAnalyticsPage() {
                 <VelocityScore
                   commits={commits ?? 0}
                   prsOpened={prsOpened ?? 0}
-                  reviews={reviews ?? 0}
                   totalScore={latestVelocity}
                 />
               )}
@@ -455,7 +450,7 @@ export default function FounderAnalyticsPage() {
                       <div className="flex-1">
                         <p className="text-sm font-medium">Track development velocity</p>
                         <p className="text-sm text-muted-foreground">
-                          Connect GitHub to score commits, PRs, and code reviews on the leaderboard.
+                          Connect GitHub to score commits and PRs on the leaderboard.
                         </p>
                       </div>
                       <Link href="/founder/integrations?tab=github">
@@ -730,7 +725,6 @@ export default function FounderAnalyticsPage() {
                   <VelocityScore
                     commits={commits ?? 0}
                     prsOpened={prsOpened ?? 0}
-                    reviews={reviews ?? 0}
                     totalScore={latestVelocity}
                   />
 

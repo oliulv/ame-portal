@@ -6,7 +6,7 @@
  * Categories (v1, no social):
  *   Revenue  25%  — MRR growth rate (week-over-week %)
  *   Traffic  20%  — Session growth rate (week-over-week %)
- *   GitHub   20%  — Commits + PRs + reviews (summed across founders)
+ *   GitHub   20%  — Commits + PRs (summed across founders)
  *   Updates  20%  — Weekly update submitted (binary) + streak bonus
  *   Milestones 15% — Approved / due milestones (completion rate)
  */

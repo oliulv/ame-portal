@@ -137,7 +137,7 @@ export const timeSeries = query({
  * For each day in the requested range, looks back 28 days and sums:
  *   contribution_count × 10 × e^(-0.03 × days_ago)
  *
- * The contribution calendar gives us total contributions per day (commits + PRs + reviews
+ * The contribution calendar gives us total contributions per day (commits + PRs + issues
  * combined). We multiply by 10 as the base score unit, consistent with the velocity
  * scoring in the sync cron.
  */
@@ -825,7 +825,6 @@ export const fetchGithubMetrics = internalAction({
         contributionsCollection(from: $from, to: $to) {
           totalCommitContributions
           totalPullRequestContributions
-          totalPullRequestReviewContributions
           totalIssueContributions
           contributionCalendar {
             weeks {
@@ -842,7 +841,6 @@ export const fetchGithubMetrics = internalAction({
     // Aggregate across all founders
     let totalCommits = 0
     let totalPrsOpened = 0
-    let totalReviews = 0
     let totalIssues = 0
     let successfulFetches = 0
     const calendarMap = new Map<string, number>() // date → sum of contributions
@@ -903,14 +901,12 @@ export const fetchGithubMetrics = internalAction({
           `GitHub contributions for @${data.data.viewer.login} (startup ${args.startupId}): ` +
             `commits=${contrib.totalCommitContributions}, ` +
             `prs=${contrib.totalPullRequestContributions}, ` +
-            `reviews=${contrib.totalPullRequestReviewContributions}, ` +
             `issues=${contrib.totalIssueContributions}`
         )
 
         // Sum across founders (not average)
         totalCommits += contrib.totalCommitContributions ?? 0
         totalPrsOpened += contrib.totalPullRequestContributions ?? 0
-        totalReviews += contrib.totalPullRequestReviewContributions ?? 0
         totalIssues += contrib.totalIssueContributions ?? 0
 
         // Merge contribution calendars (sum per day)
@@ -943,7 +939,7 @@ export const fetchGithubMetrics = internalAction({
     }
 
     // Git Velocity scoring (summed across all founders)
-    const velocityScore = totalCommits * 10 + totalPrsOpened * 25 + totalReviews * 30
+    const velocityScore = totalCommits * 10 + totalPrsOpened * 25
     const timestamp = now.toISOString()
 
     // Reconstruct merged calendar in GitHub's format
@@ -992,16 +988,8 @@ export const fetchGithubMetrics = internalAction({
         {
           startupId: args.startupId,
           provider: 'github' as const,
-          metricKey: 'reviews',
-          value: totalReviews,
-          timestamp,
-          window: 'daily' as const,
-        },
-        {
-          startupId: args.startupId,
-          provider: 'github' as const,
           metricKey: 'total_contributions',
-          value: totalCommits + totalPrsOpened + totalReviews + totalIssues,
+          value: totalCommits + totalPrsOpened + totalIssues,
           timestamp,
           window: 'daily' as const,
         },
@@ -1044,27 +1032,9 @@ export const debugGithubContributions = internalAction({
         contributionsCollection(from: $from, to: $to) {
           totalCommitContributions
           totalPullRequestContributions
-          totalPullRequestReviewContributions
           totalIssueContributions
           restrictedContributionsCount
           hasAnyRestrictedContributions
-          pullRequestReviewContributions(first: 10) {
-            totalCount
-            nodes {
-              occurredAt
-              isRestricted
-              pullRequestReview {
-                state
-                pullRequest {
-                  title
-                  repository {
-                    nameWithOwner
-                    isPrivate
-                  }
-                }
-              }
-            }
-          }
         }
       }
     }`

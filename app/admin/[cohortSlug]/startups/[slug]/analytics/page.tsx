@@ -166,10 +166,6 @@ export default function AdminStartupAnalyticsPage() {
     api.metrics.getLatest,
     latArgs ? { ...latArgs, provider: 'github' as const, metricKey: 'prs_opened' } : 'skip'
   )
-  const reviews = useQuery(
-    api.metrics.getLatest,
-    latArgs ? { ...latArgs, provider: 'github' as const, metricKey: 'reviews' } : 'skip'
-  )
   const contributionCalendar = useQuery(
     api.metrics.getContributionCalendar,
     startupId ? { startupId } : 'skip'
@@ -401,7 +397,6 @@ export default function AdminStartupAnalyticsPage() {
                   <VelocityScore
                     commits={commits ?? 0}
                     prsOpened={prsOpened ?? 0}
-                    reviews={reviews ?? 0}
                     totalScore={latestVelocity}
                   />
                 )}
@@ -701,7 +696,6 @@ export default function AdminStartupAnalyticsPage() {
                   <VelocityScore
                     commits={commits ?? 0}
                     prsOpened={prsOpened ?? 0}
-                    reviews={reviews ?? 0}
                     totalScore={latestVelocity}
                   />
 

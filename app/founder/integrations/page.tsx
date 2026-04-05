@@ -614,8 +614,7 @@ This enables session and pageview tracking. Place it on every page you want to t
               <CardHeader>
                 <CardTitle>Connect GitHub</CardTitle>
                 <CardDescription>
-                  Track development velocity — commits, PRs, and code reviews are scored on the
-                  leaderboard
+                  Track development velocity — commits and PRs are scored on the leaderboard
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
