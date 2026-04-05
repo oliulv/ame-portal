@@ -380,7 +380,7 @@ export const fullStatus = query({
 
     const stripe = connections.find((c) => c.provider === 'stripe' && c.isActive)
     const githubConns = connections.filter((c) => c.provider === 'github' && c.isActive)
-    const myGithub = githubConns.find((c) => c.connectedByUserId === user._id) ?? githubConns[0]
+    const myGithub = githubConns.find((c) => c.connectedByUserId === user._id) ?? null
 
     const socialProfiles = await ctx.db
       .query('socialProfiles')

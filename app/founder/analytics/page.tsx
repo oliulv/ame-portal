@@ -84,7 +84,7 @@ export default function FounderAnalyticsPage() {
 
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
-  const hasGithub = integrationStatus?.github?.status === 'active'
+  const hasGithub = (integrationStatus?.githubConnections?.length ?? 0) > 0
   const hasAnyIntegration = hasStripe || hasTracker || hasGithub
 
   // Per-chart start dates

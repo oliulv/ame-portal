@@ -72,7 +72,7 @@ export default function FounderDashboard() {
   const hasStripe = integrationStatus?.stripe?.status === 'active'
   const hasTracker = (trackerWebsites?.length ?? 0) > 0
   const trackerHasEvents = trackerWebsites?.some((w) => w.lastEventAt) ?? false
-  const hasGithub = fullIntegrationStatus?.github?.status === 'active'
+  const hasGithub = (fullIntegrationStatus?.githubConnections?.length ?? 0) > 0
   const hasSocial = (fullIntegrationStatus?.social?.length ?? 0) > 0
   const hasAnyIntegration = hasStripe || hasTracker || hasGithub || hasSocial
   const integrationsLoaded = integrationStatus !== undefined && trackerWebsites !== undefined
