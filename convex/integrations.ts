@@ -387,6 +387,25 @@ export const fullStatus = query({
       .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
       .collect()
 
+    // Founder list with GitHub connection status
+    const founderProfiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
+      .collect()
+    const connUserIds = new Set(githubConns.map((c) => c.connectedByUserId).filter(Boolean))
+    const seenFounderIds = new Set<string>()
+    const founders = founderProfiles
+      .filter((fp) => {
+        if (seenFounderIds.has(fp.userId)) return false
+        seenFounderIds.add(fp.userId)
+        return true
+      })
+      .map((fp) => ({
+        userId: fp.userId,
+        name: fp.fullName,
+        hasGithub: connUserIds.has(fp.userId),
+      }))
+
     return {
       stripe: stripe
         ? {
@@ -398,7 +417,7 @@ export const fullStatus = query({
             syncError: stripe.syncError,
           }
         : null,
-      // Primary connection (current user's, or first found) — for backward compat
+      // Current user's own GitHub connection, or null if they haven't connected
       github: myGithub
         ? {
             _id: myGithub._id,
@@ -419,26 +438,7 @@ export const fullStatus = query({
         syncError: c.syncError,
         connectedByUserId: c.connectedByUserId,
       })),
-      // Founder list with GitHub connection status
-      founders: await (async () => {
-        const founderProfiles = await ctx.db
-          .query('founderProfiles')
-          .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
-          .collect()
-        const connUserIds = new Set(githubConns.map((c) => c.connectedByUserId).filter(Boolean))
-        const seen = new Set<string>()
-        return founderProfiles
-          .filter((fp) => {
-            if (seen.has(fp.userId)) return false
-            seen.add(fp.userId)
-            return true
-          })
-          .map((fp) => ({
-            userId: fp.userId,
-            name: fp.fullName,
-            hasGithub: connUserIds.has(fp.userId),
-          }))
-      })(),
+      founders,
       social: socialProfiles,
     }
   },

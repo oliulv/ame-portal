@@ -810,7 +810,12 @@ export default function FounderAnalyticsPage() {
                         ? perFounderStats[shippingView].prs
                         : (prsOpened ?? 0)
                     }
-                    totalScore={latestVelocity}
+                    totalScore={
+                      shippingView !== 'team' && perFounderStats?.[shippingView]
+                        ? perFounderStats[shippingView].commits * 10 +
+                          perFounderStats[shippingView].prs * 25
+                        : latestVelocity
+                    }
                     perFounderStats={
                       shippingView === 'team' && perFounderStats ? perFounderStats : undefined
                     }
@@ -835,14 +840,16 @@ export default function FounderAnalyticsPage() {
                     }
                   />
 
-                  <ContributionCalendar
-                    weeks={contributionCalendar ?? []}
-                    title={
-                      (integrationStatus?.githubConnections?.length ?? 0) > 1
-                        ? 'Team Contribution Calendar'
-                        : undefined
-                    }
-                  />
+                  {shippingView === 'team' && (
+                    <ContributionCalendar
+                      weeks={contributionCalendar ?? []}
+                      title={
+                        (integrationStatus?.githubConnections?.length ?? 0) > 1
+                          ? 'Team Contribution Calendar'
+                          : undefined
+                      }
+                    />
+                  )}
                 </>
               )}
             </div>

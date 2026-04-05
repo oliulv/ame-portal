@@ -86,7 +86,7 @@ export function MetricAreaChart({
 
   // Multi-line mode: merge per-founder series into unified data points
   const founderNames = useMemo(() => (multiSeries ? Object.keys(multiSeries) : []), [multiSeries])
-  const isMultiLine = founderNames.length > 1
+  const isMultiLine = founderNames.length >= 1
 
   const multiLineData = useMemo(() => {
     if (!isMultiLine || !multiSeries) return []
