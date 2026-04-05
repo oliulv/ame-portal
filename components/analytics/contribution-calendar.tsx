@@ -15,6 +15,7 @@ interface ContributionWeek {
 
 interface ContributionCalendarProps {
   weeks: ContributionWeek[]
+  title?: string
 }
 
 // GitHub's exact contribution graph colors
@@ -28,7 +29,7 @@ function colorFor(count: number): string {
   return COLORS[4]
 }
 
-export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
+export function ContributionCalendar({ weeks, title }: ContributionCalendarProps) {
   // Filter to only weeks that have actual day data
   const validWeeks = useMemo(() => weeks.filter((w) => w.contributionDays.length > 0), [weeks])
 
@@ -71,7 +72,7 @@ export function ContributionCalendar({ weeks }: ContributionCalendarProps) {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Contributions</CardTitle>
+          <CardTitle className="text-base">{title ?? 'Contributions'}</CardTitle>
           <span className="text-sm text-muted-foreground tabular-nums">
             {totalContributions} in the last {validWeeks.length} weeks
           </span>

@@ -6,6 +6,13 @@ import { api } from '@/convex/_generated/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { KpiCard } from '@/components/analytics/kpi-card'
 import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { VelocityScore } from '@/components/analytics/velocity-score'
@@ -81,7 +88,8 @@ export default function FounderAnalyticsPage() {
   const [sessionsRange, setSessionsRange] = useState('max')
   const [pageviewsRange, setPageviewsRange] = useState('max')
   const [shippingRange, setShippingRange] = useState('max')
-  const [shippingView, setShippingView] = useState<'team' | 'individual'>('team')
+  // 'team' = whole team with per-founder breakdown, or a founder name for individual view
+  const [shippingView, setShippingView] = useState<string>('team')
 
   // Stable mount time to avoid impure Date calls in render
   const [mountTime] = useState(() => Date.now())
@@ -743,37 +751,43 @@ export default function FounderAnalyticsPage() {
                 </Card>
               ) : (
                 <>
-                  {/* Team / Individual toggle */}
+                  {/* Team / Per Founder selector */}
                   {(integrationStatus?.githubConnections?.length ?? 0) > 1 && (
-                    <div className="flex items-center gap-1 rounded-lg border p-1 w-fit">
-                      <button
-                        onClick={() => setShippingView('team')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
-                          shippingView === 'team'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        <Users className="h-3.5 w-3.5" />
-                        Team
-                      </button>
-                      <button
-                        onClick={() => setShippingView('individual')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
-                          shippingView === 'individual'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        <User className="h-3.5 w-3.5" />
-                        Per Founder
-                      </button>
+                    <div className="flex items-center gap-2">
+                      <Select value={shippingView} onValueChange={setShippingView}>
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="team">
+                            <span className="flex items-center gap-1.5">
+                              <Users className="h-3.5 w-3.5" />
+                              Whole Team
+                            </span>
+                          </SelectItem>
+                          {integrationStatus?.githubConnections?.map((conn) => (
+                            <SelectItem key={conn._id} value={conn.accountName ?? conn._id}>
+                              <span className="flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5" />@{conn.accountName ?? 'Unknown'}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
 
                   <VelocityScore
-                    commits={commits ?? 0}
-                    prsOpened={prsOpened ?? 0}
+                    commits={
+                      shippingView !== 'team' && perFounderStats?.[shippingView]
+                        ? perFounderStats[shippingView].commits
+                        : (commits ?? 0)
+                    }
+                    prsOpened={
+                      shippingView !== 'team' && perFounderStats?.[shippingView]
+                        ? perFounderStats[shippingView].prs
+                        : (prsOpened ?? 0)
+                    }
                     totalScore={latestVelocity}
                     perFounderStats={
                       shippingView === 'team' && perFounderStats ? perFounderStats : undefined
@@ -784,7 +798,11 @@ export default function FounderAnalyticsPage() {
                   <MetricAreaChart
                     title="Shipping Activity"
                     description="Daily velocity score — 4-week rolling window with temporal decay"
-                    data={velocityTimeSeries ?? []}
+                    data={
+                      shippingView !== 'team' && velocityPerFounder?.[shippingView]
+                        ? velocityPerFounder[shippingView]
+                        : (velocityTimeSeries ?? [])
+                    }
                     color="hsl(var(--primary))"
                     formatValue={(v) => `${v.toLocaleString()} pts`}
                     range={shippingRange}
@@ -795,7 +813,14 @@ export default function FounderAnalyticsPage() {
                     }
                   />
 
-                  {contributionCalendar && <ContributionCalendar weeks={contributionCalendar} />}
+                  <ContributionCalendar
+                    weeks={contributionCalendar ?? []}
+                    title={
+                      (integrationStatus?.githubConnections?.length ?? 0) > 1
+                        ? 'Team Contribution Calendar'
+                        : undefined
+                    }
+                  />
                 </>
               )}
             </div>

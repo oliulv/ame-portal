@@ -419,22 +419,24 @@ export const fullStatus = query({
         syncError: c.syncError,
         connectedByUserId: c.connectedByUserId,
       })),
-      // Founder list with GitHub connection status
+      // Founder list with GitHub connection status (fp.fullName is authoritative)
       founders: await (async () => {
         const founderProfiles = await ctx.db
           .query('founderProfiles')
           .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
           .collect()
-        return Promise.all(
-          founderProfiles.map(async (fp) => {
-            const u = await ctx.db.get(fp.userId)
-            return {
-              userId: fp.userId,
-              name: u?.fullName ?? fp.fullName,
-              hasGithub: githubConns.some((c) => c.connectedByUserId === fp.userId),
-            }
+        const seen = new Set<string>()
+        return founderProfiles
+          .filter((fp) => {
+            if (seen.has(fp.userId)) return false
+            seen.add(fp.userId)
+            return true
           })
-        )
+          .map((fp) => ({
+            userId: fp.userId,
+            name: fp.fullName,
+            hasGithub: githubConns.some((c) => c.connectedByUserId === fp.userId),
+          }))
       })(),
       social: socialProfiles,
     }
@@ -490,21 +492,25 @@ export const statusForAdmin = query({
     )
 
     // Get all founder profiles for this startup to show who hasn't connected
+    // Use fp.fullName as authoritative name (not user.fullName which may be stale)
     const founderProfiles = await ctx.db
       .query('founderProfiles')
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
       .collect()
 
-    const founders = await Promise.all(
-      founderProfiles.map(async (fp) => {
-        const user = await ctx.db.get(fp.userId)
-        return {
-          userId: fp.userId,
-          name: user?.fullName ?? fp.fullName ?? 'Unknown',
-          hasGithub: githubConns.some((c) => c.connectedByUserId === fp.userId),
-        }
-      })
-    )
+    // Deduplicate by userId (keep first profile per user)
+    const seenUserIds = new Set<string>()
+    const uniqueProfiles = founderProfiles.filter((fp) => {
+      if (seenUserIds.has(fp.userId)) return false
+      seenUserIds.add(fp.userId)
+      return true
+    })
+
+    const founders = uniqueProfiles.map((fp) => ({
+      userId: fp.userId,
+      name: fp.fullName,
+      hasGithub: githubConns.some((c) => c.connectedByUserId === fp.userId),
+    }))
 
     return {
       stripe: stripeConn
