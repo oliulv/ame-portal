@@ -10,7 +10,7 @@ const MAX_ARRAY_ITEMS = 20
 const MAX_OBJECT_KEYS = 40
 const MAX_STRING_LENGTH = 500
 
-function serializeUnknown(
+export function serializeUnknown(
   value: unknown,
   depth = 0,
   key = '',
