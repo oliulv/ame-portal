@@ -543,13 +543,21 @@ export const sendToXero = internalAction({
     // For batch invoices, merge original invoice files + receipts for Xero
     const originalIds: string[] = invoice.originalInvoiceStorageIds ?? []
     const originalNames: string[] = invoice.originalInvoiceFileNames ?? []
+
+    // Rename original invoices so it's clear which batch they belong to in Xero
+    const renamedOriginalNames = originalNames.map((name) => {
+      const origMatch = name.match(/Invoice (\d+)\.pdf$/i)
+      const origNum = origMatch?.[1] ?? '?'
+      return `${startupName} Batch ${invoiceNum} - Original Invoice ${origNum}.pdf`
+    })
+
     const receiptIds: string[] = [
       ...originalIds,
       ...(invoice.receiptStorageIds ??
         (invoice.receiptStorageId ? [invoice.receiptStorageId] : [])),
     ]
     const receiptNames: string[] = [
-      ...originalNames,
+      ...renamedOriginalNames,
       ...(invoice.receiptFileNames ?? (invoice.receiptFileName ? [invoice.receiptFileName] : [])),
     ]
 
