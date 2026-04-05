@@ -28,15 +28,7 @@ interface BankDetailsDialogProps {
   startupName: string
 }
 
-function CopyableField({
-  label,
-  value,
-  mono,
-}: {
-  label: string
-  value: string
-  mono?: boolean
-}) {
+function CopyableField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
@@ -65,7 +57,11 @@ function CopyableField({
           className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
           title={`Copy ${label.toLowerCase()}`}
         >
-          {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-green-600" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
         </button>
       </div>
     </div>

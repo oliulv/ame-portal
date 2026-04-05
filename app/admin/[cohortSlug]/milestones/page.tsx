@@ -127,7 +127,9 @@ function SortableWaveMilestoneRow({
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </button>
-      <div className={`h-5 w-5 rounded shrink-0 ${statusColors[milestone.status] || 'bg-gray-200'}`} />
+      <div
+        className={`h-5 w-5 rounded shrink-0 ${statusColors[milestone.status] || 'bg-gray-200'}`}
+      />
       <Link
         href={`/admin/${cohortSlug}/milestones/${milestone._id}`}
         className="text-sm font-medium truncate hover:underline"
@@ -549,10 +551,7 @@ export default function MilestonesAggregatePage() {
     const statusLabel = status === 'changes_requested' ? 'changes requested' : status
     const tooltipText = title ? `${title} (${statusLabel})` : statusLabel
     return (
-      <div
-        className={`h-6 w-6 rounded ${colors[status] || 'bg-gray-200'}`}
-        title={tooltipText}
-      />
+      <div className={`h-6 w-6 rounded ${colors[status] || 'bg-gray-200'}`} title={tooltipText} />
     )
   }
 
@@ -972,9 +971,7 @@ export default function MilestonesAggregatePage() {
               startupName={
                 waveData.startupList.find((s) => s._id === waveReorderStartupId)?.name ?? 'Startup'
               }
-              milestones={
-                waveData.customByStartup.get(waveReorderStartupId) ?? []
-              }
+              milestones={waveData.customByStartup.get(waveReorderStartupId) ?? []}
               onClose={() => setWaveReorderStartupId(null)}
               onReorder={async (ids) => {
                 try {
