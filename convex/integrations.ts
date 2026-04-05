@@ -506,12 +506,8 @@ export const statusForAdmin = query({
       return true
     })
 
-    // Build set of userIds that have a GitHub connection
     const connectedUserIds = new Set(githubConns.map((c) => c.connectedByUserId).filter(Boolean))
 
-    // A founder "has github" if their userId OR any connection's resolved userName
-    // matches. But userId matching across tables is unreliable (admin vs founder user records).
-    // So we return raw data and let the frontend show connections + unconnected founders separately.
     const founders = uniqueProfiles.map((fp) => ({
       userId: fp.userId,
       name: fp.fullName,
