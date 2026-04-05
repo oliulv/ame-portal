@@ -1011,14 +1011,6 @@ export const fetchGithubMetrics = internalAction({
         successfulFetches++
         const founderName = connection.accountName ?? connection._id
 
-        // Log per-connection breakdown for debugging
-        console.log(
-          `GitHub contributions for @${data.data.viewer.login} (startup ${args.startupId}): ` +
-            `commits=${contrib.totalCommitContributions}, ` +
-            `prs=${contrib.totalPullRequestContributions}, ` +
-            `issues=${contrib.totalIssueContributions}`
-        )
-
         const connCommits = contrib.totalCommitContributions ?? 0
         const connPrs = contrib.totalPullRequestContributions ?? 0
 

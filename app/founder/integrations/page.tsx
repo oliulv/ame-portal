@@ -700,7 +700,7 @@ This enables session and pageview tracking. Place it on every page you want to t
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
               <p>Your Git Velocity score is calculated from the last 4 weeks of activity:</p>
-              <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex justify-between bg-muted px-3 py-2">
                   <span>Commit</span>
                   <span className="font-mono font-medium">10 pts</span>
@@ -708,10 +708,6 @@ This enables session and pageview tracking. Place it on every page you want to t
                 <div className="flex justify-between bg-muted px-3 py-2">
                   <span>PR opened</span>
                   <span className="font-mono font-medium">25 pts</span>
-                </div>
-                <div className="flex justify-between bg-muted px-3 py-2">
-                  <span>Code review</span>
-                  <span className="font-mono font-medium">30 pts</span>
                 </div>
               </div>
               <p>
