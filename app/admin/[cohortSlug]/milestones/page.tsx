@@ -90,6 +90,13 @@ type MilestoneFilter = 'all' | 'waiting' | 'submitted' | 'approved' | 'changes_r
 type ViewTab = 'milestones' | 'templates'
 type MilestoneViewMode = 'list' | 'wave'
 
+const STATUS_COLORS: Record<string, string> = {
+  approved: 'bg-green-500',
+  submitted: 'bg-amber-500',
+  changes_requested: 'bg-orange-500',
+  waiting: 'bg-gray-300',
+}
+
 // --- Wave Reorder DnD row ---
 function SortableWaveMilestoneRow({
   milestone,
@@ -107,13 +114,6 @@ function SortableWaveMilestoneRow({
     opacity: isDragging ? 0.5 : 1,
   }
 
-  const statusColors: Record<string, string> = {
-    approved: 'bg-green-500',
-    submitted: 'bg-amber-500',
-    changes_requested: 'bg-orange-500',
-    waiting: 'bg-gray-300',
-  }
-
   return (
     <div
       ref={setNodeRef}
@@ -123,12 +123,13 @@ function SortableWaveMilestoneRow({
       <button
         {...attributes}
         {...listeners}
+        aria-label={`Drag to reorder ${milestone.title}`}
         className="cursor-grab active:cursor-grabbing touch-none p-1 hover:bg-muted rounded shrink-0"
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </button>
       <div
-        className={`h-5 w-5 rounded shrink-0 ${statusColors[milestone.status] || 'bg-gray-200'}`}
+        className={`h-5 w-5 rounded shrink-0 ${STATUS_COLORS[milestone.status] || 'bg-gray-200'}`}
       />
       <Link
         href={`/admin/${cohortSlug}/milestones/${milestone._id}`}
@@ -542,16 +543,13 @@ export default function MilestonesAggregatePage() {
   }
 
   function getWaveStatusIndicator(status: string, title?: string) {
-    const colors: Record<string, string> = {
-      approved: 'bg-green-500',
-      submitted: 'bg-amber-500',
-      changes_requested: 'bg-orange-500',
-      waiting: 'bg-gray-300',
-    }
     const statusLabel = status === 'changes_requested' ? 'changes requested' : status
     const tooltipText = title ? `${title} (${statusLabel})` : statusLabel
     return (
-      <div className={`h-6 w-6 rounded ${colors[status] || 'bg-gray-200'}`} title={tooltipText} />
+      <div
+        className={`h-6 w-6 rounded ${STATUS_COLORS[status] || 'bg-gray-200'}`}
+        title={tooltipText}
+      />
     )
   }
 
@@ -921,6 +919,7 @@ export default function MilestonesAggregatePage() {
                                     {customs && customs.length > 1 && (
                                       <button
                                         onClick={() => setWaveReorderStartupId(s._id)}
+                                        aria-label={`Reorder ${s.name}'s custom milestones`}
                                         className="text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
                                         title={`Reorder ${s.name}'s custom milestones`}
                                       >

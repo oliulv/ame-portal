@@ -189,7 +189,7 @@ export const setFavorite = mutation({
       favoritedBy: args.isFavorite ? user._id : undefined,
     })
 
-    // Notify founder when their update is favourited
+    // Notify founder when their update is favorited
     if (args.isFavorite) {
       const startup = await ctx.db.get(update.startupId)
       if (startup) {
@@ -197,6 +197,7 @@ export const setFavorite = mutation({
           founderId: update.founderId,
           startupName: startup.name,
           weekOf: update.weekOf,
+          cohortId: startup.cohortId,
         })
       }
     }

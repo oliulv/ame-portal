@@ -1414,18 +1414,20 @@ export const notifyWeeklyUpdateSubmitted = internalAction({
 })
 
 /**
- * Notify founder when their weekly update is favourited.
+ * Notify founder when their weekly update is favorited.
  */
 export const notifyWeeklyUpdateFavorited = internalAction({
   args: {
     founderId: v.id('users'),
     startupName: v.string(),
     weekOf: v.string(),
+    cohortId: v.optional(v.id('cohorts')),
   },
   handler: async (ctx, args) => {
     const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
       userIds: [args.founderId],
       notificationType: 'weeklyUpdateFavorited',
+      cohortId: args.cohortId,
     })
 
     if (recipients.length === 0) return
