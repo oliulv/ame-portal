@@ -1022,6 +1022,86 @@ export const fetchGithubMetrics = internalAction({
 })
 
 /**
+ * Diagnostic: query GitHub's GraphQL API directly and return the raw response.
+ * Run from the Convex dashboard to debug what GitHub actually returns for a connection.
+ */
+export const debugGithubContributions = internalAction({
+  args: { connectionId: v.id('integrationConnections') },
+  handler: async (ctx, args) => {
+    const connection: any = await ctx.runQuery(internal.integrations.getConnectionById, {
+      connectionId: args.connectionId,
+    })
+    if (!connection) return { error: 'Connection not found' }
+    if (!connection.accessToken) return { error: 'No access token' }
+
+    const now = new Date()
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+
+    // Query with extra diagnostic fields
+    const query = `query($from: DateTime!, $to: DateTime!) {
+      viewer {
+        login
+        contributionsCollection(from: $from, to: $to) {
+          totalCommitContributions
+          totalPullRequestContributions
+          totalPullRequestReviewContributions
+          totalIssueContributions
+          restrictedContributionsCount
+          hasAnyRestrictedContributions
+          pullRequestReviewContributions(first: 10) {
+            totalCount
+            nodes {
+              occurredAt
+              isRestricted
+              pullRequestReview {
+                state
+                pullRequest {
+                  title
+                  repository {
+                    nameWithOwner
+                    isPrivate
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }`
+
+    const response = await fetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${connection.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        variables: {
+          from: oneYearAgo.toISOString(),
+          to: now.toISOString(),
+        },
+      }),
+    })
+
+    const status = response.status
+    const body = await response.json()
+
+    console.log('=== GITHUB DEBUG RAW RESPONSE ===')
+    console.log(`HTTP ${status}`)
+    console.log(`Account: @${connection.accountName}`)
+    console.log(JSON.stringify(body, null, 2))
+    console.log('=== END DEBUG ===')
+
+    return {
+      httpStatus: status,
+      account: connection.accountName,
+      response: body,
+    }
+  },
+})
+
+/**
  * Get a single GitHub connection for a startup (legacy, used by integrations page).
  */
 export const getGithubConnection = internalQuery({
