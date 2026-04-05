@@ -33,12 +33,14 @@ import {
   ExternalLink,
   Calendar,
   Building2,
+  Landmark,
   User,
   TrendingDown,
   Eye,
   Clock,
   Zap,
 } from 'lucide-react'
+import { BankDetailsDialog } from '@/components/bank-details-dialog'
 import { InvoiceActions } from './InvoiceActions'
 import {
   getInvoiceStatusLabel,
@@ -93,6 +95,7 @@ export default function InvoiceDetailPage() {
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null)
   const [pdfViewerTitle, setPdfViewerTitle] = useState('')
   const [batchTriggered, setBatchTriggered] = useState(false)
+  const [showBankDetails, setShowBankDetails] = useState(false)
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const invoice = useQuery(api.invoices.getById, { id: invoiceId })
@@ -113,6 +116,10 @@ export default function InvoiceDetailPage() {
   const receiptFileNames: string[] =
     invoice?.receiptFileNames ?? (invoice?.receiptFileName ? [invoice.receiptFileName] : [])
 
+  const bankDetails = useQuery(
+    api.bankDetails.getByStartupId,
+    invoice?.startupId ? { startupId: invoice.startupId } : 'skip'
+  )
   const founderProfile = useQuery(
     api.founderProfile.getByUserId,
     invoice?.uploadedByUserId ? { userId: invoice.uploadedByUserId } : 'skip'
@@ -287,12 +294,18 @@ export default function InvoiceDetailPage() {
               Review invoice details and approve or reject reimbursement
             </p>
           </div>
-          <Badge
-            variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}
-            className="text-sm"
-          >
-            {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowBankDetails(true)}>
+              <Landmark className="mr-2 h-4 w-4" />
+              Bank Details
+            </Button>
+            <Badge
+              variant={getInvoiceStatusVariant(invoice.status as InvoiceStatus)}
+              className="text-sm"
+            >
+              {getInvoiceStatusLabel(invoice.status as InvoiceStatus)}
+            </Badge>
+          </div>
         </div>
       </div>
 
@@ -755,6 +768,13 @@ export default function InvoiceDetailPage() {
           )}
         </div>
       </div>
+
+      <BankDetailsDialog
+        open={showBankDetails}
+        onOpenChange={setShowBankDetails}
+        bankDetails={bankDetails}
+        startupName={startup?.name ?? 'Startup'}
+      />
 
       {/* PDF Viewer Modal */}
       <Dialog

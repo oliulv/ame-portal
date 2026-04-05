@@ -29,6 +29,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { BankDetailsDialog } from '@/components/bank-details-dialog'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import {
   DndContext,
@@ -1029,54 +1030,12 @@ export default function StartupDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Bank Details Dialog */}
-      <Dialog open={showBankDetailsDialog} onOpenChange={setShowBankDetailsDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Bank Details</DialogTitle>
-            <DialogDescription>Bank account details for {startup.name}.</DialogDescription>
-          </DialogHeader>
-          {bankDetails === undefined ? (
-            <div className="space-y-3 py-4">
-              <Skeleton className="h-5 w-full" />
-              <Skeleton className="h-5 w-3/4" />
-              <Skeleton className="h-5 w-1/2" />
-            </div>
-          ) : bankDetails === null ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              No bank details have been submitted yet.
-            </p>
-          ) : (
-            <div className="space-y-4 py-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Account Holder</p>
-                  <p className="mt-1">{bankDetails.accountHolderName}</p>
-                </div>
-                {bankDetails.bankName && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Bank Name</p>
-                    <p className="mt-1">{bankDetails.bankName}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Sort Code</p>
-                  <p className="mt-1 font-mono">{bankDetails.sortCode}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Account Number</p>
-                  <p className="mt-1 font-mono">{bankDetails.accountNumber}</p>
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBankDetailsDialog(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BankDetailsDialog
+        open={showBankDetailsDialog}
+        onOpenChange={setShowBankDetailsDialog}
+        bankDetails={bankDetails}
+        startupName={startup.name}
+      />
 
       {/* Invite Founder Dialog */}
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
