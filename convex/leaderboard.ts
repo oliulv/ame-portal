@@ -47,17 +47,17 @@ function powerLawNormalize(values: number[], p: number): number[] {
 function computeMomentum(
   _totalScore: number,
   data: {
-    weeklyRevenue: number[]
+    weeklyMrrGrowth: number[]
     weeklyTraffic: number[]
     weeklyGithub: number[]
   }
 ): 'up' | 'flat' | 'down' | null {
   const thisWeek =
-    Math.abs(data.weeklyRevenue[0] ?? 0) +
+    Math.abs(data.weeklyMrrGrowth[0] ?? 0) +
     Math.abs(data.weeklyTraffic[0] ?? 0) +
     Math.abs(data.weeklyGithub[0] ?? 0)
   const lastWeek =
-    Math.abs(data.weeklyRevenue[1] ?? 0) +
+    Math.abs(data.weeklyMrrGrowth[1] ?? 0) +
     Math.abs(data.weeklyTraffic[1] ?? 0) +
     Math.abs(data.weeklyGithub[1] ?? 0)
 
@@ -128,11 +128,11 @@ export const computeLeaderboard = query({
       string,
       {
         startup: Doc<'startups'>
-        weeklyRevenue: number[]
+        weeklyMrrGrowth: number[]
         weeklyTraffic: number[]
         weeklyGithub: number[]
         weeklySocial: number[]
-        totalRevenue: number
+        totalMrrGrowth: number
         totalTraffic: number
         totalGithub: number
         totalSocial: number
@@ -165,7 +165,7 @@ export const computeLeaderboard = query({
         )
         .collect()
 
-      const weeklyRevenue: number[] = []
+      const weeklyMrrGrowth: number[] = []
       for (let i = 0; i < weeks.length; i++) {
         const week = weeks[i]
         const prevWeek = weeks[i + 1]
@@ -188,7 +188,7 @@ export const computeLeaderboard = query({
           : 0
 
         const growthPct = prevWeekMrr > 0 ? ((thisWeekMrr - prevWeekMrr) / prevWeekMrr) * 100 : 0
-        weeklyRevenue.push(growthPct)
+        weeklyMrrGrowth.push(growthPct)
       }
 
       // ── Traffic Growth (WoW session % change) ────────────────
@@ -332,7 +332,7 @@ export const computeLeaderboard = query({
       const milestonesScore = totalMilestones > 0 ? (approvedMilestones / totalMilestones) * 100 : 0
 
       // ── Apply temporal decay to weekly scores ─────────────────
-      let totalRevenue = 0
+      let totalMrrGrowth = 0
       let totalTraffic = 0
       let totalGithub = 0
       let totalSocial = 0
@@ -340,7 +340,7 @@ export const computeLeaderboard = query({
       for (let i = 0; i < weeks.length; i++) {
         const daysOld = (now.getTime() - weeks[i].start.getTime()) / (1000 * 60 * 60 * 24)
         const decay = temporalDecay(daysOld)
-        totalRevenue += weeklyRevenue[i] * decay
+        totalMrrGrowth += weeklyMrrGrowth[i] * decay
         totalTraffic += weeklyTraffic[i] * decay
         totalGithub += weeklyGithub[i] * decay
         totalSocial += weeklySocial[i] * decay
@@ -360,18 +360,18 @@ export const computeLeaderboard = query({
           anomalies.push({ category: name, value: latest, threshold: mean + 2 * stdDev })
         }
       }
-      checkAnomaly('revenue', weeklyRevenue)
+      checkAnomaly('revenue', weeklyMrrGrowth)
       checkAnomaly('traffic', weeklyTraffic)
       checkAnomaly('github', weeklyGithub)
       checkAnomaly('social', weeklySocial)
 
       rawScores.set(startup._id, {
         startup,
-        weeklyRevenue,
+        weeklyMrrGrowth,
         weeklyTraffic,
         weeklyGithub,
         weeklySocial,
-        totalRevenue,
+        totalMrrGrowth,
         totalTraffic,
         totalGithub,
         totalSocial,
@@ -384,7 +384,7 @@ export const computeLeaderboard = query({
     }
 
     // ── Power law normalization for unbounded metrics ────────────
-    const revenueValues = Array.from(rawScores.values()).map((s) => s.totalRevenue)
+    const revenueValues = Array.from(rawScores.values()).map((s) => s.totalMrrGrowth)
     const trafficValues = Array.from(rawScores.values()).map((s) => s.totalTraffic)
     const githubValues = Array.from(rawScores.values()).map((s) => s.totalGithub)
     const socialValues = Array.from(rawScores.values()).map((s) => s.totalSocial)
@@ -427,7 +427,7 @@ export const computeLeaderboard = query({
 
       // Count active categories (non-zero) — 5 categories, no social
       const activeCategories = [
-        data.totalRevenue,
+        data.totalMrrGrowth,
         data.totalTraffic,
         data.totalGithub,
         data.updatesScore,
@@ -440,7 +440,7 @@ export const computeLeaderboard = query({
       const weeklyComposites: number[] = []
       for (let w = 0; w < weeks.length; w++) {
         weeklyComposites.push(
-          Math.abs(data.weeklyRevenue[w] ?? 0) +
+          Math.abs(data.weeklyMrrGrowth[w] ?? 0) +
             Math.abs(data.weeklyTraffic[w] ?? 0) +
             Math.abs(data.weeklyGithub[w] ?? 0)
         )
@@ -461,7 +461,7 @@ export const computeLeaderboard = query({
         totalScore: Math.round(totalScore * 100) / 100,
         categories: {
           revenue: {
-            raw: data.totalRevenue,
+            raw: data.totalMrrGrowth,
             normalized: normalizedRevenue[idx],
             weighted: weightedRevenue,
           },
@@ -566,10 +566,10 @@ export const computeLeaderboardForFounder = query({
     // Collect raw unbounded scores for normalization
     const rawData: Array<{
       startup: Doc<'startups'>
-      weeklyRevenue: number[]
+      weeklyMrrGrowth: number[]
       weeklyTraffic: number[]
       weeklyGithub: number[]
-      totalRevenue: number
+      totalMrrGrowth: number
       totalTraffic: number
       totalGithub: number
       totalSocial: number
@@ -588,8 +588,8 @@ export const computeLeaderboardForFounder = query({
         )
         .collect()
 
-      let totalRevenue = 0
-      const weeklyRevenue: number[] = []
+      let totalMrrGrowth = 0
+      const weeklyMrrGrowth: number[] = []
       for (let i = 0; i < weeks.length; i++) {
         const week = weeks[i]
         const prevWeek = weeks[i + 1]
@@ -609,9 +609,9 @@ export const computeLeaderboardForFounder = query({
               .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0)
           : 0
         const growth = prevVal > 0 ? ((thisVal - prevVal) / prevVal) * 100 : 0
-        weeklyRevenue.push(growth)
+        weeklyMrrGrowth.push(growth)
         const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-        totalRevenue += growth * temporalDecay(daysOld)
+        totalMrrGrowth += growth * temporalDecay(daysOld)
       }
 
       // Traffic
@@ -729,10 +729,10 @@ export const computeLeaderboardForFounder = query({
 
       rawData.push({
         startup: s,
-        weeklyRevenue,
+        weeklyMrrGrowth,
         weeklyTraffic,
         weeklyGithub,
-        totalRevenue,
+        totalMrrGrowth,
         totalTraffic,
         totalGithub,
         totalSocial,
@@ -745,7 +745,7 @@ export const computeLeaderboardForFounder = query({
 
     // Normalize
     const normRevenue = powerLawNormalize(
-      rawData.map((d) => d.totalRevenue),
+      rawData.map((d) => d.totalMrrGrowth),
       p
     )
     const normTraffic = powerLawNormalize(
@@ -772,7 +772,7 @@ export const computeLeaderboardForFounder = query({
 
       let total = rev + trf + git + soc + upd + mil
       const activeCats = [
-        d.totalRevenue,
+        d.totalMrrGrowth,
         d.totalTraffic,
         d.totalGithub,
         d.updatesScore,
@@ -783,7 +783,7 @@ export const computeLeaderboardForFounder = query({
       const weeklyComposites: number[] = []
       for (let w = 0; w < weeks.length; w++) {
         weeklyComposites.push(
-          Math.abs(d.weeklyRevenue[w] ?? 0) +
+          Math.abs(d.weeklyMrrGrowth[w] ?? 0) +
             Math.abs(d.weeklyTraffic[w] ?? 0) +
             Math.abs(d.weeklyGithub[w] ?? 0)
         )
