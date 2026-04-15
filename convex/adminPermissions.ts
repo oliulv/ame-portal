@@ -44,7 +44,12 @@ export const list = query({
 /**
  * Grant a permission to a user for a cohort.
  *
- * Omit `startupId` to grant cohort-wide (applies to every startup).
+ * Omit `startupId` to grant cohort-wide (applies to every startup). When
+ * granting cohort-wide we also delete any pre-existing startup-scoped
+ * rows for the same (user, cohort, permission) so the super-admin can
+ * later revoke the cohort-wide grant without silently re-enabling
+ * old narrow grants they may have forgotten about.
+ *
  * Provide `startupId` to restrict the grant to a single startup.
  */
 export const grant = mutation({
@@ -57,8 +62,6 @@ export const grant = mutation({
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx)
 
-    // Check for exact duplicate (same scope). A cohort-wide grant and a
-    // startup-scoped grant are distinct rows.
     const existing = await ctx.db
       .query('adminPermissions')
       .withIndex('by_userId_cohortId_permission', (q) =>
@@ -68,6 +71,15 @@ export const grant = mutation({
 
     const duplicate = existing.find((row) => (row.startupId ?? null) === (args.startupId ?? null))
     if (duplicate) return duplicate._id
+
+    // Cohort-wide grant supersedes any narrower startup-scoped rows.
+    if (args.startupId === undefined) {
+      for (const row of existing) {
+        if (row.startupId != null) {
+          await ctx.db.delete(row._id)
+        }
+      }
+    }
 
     return await ctx.db.insert('adminPermissions', {
       userId: args.userId,
