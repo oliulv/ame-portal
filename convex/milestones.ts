@@ -171,22 +171,10 @@ export const listSubmittedByCohort = query({
 
       for (const m of milestones) {
         if (m.status !== 'submitted') continue
-
-        // The milestone row's _creationTime is when the row was first
-        // created (usually when the template was assigned), not when the
-        // founder submitted it. The real submission time is the most
-        // recent milestoneEvents row with action === 'submitted' — a
-        // milestone can cycle through submit → changes_requested → submit
-        // again, and we want the latest.
-        const events = await ctx.db
-          .query('milestoneEvents')
-          .withIndex('by_milestoneId', (q) => q.eq('milestoneId', m._id))
-          .collect()
-        const lastSubmittedEvent = events
-          .filter((e) => e.action === 'submitted')
-          .sort((a, b) => b._creationTime - a._creationTime)[0]
-        const submittedAt = lastSubmittedEvent?._creationTime ?? m._creationTime
-
+        // `lastSubmittedAt` is written by the submit mutation (founder
+        // side). Rows created before that mutation landed fall back to
+        // `_creationTime` so the inbox still shows a sensible date.
+        const submittedAt = m.lastSubmittedAt ?? m._creationTime
         results.push({
           ...m,
           startupName: startup.name,
@@ -664,11 +652,13 @@ export const submit = mutation({
       throw new Error('Please provide a plan link or upload a plan file')
     }
 
+    const submittedAt = Date.now()
     await ctx.db.patch(args.id, {
       status: 'submitted',
       planLink: args.planLink,
       planStorageId: args.planStorageId,
       planFileName: args.planFileName,
+      lastSubmittedAt: submittedAt,
     })
 
     await ctx.db.insert('milestoneEvents', {
