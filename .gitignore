@@ -104,9 +104,6 @@ $RECYCLE.BIN/
 *.old
 *.orig
 
-# Clone script run logs
-clone-runs/
-
 # Database
 *.db
 *.sqlite
