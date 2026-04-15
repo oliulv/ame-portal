@@ -9,7 +9,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
 }
 
 export const CATEGORY_LABELS: Record<string, string> = {
-  revenue: 'Revenue',
+  revenue: 'MRR',
   traffic: 'Traffic',
   github: 'GitHub',
   updates: 'Updates',
@@ -26,9 +26,10 @@ export const CATEGORY_WEIGHTS: Record<string, number> = {
 
 const CATEGORY_DETAILS: Record<string, { signal: string; measurement: string; example: string }> = {
   revenue: {
-    signal: 'MRR growth rate',
-    measurement: 'Week-over-week % change in Monthly Recurring Revenue from Stripe',
-    example: 'Growing 20%/week scores higher than flat at 10x the revenue',
+    signal: 'Monthly Recurring Revenue growth',
+    measurement:
+      'Your MRR from Stripe subscriptions. We snapshot it each week and compare to last week to measure momentum — MRR itself is always a monthly figure.',
+    example: 'If your MRR was £5,000 last week and £6,000 this week, that is 20% growth.',
   },
   traffic: {
     signal: 'Session growth rate',
@@ -102,6 +103,11 @@ export function ScoringExplainerContent() {
               </tbody>
             </table>
           </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            <strong>Only active Stripe subscriptions count toward MRR.</strong> One-off payments,
+            invoices, consulting revenue, usage-based billing, and anything outside Stripe
+            subscriptions are not tracked on the leaderboard.
+          </p>
         </div>
 
         {/* Scoring mechanics */}

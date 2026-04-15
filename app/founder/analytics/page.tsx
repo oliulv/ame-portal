@@ -387,6 +387,8 @@ export default function FounderAnalyticsPage() {
                     title="MRR"
                     value={formatGBP(latestMrr, 2)}
                     change={computeGrowth(mrr)}
+                    changeLabel="vs last week's snapshot"
+                    subtitle="Monthly Recurring Revenue. Updated weekly from Stripe."
                     sparklineData={toSparkline(mrr)}
                     color="hsl(var(--chart-1))"
                   />
@@ -536,10 +538,17 @@ export default function FounderAnalyticsPage() {
                       title="MRR"
                       value={formatGBP(latestMrr, 2)}
                       change={computeGrowth(mrr)}
+                      changeLabel="vs last week's snapshot"
+                      subtitle="Monthly Recurring Revenue. Updated weekly from Stripe."
                       sparklineData={toSparkline(mrr)}
                       color="hsl(var(--chart-1))"
                     />
-                    <KpiCard title="ARR" value={formatGBP(arr ?? 0)} color="hsl(var(--chart-1))" />
+                    <KpiCard
+                      title="ARR"
+                      value={formatGBP(arr ?? 0)}
+                      subtitle="Annual Recurring Revenue. Projected from MRR."
+                      color="hsl(var(--chart-1))"
+                    />
                     <KpiCard
                       title="Active Customers"
                       value={(activeCustomers ?? 0).toLocaleString()}

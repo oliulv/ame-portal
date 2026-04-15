@@ -83,7 +83,7 @@ function WeeklyUpdateModal() {
                   {(streak ?? 0) > 0 && (
                     <Badge variant="secondary" className="text-xs">
                       <Flame className="mr-1 h-3 w-3 text-orange-500" />
-                      {streak}
+                      {streak} week streak
                     </Badge>
                   )}
                 </div>

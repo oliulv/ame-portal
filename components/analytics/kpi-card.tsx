@@ -9,6 +9,7 @@ interface KpiCardProps {
   value: string
   change?: number // percentage change (e.g. 12.5 or -3.2)
   changeLabel?: string // e.g. "vs last week"
+  subtitle?: string // optional clarifier rendered under the title
   sparklineData?: Array<{ value: number }>
   color?: string // CSS chart color variable like 'var(--chart-1)'
 }
@@ -18,6 +19,7 @@ export function KpiCard({
   value,
   change,
   changeLabel = 'vs last week',
+  subtitle,
   sparklineData,
   color = 'var(--chart-1)',
 }: KpiCardProps) {
@@ -31,6 +33,7 @@ export function KpiCard({
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">{title}</p>
             <p className="text-2xl font-bold">{value}</p>
+            {subtitle && <p className="text-[11px] text-muted-foreground">{subtitle}</p>}
             {change !== undefined && (
               <div className="flex items-center gap-1">
                 {isPositive ? (

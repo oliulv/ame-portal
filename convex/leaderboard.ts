@@ -9,7 +9,9 @@ import {
   QUALIFICATION_THRESHOLD,
   DECAY_RATE,
   computeConsistencyBonus,
+  computeUpdateScore,
 } from './lib/scoring'
+import { computeStreak } from './lib/streak'
 
 // Legacy weights map including social at 0 for backward compatibility
 // The shared scoring lib uses 5-category weights; this map keeps old code paths working
@@ -135,6 +137,7 @@ export const computeLeaderboard = query({
         totalGithub: number
         totalSocial: number
         updatesScore: number
+        updateStreak: number
         milestonesScore: number
         isFavoriteThisWeek: boolean
         anomalies: Array<{ category: string; value: number; threshold: number }>
@@ -298,16 +301,19 @@ export const computeLeaderboard = query({
         .collect()
 
       let updatesScore = 0
-      const streak = startup.updateStreak ?? 0
+      const streak = computeStreak(weeklyUpdates, now)
       const isFavoriteThisWeek = weeklyUpdates.some(
         (u) => u.weekOf === weeks[0].weekOf && u.isFavorite
       )
 
+      // Base 10 points per submitted week, scaled by the shared
+      // computeUpdateScore helper (1.0 → +0%, 1.8 → +80% at an 8-week streak).
+      const weekBase = computeUpdateScore(true, streak) * 10
+
       for (const week of weeks) {
         const update = weeklyUpdates.find((u) => u.weekOf === week.weekOf)
         if (update) {
-          let weekPoints = 10 // base points
-          weekPoints += Math.min(streak * 2, 10) // streak bonus capped at +10
+          let weekPoints = weekBase
           if (update.isFavorite) weekPoints += 25
 
           const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
@@ -370,6 +376,7 @@ export const computeLeaderboard = query({
         totalGithub,
         totalSocial,
         updatesScore,
+        updateStreak: streak,
         milestonesScore,
         isFavoriteThisWeek,
         anomalies,
@@ -485,7 +492,7 @@ export const computeLeaderboard = query({
         momentum: computeMomentum(totalScore, data),
         isFavoriteThisWeek: data.isFavoriteThisWeek,
         favoriteMultiplier,
-        updateStreak: data.startup.updateStreak ?? 0,
+        updateStreak: data.updateStreak,
         excludeFromMetrics: data.startup.excludeFromMetrics === true,
       })
     }
@@ -567,6 +574,7 @@ export const computeLeaderboardForFounder = query({
       totalGithub: number
       totalSocial: number
       updatesScore: number
+      updateStreak: number
       milestonesScore: number
       isFavoriteThisWeek: boolean
     }> = []
@@ -696,12 +704,13 @@ export const computeLeaderboardForFounder = query({
         .withIndex('by_startupId', (q) => q.eq('startupId', s._id))
         .collect()
       let updatesScore = 0
-      const streak = s.updateStreak ?? 0
+      const streak = computeStreak(updates, now)
+      const weekBase = computeUpdateScore(true, streak) * 10
       const isFavorite = updates.some((u) => u.weekOf === weeks[0].weekOf && u.isFavorite)
       for (const week of weeks) {
         const update = updates.find((u) => u.weekOf === week.weekOf)
         if (update) {
-          let pts = 10 + Math.min(streak * 2, 10)
+          let pts = weekBase
           if (update.isFavorite) pts += 25
           const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
           updatesScore += pts * temporalDecay(daysOld)
@@ -728,6 +737,7 @@ export const computeLeaderboardForFounder = query({
         totalGithub,
         totalSocial,
         updatesScore,
+        updateStreak: streak,
         milestonesScore,
         isFavoriteThisWeek: isFavorite,
       })
@@ -794,7 +804,7 @@ export const computeLeaderboardForFounder = query({
         qualified: activeCats >= QUALIFICATION_THRESHOLD,
         momentum: computeMomentum(total, d),
         isFavoriteThisWeek: d.isFavoriteThisWeek,
-        updateStreak: d.startup.updateStreak ?? 0,
+        updateStreak: d.updateStreak,
         excludeFromMetrics: d.startup.excludeFromMetrics === true,
       })
     }
