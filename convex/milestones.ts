@@ -171,10 +171,27 @@ export const listSubmittedByCohort = query({
 
       for (const m of milestones) {
         if (m.status !== 'submitted') continue
-        // `lastSubmittedAt` is written by the submit mutation (founder
-        // side). Rows created before that mutation landed fall back to
-        // `_creationTime` so the inbox still shows a sensible date.
-        const submittedAt = m.lastSubmittedAt ?? m._creationTime
+
+        // Preferred: the denormalized `lastSubmittedAt` stamped by the
+        // submit mutation. Rows predating the denormalization fall back
+        // to the most recent `milestoneEvents` row with action 'submitted'
+        // — still accurate, just an extra read per unmigrated row. The
+        // fallback disappears entirely once backfillMilestoneLastSubmittedAt
+        // has been run against the deployment.
+        let submittedAt: number
+        if (m.lastSubmittedAt !== undefined) {
+          submittedAt = m.lastSubmittedAt
+        } else {
+          const events = await ctx.db
+            .query('milestoneEvents')
+            .withIndex('by_milestoneId', (q) => q.eq('milestoneId', m._id))
+            .collect()
+          const latestSubmit = events
+            .filter((e) => e.action === 'submitted')
+            .sort((a, b) => b._creationTime - a._creationTime)[0]
+          submittedAt = latestSubmit?._creationTime ?? m._creationTime
+        }
+
         results.push({
           ...m,
           startupName: startup.name,

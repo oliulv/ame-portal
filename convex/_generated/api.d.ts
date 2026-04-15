@@ -48,6 +48,7 @@ import type * as lib_tokens from "../lib/tokens.js";
 import type * as lib_userCleanup from "../lib/userCleanup.js";
 import type * as metrics from "../metrics.js";
 import type * as migrations_backfillIsPartnership from "../migrations/backfillIsPartnership.js";
+import type * as migrations_backfillMilestoneLastSubmittedAt from "../migrations/backfillMilestoneLastSubmittedAt.js";
 import type * as migrations_stripBankDetailsVerified from "../migrations/stripBankDetailsVerified.js";
 import type * as migrations_stripUpdateStreak from "../migrations/stripUpdateStreak.js";
 import type * as migrations_updateSupabasePerk from "../migrations/updateSupabasePerk.js";
@@ -110,6 +111,7 @@ declare const fullApi: ApiFromModules<{
   "lib/userCleanup": typeof lib_userCleanup;
   metrics: typeof metrics;
   "migrations/backfillIsPartnership": typeof migrations_backfillIsPartnership;
+  "migrations/backfillMilestoneLastSubmittedAt": typeof migrations_backfillMilestoneLastSubmittedAt;
   "migrations/stripBankDetailsVerified": typeof migrations_stripBankDetailsVerified;
   "migrations/stripUpdateStreak": typeof migrations_stripUpdateStreak;
   "migrations/updateSupabasePerk": typeof migrations_updateSupabasePerk;

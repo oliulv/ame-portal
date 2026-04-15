@@ -67,6 +67,13 @@ function run(cmd: string) {
   execSync(cmd, { stdio: 'inherit' })
 }
 
+class FunctionNotFoundError extends Error {
+  constructor(fn: string) {
+    super(`Convex function not found: ${fn}`)
+    this.name = 'FunctionNotFoundError'
+  }
+}
+
 /**
  * Run a Convex function via `npx convex run` subprocess and return its
  * parsed JSON result. `target: 'prod'` adds `--prod`; `target: 'dev'`
@@ -81,9 +88,18 @@ function convexRun<T = unknown>(
   const argJson = JSON.stringify(args)
   const result = spawnSync('npx', ['convex', 'run', ...flags, fn, argJson], {
     encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
+  const stderr = result.stderr ?? ''
   if (result.status !== 0) {
+    // Distinguish "function not deployed to the target" from other
+    // errors so phase 2 can skip gracefully until the fileClone module
+    // lands on prod.
+    if (/Could not find function for/.test(stderr)) {
+      throw new FunctionNotFoundError(fn)
+    }
+    // Forward stderr for any other failure so the user sees the real cause.
+    process.stderr.write(stderr)
     throw new Error(`convex run ${target} ${fn} failed (exit ${result.status})`)
   }
   const stdout = result.stdout.trim()
@@ -152,20 +168,35 @@ async function phase2CopyFiles(
   limit: number,
   dryRun: boolean,
   logger: RunLogger
-): Promise<{ copied: number; failed: number }> {
+): Promise<{ copied: number; failed: number; skipped: boolean }> {
   console.log(`\n== Phase 2: selective file copy (top ${limit}) ==`)
 
-  const refs = convexRun<FileRef[]>('prod', 'fileClone:listRecentFileRefs', { limit })
+  let refs: FileRef[] | null
+  try {
+    refs = convexRun<FileRef[]>('prod', 'fileClone:listRecentFileRefs', { limit })
+  } catch (err) {
+    if (err instanceof FunctionNotFoundError) {
+      console.warn('\n[clone] Phase 2 skipped: the `fileClone` module is not deployed to prod yet.')
+      console.warn('[clone]   This is expected on the first run after upgrading the clone script.')
+      console.warn(
+        '[clone]   Deploy this branch to prod, then re-run `bun clone:prod --skip-db` to'
+      )
+      console.warn('[clone]   refresh dev files without re-importing the database.')
+      logger.log({ kind: 'phase2_skipped', reason: 'fileClone_not_on_prod' })
+      return { copied: 0, failed: 0, skipped: true }
+    }
+    throw err
+  }
   logger.log({ kind: 'refs_listed', count: refs?.length ?? 0 })
   console.log(`  Found ${refs?.length ?? 0} file refs.`)
 
-  if (!refs || refs.length === 0) return { copied: 0, failed: 0 }
+  if (!refs || refs.length === 0) return { copied: 0, failed: 0, skipped: false }
 
   if (dryRun) {
     for (const ref of refs) {
       console.log(`  [dry-run] ${ref.table}.${ref.fieldPath} → ${ref.storageId}`)
     }
-    return { copied: 0, failed: 0 }
+    return { copied: 0, failed: 0, skipped: false }
   }
 
   let copied = 0
@@ -201,7 +232,7 @@ async function phase2CopyFiles(
     process.stdout.write(`  ${Math.min(i + PARALLELISM, refs.length)} / ${refs.length}\r`)
   }
   process.stdout.write('\n')
-  return { copied, failed }
+  return { copied, failed, skipped: false }
 }
 
 function assertDevTarget(): void {
@@ -254,11 +285,15 @@ async function main() {
     }
   }
 
-  const { copied, failed } = await phase2CopyFiles(limit, dryRun, logger)
-  logger.log({ kind: 'run_finished', copied, failed })
-  console.log(
-    `\n[clone] Done. Copied ${copied}, failed ${failed}. Run log: clone-runs/${runId}.jsonl`
-  )
+  const { copied, failed, skipped } = await phase2CopyFiles(limit, dryRun, logger)
+  logger.log({ kind: 'run_finished', copied, failed, skipped })
+  if (skipped) {
+    console.log(`\n[clone] Done (phase 2 skipped). Run log: clone-runs/${runId}.jsonl`)
+  } else {
+    console.log(
+      `\n[clone] Done. Copied ${copied}, failed ${failed}. Run log: clone-runs/${runId}.jsonl`
+    )
+  }
 
   try {
     unlinkSync(EXPORT_PATH)
