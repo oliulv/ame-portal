@@ -78,12 +78,15 @@ bun test -- -t "slugify"        # Filter by test name
 **What's covered:**
 
 - `convex/lib/scoring.ts` — scoring engine (growth rates, normalization, momentum)
+- `convex/lib/streak.ts` — weekly-update streak computation (deadlines, duplicates, malformed weekOf)
 - `convex/lib/stripeMrr.ts` — MRR normalization from Stripe billing intervals
 - `convex/lib/slugify.ts` — URL slug generation and uniqueness
 - `convex/lib/tokens.ts` — token generation and expiration
 - `convex/lib/invoiceLogic.ts` — invoice numbering, status transitions, balance calculation
 - `convex/invoiceValidation.ts` — invoice filename validation
 - `convex/notifications.ts` — E.164 phone regex and auth checks
+- `convex/auth.ts` — delegated-permission decision logic (`permissionRowsGrantAccess`)
+- `convex/fileClone.ts` — schema-drift guard for `FILE_REF_FIELDS` (ensures every `_storage` schema reference stays registered)
 - `lib/schemas.ts` — Zod validation schemas
 - `lib/invoice-status.ts` — status display variants, labels, and filters
 - `lib/logging.ts` — log serialization (truncation, redaction, depth limits)

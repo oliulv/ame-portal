@@ -40,6 +40,30 @@
 
 **Depends on:** `convex-test` package installation and configuration.
 
+## Timezone-Aware Week Boundaries for Weekly Updates
+
+**What:** `convex/lib/dateUtils.ts:getMonday` uses UTC Mondays, so a founder in UTC+8 submitting Monday 7am local time lands in UTC Sunday and counts for the previous week. Consider per-user timezone preference or a more forgiving submission window.
+
+**Why:** Live streak now reads directly from `weeklyUpdates`, so any misclassification of `weekOf` directly affects the displayed streak. The problem was latent when a cron owned the value; it is observable now.
+
+**Depends on:** Decision on whether to store a per-user timezone or just widen the submit window.
+
+## Audit Log for Scoped Admin Approvals
+
+**What:** `adminPermissions` rows now support `startupId` scoping, but there is no audit log of which admin approved which milestone/invoice under which scope. Add a table that records `(adminUserId, action, targetId, permissionRowId, timestamp)` on every approval path.
+
+**Why:** Scoped permissions make delegation easier, which means more people approving more things. A trail matters once non-super-admins start acting on behalf of specific startups.
+
+**Depends on:** Agreement on retention policy and admin-facing UI for reviewing the log.
+
+## Rename `weeklyValues` Field in `scoring.test.ts`
+
+**What:** Test data in `convex/lib/scoring.test.ts` uses the key `weeklyValues` inside a `revenue:` object to represent week-over-week MRR growth rates, which is misleading. Rename to `weeklyMrrGrowth` next time those tests are touched.
+
+**Why:** The misleading name was a contributor to the MRR-vs-weekly-revenue copy confusion the fix PR addressed. Low priority, but worth cleaning up to prevent the same confusion resurfacing in reviews.
+
+**Depends on:** Nothing.
+
 ## React Component + E2E Tests
 
 **What:** Add component tests (happy-dom + React Testing Library) for key UI components and E2E tests (Playwright) for critical user flows (login, invoice submission, leaderboard).

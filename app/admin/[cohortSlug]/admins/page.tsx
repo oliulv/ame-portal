@@ -46,7 +46,17 @@ import {
 } from '@/components/ui/select'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Users, UserPlus, RotateCw, Trash2 } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import { Check, ChevronsUpDown, Users, UserPlus, RotateCw, Trash2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const adminInvitationSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -97,6 +107,9 @@ export default function AdminsPage() {
 
   // Fetch admin users filtered by cohort (skip if cohort not loaded yet)
   const adminUsers = useQuery(api.adminUsers.list, cohort ? { cohortId: cohort._id } : 'skip')
+
+  // Startups in this cohort (needed for startup-scoped permission grants)
+  const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
 
   // Fetch admin invitations for this cohort
   const invitations = useQuery(
@@ -197,11 +210,23 @@ export default function AdminsPage() {
     }
   }
 
-  function hasUserPermission(userId: string, permission: PermissionType) {
-    return permissions?.some((p) => p.userId === userId && p.permission === permission) ?? false
+  function hasCohortWidePermission(userId: string, permission: PermissionType) {
+    return (
+      permissions?.some(
+        (p) => p.userId === userId && p.permission === permission && p.startupId == null
+      ) ?? false
+    )
   }
 
-  async function handleTogglePermission(
+  function scopedStartupIdsForPermission(userId: string, permission: PermissionType): string[] {
+    return (
+      permissions
+        ?.filter((p) => p.userId === userId && p.permission === permission && p.startupId != null)
+        .map((p) => p.startupId as string) ?? []
+    )
+  }
+
+  async function handleToggleCohortWide(
     userId: string,
     permission: PermissionType,
     currentlyGranted: boolean
@@ -219,6 +244,34 @@ export default function AdminsPage() {
           userId: userId as any,
           cohortId: cohort._id,
           permission,
+        })
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update permission')
+    }
+  }
+
+  async function handleToggleStartupScoped(
+    userId: string,
+    permission: PermissionType,
+    startupId: string,
+    currentlyGranted: boolean
+  ) {
+    if (!cohort) return
+    try {
+      if (currentlyGranted) {
+        await revokePermission({
+          userId: userId as any,
+          cohortId: cohort._id,
+          permission,
+          startupId: startupId as any,
+        })
+      } else {
+        await grantPermission({
+          userId: userId as any,
+          cohortId: cohort._id,
+          permission,
+          startupId: startupId as any,
         })
       }
     } catch (err) {
@@ -588,67 +641,156 @@ export default function AdminsPage() {
                   {selectedUser.role === 'super_admin' ? (
                     <Badge variant="secondary">All permissions</Badge>
                   ) : (
-                    <div className="flex flex-col gap-2.5">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={hasUserPermission(selectedUser._id, 'approve_milestones')}
-                          onChange={() =>
-                            handleTogglePermission(
+                    <div className="flex flex-col gap-4">
+                      {/* Cohort-wide, non-scopable permissions */}
+                      <div className="flex flex-col gap-2.5">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={hasCohortWidePermission(
                               selectedUser._id,
-                              'approve_milestones',
-                              hasUserPermission(selectedUser._id, 'approve_milestones')
-                            )
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        Approve milestones
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={hasUserPermission(selectedUser._id, 'approve_invoices')}
-                          onChange={() =>
-                            handleTogglePermission(
+                              'send_announcements'
+                            )}
+                            onChange={() =>
+                              handleToggleCohortWide(
+                                selectedUser._id,
+                                'send_announcements',
+                                hasCohortWidePermission(selectedUser._id, 'send_announcements')
+                              )
+                            }
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                          Send announcements
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={hasCohortWidePermission(
                               selectedUser._id,
-                              'approve_invoices',
-                              hasUserPermission(selectedUser._id, 'approve_invoices')
-                            )
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        Approve invoices
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={hasUserPermission(selectedUser._id, 'send_announcements')}
-                          onChange={() =>
-                            handleTogglePermission(
-                              selectedUser._id,
-                              'send_announcements',
-                              hasUserPermission(selectedUser._id, 'send_announcements')
-                            )
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        Send announcements
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={hasUserPermission(selectedUser._id, 'manage_notifications')}
-                          onChange={() =>
-                            handleTogglePermission(
-                              selectedUser._id,
-                              'manage_notifications',
-                              hasUserPermission(selectedUser._id, 'manage_notifications')
-                            )
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        Manage notifications
-                      </label>
+                              'manage_notifications'
+                            )}
+                            onChange={() =>
+                              handleToggleCohortWide(
+                                selectedUser._id,
+                                'manage_notifications',
+                                hasCohortWidePermission(selectedUser._id, 'manage_notifications')
+                              )
+                            }
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                          Manage notifications
+                        </label>
+                      </div>
+
+                      {/* Scopable permissions: cohort-wide OR per-startup */}
+                      {(['approve_milestones', 'approve_invoices'] as const).map((permission) => {
+                        const cohortWide = hasCohortWidePermission(selectedUser._id, permission)
+                        const scopedIds = scopedStartupIdsForPermission(
+                          selectedUser._id,
+                          permission
+                        )
+                        const label =
+                          permission === 'approve_milestones'
+                            ? 'Approve milestones'
+                            : 'Approve invoices'
+                        const triggerText = cohortWide
+                          ? 'All startups'
+                          : scopedIds.length === 0
+                            ? 'No startups selected'
+                            : scopedIds.length === 1
+                              ? (startups?.find((s) => s._id === scopedIds[0])?.name ?? '1 startup')
+                              : `${scopedIds.length} startups`
+                        return (
+                          <div key={permission} className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium">{label}</span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 min-w-[180px] justify-between font-normal"
+                                >
+                                  <span
+                                    className={cn(
+                                      'truncate text-xs',
+                                      !cohortWide &&
+                                        scopedIds.length === 0 &&
+                                        'text-muted-foreground'
+                                    )}
+                                  >
+                                    {triggerText}
+                                  </span>
+                                  <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[260px] p-0" align="end">
+                                <Command>
+                                  <CommandInput placeholder="Search startups…" className="h-9" />
+                                  <CommandList className="max-h-[240px]">
+                                    <CommandEmpty>No startups found.</CommandEmpty>
+                                    <CommandGroup heading="Scope">
+                                      <CommandItem
+                                        onSelect={() =>
+                                          handleToggleCohortWide(
+                                            selectedUser._id,
+                                            permission,
+                                            cohortWide
+                                          )
+                                        }
+                                      >
+                                        <Check
+                                          className={cn(
+                                            'mr-2 h-4 w-4',
+                                            cohortWide ? 'opacity-100' : 'opacity-0'
+                                          )}
+                                        />
+                                        All startups in cohort
+                                      </CommandItem>
+                                    </CommandGroup>
+                                    {!cohortWide && startups && startups.length > 0 && (
+                                      <CommandGroup heading="Or specific startups">
+                                        {startups.map((s) => {
+                                          const granted = scopedIds.includes(s._id)
+                                          return (
+                                            <CommandItem
+                                              key={s._id}
+                                              // cmdk dedupes items by `value`, so two startups
+                                              // with the same name would collapse into one.
+                                              // Suffix the id to keep each row unique.
+                                              value={`${s.name} ${s._id}`}
+                                              onSelect={() =>
+                                                handleToggleStartupScoped(
+                                                  selectedUser._id,
+                                                  permission,
+                                                  s._id,
+                                                  granted
+                                                )
+                                              }
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  'mr-2 h-4 w-4',
+                                                  granted ? 'opacity-100' : 'opacity-0'
+                                                )}
+                                              />
+                                              {s.name}
+                                            </CommandItem>
+                                          )
+                                        })}
+                                      </CommandGroup>
+                                    )}
+                                    {startups === undefined && (
+                                      <div className="py-6 text-center text-xs text-muted-foreground">
+                                        Loading startups…
+                                      </div>
+                                    )}
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

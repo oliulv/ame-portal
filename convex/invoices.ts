@@ -362,13 +362,20 @@ export const updateStatus = mutation({
     const invoice = await ctx.db.get(args.id)
     if (!invoice) throw new Error('Invoice not found')
 
-    // Permission gating: approved/rejected require approve_invoices permission
+    // Every financial state transition (approved/rejected/paid) requires
+    // approve_invoices permission scoped to this startup. `under_review`
+    // is a lightweight triage action any admin can take.
     const startup = await ctx.db.get(invoice.startupId)
     if (!startup) throw new Error('Startup not found')
 
     let admin
-    if (args.status === 'approved' || args.status === 'rejected') {
-      admin = await requireAdminWithPermission(ctx, startup.cohortId, 'approve_invoices')
+    if (args.status === 'approved' || args.status === 'rejected' || args.status === 'paid') {
+      admin = await requireAdminWithPermission(
+        ctx,
+        startup.cohortId,
+        'approve_invoices',
+        startup._id
+      )
     } else {
       admin = await requireAdmin(ctx)
     }
@@ -435,23 +442,27 @@ export const updateStatus = mutation({
 export const batchMarkPaid = mutation({
   args: { ids: v.array(v.id('invoices')) },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    // Each invoice must pass the scoped approve_invoices check before
+    // it can be marked paid. A user with a grant on one startup cannot
+    // batch-mark invoices on another startup in the same cohort.
     for (const id of args.ids) {
       const invoice = await ctx.db.get(id)
       if (!invoice) throw new Error(`Invoice ${id} not found`)
       if (invoice.status !== 'approved') throw new Error(`Invoice ${id} is not approved`)
+      const startup = await ctx.db.get(invoice.startupId)
+      if (!startup) throw new Error(`Startup for invoice ${id} not found`)
+      await requireAdminWithPermission(ctx, startup.cohortId, 'approve_invoices', startup._id)
       await ctx.db.patch(id, {
         status: 'paid',
         paidAt: new Date().toISOString(),
       })
 
       // Notify founder about payment
-      const startup = await ctx.db.get(invoice.startupId)
       await ctx.scheduler.runAfter(0, internal.notifications.notifyInvoicePaid, {
         userId: invoice.uploadedByUserId,
         fileName: invoice.fileName,
         amountGbp: invoice.amountGbp,
-        cohortId: startup?.cohortId,
+        cohortId: startup.cohortId,
       })
     }
   },

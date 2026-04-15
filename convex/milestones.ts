@@ -170,18 +170,38 @@ export const listSubmittedByCohort = query({
         .collect()
 
       for (const m of milestones) {
-        if (m.status === 'submitted') {
-          results.push({
-            ...m,
-            startupName: startup.name,
-            startupSlug: startup.slug,
-          })
+        if (m.status !== 'submitted') continue
+
+        // Preferred: the denormalized `lastSubmittedAt` stamped by the
+        // submit mutation. Rows predating the denormalization fall back
+        // to the most recent `milestoneEvents` row with action 'submitted'
+        // — still accurate, just an extra read per unmigrated row. The
+        // fallback disappears entirely once backfillMilestoneLastSubmittedAt
+        // has been run against the deployment.
+        let submittedAt: number
+        if (m.lastSubmittedAt !== undefined) {
+          submittedAt = m.lastSubmittedAt
+        } else {
+          const events = await ctx.db
+            .query('milestoneEvents')
+            .withIndex('by_milestoneId', (q) => q.eq('milestoneId', m._id))
+            .collect()
+          const latestSubmit = events
+            .filter((e) => e.action === 'submitted')
+            .sort((a, b) => b._creationTime - a._creationTime)[0]
+          submittedAt = latestSubmit?._creationTime ?? m._creationTime
         }
+
+        results.push({
+          ...m,
+          startupName: startup.name,
+          startupSlug: startup.slug,
+          submittedAt,
+        })
       }
     }
 
-    // Sort by creation time, newest first
-    return results.sort((a, b) => b._creationTime - a._creationTime)
+    return results.sort((a, b) => b.submittedAt - a.submittedAt)
   },
 })
 
@@ -519,7 +539,12 @@ export const approve = mutation({
 
     const startup = await ctx.db.get(milestone.startupId)
     if (!startup) throw new Error('Startup not found')
-    const admin = await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
+    const admin = await requireAdminWithPermission(
+      ctx,
+      startup.cohortId,
+      'approve_milestones',
+      startup._id
+    )
 
     await ctx.db.patch(args.id, { status: 'approved' })
 
@@ -562,7 +587,12 @@ export const requestChanges = mutation({
 
     const startup = await ctx.db.get(milestone.startupId)
     if (!startup) throw new Error('Startup not found')
-    const admin = await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
+    const admin = await requireAdminWithPermission(
+      ctx,
+      startup.cohortId,
+      'approve_milestones',
+      startup._id
+    )
 
     const comment = args.adminComment?.trim() || undefined
 
@@ -639,11 +669,13 @@ export const submit = mutation({
       throw new Error('Please provide a plan link or upload a plan file')
     }
 
+    const submittedAt = Date.now()
     await ctx.db.patch(args.id, {
       status: 'submitted',
       planLink: args.planLink,
       planStorageId: args.planStorageId,
       planFileName: args.planFileName,
+      lastSubmittedAt: submittedAt,
     })
 
     await ctx.db.insert('milestoneEvents', {

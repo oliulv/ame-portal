@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireAuth, requireStartupAccess, requireSuperAdmin } from './auth'
+import { requireAdmin, requireAuth, requireSuperAdmin } from './auth'
 import type { Doc, Id } from './_generated/dataModel'
 import { getWeekBoundaries } from './lib/dateUtils'
 import {
@@ -9,7 +9,9 @@ import {
   QUALIFICATION_THRESHOLD,
   DECAY_RATE,
   computeConsistencyBonus,
+  computeUpdateScore,
 } from './lib/scoring'
+import { computeStreak } from './lib/streak'
 
 // Legacy weights map including social at 0 for backward compatibility
 // The shared scoring lib uses 5-category weights; this map keeps old code paths working
@@ -45,17 +47,17 @@ function powerLawNormalize(values: number[], p: number): number[] {
 function computeMomentum(
   _totalScore: number,
   data: {
-    weeklyRevenue: number[]
+    weeklyMrrGrowth: number[]
     weeklyTraffic: number[]
     weeklyGithub: number[]
   }
 ): 'up' | 'flat' | 'down' | null {
   const thisWeek =
-    Math.abs(data.weeklyRevenue[0] ?? 0) +
+    Math.abs(data.weeklyMrrGrowth[0] ?? 0) +
     Math.abs(data.weeklyTraffic[0] ?? 0) +
     Math.abs(data.weeklyGithub[0] ?? 0)
   const lastWeek =
-    Math.abs(data.weeklyRevenue[1] ?? 0) +
+    Math.abs(data.weeklyMrrGrowth[1] ?? 0) +
     Math.abs(data.weeklyTraffic[1] ?? 0) +
     Math.abs(data.weeklyGithub[1] ?? 0)
 
@@ -126,15 +128,16 @@ export const computeLeaderboard = query({
       string,
       {
         startup: Doc<'startups'>
-        weeklyRevenue: number[]
+        weeklyMrrGrowth: number[]
         weeklyTraffic: number[]
         weeklyGithub: number[]
         weeklySocial: number[]
-        totalRevenue: number
+        totalMrrGrowth: number
         totalTraffic: number
         totalGithub: number
         totalSocial: number
         updatesScore: number
+        updateStreak: number
         milestonesScore: number
         isFavoriteThisWeek: boolean
         anomalies: Array<{ category: string; value: number; threshold: number }>
@@ -162,7 +165,7 @@ export const computeLeaderboard = query({
         )
         .collect()
 
-      const weeklyRevenue: number[] = []
+      const weeklyMrrGrowth: number[] = []
       for (let i = 0; i < weeks.length; i++) {
         const week = weeks[i]
         const prevWeek = weeks[i + 1]
@@ -185,7 +188,7 @@ export const computeLeaderboard = query({
           : 0
 
         const growthPct = prevWeekMrr > 0 ? ((thisWeekMrr - prevWeekMrr) / prevWeekMrr) * 100 : 0
-        weeklyRevenue.push(growthPct)
+        weeklyMrrGrowth.push(growthPct)
       }
 
       // ── Traffic Growth (WoW session % change) ────────────────
@@ -298,16 +301,19 @@ export const computeLeaderboard = query({
         .collect()
 
       let updatesScore = 0
-      const streak = startup.updateStreak ?? 0
+      const streak = computeStreak(weeklyUpdates, now)
       const isFavoriteThisWeek = weeklyUpdates.some(
         (u) => u.weekOf === weeks[0].weekOf && u.isFavorite
       )
 
+      // Base 10 points per submitted week, scaled by the shared
+      // computeUpdateScore helper (1.0 → +0%, 1.8 → +80% at an 8-week streak).
+      const weekBase = computeUpdateScore(true, streak) * 10
+
       for (const week of weeks) {
         const update = weeklyUpdates.find((u) => u.weekOf === week.weekOf)
         if (update) {
-          let weekPoints = 10 // base points
-          weekPoints += Math.min(streak * 2, 10) // streak bonus capped at +10
+          let weekPoints = weekBase
           if (update.isFavorite) weekPoints += 25
 
           const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
@@ -326,7 +332,7 @@ export const computeLeaderboard = query({
       const milestonesScore = totalMilestones > 0 ? (approvedMilestones / totalMilestones) * 100 : 0
 
       // ── Apply temporal decay to weekly scores ─────────────────
-      let totalRevenue = 0
+      let totalMrrGrowth = 0
       let totalTraffic = 0
       let totalGithub = 0
       let totalSocial = 0
@@ -334,7 +340,7 @@ export const computeLeaderboard = query({
       for (let i = 0; i < weeks.length; i++) {
         const daysOld = (now.getTime() - weeks[i].start.getTime()) / (1000 * 60 * 60 * 24)
         const decay = temporalDecay(daysOld)
-        totalRevenue += weeklyRevenue[i] * decay
+        totalMrrGrowth += weeklyMrrGrowth[i] * decay
         totalTraffic += weeklyTraffic[i] * decay
         totalGithub += weeklyGithub[i] * decay
         totalSocial += weeklySocial[i] * decay
@@ -354,22 +360,23 @@ export const computeLeaderboard = query({
           anomalies.push({ category: name, value: latest, threshold: mean + 2 * stdDev })
         }
       }
-      checkAnomaly('revenue', weeklyRevenue)
+      checkAnomaly('revenue', weeklyMrrGrowth)
       checkAnomaly('traffic', weeklyTraffic)
       checkAnomaly('github', weeklyGithub)
       checkAnomaly('social', weeklySocial)
 
       rawScores.set(startup._id, {
         startup,
-        weeklyRevenue,
+        weeklyMrrGrowth,
         weeklyTraffic,
         weeklyGithub,
         weeklySocial,
-        totalRevenue,
+        totalMrrGrowth,
         totalTraffic,
         totalGithub,
         totalSocial,
         updatesScore,
+        updateStreak: streak,
         milestonesScore,
         isFavoriteThisWeek,
         anomalies,
@@ -377,7 +384,7 @@ export const computeLeaderboard = query({
     }
 
     // ── Power law normalization for unbounded metrics ────────────
-    const revenueValues = Array.from(rawScores.values()).map((s) => s.totalRevenue)
+    const revenueValues = Array.from(rawScores.values()).map((s) => s.totalMrrGrowth)
     const trafficValues = Array.from(rawScores.values()).map((s) => s.totalTraffic)
     const githubValues = Array.from(rawScores.values()).map((s) => s.totalGithub)
     const socialValues = Array.from(rawScores.values()).map((s) => s.totalSocial)
@@ -420,7 +427,7 @@ export const computeLeaderboard = query({
 
       // Count active categories (non-zero) — 5 categories, no social
       const activeCategories = [
-        data.totalRevenue,
+        data.totalMrrGrowth,
         data.totalTraffic,
         data.totalGithub,
         data.updatesScore,
@@ -433,7 +440,7 @@ export const computeLeaderboard = query({
       const weeklyComposites: number[] = []
       for (let w = 0; w < weeks.length; w++) {
         weeklyComposites.push(
-          Math.abs(data.weeklyRevenue[w] ?? 0) +
+          Math.abs(data.weeklyMrrGrowth[w] ?? 0) +
             Math.abs(data.weeklyTraffic[w] ?? 0) +
             Math.abs(data.weeklyGithub[w] ?? 0)
         )
@@ -454,7 +461,7 @@ export const computeLeaderboard = query({
         totalScore: Math.round(totalScore * 100) / 100,
         categories: {
           revenue: {
-            raw: data.totalRevenue,
+            raw: data.totalMrrGrowth,
             normalized: normalizedRevenue[idx],
             weighted: weightedRevenue,
           },
@@ -485,7 +492,7 @@ export const computeLeaderboard = query({
         momentum: computeMomentum(totalScore, data),
         isFavoriteThisWeek: data.isFavoriteThisWeek,
         favoriteMultiplier,
-        updateStreak: data.startup.updateStreak ?? 0,
+        updateStreak: data.updateStreak,
         excludeFromMetrics: data.startup.excludeFromMetrics === true,
       })
     }
@@ -502,51 +509,6 @@ export const computeLeaderboard = query({
     const unranked = results.filter((r) => !r.qualified || r.excludeFromMetrics)
 
     return { ranked, unranked, normalizationPower: p }
-  },
-})
-
-/**
- * Get detailed score breakdown for a single startup.
- */
-export const getScoreBreakdown = query({
-  args: {
-    startupId: v.id('startups'),
-  },
-  handler: async (ctx, args) => {
-    await requireStartupAccess(ctx, args.startupId)
-
-    const startup = await ctx.db.get(args.startupId)
-    if (!startup) throw new Error('Startup not found')
-
-    // Get recent MRR movements for waterfall
-    const movements = await ctx.db
-      .query('mrrMovements')
-      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
-      .collect()
-
-    // Get weekly updates
-    const updates = await ctx.db
-      .query('weeklyUpdates')
-      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
-      .collect()
-
-    // Get milestones
-    const milestones = await ctx.db
-      .query('milestones')
-      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
-      .collect()
-
-    return {
-      startup: { name: startup.name, logoUrl: startup.logoUrl },
-      mrrMovements: movements.sort((a, b) => a.month.localeCompare(b.month)),
-      weeklyUpdates: updates.sort((a, b) => b.weekOf.localeCompare(a.weekOf)),
-      milestones: {
-        total: milestones.length,
-        approved: milestones.filter((m) => m.status === 'approved').length,
-        submitted: milestones.filter((m) => m.status === 'submitted').length,
-      },
-      updateStreak: startup.updateStreak ?? 0,
-    }
   },
 })
 
@@ -604,14 +566,15 @@ export const computeLeaderboardForFounder = query({
     // Collect raw unbounded scores for normalization
     const rawData: Array<{
       startup: Doc<'startups'>
-      weeklyRevenue: number[]
+      weeklyMrrGrowth: number[]
       weeklyTraffic: number[]
       weeklyGithub: number[]
-      totalRevenue: number
+      totalMrrGrowth: number
       totalTraffic: number
       totalGithub: number
       totalSocial: number
       updatesScore: number
+      updateStreak: number
       milestonesScore: number
       isFavoriteThisWeek: boolean
     }> = []
@@ -625,8 +588,8 @@ export const computeLeaderboardForFounder = query({
         )
         .collect()
 
-      let totalRevenue = 0
-      const weeklyRevenue: number[] = []
+      let totalMrrGrowth = 0
+      const weeklyMrrGrowth: number[] = []
       for (let i = 0; i < weeks.length; i++) {
         const week = weeks[i]
         const prevWeek = weeks[i + 1]
@@ -646,9 +609,9 @@ export const computeLeaderboardForFounder = query({
               .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0)
           : 0
         const growth = prevVal > 0 ? ((thisVal - prevVal) / prevVal) * 100 : 0
-        weeklyRevenue.push(growth)
+        weeklyMrrGrowth.push(growth)
         const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-        totalRevenue += growth * temporalDecay(daysOld)
+        totalMrrGrowth += growth * temporalDecay(daysOld)
       }
 
       // Traffic
@@ -741,12 +704,13 @@ export const computeLeaderboardForFounder = query({
         .withIndex('by_startupId', (q) => q.eq('startupId', s._id))
         .collect()
       let updatesScore = 0
-      const streak = s.updateStreak ?? 0
+      const streak = computeStreak(updates, now)
+      const weekBase = computeUpdateScore(true, streak) * 10
       const isFavorite = updates.some((u) => u.weekOf === weeks[0].weekOf && u.isFavorite)
       for (const week of weeks) {
         const update = updates.find((u) => u.weekOf === week.weekOf)
         if (update) {
-          let pts = 10 + Math.min(streak * 2, 10)
+          let pts = weekBase
           if (update.isFavorite) pts += 25
           const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
           updatesScore += pts * temporalDecay(daysOld)
@@ -765,14 +729,15 @@ export const computeLeaderboardForFounder = query({
 
       rawData.push({
         startup: s,
-        weeklyRevenue,
+        weeklyMrrGrowth,
         weeklyTraffic,
         weeklyGithub,
-        totalRevenue,
+        totalMrrGrowth,
         totalTraffic,
         totalGithub,
         totalSocial,
         updatesScore,
+        updateStreak: streak,
         milestonesScore,
         isFavoriteThisWeek: isFavorite,
       })
@@ -780,7 +745,7 @@ export const computeLeaderboardForFounder = query({
 
     // Normalize
     const normRevenue = powerLawNormalize(
-      rawData.map((d) => d.totalRevenue),
+      rawData.map((d) => d.totalMrrGrowth),
       p
     )
     const normTraffic = powerLawNormalize(
@@ -807,7 +772,7 @@ export const computeLeaderboardForFounder = query({
 
       let total = rev + trf + git + soc + upd + mil
       const activeCats = [
-        d.totalRevenue,
+        d.totalMrrGrowth,
         d.totalTraffic,
         d.totalGithub,
         d.updatesScore,
@@ -818,7 +783,7 @@ export const computeLeaderboardForFounder = query({
       const weeklyComposites: number[] = []
       for (let w = 0; w < weeks.length; w++) {
         weeklyComposites.push(
-          Math.abs(d.weeklyRevenue[w] ?? 0) +
+          Math.abs(d.weeklyMrrGrowth[w] ?? 0) +
             Math.abs(d.weeklyTraffic[w] ?? 0) +
             Math.abs(d.weeklyGithub[w] ?? 0)
         )
@@ -839,7 +804,7 @@ export const computeLeaderboardForFounder = query({
         qualified: activeCats >= QUALIFICATION_THRESHOLD,
         momentum: computeMomentum(total, d),
         isFavoriteThisWeek: d.isFavoriteThisWeek,
-        updateStreak: d.startup.updateStreak ?? 0,
+        updateStreak: d.updateStreak,
         excludeFromMetrics: d.startup.excludeFromMetrics === true,
       })
     }

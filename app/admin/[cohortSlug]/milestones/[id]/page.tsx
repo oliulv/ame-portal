@@ -48,7 +48,13 @@ export default function AdminMilestoneDetailPage() {
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const canApproveMilestones = useQuery(
     api.adminPermissions.checkMyPermission,
-    cohort ? { cohortId: cohort._id, permission: 'approve_milestones' as const } : 'skip'
+    cohort && milestone
+      ? {
+          cohortId: cohort._id,
+          permission: 'approve_milestones' as const,
+          startupId: milestone.startupId,
+        }
+      : 'skip'
   )
   const approveMilestone = useMutation(api.milestones.approve)
   const requestChangesMutation = useMutation(api.milestones.requestChanges)

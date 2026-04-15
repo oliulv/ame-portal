@@ -1,8 +1,9 @@
-import { query, mutation, internalMutation } from './functions'
+import { query, mutation } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAuth, requireFounder, requireAdmin, getFounderStartupIds } from './auth'
 import { getMonday } from './lib/dateUtils'
+import { computeStreak } from './lib/streak'
 
 /**
  * Submit or update a weekly update (one per startup per week, upsert).
@@ -27,9 +28,10 @@ export const submit = mutation({
     const now = new Date()
     const weekOf = getMonday(now)
 
-    // Check deadline: Monday 9am UTC of next week
-    const deadline = new Date(weekOf)
-    deadline.setDate(deadline.getDate() + 7) // Next Monday
+    // Check deadline: Monday 9am UTC of next week. All math in UTC so the
+    // result is independent of the runtime's local timezone.
+    const deadline = new Date(weekOf + 'T00:00:00.000Z')
+    deadline.setUTCDate(deadline.getUTCDate() + 7) // Next Monday
     deadline.setUTCHours(9, 0, 0, 0)
 
     if (now > deadline) {
@@ -205,7 +207,7 @@ export const setFavorite = mutation({
 })
 
 /**
- * Get the current update streak for a startup.
+ * Get the current update streak for a startup (computed live from history).
  */
 export const getCurrentStreak = query({
   args: {
@@ -221,8 +223,12 @@ export const getCurrentStreak = query({
       startupId = startupIds[0]
     }
 
-    const startup = await ctx.db.get(startupId)
-    return startup?.updateStreak ?? 0
+    const updates = await ctx.db
+      .query('weeklyUpdates')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupId!))
+      .collect()
+
+    return computeStreak(updates, new Date())
   },
 })
 
@@ -262,39 +268,6 @@ export const getWeeklySummary = query({
       favoriteCount: favorites.length,
       submitted: submitted.map((s) => ({ _id: s._id, name: s.name })),
       missing: missing.map((s) => ({ _id: s._id, name: s.name })),
-    }
-  },
-})
-
-/**
- * Update streaks for all startups (called by Tuesday 10am cron).
- */
-export const updateStreaks = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    // Get the previous week's Monday
-    const now = new Date()
-    const lastMonday = new Date(now)
-    lastMonday.setDate(lastMonday.getDate() - 7)
-    const weekOf = getMonday(lastMonday)
-
-    const allStartups = await ctx.db.query('startups').collect()
-
-    for (const startup of allStartups) {
-      const update = await ctx.db
-        .query('weeklyUpdates')
-        .withIndex('by_startupId_weekOf', (q) =>
-          q.eq('startupId', startup._id).eq('weekOf', weekOf)
-        )
-        .first()
-
-      const currentStreak = startup.updateStreak ?? 0
-
-      if (update) {
-        await ctx.db.patch(startup._id, { updateStreak: currentStreak + 1 })
-      } else {
-        await ctx.db.patch(startup._id, { updateStreak: 0 })
-      }
     }
   },
 })

@@ -71,43 +71,69 @@ export async function requireFounder(ctx: QueryCtx | MutationCtx): Promise<Doc<'
   throw new Error('Founder access required')
 }
 
+type DelegatedPermission =
+  | 'approve_milestones'
+  | 'approve_invoices'
+  | 'send_announcements'
+  | 'manage_notifications'
+
 /**
- * Check if a user has a specific delegated permission for a cohort.
+ * Pure decision function for whether a set of stored adminPermissions rows
+ * grants access to a target operation. Extracted for unit testing.
+ *
+ * A cohort-wide row (startupId == null) always grants access. A startup-scoped
+ * row only grants when `startupId` is provided and matches exactly.
  */
+export function permissionRowsGrantAccess(
+  rows: Array<{ startupId?: Doc<'startups'>['_id'] }>,
+  startupId?: Doc<'startups'>['_id']
+): boolean {
+  if (rows.length === 0) return false
+  for (const row of rows) {
+    if (row.startupId == null) return true
+    if (startupId && row.startupId === startupId) return true
+  }
+  return false
+}
+
+// startupId semantics on hasPermission / requireAdminWithPermission:
+//   omitted  → only cohort-wide grants count; startup-scoped grants are ignored
+//   provided → cohort-wide grants OR a grant that exactly matches startupId both pass
+//
+// Always pass startupId when the operation is startup-scoped. Omitting it when you
+// have one is a bug: it would deny legitimate startup-scoped grants (safe), but
+// passing the wrong startupId would deny a legitimate cohort-wide grant on a row
+// that happens to have no startupId — which is why we check "row.startupId == null"
+// first.
 export async function hasPermission(
   ctx: QueryCtx | MutationCtx,
   userId: Doc<'users'>['_id'],
   cohortId: Doc<'cohorts'>['_id'],
-  permission:
-    | 'approve_milestones'
-    | 'approve_invoices'
-    | 'send_announcements'
-    | 'manage_notifications'
+  permission: DelegatedPermission,
+  startupId?: Doc<'startups'>['_id']
 ): Promise<boolean> {
-  const row = await ctx.db
+  const rows = await ctx.db
     .query('adminPermissions')
     .withIndex('by_userId_cohortId_permission', (q) =>
       q.eq('userId', userId).eq('cohortId', cohortId).eq('permission', permission)
     )
-    .first()
-  return !!row
+    .collect()
+  return permissionRowsGrantAccess(rows, startupId)
 }
 
 /**
  * Require the user to be a super_admin OR have a specific delegated permission.
+ * Pass startupId for startup-scoped operations (milestone / invoice approval).
  */
 export async function requireAdminWithPermission(
   ctx: QueryCtx | MutationCtx,
   cohortId: Doc<'cohorts'>['_id'],
-  permission:
-    | 'approve_milestones'
-    | 'approve_invoices'
-    | 'send_announcements'
-    | 'manage_notifications'
+  permission: DelegatedPermission,
+  startupId?: Doc<'startups'>['_id']
 ): Promise<Doc<'users'>> {
   const user = await requireAdmin(ctx)
   if (user.role === 'super_admin') return user
-  const has = await hasPermission(ctx, user._id, cohortId, permission)
+  const has = await hasPermission(ctx, user._id, cohortId, permission, startupId)
   if (!has) {
     throw new Error(`Permission required: ${permission}`)
   }
