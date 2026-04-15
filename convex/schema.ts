@@ -77,6 +77,12 @@ export default defineSchema({
     ),
     fundingDeployed: v.optional(v.number()),
     excludeFromMetrics: v.optional(v.boolean()),
+    // @deprecated — no longer written or read. Streak is now computed
+    // live from weeklyUpdates via convex/lib/streak.ts. Left in the
+    // schema so strict-validation does not reject existing rows that
+    // still carry a value. Remove in a follow-up PR after running
+    // `npx convex run migrations/stripUpdateStreak:run --prod`.
+    updateStreak: v.optional(v.number()),
   })
     .index('by_cohortId', ['cohortId'])
     .index('by_slug', ['slug']),
@@ -162,6 +168,10 @@ export default defineSchema({
     requireLink: v.optional(v.boolean()),
     requireFile: v.optional(v.boolean()),
     adminComment: v.optional(v.string()),
+    // Timestamp of the most recent submit. Denormalized from milestoneEvents
+    // so the admin inbox can order and display "Submitted X" without an
+    // N+1 join. Rewritten on every submit (initial and re-submissions).
+    lastSubmittedAt: v.optional(v.number()),
   })
     .index('by_startupId', ['startupId'])
     .index('by_milestoneTemplateId', ['milestoneTemplateId']),
