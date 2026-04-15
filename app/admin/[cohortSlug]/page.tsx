@@ -211,7 +211,7 @@ export default function AdminDashboard() {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Submitted{' '}
-                      {new Date(m._creationTime).toLocaleDateString('en-GB', {
+                      {new Date(m.submittedAt).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short',
                       })}

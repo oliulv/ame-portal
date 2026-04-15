@@ -170,18 +170,33 @@ export const listSubmittedByCohort = query({
         .collect()
 
       for (const m of milestones) {
-        if (m.status === 'submitted') {
-          results.push({
-            ...m,
-            startupName: startup.name,
-            startupSlug: startup.slug,
-          })
-        }
+        if (m.status !== 'submitted') continue
+
+        // The milestone row's _creationTime is when the row was first
+        // created (usually when the template was assigned), not when the
+        // founder submitted it. The real submission time is the most
+        // recent milestoneEvents row with action === 'submitted' — a
+        // milestone can cycle through submit → changes_requested → submit
+        // again, and we want the latest.
+        const events = await ctx.db
+          .query('milestoneEvents')
+          .withIndex('by_milestoneId', (q) => q.eq('milestoneId', m._id))
+          .collect()
+        const lastSubmittedEvent = events
+          .filter((e) => e.action === 'submitted')
+          .sort((a, b) => b._creationTime - a._creationTime)[0]
+        const submittedAt = lastSubmittedEvent?._creationTime ?? m._creationTime
+
+        results.push({
+          ...m,
+          startupName: startup.name,
+          startupSlug: startup.slug,
+          submittedAt,
+        })
       }
     }
 
-    // Sort by creation time, newest first
-    return results.sort((a, b) => b._creationTime - a._creationTime)
+    return results.sort((a, b) => b.submittedAt - a.submittedAt)
   },
 })
 
