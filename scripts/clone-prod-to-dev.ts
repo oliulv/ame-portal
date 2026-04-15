@@ -9,16 +9,13 @@
  *      from prod, re-upload into dev via `internal.fileClone.generateUploadUrl`,
  *      and patch the cloned rows with `internal.fileClone.rewriteStorageRef`.
  *
- * All Convex calls go through `npx convex run` subprocesses with explicit
- * `--prod` / `--url`+`--admin-key` flags so they can never silently target
- * the wrong deployment. Prod is strictly read-only — the script never
- * issues a mutation against prod.
- *
- * Env vars:
- *   CONVEX_PROD_URL          prod deployment URL (required)
- *   CONVEX_DEV_URL           dev deployment URL (required)
- *   CONVEX_DEV_DEPLOY_KEY    dev deploy key (required for `convex run`
- *                            and the file upload PUT)
+ * All Convex calls go through `npx convex run` subprocesses. `--prod` is
+ * passed explicitly for every prod read so the CLI always targets the
+ * right deployment. Dev calls use the ambient Convex CLI config
+ * (`.env.local`) the same way `npx convex import` does. The only safety
+ * interlock is a check that the ambient `CONVEX_DEPLOYMENT` env var does
+ * NOT look like production — if it does, the script refuses to run so
+ * phase 1's `--replace-all` can't silently wipe prod.
  */
 
 import { execSync, spawnSync } from 'child_process'
@@ -50,7 +47,6 @@ function parseArgs() {
   return {
     dryRun: args.includes('--dry-run'),
     skipDb: args.includes('--skip-db'),
-    yesDestroyDev: args.includes('--yes-destroy-dev'),
     limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : DEFAULT_FILE_COPY_LIMIT,
   }
 }
@@ -66,34 +62,22 @@ function createLogger(runId: string): RunLogger {
   }
 }
 
-function requireEnv(name: string): string {
-  const value = process.env[name]
-  if (!value || value.length === 0) {
-    console.error(`[clone] Missing required env var: ${name}`)
-    process.exit(1)
-  }
-  return value
-}
-
 function run(cmd: string) {
   console.log(`\n> ${cmd}`)
   execSync(cmd, { stdio: 'inherit' })
 }
 
 /**
- * Run a Convex function via subprocess. Returns parsed JSON output.
- *
- * `target` is either 'prod' (adds --prod) or 'dev' (explicit
- * --url + --admin-key so it can never use ambient CONVEX_DEPLOYMENT).
+ * Run a Convex function via `npx convex run` subprocess and return its
+ * parsed JSON result. `target: 'prod'` adds `--prod`; `target: 'dev'`
+ * omits it (CLI uses ambient dev config).
  */
 function convexRun<T = unknown>(
   target: 'prod' | 'dev',
   fn: string,
-  args: Record<string, unknown>,
-  devUrl: string,
-  devDeployKey: string
+  args: Record<string, unknown>
 ): T {
-  const flags = target === 'prod' ? ['--prod'] : ['--url', devUrl, '--admin-key', devDeployKey]
+  const flags = target === 'prod' ? ['--prod'] : []
   const argJson = JSON.stringify(args)
   const result = spawnSync('npx', ['convex', 'run', ...flags, fn, argJson], {
     encoding: 'utf8',
@@ -104,7 +88,7 @@ function convexRun<T = unknown>(
   }
   const stdout = result.stdout.trim()
   // `convex run` prints a leading header line before the JSON result.
-  // Find the first line that parses as JSON.
+  // Find the last line that parses as JSON.
   const lines = stdout.split('\n')
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim()
@@ -112,10 +96,9 @@ function convexRun<T = unknown>(
     try {
       return JSON.parse(line) as T
     } catch {
-      // continue
+      // continue searching upward for the JSON line
     }
   }
-  // Function may return undefined; treat as null.
   return null as T
 }
 
@@ -123,20 +106,11 @@ function convexRun<T = unknown>(
  * Download a file from prod and upload it to dev. Returns the new dev
  * storage id on success.
  */
-async function copyFile(
-  ref: FileRef,
-  devUrl: string,
-  devDeployKey: string,
-  logger: RunLogger
-): Promise<string | null> {
+async function copyFile(ref: FileRef, logger: RunLogger): Promise<string | null> {
   // 1. Get the prod download URL via the internal query.
-  const url = convexRun<string | null>(
-    'prod',
-    'fileClone:getStorageUrl',
-    { storageId: ref.storageId },
-    devUrl,
-    devDeployKey
-  )
+  const url = convexRun<string | null>('prod', 'fileClone:getStorageUrl', {
+    storageId: ref.storageId,
+  })
   if (!url) {
     logger.log({ kind: 'file_copy_error', ref, reason: 'no_url' })
     return null
@@ -152,13 +126,7 @@ async function copyFile(
   const contentType = res.headers.get('Content-Type') ?? 'application/octet-stream'
 
   // 3. Request a dev upload URL via the internal mutation.
-  const uploadUrl = convexRun<string>(
-    'dev',
-    'fileClone:generateUploadUrl',
-    {},
-    devUrl,
-    devDeployKey
-  )
+  const uploadUrl = convexRun<string>('dev', 'fileClone:generateUploadUrl', {})
   if (!uploadUrl) {
     logger.log({ kind: 'file_copy_error', ref, reason: 'no_upload_url' })
     return null
@@ -181,21 +149,13 @@ async function copyFile(
 }
 
 async function phase2CopyFiles(
-  devUrl: string,
-  devDeployKey: string,
   limit: number,
   dryRun: boolean,
   logger: RunLogger
 ): Promise<{ copied: number; failed: number }> {
   console.log(`\n== Phase 2: selective file copy (top ${limit}) ==`)
 
-  const refs = convexRun<FileRef[]>(
-    'prod',
-    'fileClone:listRecentFileRefs',
-    { limit },
-    devUrl,
-    devDeployKey
-  )
+  const refs = convexRun<FileRef[]>('prod', 'fileClone:listRecentFileRefs', { limit })
   logger.log({ kind: 'refs_listed', count: refs?.length ?? 0 })
   console.log(`  Found ${refs?.length ?? 0} file refs.`)
 
@@ -214,21 +174,15 @@ async function phase2CopyFiles(
     const batch = refs.slice(i, i + PARALLELISM)
     const results = await Promise.all(
       batch.map(async (ref) => {
-        const newId = await copyFile(ref, devUrl, devDeployKey, logger)
+        const newId = await copyFile(ref, logger)
         if (!newId) return { ref, ok: false as const }
         try {
-          convexRun(
-            'dev',
-            'fileClone:rewriteStorageRef',
-            {
-              table: ref.table,
-              rowId: ref.rowId,
-              fieldPath: ref.fieldPath,
-              newStorageId: newId,
-            },
-            devUrl,
-            devDeployKey
-          )
+          convexRun('dev', 'fileClone:rewriteStorageRef', {
+            table: ref.table,
+            rowId: ref.rowId,
+            fieldPath: ref.fieldPath,
+            newStorageId: newId,
+          })
           return { ref, ok: true as const }
         } catch (err) {
           logger.log({
@@ -250,45 +204,31 @@ async function phase2CopyFiles(
   return { copied, failed }
 }
 
-function assertDevTarget(prodUrl: string, devUrl: string, yesDestroyDev: boolean): void {
-  if (prodUrl === devUrl) {
-    console.error(
-      '[clone] FATAL: CONVEX_PROD_URL === CONVEX_DEV_URL. Refusing to clone prod → prod.'
-    )
-    process.exit(1)
-  }
+function assertDevTarget(): void {
+  // The Convex CLI resolves its dev deployment from CONVEX_DEPLOYMENT (or
+  // .env.local). If that value looks like production, phase 1's
+  // `convex import --replace-all` would wipe prod — refuse to run.
   const ambient = process.env.CONVEX_DEPLOYMENT ?? ''
-  if (ambient && /prod/i.test(ambient)) {
+  if (/prod/i.test(ambient)) {
     console.error(
-      `[clone] FATAL: ambient CONVEX_DEPLOYMENT="${ambient}" looks like production. Unset it or run with a clean env before cloning.`
+      `[clone] FATAL: CONVEX_DEPLOYMENT="${ambient}" looks like production. Unset it or run with a clean env before cloning.`
     )
-    process.exit(1)
-  }
-  if (!yesDestroyDev) {
-    console.error(`[clone] This script will REPLACE ALL data in the dev deployment at ${devUrl}.`)
-    console.error('[clone] Re-run with --yes-destroy-dev to confirm.')
     process.exit(1)
   }
 }
 
 async function main() {
-  const { dryRun, skipDb, yesDestroyDev, limit } = parseArgs()
+  const { dryRun, skipDb, limit } = parseArgs()
 
-  const prodUrl = requireEnv('CONVEX_PROD_URL')
-  const devUrl = requireEnv('CONVEX_DEV_URL')
-  const devDeployKey = requireEnv('CONVEX_DEV_DEPLOY_KEY')
-
-  // Dry-runs are safe without the destroy flag.
+  // Dry-runs don't touch dev, so the safety assertion is optional there.
   if (!dryRun) {
-    assertDevTarget(prodUrl, devUrl, yesDestroyDev)
+    assertDevTarget()
   }
 
   const runId = randomUUID()
   const logger = createLogger(runId)
-  logger.log({ kind: 'run_started', runId, dryRun, skipDb, limit, prodUrl, devUrl })
+  logger.log({ kind: 'run_started', runId, dryRun, skipDb, limit })
   console.error(`[clone] Cloning PROD → DEV. Prod is READ-ONLY. Run ID: ${runId}`)
-  console.error(`[clone]   prod: ${prodUrl}`)
-  console.error(`[clone]   dev:  ${devUrl}`)
 
   if (!skipDb) {
     try {
@@ -304,16 +244,17 @@ async function main() {
       console.log('  [dry-run] skipping dev import')
     } else {
       console.log('\n== Phase 1: DB import into dev ==')
-      run(
-        `npx convex import --url ${devUrl} --admin-key ${devDeployKey} --replace-all ${EXPORT_PATH}`
-      )
+      run(`npx convex import --replace-all ${EXPORT_PATH}`)
+
+      console.log('\n== Pushing functions ==')
+      run('npx convex dev --once')
 
       console.log('\n== Swapping Clerk IDs ==')
-      run(`npx convex run --url ${devUrl} --admin-key ${devDeployKey} dev/swapClerkIds:run`)
+      run('npx convex run dev/swapClerkIds:run')
     }
   }
 
-  const { copied, failed } = await phase2CopyFiles(devUrl, devDeployKey, limit, dryRun, logger)
+  const { copied, failed } = await phase2CopyFiles(limit, dryRun, logger)
   logger.log({ kind: 'run_finished', copied, failed })
   console.log(
     `\n[clone] Done. Copied ${copied}, failed ${failed}. Run log: clone-runs/${runId}.jsonl`
