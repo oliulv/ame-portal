@@ -49,6 +49,7 @@ import type * as lib_userCleanup from "../lib/userCleanup.js";
 import type * as metrics from "../metrics.js";
 import type * as migrations_backfillIsPartnership from "../migrations/backfillIsPartnership.js";
 import type * as migrations_stripBankDetailsVerified from "../migrations/stripBankDetailsVerified.js";
+import type * as migrations_stripUpdateStreak from "../migrations/stripUpdateStreak.js";
 import type * as migrations_updateSupabasePerk from "../migrations/updateSupabasePerk.js";
 import type * as milestoneTemplates from "../milestoneTemplates.js";
 import type * as milestones from "../milestones.js";
@@ -110,6 +111,7 @@ declare const fullApi: ApiFromModules<{
   metrics: typeof metrics;
   "migrations/backfillIsPartnership": typeof migrations_backfillIsPartnership;
   "migrations/stripBankDetailsVerified": typeof migrations_stripBankDetailsVerified;
+  "migrations/stripUpdateStreak": typeof migrations_stripUpdateStreak;
   "migrations/updateSupabasePerk": typeof migrations_updateSupabasePerk;
   milestoneTemplates: typeof milestoneTemplates;
   milestones: typeof milestones;
