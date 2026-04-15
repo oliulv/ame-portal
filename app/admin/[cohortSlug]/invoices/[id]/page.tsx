@@ -762,6 +762,8 @@ export default function InvoiceDetailPage() {
             <InvoiceActions
               invoiceId={invoice._id}
               currentStatus={invoice.status}
+              cohortId={cohort._id}
+              startupId={invoice.startupId}
               className="flex-1"
               onApproved={handleApproved}
             />

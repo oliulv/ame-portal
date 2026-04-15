@@ -44,6 +44,8 @@ export default defineSchema({
     .index('by_userId_cohortId', ['userId', 'cohortId']),
 
   // ── Admin Permissions (delegated) ─────────────────────────────────
+  // startupId omitted = cohort-wide grant (applies to every startup in the cohort)
+  // startupId set      = grant is restricted to that single startup
   adminPermissions: defineTable({
     userId: v.id('users'),
     cohortId: v.id('cohorts'),
@@ -53,6 +55,7 @@ export default defineSchema({
       v.literal('send_announcements'),
       v.literal('manage_notifications')
     ),
+    startupId: v.optional(v.id('startups')),
   })
     .index('by_userId_cohortId', ['userId', 'cohortId'])
     .index('by_userId_cohortId_permission', ['userId', 'cohortId', 'permission']),

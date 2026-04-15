@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useMutation } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,8 @@ import { toast } from 'sonner'
 interface InvoiceActionsProps {
   invoiceId: Id<'invoices'>
   currentStatus: string
+  cohortId: Id<'cohorts'>
+  startupId: Id<'startups'>
   className?: string
   onApproved?: () => void
 }
@@ -21,15 +23,23 @@ interface InvoiceActionsProps {
 export function InvoiceActions({
   invoiceId,
   currentStatus,
+  cohortId,
+  startupId,
   className,
   onApproved,
 }: InvoiceActionsProps) {
   const updateStatus = useMutation(api.invoices.updateStatus)
+  const canApproveInvoices = useQuery(api.adminPermissions.checkMyPermission, {
+    cohortId,
+    permission: 'approve_invoices' as const,
+    startupId,
+  })
   const [comment, setComment] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [actionType, setActionType] = useState<'approve' | 'reject' | 'paid' | null>(null)
 
-  const canApprove = currentStatus === 'submitted' || currentStatus === 'under_review'
+  const statusAllowsApprove = currentStatus === 'submitted' || currentStatus === 'under_review'
+  const canApprove = statusAllowsApprove && canApproveInvoices === true
   const canMarkPaid = currentStatus === 'approved'
 
   const handleAction = async (action: 'approve' | 'reject' | 'paid') => {
@@ -64,6 +74,8 @@ export function InvoiceActions({
       setComment('')
     }
   }
+
+  if (!canApprove && !canMarkPaid) return null
 
   return (
     <Card className={className}>

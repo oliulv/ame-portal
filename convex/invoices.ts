@@ -368,7 +368,12 @@ export const updateStatus = mutation({
 
     let admin
     if (args.status === 'approved' || args.status === 'rejected') {
-      admin = await requireAdminWithPermission(ctx, startup.cohortId, 'approve_invoices')
+      admin = await requireAdminWithPermission(
+        ctx,
+        startup.cohortId,
+        'approve_invoices',
+        startup._id
+      )
     } else {
       admin = await requireAdmin(ctx)
     }

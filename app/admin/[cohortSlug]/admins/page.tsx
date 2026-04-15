@@ -98,6 +98,9 @@ export default function AdminsPage() {
   // Fetch admin users filtered by cohort (skip if cohort not loaded yet)
   const adminUsers = useQuery(api.adminUsers.list, cohort ? { cohortId: cohort._id } : 'skip')
 
+  // Startups in this cohort (needed for startup-scoped permission grants)
+  const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
+
   // Fetch admin invitations for this cohort
   const invitations = useQuery(
     api.adminInvitations.list,
@@ -197,11 +200,35 @@ export default function AdminsPage() {
     }
   }
 
-  function hasUserPermission(userId: string, permission: PermissionType) {
-    return permissions?.some((p) => p.userId === userId && p.permission === permission) ?? false
+  function hasCohortWidePermission(userId: string, permission: PermissionType) {
+    return (
+      permissions?.some(
+        (p) => p.userId === userId && p.permission === permission && p.startupId == null
+      ) ?? false
+    )
   }
 
-  async function handleTogglePermission(
+  function hasStartupScopedPermission(
+    userId: string,
+    permission: PermissionType,
+    startupId: string
+  ) {
+    return (
+      permissions?.some(
+        (p) => p.userId === userId && p.permission === permission && p.startupId === startupId
+      ) ?? false
+    )
+  }
+
+  function scopedStartupIdsForPermission(userId: string, permission: PermissionType): string[] {
+    return (
+      permissions
+        ?.filter((p) => p.userId === userId && p.permission === permission && p.startupId != null)
+        .map((p) => p.startupId as string) ?? []
+    )
+  }
+
+  async function handleToggleCohortWide(
     userId: string,
     permission: PermissionType,
     currentlyGranted: boolean
@@ -219,6 +246,34 @@ export default function AdminsPage() {
           userId: userId as any,
           cohortId: cohort._id,
           permission,
+        })
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update permission')
+    }
+  }
+
+  async function handleToggleStartupScoped(
+    userId: string,
+    permission: PermissionType,
+    startupId: string,
+    currentlyGranted: boolean
+  ) {
+    if (!cohort) return
+    try {
+      if (currentlyGranted) {
+        await revokePermission({
+          userId: userId as any,
+          cohortId: cohort._id,
+          permission,
+          startupId: startupId as any,
+        })
+      } else {
+        await grantPermission({
+          userId: userId as any,
+          cohortId: cohort._id,
+          permission,
+          startupId: startupId as any,
         })
       }
     } catch (err) {
@@ -588,67 +643,119 @@ export default function AdminsPage() {
                   {selectedUser.role === 'super_admin' ? (
                     <Badge variant="secondary">All permissions</Badge>
                   ) : (
-                    <div className="flex flex-col gap-2.5">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={hasUserPermission(selectedUser._id, 'approve_milestones')}
-                          onChange={() =>
-                            handleTogglePermission(
+                    <div className="flex flex-col gap-4">
+                      {/* Cohort-wide, non-scopable permissions */}
+                      <div className="flex flex-col gap-2.5">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={hasCohortWidePermission(
                               selectedUser._id,
-                              'approve_milestones',
-                              hasUserPermission(selectedUser._id, 'approve_milestones')
-                            )
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        Approve milestones
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={hasUserPermission(selectedUser._id, 'approve_invoices')}
-                          onChange={() =>
-                            handleTogglePermission(
+                              'send_announcements'
+                            )}
+                            onChange={() =>
+                              handleToggleCohortWide(
+                                selectedUser._id,
+                                'send_announcements',
+                                hasCohortWidePermission(selectedUser._id, 'send_announcements')
+                              )
+                            }
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                          Send announcements
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={hasCohortWidePermission(
                               selectedUser._id,
-                              'approve_invoices',
-                              hasUserPermission(selectedUser._id, 'approve_invoices')
-                            )
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        Approve invoices
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={hasUserPermission(selectedUser._id, 'send_announcements')}
-                          onChange={() =>
-                            handleTogglePermission(
-                              selectedUser._id,
-                              'send_announcements',
-                              hasUserPermission(selectedUser._id, 'send_announcements')
-                            )
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        Send announcements
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={hasUserPermission(selectedUser._id, 'manage_notifications')}
-                          onChange={() =>
-                            handleTogglePermission(
-                              selectedUser._id,
-                              'manage_notifications',
-                              hasUserPermission(selectedUser._id, 'manage_notifications')
-                            )
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        Manage notifications
-                      </label>
+                              'manage_notifications'
+                            )}
+                            onChange={() =>
+                              handleToggleCohortWide(
+                                selectedUser._id,
+                                'manage_notifications',
+                                hasCohortWidePermission(selectedUser._id, 'manage_notifications')
+                              )
+                            }
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                          Manage notifications
+                        </label>
+                      </div>
+
+                      {/* Scopable permissions: cohort-wide OR per-startup */}
+                      {(['approve_milestones', 'approve_invoices'] as const).map((permission) => {
+                        const cohortWide = hasCohortWidePermission(selectedUser._id, permission)
+                        const scopedIds = scopedStartupIdsForPermission(
+                          selectedUser._id,
+                          permission
+                        )
+                        const label =
+                          permission === 'approve_milestones'
+                            ? 'Approve milestones'
+                            : 'Approve invoices'
+                        return (
+                          <div key={permission} className="flex flex-col gap-2">
+                            <label className="flex items-center gap-2 text-sm font-medium">
+                              <input
+                                type="checkbox"
+                                checked={cohortWide}
+                                onChange={() =>
+                                  handleToggleCohortWide(selectedUser._id, permission, cohortWide)
+                                }
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                              {label} — all startups in cohort
+                            </label>
+                            {!cohortWide && (
+                              <div className="ml-6 flex flex-col gap-1.5 max-h-48 overflow-y-auto">
+                                <p className="text-xs text-muted-foreground">
+                                  Or grant for specific startups only:
+                                </p>
+                                {startups === undefined ? (
+                                  <p className="text-xs text-muted-foreground italic">Loading…</p>
+                                ) : !startups || startups.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic">
+                                    No startups in this cohort
+                                  </p>
+                                ) : (
+                                  startups.map((s) => {
+                                    const granted = scopedIds.includes(s._id)
+                                    return (
+                                      <label
+                                        key={s._id}
+                                        className="flex items-center gap-2 text-sm"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={granted}
+                                          onChange={() =>
+                                            handleToggleStartupScoped(
+                                              selectedUser._id,
+                                              permission,
+                                              s._id,
+                                              granted
+                                            )
+                                          }
+                                          className="h-4 w-4 rounded border-gray-300"
+                                        />
+                                        {s.name}
+                                      </label>
+                                    )
+                                  })
+                                )}
+                              </div>
+                            )}
+                            {cohortWide && scopedIds.length > 0 && (
+                              <p className="ml-6 text-xs text-muted-foreground italic">
+                                Cohort-wide grant overrides {scopedIds.length} startup-scoped
+                                grant(s).
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

@@ -519,7 +519,12 @@ export const approve = mutation({
 
     const startup = await ctx.db.get(milestone.startupId)
     if (!startup) throw new Error('Startup not found')
-    const admin = await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
+    const admin = await requireAdminWithPermission(
+      ctx,
+      startup.cohortId,
+      'approve_milestones',
+      startup._id
+    )
 
     await ctx.db.patch(args.id, { status: 'approved' })
 
@@ -562,7 +567,12 @@ export const requestChanges = mutation({
 
     const startup = await ctx.db.get(milestone.startupId)
     if (!startup) throw new Error('Startup not found')
-    const admin = await requireAdminWithPermission(ctx, startup.cohortId, 'approve_milestones')
+    const admin = await requireAdminWithPermission(
+      ctx,
+      startup.cohortId,
+      'approve_milestones',
+      startup._id
+    )
 
     const comment = args.adminComment?.trim() || undefined
 

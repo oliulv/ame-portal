@@ -12,16 +12,20 @@ const permissionValue = v.union(
 /**
  * Check if the current user has a specific permission for a cohort.
  * Super admins always return true.
+ *
+ * Pass `startupId` for startup-scoped operations (milestones, invoices).
+ * Without it, only cohort-wide grants are considered.
  */
 export const checkMyPermission = query({
   args: {
     cohortId: v.id('cohorts'),
     permission: permissionValue,
+    startupId: v.optional(v.id('startups')),
   },
   handler: async (ctx, args) => {
     const user = await requireAdmin(ctx)
     if (user.role === 'super_admin') return true
-    return hasPermission(ctx, user._id, args.cohortId, args.permission)
+    return hasPermission(ctx, user._id, args.cohortId, args.permission, args.startupId)
   },
 })
 
@@ -39,55 +43,67 @@ export const list = query({
 
 /**
  * Grant a permission to a user for a cohort.
+ *
+ * Omit `startupId` to grant cohort-wide (applies to every startup).
+ * Provide `startupId` to restrict the grant to a single startup.
  */
 export const grant = mutation({
   args: {
     userId: v.id('users'),
     cohortId: v.id('cohorts'),
     permission: permissionValue,
+    startupId: v.optional(v.id('startups')),
   },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx)
 
-    // Check for duplicate
+    // Check for exact duplicate (same scope). A cohort-wide grant and a
+    // startup-scoped grant are distinct rows.
     const existing = await ctx.db
       .query('adminPermissions')
       .withIndex('by_userId_cohortId_permission', (q) =>
         q.eq('userId', args.userId).eq('cohortId', args.cohortId).eq('permission', args.permission)
       )
-      .first()
+      .collect()
 
-    if (existing) return existing._id
+    const duplicate = existing.find((row) => (row.startupId ?? null) === (args.startupId ?? null))
+    if (duplicate) return duplicate._id
 
     return await ctx.db.insert('adminPermissions', {
       userId: args.userId,
       cohortId: args.cohortId,
       permission: args.permission,
+      ...(args.startupId ? { startupId: args.startupId } : {}),
     })
   },
 })
 
 /**
  * Revoke a permission from a user for a cohort.
+ *
+ * Matches on the same (userId, cohortId, permission, startupId?) tuple used
+ * to grant. Omit `startupId` to revoke a cohort-wide grant.
  */
 export const revoke = mutation({
   args: {
     userId: v.id('users'),
     cohortId: v.id('cohorts'),
     permission: permissionValue,
+    startupId: v.optional(v.id('startups')),
   },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx)
 
-    const existing = await ctx.db
+    const rows = await ctx.db
       .query('adminPermissions')
       .withIndex('by_userId_cohortId_permission', (q) =>
         q.eq('userId', args.userId).eq('cohortId', args.cohortId).eq('permission', args.permission)
       )
-      .first()
+      .collect()
 
-    if (existing) {
-      await ctx.db.delete(existing._id)
+    const target = rows.find((row) => (row.startupId ?? null) === (args.startupId ?? null))
+    if (target) {
+      await ctx.db.delete(target._id)
     }
   },
 })
