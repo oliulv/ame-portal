@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireAuth, requireStartupAccess, requireSuperAdmin } from './auth'
+import { requireAdmin, requireAuth, requireSuperAdmin } from './auth'
 import type { Doc, Id } from './_generated/dataModel'
 import { getWeekBoundaries } from './lib/dateUtils'
 import {
@@ -502,51 +502,6 @@ export const computeLeaderboard = query({
     const unranked = results.filter((r) => !r.qualified || r.excludeFromMetrics)
 
     return { ranked, unranked, normalizationPower: p }
-  },
-})
-
-/**
- * Get detailed score breakdown for a single startup.
- */
-export const getScoreBreakdown = query({
-  args: {
-    startupId: v.id('startups'),
-  },
-  handler: async (ctx, args) => {
-    await requireStartupAccess(ctx, args.startupId)
-
-    const startup = await ctx.db.get(args.startupId)
-    if (!startup) throw new Error('Startup not found')
-
-    // Get recent MRR movements for waterfall
-    const movements = await ctx.db
-      .query('mrrMovements')
-      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
-      .collect()
-
-    // Get weekly updates
-    const updates = await ctx.db
-      .query('weeklyUpdates')
-      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
-      .collect()
-
-    // Get milestones
-    const milestones = await ctx.db
-      .query('milestones')
-      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
-      .collect()
-
-    return {
-      startup: { name: startup.name, logoUrl: startup.logoUrl },
-      mrrMovements: movements.sort((a, b) => a.month.localeCompare(b.month)),
-      weeklyUpdates: updates.sort((a, b) => b.weekOf.localeCompare(a.weekOf)),
-      milestones: {
-        total: milestones.length,
-        approved: milestones.filter((m) => m.status === 'approved').length,
-        submitted: milestones.filter((m) => m.status === 'submitted').length,
-      },
-      updateStreak: startup.updateStreak ?? 0,
-    }
   },
 })
 

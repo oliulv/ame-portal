@@ -17,7 +17,6 @@ import { KpiCard } from '@/components/analytics/kpi-card'
 import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { VelocityScore } from '@/components/analytics/velocity-score'
 import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
-import { MrrWaterfall } from '@/components/analytics/mrr-waterfall'
 import {
   Plug,
   TrendingUp,
@@ -186,9 +185,6 @@ export default function FounderAnalyticsPage() {
       : 'skip'
   )
 
-  // MRR movements
-  const mrrMovements = useQuery(api.metrics.getMrrMovements, startupId ? { startupId } : 'skip')
-
   // Tracker metrics — per-chart ranges
   const sessions = useQuery(
     api.metrics.timeSeries,
@@ -322,10 +318,6 @@ export default function FounderAnalyticsPage() {
   const latestVelocity = velocityTimeSeries?.length
     ? velocityTimeSeries[velocityTimeSeries.length - 1].value
     : 0
-
-  // Current month MRR movements for waterfall
-  const currentMonth = new Date(mountTime).toISOString().slice(0, 7)
-  const currentMovements = mrrMovements?.filter((m) => m.month === currentMonth) ?? []
 
   const stripeRangeOptions = buildRangeOptions(stripeDaysAvailable)
   const trackerRangeOptions = buildRangeOptions(trackerDaysAvailable)
@@ -585,25 +577,6 @@ export default function FounderAnalyticsPage() {
                       range={revenueRange}
                       onRangeChange={setRevenueRange}
                       rangeOptions={stripeRangeOptions}
-                    />
-                  )}
-
-                  {/* MRR waterfall */}
-                  {currentMovements.length > 0 && mrr && mrr.length > 0 && (
-                    <MrrWaterfall
-                      startingMrr={(() => {
-                        const monthStart = currentMonth + '-01'
-                        const priorValues = mrr.filter((m) => m.timestamp < monthStart)
-                        const priorMrr =
-                          priorValues.length > 0
-                            ? priorValues[priorValues.length - 1].value
-                            : mrr[0].value
-                        return priorMrr * 100
-                      })()}
-                      movements={currentMovements.map((m) => ({
-                        type: m.type,
-                        amount: m.amount,
-                      }))}
                     />
                   )}
 

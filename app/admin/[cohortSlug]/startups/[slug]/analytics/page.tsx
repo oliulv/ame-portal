@@ -21,7 +21,6 @@ import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { VelocityScore } from '@/components/analytics/velocity-score'
 import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
 import { SocialCard } from '@/components/analytics/social-card'
-import { MrrWaterfall } from '@/components/analytics/mrr-waterfall'
 import { GithubTeamStatus } from '@/components/analytics/github-team-status'
 import {
   ArrowLeft,
@@ -141,9 +140,6 @@ export default function AdminStartupAnalyticsPage() {
     latArgs ? { ...latArgs, provider: 'stripe' as const, metricKey: 'monthly_churn_rate' } : 'skip'
   )
 
-  // MRR movements
-  const mrrMovements = useQuery(api.metrics.getMrrMovements, startupId ? { startupId } : 'skip')
-
   // Tracker
   const sessions = useQuery(
     api.metrics.timeSeries,
@@ -262,9 +258,6 @@ export default function AdminStartupAnalyticsPage() {
     : 0
   const totalFollowers =
     (twitterFollowers ?? 0) + (instagramFollowers ?? 0) + (linkedinFollowers ?? 0)
-
-  const currentMonth = new Date().toISOString().slice(0, 7)
-  const currentMovements = mrrMovements?.filter((m) => m.month === currentMonth) ?? []
 
   const tabItems: { key: AnalyticsTab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -520,16 +513,6 @@ export default function AdminStartupAnalyticsPage() {
                       data={revenue.map((d) => ({ timestamp: d.timestamp, value: d.value }))}
                       formatValue={(v) => formatGBP(v)}
                       color="hsl(var(--chart-2))"
-                    />
-                  )}
-
-                  {currentMovements.length > 0 && (
-                    <MrrWaterfall
-                      startingMrr={mrr && mrr.length > 1 ? mrr[0].value * 100 : latestMrr * 100}
-                      movements={currentMovements.map((m) => ({
-                        type: m.type,
-                        amount: m.amount,
-                      }))}
                     />
                   )}
 
