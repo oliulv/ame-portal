@@ -754,7 +754,10 @@ export default function AdminsPage() {
                                           return (
                                             <CommandItem
                                               key={s._id}
-                                              value={s.name}
+                                              // cmdk dedupes items by `value`, so two startups
+                                              // with the same name would collapse into one.
+                                              // Suffix the id to keep each row unique.
+                                              value={`${s.name} ${s._id}`}
                                               onSelect={() =>
                                                 handleToggleStartupScoped(
                                                   selectedUser._id,

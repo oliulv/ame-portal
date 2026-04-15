@@ -24,7 +24,11 @@ export function getMonday(date: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** Generate week boundaries for a rolling window (most recent first). */
+/**
+ * Generate week boundaries for a rolling window (most recent first).
+ * All date math is in UTC so the boundaries are timezone-stable — DST
+ * transitions in the host runtime will not shift `start`/`end` by an hour.
+ */
 export function getWeekBoundaries(
   weeksBack: number
 ): Array<{ start: Date; end: Date; weekOf: string }> {
@@ -32,11 +36,11 @@ export function getWeekBoundaries(
   const weeks: Array<{ start: Date; end: Date; weekOf: string }> = []
   for (let i = 0; i < weeksBack; i++) {
     const d = new Date(now)
-    d.setDate(d.getDate() - i * 7)
+    d.setUTCDate(d.getUTCDate() - i * 7)
     const monday = getMonday(d)
     const start = new Date(monday + 'T00:00:00.000Z')
     const end = new Date(start)
-    end.setDate(end.getDate() + 7)
+    end.setUTCDate(end.getUTCDate() + 7)
     weeks.push({ start, end, weekOf: monday })
   }
   return weeks

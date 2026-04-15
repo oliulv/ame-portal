@@ -138,25 +138,41 @@ export function InvoiceActions({
                     </Button>
                   </>
                 ) : (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span tabIndex={0} className="flex flex-col gap-2">
-                        <Button disabled className="w-full opacity-50">
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          {permissionLoading ? 'Loading…' : 'Approve Invoice'}
-                        </Button>
-                        <Button disabled variant="destructive" className="w-full opacity-50">
-                          <XCircle className="mr-2 h-4 w-4" />
-                          {permissionLoading ? 'Loading…' : 'Reject Invoice'}
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    {!permissionLoading && (
-                      <TooltipContent>
-                        <p>{permissionTooltip}</p>
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
+                  // Each disabled button gets its own tooltip + span so
+                  // screen readers announce them as distinct controls,
+                  // and keyboard focus stops on each one individually.
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button disabled className="w-full opacity-50">
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            {permissionLoading ? 'Loading…' : 'Approve Invoice'}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      {!permissionLoading && (
+                        <TooltipContent>
+                          <p>{permissionTooltip}</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button disabled variant="destructive" className="w-full opacity-50">
+                            <XCircle className="mr-2 h-4 w-4" />
+                            {permissionLoading ? 'Loading…' : 'Reject Invoice'}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      {!permissionLoading && (
+                        <TooltipContent>
+                          <p>{permissionTooltip}</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </>
                 )}
               </>
             )}
