@@ -1,3 +1,9 @@
+// Pin TZ so the tests produce the same week boundaries regardless of
+// the developer's or CI machine's local timezone. getMonday now uses
+// UTC methods so this is belt-and-suspenders — if someone ever reverts
+// that change, these tests will catch it on a non-UTC machine.
+process.env.TZ = 'UTC'
+
 import { describe, test, expect } from 'bun:test'
 import { computeStreak } from './streak'
 import { getMonday } from './dateUtils'
@@ -59,5 +65,25 @@ describe('computeStreak', () => {
   test('10 consecutive weeks → returns actual count (streak is uncapped)', () => {
     const updates = Array.from({ length: 10 }, (_, i) => ({ weekOf: weeksBack(i) }))
     expect(computeStreak(updates, NOW)).toBe(10)
+  })
+
+  test('duplicate weekOf entries do not inflate streak', () => {
+    const w = weeksBack(1)
+    expect(computeStreak([{ weekOf: w }, { weekOf: w }], NOW)).toBe(1)
+  })
+
+  test('malformed weekOf values are ignored', () => {
+    expect(
+      computeStreak([{ weekOf: '' }, { weekOf: 'not-a-date' }, { weekOf: '2026-04' }], NOW)
+    ).toBe(0)
+  })
+
+  test('malformed values mixed with valid ones only count the valid rows', () => {
+    expect(
+      computeStreak(
+        [{ weekOf: weeksBack(1) }, { weekOf: 'garbage' }, { weekOf: weeksBack(2) }],
+        NOW
+      )
+    ).toBe(2)
   })
 })

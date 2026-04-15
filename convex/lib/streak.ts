@@ -44,13 +44,20 @@ function shiftWeek(weekOf: string, weeks: number): string {
  * without penalising the user for not having submitted this week's update yet.
  * Once last week's deadline passes without a submission, the streak breaks.
  */
+// A valid weekOf is a YYYY-MM-DD string (ISO date, no time component).
+// We don't verify it's actually a Monday — `getMonday` upstream produces
+// those — but we reject obviously malformed values so corrupted rows
+// can't silently inflate or break a streak.
+const WEEK_OF_FORMAT = /^\d{4}-\d{2}-\d{2}$/
+
 export function computeStreak(updates: WeeklyUpdateLike[], now: Date): number {
   if (updates.length === 0) return 0
 
   const submittedWeeks = new Set<string>()
   for (const u of updates) {
-    if (u.weekOf) submittedWeeks.add(u.weekOf)
+    if (u.weekOf && WEEK_OF_FORMAT.test(u.weekOf)) submittedWeeks.add(u.weekOf)
   }
+  if (submittedWeeks.size === 0) return 0
 
   const currentWeek = getMonday(now)
   const lastWeek = shiftWeek(currentWeek, -1)

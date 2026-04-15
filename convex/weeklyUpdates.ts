@@ -28,9 +28,10 @@ export const submit = mutation({
     const now = new Date()
     const weekOf = getMonday(now)
 
-    // Check deadline: Monday 9am UTC of next week
-    const deadline = new Date(weekOf)
-    deadline.setDate(deadline.getDate() + 7) // Next Monday
+    // Check deadline: Monday 9am UTC of next week. All math in UTC so the
+    // result is independent of the runtime's local timezone.
+    const deadline = new Date(weekOf + 'T00:00:00.000Z')
+    deadline.setUTCDate(deadline.getUTCDate() + 7) // Next Monday
     deadline.setUTCHours(9, 0, 0, 0)
 
     if (now > deadline) {
