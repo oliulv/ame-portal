@@ -21,6 +21,7 @@ import type * as bankDetails from "../bankDetails.js";
 import type * as cohortEvents from "../cohortEvents.js";
 import type * as cohorts from "../cohorts.js";
 import type * as crons from "../crons.js";
+import type * as dev_debugGithub from "../dev/debugGithub.js";
 import type * as dev_swapClerkIds from "../dev/swapClerkIds.js";
 import type * as fileClone from "../fileClone.js";
 import type * as founderInvitations from "../founderInvitations.js";
@@ -84,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   cohortEvents: typeof cohortEvents;
   cohorts: typeof cohorts;
   crons: typeof crons;
+  "dev/debugGithub": typeof dev_debugGithub;
   "dev/swapClerkIds": typeof dev_swapClerkIds;
   fileClone: typeof fileClone;
   founderInvitations: typeof founderInvitations;
