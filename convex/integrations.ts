@@ -507,6 +507,11 @@ export const statusForAdmin = query({
     })
 
     const connectedUserIds = new Set(githubConns.map((c) => c.connectedByUserId).filter(Boolean))
+    const connAccountNames = new Map(
+      githubConns
+        .filter((c) => c.accountName)
+        .map((c) => [c.accountName!.toLowerCase(), c.connectedByUserId])
+    )
 
     const founders = uniqueProfiles.map((fp) => ({
       userId: fp.userId,
