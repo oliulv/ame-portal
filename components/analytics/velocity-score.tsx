@@ -13,6 +13,7 @@ import {
   Cell,
   Legend,
 } from 'recharts'
+import type { VelocityBreakdown } from '@/convex/lib/scoring'
 
 const FOUNDER_COLORS = [
   'hsl(var(--primary))',
@@ -23,51 +24,61 @@ const FOUNDER_COLORS = [
 ]
 
 interface VelocityScoreProps {
-  commits: number
-  prsOpened: number
-  totalScore: number
-  /** Per-founder stats: { [name]: { commits, prs } } */
-  perFounderStats?: Record<string, { commits: number; prs: number }>
+  breakdown: VelocityBreakdown | null
+  perFounderBreakdown?: Record<string, VelocityBreakdown> | null
 }
 
 const BARS = [
-  { key: 'Commits', points: 10, color: 'hsl(var(--primary))' },
-  { key: 'PRs', points: 25, color: 'hsl(var(--primary) / 0.7)' },
+  { key: 'Commits' as const, weight: 10, color: 'hsl(var(--primary))' },
+  { key: 'PRs' as const, weight: 25, color: 'hsl(var(--primary) / 0.7)' },
+  { key: 'Issues' as const, weight: 15, color: 'hsl(var(--chart-2))' },
 ]
 
-export function VelocityScore({
-  commits,
-  prsOpened,
-  totalScore,
-  perFounderStats,
-}: VelocityScoreProps) {
-  const rawTotal = commits * 10 + prsOpened * 25
+type BarKey = (typeof BARS)[number]['key']
+
+function getBarValue(breakdown: VelocityBreakdown, key: BarKey) {
+  if (key === 'Commits') return breakdown.commits
+  if (key === 'PRs') return breakdown.prs
+  return breakdown.issues
+}
+
+export function VelocityScore({ breakdown, perFounderBreakdown }: VelocityScoreProps) {
+  const totalScore = breakdown?.total ?? 0
+  const rawTotal = breakdown?.rawTotal ?? 0
   const decayPct = rawTotal > 0 ? Math.round(((rawTotal - totalScore) / rawTotal) * 100) : 0
 
   const founderNames = useMemo(
-    () => (perFounderStats ? Object.keys(perFounderStats) : []),
-    [perFounderStats]
+    () => (perFounderBreakdown ? Object.keys(perFounderBreakdown) : []),
+    [perFounderBreakdown]
   )
   const isMultiFounder = founderNames.length > 1
 
-  // Stacked bar data for multi-founder mode
+  // Always show all three bars, even when a type has 0 points
+  const activeBars = BARS
+
+  const chartHeight = activeBars.length <= 2 ? 160 : isMultiFounder ? 220 : 200
+
   const stackedData = useMemo(() => {
-    if (!isMultiFounder || !perFounderStats) return null
+    if (!isMultiFounder || !perFounderBreakdown) return null
+    return activeBars.map((bar) => {
+      const row: Record<string, string | number> = { name: bar.key }
+      for (const [name, bd] of Object.entries(perFounderBreakdown)) {
+        row[name] = getBarValue(bd, bar.key).points
+      }
+      return row
+    })
+  }, [isMultiFounder, perFounderBreakdown, activeBars])
 
-    const commitsRow: Record<string, string | number> = { name: 'Commits' }
-    const prsRow: Record<string, string | number> = { name: 'PRs' }
-    for (const [name, stats] of Object.entries(perFounderStats)) {
-      commitsRow[name] = stats.commits * 10
-      prsRow[name] = stats.prs * 25
-    }
-    return [commitsRow, prsRow]
-  }, [isMultiFounder, perFounderStats])
-
-  // Single-founder data
-  const singleData = [
-    { name: 'Commits', count: commits, points: commits * 10 },
-    { name: 'PRs', count: prsOpened, points: prsOpened * 25 },
-  ]
+  const singleData = useMemo(
+    () =>
+      breakdown
+        ? activeBars.map((bar) => {
+            const val = getBarValue(breakdown, bar.key)
+            return { name: bar.key, count: val.count, points: val.points }
+          })
+        : [],
+    [breakdown, activeBars]
+  )
 
   return (
     <Card>
@@ -75,7 +86,7 @@ export function VelocityScore({
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-base">Git Velocity</CardTitle>
-            <p className="text-xs text-muted-foreground">Last 4 weeks with temporal decay</p>
+            <p className="text-xs text-muted-foreground">Last 4 weeks (decay-adjusted)</p>
           </div>
           <div className="text-right">
             <span className="text-2xl font-bold font-display tabular-nums">
@@ -92,8 +103,8 @@ export function VelocityScore({
       <CardContent>
         {isMultiFounder && stackedData ? (
           <>
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={stackedData} layout="vertical" barCategoryGap="30%">
+            <ResponsiveContainer width="100%" height={chartHeight}>
+              <BarChart data={stackedData} layout="vertical" barCategoryGap="20%">
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
                 <XAxis
                   type="number"
@@ -130,23 +141,18 @@ export function VelocityScore({
               </BarChart>
             </ResponsiveContainer>
 
-            <div className="mt-3 flex items-center justify-between">
-              <div className="flex gap-5 text-xs text-muted-foreground">
-                {BARS.map((bar) => (
-                  <span key={bar.key}>
-                    {bar.key} ({bar.points}pts)
-                  </span>
-                ))}
-              </div>
-              {decayPct > 0 && (
-                <p className="text-xs text-muted-foreground">Older activity decays ~19%/week</p>
-              )}
+            <div className="mt-3 flex gap-5 text-xs text-muted-foreground">
+              {activeBars.map((bar) => (
+                <span key={bar.key}>
+                  {bar.key} ({bar.weight}pts)
+                </span>
+              ))}
             </div>
           </>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={singleData} layout="vertical" barCategoryGap="30%">
+            <ResponsiveContainer width="100%" height={chartHeight}>
+              <BarChart data={singleData} layout="vertical" barCategoryGap="20%">
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
                 <XAxis
                   type="number"
@@ -162,8 +168,7 @@ export function VelocityScore({
                 />
                 <Tooltip
                   formatter={(value: number, _name: string, props: any) => {
-                    const bar = BARS.find((b) => b.key === props.payload.name)
-                    return [`${props.payload.count} × ${bar?.points ?? 0} = ${value} pts (raw)`, '']
+                    return [`${value} pts (${props.payload.count} items, decayed)`, '']
                   }}
                   contentStyle={{
                     backgroundColor: 'hsl(var(--card))',
@@ -173,28 +178,21 @@ export function VelocityScore({
                   }}
                 />
                 <Bar dataKey="points" animationDuration={400} radius={[0, 3, 3, 0]}>
-                  {singleData.map((_, i) => (
-                    <Cell key={i} fill={BARS[i].color} />
-                  ))}
+                  {singleData.map((entry, i) => {
+                    const barDef = activeBars.find((b) => b.key === entry.name)
+                    return <Cell key={i} fill={barDef?.color ?? 'hsl(var(--primary))'} />
+                  })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
 
-            <div className="mt-3 flex items-center justify-between">
-              <div className="flex gap-5 text-xs text-muted-foreground">
-                {BARS.map((bar) => (
-                  <span key={bar.key} className="flex items-center gap-1.5">
-                    <span
-                      className="h-2.5 w-2.5 rounded-sm"
-                      style={{ backgroundColor: bar.color }}
-                    />
-                    {bar.key} ({bar.points}pts)
-                  </span>
-                ))}
-              </div>
-              {decayPct > 0 && (
-                <p className="text-xs text-muted-foreground">Older activity decays ~19%/week</p>
-              )}
+            <div className="mt-3 flex gap-5 text-xs text-muted-foreground">
+              {activeBars.map((bar) => (
+                <span key={bar.key} className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: bar.color }} />
+                  {bar.key} ({bar.weight}pts)
+                </span>
+              ))}
             </div>
           </>
         )}

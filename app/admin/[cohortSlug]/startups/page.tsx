@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import { useState, useMemo, useEffect } from 'react'
 import { toast } from 'sonner'
-import { MomentumArrow } from '@/components/leaderboard/momentum-arrow'
+import { RankChangeArrow } from '@/components/leaderboard/momentum-arrow'
 import {
   ScoringExplainerContent,
   CATEGORY_COLORS,
@@ -184,7 +184,7 @@ function ExpandableRow({
         <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-right">
           <span className="inline-flex items-center gap-1.5">
             {entry.totalScore.toFixed(1)}
-            <MomentumArrow momentum={entry.momentum} />
+            <RankChangeArrow rankChange={entry.rankChange} />
           </span>
         </td>
         <td className="px-4 py-3 whitespace-nowrap text-center">

@@ -183,13 +183,35 @@ export function MetricAreaChart({
                 width={55}
               />
               <Tooltip
-                formatter={(value: number, name: string) => [formatValue(value), `@${name}`]}
-                labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '0px',
-                  fontSize: '12px',
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const total = payload.reduce(
+                    (sum: number, entry: any) => sum + (entry.value ?? 0),
+                    0
+                  )
+                  return (
+                    <div
+                      style={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '0px',
+                        fontSize: '12px',
+                        padding: '8px 12px',
+                      }}
+                    >
+                      <p style={{ marginBottom: '4px', fontWeight: 600 }}>
+                        {label ? new Date(label).toLocaleDateString() : ''}
+                      </p>
+                      <p style={{ marginBottom: '4px', fontWeight: 600 }}>
+                        Total: {formatValue(total)}
+                      </p>
+                      {payload.map((entry: any) => (
+                        <p key={entry.name} style={{ color: entry.color, margin: '2px 0' }}>
+                          @{entry.name} : {formatValue(entry.value ?? 0)}
+                        </p>
+                      ))}
+                    </div>
+                  )
                 }}
               />
               <Legend formatter={(value) => `@${value}`} wrapperStyle={{ fontSize: '12px' }} />

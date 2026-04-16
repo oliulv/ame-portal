@@ -5,7 +5,13 @@ import { requireStartupAccess } from './auth'
 import { logConvexError } from './lib/logging'
 import { providerValidator } from './lib/providers'
 import { normalizeToMonthlyCents } from './lib/stripeMrr'
-import { DECAY_RATE } from './lib/scoring'
+import {
+  computeVelocityScore,
+  computeVelocityBreakdown,
+  convertMergedCalendar,
+  type TypedDayCounts,
+  type MergedCalendarWeek,
+} from './lib/scoring'
 
 /**
  * Store metric snapshots (upserts by day to avoid duplicates).
@@ -131,15 +137,10 @@ export const timeSeries = query({
 
 /**
  * Get velocity score time series with 28-day rolling window and temporal decay.
- * Server-side computation — single source of truth for both KPI and chart.
+ * Single source of truth — same formula as the stored velocity_score metric.
  *
- * Computes from the GitHub contribution calendar (has a full year of daily data).
- * For each day in the requested range, looks back 28 days and sums:
- *   contribution_count × 10 × e^(-0.03 × days_ago)
- *
- * The contribution calendar gives us total contributions per day (commits + PRs + issues
- * combined). We multiply by 10 as the base score unit, consistent with the velocity
- * scoring in the sync cron.
+ * Uses the typed contribution calendar (per-type per-day counts) when available.
+ * Falls back to the merged calendar (all types × 10) for pre-migration data.
  */
 export const getVelocityTimeSeries = query({
   args: {
@@ -149,7 +150,25 @@ export const getVelocityTimeSeries = query({
   handler: async (ctx, args) => {
     await requireStartupAccess(ctx, args.startupId)
 
-    // Read the contribution calendar (stored by GitHub sync, contains ~1 year of daily data)
+    // Prefer typed calendar (per-type weights); fall back to merged calendar
+    const typedMetric = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'typed_contribution_calendar')
+      )
+      .order('desc')
+      .first()
+
+    const typedCalendar = typedMetric?.meta as TypedDayCounts | undefined
+
+    if (typedCalendar && Object.keys(typedCalendar).length > 0) {
+      return buildTimeSeries(typedCalendar, args.startDate, true)
+    }
+
+    // Fallback: merged calendar (pre-migration data, all types × 10)
     const calendarMetric = await ctx.db
       .query('metricsData')
       .withIndex('by_startupId_provider_metricKey', (q) =>
@@ -161,68 +180,48 @@ export const getVelocityTimeSeries = query({
       .order('desc')
       .first()
 
-    const calendar = calendarMetric?.meta as
-      | Array<{ contributionDays?: Array<{ date: string; contributionCount?: number }> }>
-      | undefined
+    const calendar = calendarMetric?.meta as MergedCalendarWeek[] | undefined
 
     if (!calendar || calendar.length === 0) return []
 
-    // Flatten calendar into a date→count map
-    const countByDay = new Map<string, number>()
-    for (const week of calendar) {
-      for (const day of week.contributionDays ?? []) {
-        countByDay.set(day.date, day.contributionCount ?? 0)
-      }
-    }
-
-    if (countByDay.size === 0) return []
-
-    // Find the data range from the calendar
-    const allDates = Array.from(countByDay.keys()).sort()
-    const earliestDay = allDates[0]
-
-    // Determine output range — start 28 days after earliest data (need lookback window)
-    const earliestOutput = new Date(earliestDay + 'T00:00:00.000Z')
-    earliestOutput.setDate(earliestOutput.getDate() + 28)
-
-    // If no startDate provided (max), use earliest possible output date
-    const requestedStart = args.startDate ? new Date(args.startDate) : earliestOutput
-
-    const outputStart =
-      requestedStart.getTime() > earliestOutput.getTime() ? requestedStart : earliestOutput
-
-    const today = new Date()
-    today.setUTCHours(0, 0, 0, 0)
-
-    const result: { timestamp: string; value: number }[] = []
-    const current = new Date(outputStart)
-    current.setUTCHours(0, 0, 0, 0)
-
-    while (current <= today) {
-      let score = 0
-
-      // Sum contributions in the 28-day lookback window with temporal decay
-      for (let daysAgo = 0; daysAgo < 28; daysAgo++) {
-        const lookbackDate = new Date(current)
-        lookbackDate.setDate(lookbackDate.getDate() - daysAgo)
-        const dayStr = lookbackDate.toISOString().slice(0, 10)
-        const count = countByDay.get(dayStr) ?? 0
-        if (count > 0) {
-          score += count * 10 * Math.exp(-DECAY_RATE * daysAgo)
-        }
-      }
-
-      result.push({
-        timestamp: current.toISOString().slice(0, 10) + 'T00:00:00.000Z',
-        value: Math.round(score),
-      })
-
-      current.setDate(current.getDate() + 1)
-    }
-
-    return result
+    return buildTimeSeries(convertMergedCalendar(calendar), args.startDate, false)
   },
 })
+
+function buildTimeSeries(
+  calendar: TypedDayCounts,
+  startDate: string | undefined,
+  _isTyped: boolean
+): { timestamp: string; value: number }[] {
+  const allDates = Object.keys(calendar).sort()
+  if (allDates.length === 0) return []
+
+  const earliestDay = allDates[0]
+  const earliestOutput = new Date(earliestDay + 'T00:00:00.000Z')
+  earliestOutput.setDate(earliestOutput.getDate() + 28)
+
+  const requestedStart = startDate ? new Date(startDate) : earliestOutput
+  const outputStart =
+    requestedStart.getTime() > earliestOutput.getTime() ? requestedStart : earliestOutput
+
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+
+  const result: { timestamp: string; value: number }[] = []
+  const current = new Date(outputStart)
+  current.setUTCHours(0, 0, 0, 0)
+
+  while (current <= today) {
+    const score = computeVelocityScore(calendar, current)
+    result.push({
+      timestamp: current.toISOString().slice(0, 10) + 'T00:00:00.000Z',
+      value: score,
+    })
+    current.setDate(current.getDate() + 1)
+  }
+
+  return result
+}
 
 /**
  * Get the latest GitHub contribution calendar data for a startup.
@@ -248,6 +247,103 @@ export const getContributionCalendar = query({
 })
 
 /**
+ * Decompose today's velocity score by contribution type.
+ * Each type's `points` is the decayed contribution — they sum to `total`.
+ */
+export const getVelocityBreakdown = query({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    await requireStartupAccess(ctx, args.startupId)
+
+    // Prefer typed calendar; fall back to merged calendar (pre-migration)
+    const typedMetric = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'typed_contribution_calendar')
+      )
+      .order('desc')
+      .first()
+
+    let teamCalendar: TypedDayCounts = (typedMetric?.meta as TypedDayCounts | undefined) ?? {}
+
+    // Fallback: convert merged calendar to typed format (all counts as commits)
+    if (Object.keys(teamCalendar).length === 0) {
+      const calendarMetric = await ctx.db
+        .query('metricsData')
+        .withIndex('by_startupId_provider_metricKey', (q) =>
+          q
+            .eq('startupId', args.startupId)
+            .eq('provider', 'github')
+            .eq('metricKey', 'contribution_calendar')
+        )
+        .order('desc')
+        .first()
+
+      const calendar = calendarMetric?.meta as MergedCalendarWeek[] | undefined
+      if (calendar) {
+        teamCalendar = convertMergedCalendar(calendar)
+      }
+    }
+
+    const founderMetric = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'typed_contribution_calendar_by_founder')
+      )
+      .order('desc')
+      .first()
+
+    let founderCalendars = (founderMetric?.meta as Record<string, TypedDayCounts> | undefined) ?? {}
+
+    // Check if typed per-founder data has any actual contribution days
+    const hasTypedFounderData = Object.values(founderCalendars).some(
+      (cal) => cal && Object.keys(cal).length > 0
+    )
+
+    // Fallback: convert merged per-founder calendar to typed format
+    if (!hasTypedFounderData) {
+      const mergedFounderMetric = await ctx.db
+        .query('metricsData')
+        .withIndex('by_startupId_provider_metricKey', (q) =>
+          q
+            .eq('startupId', args.startupId)
+            .eq('provider', 'github')
+            .eq('metricKey', 'contribution_calendar_by_founder')
+        )
+        .order('desc')
+        .first()
+
+      const mergedFounderCals = mergedFounderMetric?.meta as
+        | Record<string, MergedCalendarWeek[]>
+        | undefined
+
+      if (mergedFounderCals) {
+        const converted: Record<string, TypedDayCounts> = {}
+        for (const [name, calendar] of Object.entries(mergedFounderCals)) {
+          const typed = convertMergedCalendar(calendar)
+          if (Object.keys(typed).length > 0) converted[name] = typed
+        }
+        founderCalendars = converted
+      }
+    }
+
+    const team = computeVelocityBreakdown(teamCalendar)
+    const perFounder: Record<string, ReturnType<typeof computeVelocityBreakdown>> = {}
+    for (const [name, cal] of Object.entries(founderCalendars)) {
+      perFounder[name] = computeVelocityBreakdown(cal)
+    }
+
+    return { team, perFounder }
+  },
+})
+
+/**
  * Get per-founder velocity time series (one series per connected GitHub account).
  * Returns { [founderName]: { timestamp, value }[] }
  */
@@ -259,6 +355,31 @@ export const getVelocityTimeSeriesPerFounder = query({
   handler: async (ctx, args) => {
     await requireStartupAccess(ctx, args.startupId)
 
+    // Prefer typed per-founder calendars; fall back to merged per-founder
+    const typedMetric = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'typed_contribution_calendar_by_founder')
+      )
+      .order('desc')
+      .first()
+
+    const typedCalendars = typedMetric?.meta as Record<string, TypedDayCounts> | undefined
+
+    if (typedCalendars && Object.keys(typedCalendars).length > 0) {
+      const result: Record<string, Array<{ timestamp: string; value: number }>> = {}
+      for (const [name, cal] of Object.entries(typedCalendars)) {
+        if (!cal || Object.keys(cal).length === 0) continue
+        result[name] = buildTimeSeries(cal, args.startDate, true)
+      }
+      // Only use typed data if it actually produced results; otherwise fall through
+      if (Object.keys(result).length > 0) return result
+    }
+
+    // Fallback: merged per-founder calendar
     const calendarMetric = await ctx.db
       .query('metricsData')
       .withIndex('by_startupId_provider_metricKey', (q) =>
@@ -271,62 +392,17 @@ export const getVelocityTimeSeriesPerFounder = query({
       .first()
 
     const perFounderCalendars = calendarMetric?.meta as
-      | Record<
-          string,
-          Array<{ contributionDays?: Array<{ date: string; contributionCount?: number }> }>
-        >
+      | Record<string, MergedCalendarWeek[]>
       | undefined
 
     if (!perFounderCalendars) return {}
 
     const result: Record<string, Array<{ timestamp: string; value: number }>> = {}
-
     for (const [founderName, calendar] of Object.entries(perFounderCalendars)) {
       if (!calendar || calendar.length === 0) continue
-
-      const countByDay = new Map<string, number>()
-      for (const week of calendar) {
-        for (const day of week.contributionDays ?? []) {
-          countByDay.set(day.date, day.contributionCount ?? 0)
-        }
-      }
-      if (countByDay.size === 0) continue
-
-      const allDates = Array.from(countByDay.keys()).sort()
-      const earliestDay = allDates[0]
-      const earliestOutput = new Date(earliestDay + 'T00:00:00.000Z')
-      earliestOutput.setDate(earliestOutput.getDate() + 28)
-
-      const requestedStart = args.startDate ? new Date(args.startDate) : earliestOutput
-      const outputStart =
-        requestedStart.getTime() > earliestOutput.getTime() ? requestedStart : earliestOutput
-
-      const today = new Date()
-      today.setUTCHours(0, 0, 0, 0)
-
-      const series: Array<{ timestamp: string; value: number }> = []
-      const current = new Date(outputStart)
-      current.setUTCHours(0, 0, 0, 0)
-
-      while (current <= today) {
-        let score = 0
-        for (let daysAgo = 0; daysAgo < 28; daysAgo++) {
-          const lookbackDate = new Date(current)
-          lookbackDate.setDate(lookbackDate.getDate() - daysAgo)
-          const dayStr = lookbackDate.toISOString().slice(0, 10)
-          const count = countByDay.get(dayStr) ?? 0
-          if (count > 0) {
-            score += count * 10 * Math.exp(-DECAY_RATE * daysAgo)
-          }
-        }
-        series.push({
-          timestamp: current.toISOString().slice(0, 10) + 'T00:00:00.000Z',
-          value: Math.round(score),
-        })
-        current.setDate(current.getDate() + 1)
-      }
-
-      result[founderName] = series
+      const typed = convertMergedCalendar(calendar)
+      if (Object.keys(typed).length === 0) continue
+      result[founderName] = buildTimeSeries(typed, args.startDate, false)
     }
 
     return result
@@ -353,7 +429,7 @@ export const getPerFounderGithubStats = query({
       .order('desc')
       .first()
 
-    return (metric?.meta as Record<string, { commits: number; prs: number }>) ?? {}
+    return (metric?.meta as Record<string, { commits: number; prs: number; issues: number }>) ?? {}
   },
 })
 
@@ -944,6 +1020,17 @@ export const fetchGithubMetrics = internalAction({
               }
             }
           }
+          commitContributionsByRepository(maxRepositories: 100) {
+            contributions(first: 100, orderBy: { field: OCCURRED_AT, direction: DESC }) {
+              nodes { commitCount occurredAt }
+            }
+          }
+          pullRequestContributions(first: 100, orderBy: { direction: DESC }) {
+            nodes { occurredAt }
+          }
+          issueContributions(first: 100, orderBy: { direction: DESC }) {
+            nodes { occurredAt }
+          }
         }
       }
     }`
@@ -957,7 +1044,9 @@ export const fetchGithubMetrics = internalAction({
 
     // Per-founder tracking
     const perFounderCalendars: Record<string, Map<string, number>> = {}
-    const perFounderStats: Record<string, { commits: number; prs: number }> = {}
+    const perFounderStats: Record<string, { commits: number; prs: number; issues: number }> = {}
+    const perFounderTypedCalendars: Record<string, TypedDayCounts> = {}
+    const mergedTypedCalendar: TypedDayCounts = {}
 
     for (const connection of connections) {
       if (!connection.accessToken) continue
@@ -1014,13 +1103,15 @@ export const fetchGithubMetrics = internalAction({
         const connCommits = contrib.totalCommitContributions ?? 0
         const connPrs = contrib.totalPullRequestContributions ?? 0
 
+        const connIssues = contrib.totalIssueContributions ?? 0
+
         // Sum across founders (not average)
         totalCommits += connCommits
         totalPrsOpened += connPrs
-        totalIssues += contrib.totalIssueContributions ?? 0
+        totalIssues += connIssues
 
         // Track per-founder stats
-        perFounderStats[founderName] = { commits: connCommits, prs: connPrs }
+        perFounderStats[founderName] = { commits: connCommits, prs: connPrs, issues: connIssues }
 
         // Merge contribution calendars (sum per day) + track per-founder calendar
         const founderCalendar = new Map<string, number>()
@@ -1033,6 +1124,49 @@ export const fetchGithubMetrics = internalAction({
           }
         }
         perFounderCalendars[founderName] = founderCalendar
+
+        // Build per-type per-day calendar from detailed contribution data
+        const founderTyped: TypedDayCounts = {}
+        for (const repo of contrib.commitContributionsByRepository ?? []) {
+          for (const node of repo.contributions?.nodes ?? []) {
+            const date = (node.occurredAt as string).slice(0, 10)
+            founderTyped[date] ??= { commits: 0, prs: 0, issues: 0 }
+            founderTyped[date].commits += node.commitCount ?? 0
+          }
+        }
+        for (const node of contrib.pullRequestContributions?.nodes ?? []) {
+          const date = (node.occurredAt as string).slice(0, 10)
+          founderTyped[date] ??= { commits: 0, prs: 0, issues: 0 }
+          founderTyped[date].prs += 1
+        }
+        for (const node of contrib.issueContributions?.nodes ?? []) {
+          const date = (node.occurredAt as string).slice(0, 10)
+          founderTyped[date] ??= { commits: 0, prs: 0, issues: 0 }
+          founderTyped[date].issues += 1
+        }
+        // Reconcile typed calendar with merged calendar: the merged
+        // contributionCalendar includes code reviews and other types that the
+        // per-type fields don't capture. Attribute any gap to commits so the
+        // typed calendar never under-counts vs the merged calendar.
+        for (const [date, mergedCount] of founderCalendar) {
+          const typed = founderTyped[date] ?? { commits: 0, prs: 0, issues: 0 }
+          const typedTotal = typed.commits + typed.prs + typed.issues
+          if (mergedCount > typedTotal) {
+            founderTyped[date] = {
+              ...typed,
+              commits: typed.commits + (mergedCount - typedTotal),
+            }
+          }
+        }
+        perFounderTypedCalendars[founderName] = founderTyped
+
+        // Merge into team-level typed calendar
+        for (const [date, counts] of Object.entries(founderTyped)) {
+          mergedTypedCalendar[date] ??= { commits: 0, prs: 0, issues: 0 }
+          mergedTypedCalendar[date].commits += counts.commits
+          mergedTypedCalendar[date].prs += counts.prs
+          mergedTypedCalendar[date].issues += counts.issues
+        }
       } catch (error) {
         logConvexError(
           `GitHub fetch error for startup ${args.startupId}, connection ${connection._id}:`,
@@ -1052,8 +1186,8 @@ export const fetchGithubMetrics = internalAction({
       return
     }
 
-    // Git Velocity scoring (summed across all founders)
-    const velocityScore = totalCommits * 10 + totalPrsOpened * 25
+    // Git Velocity scoring: unified formula with per-type weights and decay
+    const velocityScore = computeVelocityScore(mergedTypedCalendar, now)
     const timestamp = now.toISOString()
 
     // Reconstruct merged calendar in GitHub's format
@@ -1163,6 +1297,29 @@ export const fetchGithubMetrics = internalAction({
         timestamp,
         window: 'daily' as const,
         meta: perFounderStats,
+      })
+    }
+
+    // Store typed per-day calendars for the unified velocity formula
+    await ctx.runMutation(internal.metrics.storeInternalWithMeta, {
+      startupId: args.startupId,
+      provider: 'github' as const,
+      metricKey: 'typed_contribution_calendar',
+      value: 0,
+      timestamp,
+      window: 'daily' as const,
+      meta: mergedTypedCalendar,
+    })
+
+    if (Object.keys(perFounderTypedCalendars).length > 0) {
+      await ctx.runMutation(internal.metrics.storeInternalWithMeta, {
+        startupId: args.startupId,
+        provider: 'github' as const,
+        metricKey: 'typed_contribution_calendar_by_founder',
+        value: 0,
+        timestamp,
+        window: 'daily' as const,
+        meta: perFounderTypedCalendars,
       })
     }
   },

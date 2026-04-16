@@ -10,6 +10,10 @@ import {
   DECAY_RATE,
   computeConsistencyBonus,
   computeUpdateScore,
+  computeVelocityScore,
+  convertMergedCalendar,
+  type TypedDayCounts,
+  type MergedCalendarWeek,
 } from './lib/scoring'
 import { computeStreak } from './lib/streak'
 
@@ -39,36 +43,6 @@ function powerLawNormalize(values: number[], p: number): number[] {
   return transformed.map((t) => (t / maxVal) * 100)
 }
 
-/**
- * Compute momentum by comparing this-week vs last-week raw activity.
- * Uses a simple heuristic: sum the absolute values of this week's metrics
- * and compare to last week's. >5% increase = up, >5% decrease = down.
- */
-function computeMomentum(
-  _totalScore: number,
-  data: {
-    weeklyMrrGrowth: number[]
-    weeklyTraffic: number[]
-    weeklyGithub: number[]
-  }
-): 'up' | 'flat' | 'down' | null {
-  const thisWeek =
-    Math.abs(data.weeklyMrrGrowth[0] ?? 0) +
-    Math.abs(data.weeklyTraffic[0] ?? 0) +
-    Math.abs(data.weeklyGithub[0] ?? 0)
-  const lastWeek =
-    Math.abs(data.weeklyMrrGrowth[1] ?? 0) +
-    Math.abs(data.weeklyTraffic[1] ?? 0) +
-    Math.abs(data.weeklyGithub[1] ?? 0)
-
-  if (thisWeek === 0 && lastWeek === 0) return null
-  if (lastWeek === 0) return 'up'
-  const change = (thisWeek - lastWeek) / lastWeek
-  if (change > 0.05) return 'up'
-  if (change < -0.05) return 'down'
-  return 'flat'
-}
-
 // ── Score Breakdown Type ─────────────────────────────────────────────
 
 export interface ScoreBreakdown {
@@ -88,11 +62,48 @@ export interface ScoreBreakdown {
   activeCategories: number
   qualified: boolean
   consistencyBonus: number
-  momentum: 'up' | 'flat' | 'down' | null
+  rankChange: number | null // positive = moved up, negative = moved down, null = no prior data
   isFavoriteThisWeek: boolean
   favoriteMultiplier: number
   updateStreak: number
   excludeFromMetrics: boolean
+}
+
+/**
+ * Read the velocity calendar for a startup (typed → fallback to merged).
+ * Single source of truth for velocity scoring across all consumers.
+ */
+async function readVelocityCalendar(
+  ctx: { db: any },
+  startupId: Id<'startups'>
+): Promise<TypedDayCounts> {
+  const typedMetric = await ctx.db
+    .query('metricsData')
+    .withIndex('by_startupId_provider_metricKey', (q: any) =>
+      q
+        .eq('startupId', startupId)
+        .eq('provider', 'github')
+        .eq('metricKey', 'typed_contribution_calendar')
+    )
+    .order('desc')
+    .first()
+
+  const typed = (typedMetric?.meta as TypedDayCounts | undefined) ?? {}
+  if (Object.keys(typed).length > 0) return typed
+
+  // Fallback: merged contribution calendar
+  const mergedMetric = await ctx.db
+    .query('metricsData')
+    .withIndex('by_startupId_provider_metricKey', (q: any) =>
+      q.eq('startupId', startupId).eq('provider', 'github').eq('metricKey', 'contribution_calendar')
+    )
+    .order('desc')
+    .first()
+
+  const merged = mergedMetric?.meta as MergedCalendarWeek[] | undefined
+  if (merged && merged.length > 0) return convertMergedCalendar(merged)
+
+  return {}
 }
 
 // ── Main Leaderboard Query ───────────────────────────────────────────
@@ -226,23 +237,11 @@ export const computeLeaderboard = query({
         weeklyTraffic.push(growthPct)
       }
 
-      // ── GitHub Activity (Velocity score, summed across all founders) ─
-      const velocityMetrics = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q.eq('startupId', startup._id).eq('provider', 'github').eq('metricKey', 'velocity_score')
-        )
-        .collect()
-
+      // ── GitHub Activity (compute from calendar — single source of truth) ─
+      const velocityCalendar = await readVelocityCalendar(ctx, startup._id)
       const weeklyGithub: number[] = []
       for (const week of weeks) {
-        const weekVelocity =
-          velocityMetrics
-            .filter(
-              (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-            )
-            .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-        weeklyGithub.push(weekVelocity) // Summed across all founders (aggregated at sync time)
+        weeklyGithub.push(computeVelocityScore(velocityCalendar, week.end))
       }
 
       // ── Social Growth (follower growth %) ────────────────────
@@ -342,9 +341,10 @@ export const computeLeaderboard = query({
         const decay = temporalDecay(daysOld)
         totalMrrGrowth += weeklyMrrGrowth[i] * decay
         totalTraffic += weeklyTraffic[i] * decay
-        totalGithub += weeklyGithub[i] * decay
         totalSocial += weeklySocial[i] * decay
       }
+      // computeVelocityScore already includes 28-day decay — use latest directly
+      totalGithub = weeklyGithub[0] ?? 0
 
       // ── Anomaly detection ─────────────────────────────────────
       const anomalies: Array<{ category: string; value: number; threshold: number }> = []
@@ -489,7 +489,7 @@ export const computeLeaderboard = query({
         activeCategories,
         qualified,
         consistencyBonus,
-        momentum: computeMomentum(totalScore, data),
+        rankChange: null, // computed after ranking
         isFavoriteThisWeek: data.isFavoriteThisWeek,
         favoriteMultiplier,
         updateStreak: data.updateStreak,
@@ -505,6 +505,36 @@ export const computeLeaderboard = query({
     ranked.forEach((r, i) => {
       r.rank = i + 1
     })
+
+    // ── Compute rank changes (compare to last week's ranking) ──
+    // Re-score using previous week's data (shift weekly arrays by 1)
+    const prevScores: Array<{ startupId: Id<'startups'>; score: number }> = []
+    for (const [, data] of rawScores) {
+      let prevMrr = 0
+      let prevTraffic = 0
+      let prevSocial = 0
+      for (let i = 1; i < weeks.length; i++) {
+        const daysOld = (now.getTime() - weeks[i].start.getTime()) / (1000 * 60 * 60 * 24)
+        const decay = temporalDecay(daysOld)
+        prevMrr += data.weeklyMrrGrowth[i] * decay
+        prevTraffic += data.weeklyTraffic[i] * decay
+        prevSocial += data.weeklySocial[i] * decay
+      }
+      const prevGithub = data.weeklyGithub[1] ?? 0
+      prevScores.push({
+        startupId: data.startup._id,
+        score: prevMrr + prevTraffic + prevGithub + prevSocial,
+      })
+    }
+    prevScores.sort((a, b) => b.score - a.score)
+    const prevRankMap = new Map(prevScores.map((s, i) => [s.startupId, i + 1]))
+
+    for (const r of ranked) {
+      const prev = prevRankMap.get(r.startupId)
+      if (prev != null && r.rank != null) {
+        r.rankChange = prev - r.rank // positive = moved up
+      }
+    }
 
     const unranked = results.filter((r) => !r.qualified || r.excludeFromMetrics)
 
@@ -557,7 +587,7 @@ export const computeLeaderboardForFounder = query({
       totalScore: number
       activeCategories: number
       qualified: boolean
-      momentum: 'up' | 'flat' | 'down' | null
+      rankChange: number | null
       isFavoriteThisWeek: boolean
       updateStreak: number
       excludeFromMetrics: boolean
@@ -646,26 +676,13 @@ export const computeLeaderboardForFounder = query({
         totalTraffic += growth * temporalDecay(daysOld)
       }
 
-      // GitHub (summed across founders — aggregated at sync time)
-      const velocityMetrics = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q.eq('startupId', s._id).eq('provider', 'github').eq('metricKey', 'velocity_score')
-        )
-        .collect()
-      let totalGithub = 0
+      // GitHub (compute from calendar — single source of truth)
+      const velocityCalendar = await readVelocityCalendar(ctx, s._id)
       const weeklyGithub: number[] = []
       for (const week of weeks) {
-        const val =
-          velocityMetrics
-            .filter(
-              (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-            )
-            .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-        weeklyGithub.push(val) // Summed across founders (aggregated at sync time)
-        const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-        totalGithub += val * temporalDecay(daysOld)
+        weeklyGithub.push(computeVelocityScore(velocityCalendar, week.end))
       }
+      const totalGithub = weeklyGithub[0] ?? 0
 
       // Social
       const socialMetrics = await ctx.db
@@ -802,7 +819,7 @@ export const computeLeaderboardForFounder = query({
         totalScore: Math.round(total * 100) / 100,
         activeCategories: activeCats,
         qualified: activeCats >= QUALIFICATION_THRESHOLD,
-        momentum: computeMomentum(total, d),
+        rankChange: null,
         isFavoriteThisWeek: d.isFavoriteThisWeek,
         updateStreak: d.updateStreak,
         excludeFromMetrics: d.startup.excludeFromMetrics === true,
@@ -816,6 +833,28 @@ export const computeLeaderboardForFounder = query({
     ranked.forEach((r, i) => {
       r.rank = i + 1
     })
+
+    // Compute rank changes (compare to last week's ranking)
+    const prevScores: Array<{ startupId: Id<'startups'>; score: number }> = []
+    for (const d of rawData) {
+      let prevScore = 0
+      for (let w = 1; w < weeks.length; w++) {
+        const daysOld = (now.getTime() - weeks[w].start.getTime()) / (1000 * 60 * 60 * 24)
+        const decay = temporalDecay(daysOld)
+        prevScore += (d.weeklyMrrGrowth[w] ?? 0) * decay
+        prevScore += (d.weeklyTraffic[w] ?? 0) * decay
+      }
+      prevScore += d.weeklyGithub[1] ?? 0
+      prevScores.push({ startupId: d.startup._id, score: prevScore })
+    }
+    prevScores.sort((a, b) => b.score - a.score)
+    const prevRankMap = new Map(prevScores.map((s, i) => [s.startupId, i + 1]))
+    for (const r of ranked) {
+      const prev = prevRankMap.get(r.startupId)
+      if (prev != null && r.rank != null) {
+        r.rankChange = prev - r.rank
+      }
+    }
 
     const unranked = results.filter((r) => !r.qualified || r.excludeFromMetrics)
 
