@@ -53,13 +53,8 @@ export function VelocityScore({ breakdown, perFounderBreakdown }: VelocityScoreP
   )
   const isMultiFounder = founderNames.length > 1
 
-  const activeBars = useMemo(
-    () =>
-      breakdown
-        ? BARS.filter((bar) => getBarValue(breakdown, bar.key).points > 0)
-        : BARS.slice(0, 2),
-    [breakdown]
-  )
+  // Always show all three bars, even when a type has 0 points
+  const activeBars = BARS
 
   const chartHeight = activeBars.length <= 2 ? 160 : isMultiFounder ? 220 : 200
 

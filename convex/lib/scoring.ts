@@ -38,6 +38,26 @@ export const GROWTH_RATE_CAP_MIN = -100 // -100%
 
 export type TypedDayCounts = Record<string, { commits: number; prs: number; issues: number }>
 
+export type MergedCalendarWeek = {
+  contributionDays?: Array<{ date: string; contributionCount?: number }>
+}
+
+/**
+ * Convert GitHub's merged contributionCalendar format to our per-type format.
+ * All contributions counted as commits (we don't know the breakdown from merged data).
+ */
+export function convertMergedCalendar(weeks: MergedCalendarWeek[]): TypedDayCounts {
+  const typed: TypedDayCounts = {}
+  for (const week of weeks) {
+    for (const day of week.contributionDays ?? []) {
+      if ((day.contributionCount ?? 0) > 0) {
+        typed[day.date] = { commits: day.contributionCount ?? 0, prs: 0, issues: 0 }
+      }
+    }
+  }
+  return typed
+}
+
 export interface VelocityBreakdown {
   commits: { count: number; points: number }
   prs: { count: number; points: number }

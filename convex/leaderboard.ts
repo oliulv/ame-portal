@@ -10,6 +10,10 @@ import {
   DECAY_RATE,
   computeConsistencyBonus,
   computeUpdateScore,
+  computeVelocityScore,
+  convertMergedCalendar,
+  type TypedDayCounts,
+  type MergedCalendarWeek,
 } from './lib/scoring'
 import { computeStreak } from './lib/streak'
 
@@ -93,6 +97,43 @@ export interface ScoreBreakdown {
   favoriteMultiplier: number
   updateStreak: number
   excludeFromMetrics: boolean
+}
+
+/**
+ * Read the velocity calendar for a startup (typed → fallback to merged).
+ * Single source of truth for velocity scoring across all consumers.
+ */
+async function readVelocityCalendar(
+  ctx: { db: any },
+  startupId: Id<'startups'>
+): Promise<TypedDayCounts> {
+  const typedMetric = await ctx.db
+    .query('metricsData')
+    .withIndex('by_startupId_provider_metricKey', (q: any) =>
+      q
+        .eq('startupId', startupId)
+        .eq('provider', 'github')
+        .eq('metricKey', 'typed_contribution_calendar')
+    )
+    .order('desc')
+    .first()
+
+  const typed = (typedMetric?.meta as TypedDayCounts | undefined) ?? {}
+  if (Object.keys(typed).length > 0) return typed
+
+  // Fallback: merged contribution calendar
+  const mergedMetric = await ctx.db
+    .query('metricsData')
+    .withIndex('by_startupId_provider_metricKey', (q: any) =>
+      q.eq('startupId', startupId).eq('provider', 'github').eq('metricKey', 'contribution_calendar')
+    )
+    .order('desc')
+    .first()
+
+  const merged = mergedMetric?.meta as MergedCalendarWeek[] | undefined
+  if (merged && merged.length > 0) return convertMergedCalendar(merged)
+
+  return {}
 }
 
 // ── Main Leaderboard Query ───────────────────────────────────────────
@@ -226,23 +267,11 @@ export const computeLeaderboard = query({
         weeklyTraffic.push(growthPct)
       }
 
-      // ── GitHub Activity (Velocity score, summed across all founders) ─
-      const velocityMetrics = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q.eq('startupId', startup._id).eq('provider', 'github').eq('metricKey', 'velocity_score')
-        )
-        .collect()
-
+      // ── GitHub Activity (compute from calendar — single source of truth) ─
+      const velocityCalendar = await readVelocityCalendar(ctx, startup._id)
       const weeklyGithub: number[] = []
       for (const week of weeks) {
-        const weekVelocity =
-          velocityMetrics
-            .filter(
-              (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-            )
-            .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-        weeklyGithub.push(weekVelocity) // Summed across all founders (aggregated at sync time)
+        weeklyGithub.push(computeVelocityScore(velocityCalendar, week.end))
       }
 
       // ── Social Growth (follower growth %) ────────────────────
@@ -647,24 +676,12 @@ export const computeLeaderboardForFounder = query({
         totalTraffic += growth * temporalDecay(daysOld)
       }
 
-      // GitHub (summed across founders — aggregated at sync time)
-      const velocityMetrics = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q.eq('startupId', s._id).eq('provider', 'github').eq('metricKey', 'velocity_score')
-        )
-        .collect()
+      // GitHub (compute from calendar — single source of truth)
+      const velocityCalendar = await readVelocityCalendar(ctx, s._id)
       const weeklyGithub: number[] = []
       for (const week of weeks) {
-        const val =
-          velocityMetrics
-            .filter(
-              (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-            )
-            .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-        weeklyGithub.push(val)
+        weeklyGithub.push(computeVelocityScore(velocityCalendar, week.end))
       }
-      // velocity_score already includes 28-day decay — use latest directly
       const totalGithub = weeklyGithub[0] ?? 0
 
       // Social
