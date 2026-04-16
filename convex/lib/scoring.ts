@@ -25,11 +25,84 @@ export const WEIGHTS: Record<CategoryKey, number> = {
 }
 
 export const DECAY_RATE = 0.03
+
+// Per-type velocity scoring weights (used by the unified formula)
+export const COMMIT_PTS = 10
+export const PR_PTS = 25
+export const ISSUE_PTS = 15
 export const ROLLING_WEEKS = 4
 export const QUALIFICATION_THRESHOLD = 3
 export const MOMENTUM_THRESHOLD = 0.05 // 5% change
 export const GROWTH_RATE_CAP_MAX = 200 // +200%
 export const GROWTH_RATE_CAP_MIN = -100 // -100%
+
+export type TypedDayCounts = Record<string, { commits: number; prs: number; issues: number }>
+
+export interface VelocityBreakdown {
+  commits: { count: number; points: number }
+  prs: { count: number; points: number }
+  issues: { count: number; points: number }
+  total: number
+  rawTotal: number
+}
+
+/**
+ * Compute the velocity score for a single day's snapshot using the unified
+ * formula: 28-day rolling window with per-type weights and temporal decay.
+ */
+export function computeVelocityScore(calendar: TypedDayCounts, asOf?: Date): number {
+  const today = asOf ? new Date(asOf.getTime()) : new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  let score = 0
+  for (let daysAgo = 0; daysAgo < 28; daysAgo++) {
+    const d = new Date(today.getTime())
+    d.setUTCDate(d.getUTCDate() - daysAgo)
+    const dateStr = d.toISOString().slice(0, 10)
+    const counts = calendar[dateStr]
+    if (!counts) continue
+    const dayScore = counts.commits * COMMIT_PTS + counts.prs * PR_PTS + counts.issues * ISSUE_PTS
+    score += dayScore * Math.exp(-DECAY_RATE * daysAgo)
+  }
+  return Math.round(score)
+}
+
+/**
+ * Decompose a velocity score into per-type contributions. Each type's
+ * `points` field is the decayed contribution — they sum to `total` exactly
+ * (before rounding).
+ */
+export function computeVelocityBreakdown(calendar: TypedDayCounts, asOf?: Date): VelocityBreakdown {
+  const today = asOf ? new Date(asOf.getTime()) : new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  let commitsPts = 0
+  let prsPts = 0
+  let issuesPts = 0
+  let rawCommits = 0
+  let rawPrs = 0
+  let rawIssues = 0
+  for (let daysAgo = 0; daysAgo < 28; daysAgo++) {
+    const d = new Date(today.getTime())
+    d.setUTCDate(d.getUTCDate() - daysAgo)
+    const dateStr = d.toISOString().slice(0, 10)
+    const counts = calendar[dateStr]
+    if (!counts) continue
+    const decay = Math.exp(-DECAY_RATE * daysAgo)
+    commitsPts += counts.commits * COMMIT_PTS * decay
+    prsPts += counts.prs * PR_PTS * decay
+    issuesPts += counts.issues * ISSUE_PTS * decay
+    rawCommits += counts.commits
+    rawPrs += counts.prs
+    rawIssues += counts.issues
+  }
+  const total = Math.round(commitsPts + prsPts + issuesPts)
+  return {
+    commits: { count: rawCommits, points: Math.round(commitsPts) },
+    prs: { count: rawPrs, points: Math.round(prsPts) },
+    issues: { count: rawIssues, points: Math.round(issuesPts) },
+    total,
+    rawTotal: rawCommits * COMMIT_PTS + rawPrs * PR_PTS + rawIssues * ISSUE_PTS,
+  }
+}
 
 // ── Types ────────────────────────────────────────────────────────────
 

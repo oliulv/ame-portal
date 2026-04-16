@@ -8,9 +8,14 @@ import {
   isQualified,
   computeUpdateScore,
   computeStartupScore,
+  computeVelocityScore,
+  computeVelocityBreakdown,
   CATEGORY_KEYS,
   WEIGHTS,
   DECAY_RATE,
+  COMMIT_PTS,
+  PR_PTS,
+  ISSUE_PTS,
   ROLLING_WEEKS,
   QUALIFICATION_THRESHOLD,
   MOMENTUM_THRESHOLD,
@@ -19,6 +24,7 @@ import {
   type CategoryMetric,
   type ScoringConfig,
   type CategoryKey,
+  type TypedDayCounts,
 } from './scoring'
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -586,5 +592,103 @@ describe('constants', () => {
     expect(MOMENTUM_THRESHOLD).toBe(0.05)
     expect(GROWTH_RATE_CAP_MAX).toBe(200)
     expect(GROWTH_RATE_CAP_MIN).toBe(-100)
+  })
+})
+
+// ── computeVelocityScore & computeVelocityBreakdown ─────────────────
+
+describe('computeVelocityScore & computeVelocityBreakdown', () => {
+  const AS_OF = new Date('2026-04-15T00:00:00.000Z')
+
+  /** Build a date string N days before asOf. */
+  function daysBeforeAsOf(daysAgo: number): string {
+    const d = new Date(AS_OF.getTime())
+    d.setUTCDate(d.getUTCDate() - daysAgo)
+    return d.toISOString().slice(0, 10)
+  }
+
+  it('should compute known score for 28 days of 1 commit each', () => {
+    // Build calendar: each of the 28 days (d=0..27) has exactly 1 commit
+    const calendar: TypedDayCounts = {}
+    let expectedScore = 0
+    for (let d = 0; d < 28; d++) {
+      calendar[daysBeforeAsOf(d)] = { commits: 1, prs: 0, issues: 0 }
+      expectedScore += COMMIT_PTS * Math.exp(-DECAY_RATE * d)
+    }
+
+    const score = computeVelocityScore(calendar, AS_OF)
+    expect(score).toBe(Math.round(expectedScore))
+  })
+
+  it('should apply per-type weights correctly on day 0 (no decay)', () => {
+    // Only day 0 has activity: 1 commit + 1 PR + 1 issue
+    const calendar: TypedDayCounts = {
+      [daysBeforeAsOf(0)]: { commits: 1, prs: 1, issues: 1 },
+    }
+
+    const score = computeVelocityScore(calendar, AS_OF)
+    // exp(-0.03 * 0) = 1.0, so score = (10 + 25 + 15) * 1 = 50
+    expect(score).toBe(COMMIT_PTS + PR_PTS + ISSUE_PTS)
+    expect(score).toBe(50)
+  })
+
+  it('should return a breakdown whose per-type points sum to total (within rounding tolerance)', () => {
+    // Multi-day calendar with mixed types
+    const calendar: TypedDayCounts = {
+      [daysBeforeAsOf(0)]: { commits: 3, prs: 1, issues: 2 },
+      [daysBeforeAsOf(5)]: { commits: 0, prs: 2, issues: 0 },
+      [daysBeforeAsOf(14)]: { commits: 5, prs: 0, issues: 1 },
+      [daysBeforeAsOf(27)]: { commits: 1, prs: 1, issues: 1 },
+    }
+
+    const breakdown = computeVelocityBreakdown(calendar, AS_OF)
+    const partsSum = breakdown.commits.points + breakdown.prs.points + breakdown.issues.points
+
+    // Each part is Math.round() individually, total is Math.round() of the unrounded sum,
+    // so the difference can be at most 1 due to rounding.
+    expect(Math.abs(partsSum - breakdown.total)).toBeLessThanOrEqual(1)
+
+    // Also verify raw counts are correct
+    expect(breakdown.commits.count).toBe(3 + 0 + 5 + 1)
+    expect(breakdown.prs.count).toBe(1 + 2 + 0 + 1)
+    expect(breakdown.issues.count).toBe(2 + 0 + 1 + 1)
+  })
+
+  it('should return 0 for everything when the calendar is empty', () => {
+    const calendar: TypedDayCounts = {}
+
+    const score = computeVelocityScore(calendar, AS_OF)
+    expect(score).toBe(0)
+
+    const breakdown = computeVelocityBreakdown(calendar, AS_OF)
+    expect(breakdown.total).toBe(0)
+    expect(breakdown.commits).toEqual({ count: 0, points: 0 })
+    expect(breakdown.prs).toEqual({ count: 0, points: 0 })
+    expect(breakdown.issues).toEqual({ count: 0, points: 0 })
+    expect(breakdown.rawTotal).toBe(0)
+  })
+
+  it('should decay older contributions: day-0 commit scores more than day-27 commit', () => {
+    const calendarDay0: TypedDayCounts = {
+      [daysBeforeAsOf(0)]: { commits: 1, prs: 0, issues: 0 },
+    }
+    const calendarDay27: TypedDayCounts = {
+      [daysBeforeAsOf(27)]: { commits: 1, prs: 0, issues: 0 },
+    }
+
+    const scoreDay0 = computeVelocityScore(calendarDay0, AS_OF)
+    const scoreDay27 = computeVelocityScore(calendarDay27, AS_OF)
+
+    // Day 0: 10 * exp(0) = 10 -> rounds to 10
+    expect(scoreDay0).toBe(10)
+    // Day 27: 10 * exp(-0.03 * 27) -> rounds to ~4
+    expect(scoreDay27).toBe(Math.round(COMMIT_PTS * Math.exp(-DECAY_RATE * 27)))
+    expect(scoreDay0).toBeGreaterThan(scoreDay27)
+
+    // Verify the ratio matches the expected decay factor
+    // Use the unrounded values for a precise ratio check
+    const expectedRatio = Math.exp(-DECAY_RATE * 27) // ~0.4449
+    const actualRatio = scoreDay27 / scoreDay0
+    expect(actualRatio).toBeCloseTo(expectedRatio, 1)
   })
 })
