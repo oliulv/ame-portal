@@ -373,7 +373,7 @@ export const computeLeaderboard = query({
         totalTraffic += weeklyTraffic[i] * decay
         totalSocial += weeklySocial[i] * decay
       }
-      // GitHub velocity_score already includes 28-day decay — use latest directly
+      // computeVelocityScore already includes 28-day decay — use latest directly
       totalGithub = weeklyGithub[0] ?? 0
 
       // ── Anomaly detection ─────────────────────────────────────
