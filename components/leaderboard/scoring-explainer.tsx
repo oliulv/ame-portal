@@ -38,8 +38,9 @@ const CATEGORY_DETAILS: Record<string, { signal: string; measurement: string; ex
   },
   github: {
     signal: 'Shipping velocity',
-    measurement: 'Commits (10 pts) + PRs opened (25 pts), summed across all founders',
-    example: '5 commits + 2 PRs = 100 pts for that day',
+    measurement:
+      'Commits (10 pts) + PRs opened (25 pts) + Issues (15 pts), 4-week rolling window with daily temporal decay',
+    example: '5 commits + 2 PRs + 1 issue = 115 pts raw for that day, decayed by recency',
   },
   updates: {
     signal: 'Weekly update submitted',

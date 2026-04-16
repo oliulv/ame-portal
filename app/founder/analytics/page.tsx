@@ -216,13 +216,9 @@ export default function FounderAnalyticsPage() {
     api.metrics.getVelocityTimeSeries,
     startupId ? { startupId } : 'skip'
   )
-  const commits = useQuery(
-    api.metrics.getLatest,
-    latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'commits' } : 'skip'
-  )
-  const prsOpened = useQuery(
-    api.metrics.getLatest,
-    latestArgs ? { ...latestArgs, provider: 'github' as const, metricKey: 'prs_opened' } : 'skip'
+  const velocityBreakdown = useQuery(
+    api.metrics.getVelocityBreakdown,
+    startupId ? { startupId } : 'skip'
   )
   const contributionCalendar = useQuery(
     api.metrics.getContributionCalendar,
@@ -438,13 +434,7 @@ export default function FounderAnalyticsPage() {
                   rangeOptions={trackerRangeOptions}
                 />
               )}
-              {hasGithub && (
-                <VelocityScore
-                  commits={commits ?? 0}
-                  prsOpened={prsOpened ?? 0}
-                  totalScore={latestVelocity}
-                />
-              )}
+              {hasGithub && <VelocityScore breakdown={velocityBreakdown?.team ?? null} />}
 
               {/* Integration nudges */}
               {!hasStripe && (
@@ -782,24 +772,13 @@ export default function FounderAnalyticsPage() {
                   )}
 
                   <VelocityScore
-                    commits={
-                      shippingView !== 'team' && perFounderStats?.[shippingView]
-                        ? perFounderStats[shippingView].commits
-                        : (commits ?? 0)
+                    breakdown={
+                      shippingView !== 'team' && velocityBreakdown?.perFounder?.[shippingView]
+                        ? velocityBreakdown.perFounder[shippingView]
+                        : (velocityBreakdown?.team ?? null)
                     }
-                    prsOpened={
-                      shippingView !== 'team' && perFounderStats?.[shippingView]
-                        ? perFounderStats[shippingView].prs
-                        : (prsOpened ?? 0)
-                    }
-                    totalScore={
-                      shippingView !== 'team' && perFounderStats?.[shippingView]
-                        ? perFounderStats[shippingView].commits * 10 +
-                          perFounderStats[shippingView].prs * 25
-                        : latestVelocity
-                    }
-                    perFounderStats={
-                      shippingView === 'team' && perFounderStats ? perFounderStats : undefined
+                    perFounderBreakdown={
+                      shippingView === 'team' ? velocityBreakdown?.perFounder : undefined
                     }
                   />
 
