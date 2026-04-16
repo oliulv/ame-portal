@@ -342,9 +342,10 @@ export const computeLeaderboard = query({
         const decay = temporalDecay(daysOld)
         totalMrrGrowth += weeklyMrrGrowth[i] * decay
         totalTraffic += weeklyTraffic[i] * decay
-        totalGithub += weeklyGithub[i] * decay
         totalSocial += weeklySocial[i] * decay
       }
+      // GitHub velocity_score already includes 28-day decay — use latest directly
+      totalGithub = weeklyGithub[0] ?? 0
 
       // ── Anomaly detection ─────────────────────────────────────
       const anomalies: Array<{ category: string; value: number; threshold: number }> = []
@@ -653,7 +654,6 @@ export const computeLeaderboardForFounder = query({
           q.eq('startupId', s._id).eq('provider', 'github').eq('metricKey', 'velocity_score')
         )
         .collect()
-      let totalGithub = 0
       const weeklyGithub: number[] = []
       for (const week of weeks) {
         const val =
@@ -662,10 +662,10 @@ export const computeLeaderboardForFounder = query({
               (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
             )
             .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-        weeklyGithub.push(val) // Summed across founders (aggregated at sync time)
-        const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-        totalGithub += val * temporalDecay(daysOld)
+        weeklyGithub.push(val)
       }
+      // velocity_score already includes 28-day decay — use latest directly
+      const totalGithub = weeklyGithub[0] ?? 0
 
       // Social
       const socialMetrics = await ctx.db
