@@ -152,10 +152,10 @@ export function ScoringExplainerContent() {
               </p>
             </div>
             <div className="border p-3 space-y-1">
-              <h4 className="font-medium text-sm">Momentum Arrows</h4>
+              <h4 className="font-medium text-sm">Rank Change Arrows</h4>
               <p className="text-sm text-muted-foreground">
-                Compares your total score this week vs last week. &gt;5% increase = trending up,
-                &gt;5% decrease = trending down.
+                Shows whether your rank moved up or down compared to last week. Green arrow = you
+                climbed, red arrow = you dropped.
               </p>
             </div>
           </div>

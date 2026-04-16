@@ -1,14 +1,12 @@
-export function MomentumArrow({ momentum }: { momentum: 'up' | 'flat' | 'down' | null }) {
-  if (!momentum) return null
-  const config = {
-    up: { icon: '↑', color: 'text-emerald-500', label: 'Trending up' },
-    flat: { icon: '→', color: 'text-muted-foreground', label: 'Flat' },
-    down: { icon: '↓', color: 'text-red-500', label: 'Trending down' },
-  }
-  const { icon, color, label } = config[momentum]
+export function RankChangeArrow({ rankChange }: { rankChange: number | null }) {
+  if (!rankChange) return null
+  const config =
+    rankChange > 0
+      ? { icon: '↑', color: 'text-emerald-500', label: `Up ${rankChange}` }
+      : { icon: '↓', color: 'text-red-500', label: `Down ${Math.abs(rankChange)}` }
   return (
-    <span className={`${color} font-bold text-sm`} title={label}>
-      {icon}
+    <span className={`${config.color} font-bold text-sm`} title={config.label}>
+      {config.icon}
     </span>
   )
 }

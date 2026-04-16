@@ -20,7 +20,7 @@ import {
 import { Star, Flame, Trophy, Send, CheckCircle, Pencil, Info, ChevronDown } from 'lucide-react'
 import Image from 'next/image'
 import { toast } from 'sonner'
-import { MomentumArrow } from '@/components/leaderboard/momentum-arrow'
+import { RankChangeArrow } from '@/components/leaderboard/momentum-arrow'
 import { ScoringExplainerContent } from '@/components/leaderboard/scoring-explainer'
 
 function WeeklyUpdateModal() {
@@ -376,7 +376,7 @@ export default function FounderLeaderboardPage() {
                 <td className="px-4 py-3 text-right text-sm font-bold">
                   <span className="inline-flex items-center gap-1.5">
                     {entry.totalScore.toFixed(1)}
-                    <MomentumArrow momentum={entry.momentum} />
+                    <RankChangeArrow rankChange={entry.rankChange} />
                   </span>
                 </td>
                 <td className="px-4 py-3 text-center text-sm">

@@ -32,7 +32,6 @@ export const PR_PTS = 25
 export const ISSUE_PTS = 15
 export const ROLLING_WEEKS = 4
 export const QUALIFICATION_THRESHOLD = 3
-export const MOMENTUM_THRESHOLD = 0.05 // 5% change
 export const GROWTH_RATE_CAP_MAX = 200 // +200%
 export const GROWTH_RATE_CAP_MIN = -100 // -100%
 
@@ -150,7 +149,6 @@ export interface ScoreResult {
   activeCategories: number
   qualified: boolean
   consistencyBonus: number
-  momentum: 'up' | 'flat' | 'down' | null
 }
 
 // ── Pure scoring functions ───────────────────────────────────────────
@@ -207,19 +205,6 @@ export function computeConsistencyBonus(weeklyScores: number[]): number {
   return 0
 }
 
-/** Momentum arrow: compare two consecutive week scores. */
-export function computeMomentumArrow(
-  thisWeek: number,
-  lastWeek: number
-): 'up' | 'flat' | 'down' | null {
-  if (lastWeek === 0 && thisWeek === 0) return null
-  if (lastWeek === 0) return 'up'
-  const change = (thisWeek - lastWeek) / lastWeek
-  if (change > MOMENTUM_THRESHOLD) return 'up'
-  if (change < -MOMENTUM_THRESHOLD) return 'down'
-  return 'flat'
-}
-
 /** Check if a startup qualifies for extra funding (>= 3/5 active categories). */
 export function isQualified(activeCategoryCount: number): boolean {
   return activeCategoryCount >= QUALIFICATION_THRESHOLD
@@ -250,8 +235,7 @@ export function computeUpdateScore(submitted: boolean, streak: number): number {
 export function computeStartupScore(
   metrics: CategoryMetric[],
   maxInCohort: Record<CategoryKey, number>,
-  config: ScoringConfig,
-  previousWeekScore?: number
+  config: ScoringConfig
 ): ScoreResult {
   const categories = {} as Record<CategoryKey, CategoryScore>
   let activeCount = 0
@@ -310,17 +294,12 @@ export function computeStartupScore(
   // Step 6: Final score capped at 1.0
   const totalScore = Math.min(baseScore + consistencyBonus, 1.0)
 
-  // Momentum
-  const momentum =
-    previousWeekScore !== undefined ? computeMomentumArrow(totalScore, previousWeekScore) : null
-
   return {
     totalScore,
     categories,
     activeCategories: activeCount,
     qualified: isQualified(activeCount),
     consistencyBonus,
-    momentum,
   }
 }
 

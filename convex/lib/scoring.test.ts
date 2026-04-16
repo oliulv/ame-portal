@@ -4,7 +4,6 @@ import {
   temporalDecay,
   powerLawNormalize,
   computeConsistencyBonus,
-  computeMomentumArrow,
   isQualified,
   computeUpdateScore,
   computeStartupScore,
@@ -18,7 +17,6 @@ import {
   ISSUE_PTS,
   ROLLING_WEEKS,
   QUALIFICATION_THRESHOLD,
-  MOMENTUM_THRESHOLD,
   GROWTH_RATE_CAP_MAX,
   GROWTH_RATE_CAP_MIN,
   type CategoryMetric,
@@ -252,57 +250,6 @@ describe('computeConsistencyBonus', () => {
   })
 })
 
-// ── computeMomentumArrow ─────────────────────────────────────────────
-
-describe('computeMomentumArrow', () => {
-  it("should return 'up' for >5% increase", () => {
-    // 10% increase: lastWeek=0.5, thisWeek=0.56 => change = 0.12 > 0.05
-    expect(computeMomentumArrow(0.56, 0.5)).toBe('up')
-  })
-
-  it("should return 'down' for >5% decrease", () => {
-    // 10% decrease: lastWeek=0.5, thisWeek=0.44 => change = -0.12 < -0.05
-    expect(computeMomentumArrow(0.44, 0.5)).toBe('down')
-  })
-
-  it("should return 'flat' for change within 5%", () => {
-    // 2% increase: lastWeek=0.5, thisWeek=0.51 => change = 0.02 < 0.05
-    expect(computeMomentumArrow(0.51, 0.5)).toBe('flat')
-  })
-
-  it('should return null when both are zero', () => {
-    expect(computeMomentumArrow(0, 0)).toBeNull()
-  })
-
-  it("should return 'up' when going from zero to positive", () => {
-    expect(computeMomentumArrow(0.5, 0)).toBe('up')
-  })
-
-  it("should return 'up' at exactly 5% boundary due to floating-point precision", () => {
-    // (1.05 - 1.0) / 1.0 = 0.050000000000000044 in IEEE 754
-    // This is barely > 0.05 so the code returns 'up'
-    expect(computeMomentumArrow(1.05, 1.0)).toBe('up')
-  })
-
-  it("should return 'down' at exactly -5% boundary due to floating-point precision", () => {
-    // (0.95 - 1.0) / 1.0 = -0.050000000000000044 in IEEE 754
-    // This is barely < -0.05 so the code returns 'down'
-    expect(computeMomentumArrow(0.95, 1.0)).toBe('down')
-  })
-
-  it("should return 'flat' for change just inside the 5% threshold", () => {
-    // 1% increase: well within flat range
-    expect(computeMomentumArrow(1.01, 1.0)).toBe('flat')
-    // 1% decrease: well within flat range
-    expect(computeMomentumArrow(0.99, 1.0)).toBe('flat')
-  })
-
-  it("should return 'down' when going from positive to zero", () => {
-    // lastWeek=0.5, thisWeek=0 => change = (0 - 0.5)/0.5 = -1.0 < -0.05
-    expect(computeMomentumArrow(0, 0.5)).toBe('down')
-  })
-})
-
 // ── isQualified ──────────────────────────────────────────────────────
 
 describe('isQualified', () => {
@@ -452,39 +399,6 @@ describe('computeStartupScore', () => {
     expect(result.qualified).toBe(false)
   })
 
-  it('should compute momentum when previousWeekScore is provided', () => {
-    const metrics = makeMetrics({
-      revenue: { weeklyValues: [80, 60, 40, 20], active: true },
-      traffic: { weeklyValues: [70, 50, 30, 10], active: true },
-      github: { weeklyValues: [50, 40, 30, 20], active: true },
-    })
-    const maxInCohort = makeMaxInCohort()
-
-    // Compute the score first to know what we're comparing against
-    const baseline = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
-    const score = baseline.totalScore
-
-    // Use a previous score much lower => should be 'up'
-    const resultUp = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG, score * 0.5)
-    expect(resultUp.momentum).toBe('up')
-
-    // Use a previous score much higher => should be 'down'
-    const resultDown = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG, score * 2)
-    expect(resultDown.momentum).toBe('down')
-  })
-
-  it('should return momentum=null when no previousWeekScore', () => {
-    const metrics = makeMetrics({
-      revenue: { weeklyValues: [50, 50, 50, 50], active: true },
-      traffic: { weeklyValues: [50, 50, 50, 50], active: true },
-      github: { weeklyValues: [50, 50, 50, 50], active: true },
-    })
-    const maxInCohort = makeMaxInCohort()
-
-    const result = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
-    expect(result.momentum).toBeNull()
-  })
-
   it('should apply consistency bonus to the final score', () => {
     // Create consistent metrics (identical weekly values) to trigger +0.05 bonus
     const metrics = makeMetrics({
@@ -589,7 +503,6 @@ describe('constants', () => {
     expect(DECAY_RATE).toBe(0.03)
     expect(ROLLING_WEEKS).toBe(4)
     expect(QUALIFICATION_THRESHOLD).toBe(3)
-    expect(MOMENTUM_THRESHOLD).toBe(0.05)
     expect(GROWTH_RATE_CAP_MAX).toBe(200)
     expect(GROWTH_RATE_CAP_MIN).toBe(-100)
   })
