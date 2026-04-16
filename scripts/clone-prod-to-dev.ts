@@ -4,39 +4,32 @@
  *
  *   1. DB export with `npx convex export --prod` (no file storage) and
  *      `npx convex import --replace-all` into dev.
- *   2. Selective file copy: call `internal.fileClone.listRecentFileRefs`
- *      against prod for the N most recently uploaded files, download each
- *      from prod, re-upload into dev via `internal.fileClone.generateUploadUrl`,
- *      and patch the cloned rows with `internal.fileClone.rewriteStorageRef`.
+ *   2. Selective file copy via ConvexHttpClient: query prod for the N most
+ *      recently uploaded files, download each, re-upload into dev, and patch
+ *      the cloned rows with the new storage ids.
  *
- * All Convex calls go through `npx convex run` subprocesses. `--prod` is
- * passed explicitly for every prod read so the CLI always targets the
- * right deployment. Dev calls use the ambient Convex CLI config
- * (`.env.local`) the same way `npx convex import` does. The only safety
- * interlock is a check that the ambient `CONVEX_DEPLOYMENT` env var does
- * NOT look like production — if it does, the script refuses to run so
- * phase 1's `--replace-all` can't silently wipe prod.
+ * Phase 1 uses `npx convex` subprocesses (export/import have no JSON issues).
+ * Phase 2 uses ConvexHttpClient with admin auth so we get proper JSON back.
  *
- * Observability: every prod request is tagged with an `X-Clone-Run-Id`
- * header and shows up in the Convex dashboard logs under the run id
- * printed at the start of each run.
+ * Required env vars (bun auto-loads .env.local):
+ *   NEXT_PUBLIC_CONVEX_URL   — dev deployment URL (already in .env.local)
+ *   CLONE_DEV_DEPLOY_KEY     — dev admin deploy key (from Convex dashboard)
+ *   CLONE_PROD_URL           — prod deployment URL
+ *   CLONE_PROD_DEPLOY_KEY    — prod admin deploy key
+ *
+ * IMPORTANT: Do NOT use CONVEX_DEPLOY_KEY — the Convex CLI reserves it and
+ * will override all npx convex commands to target that deployment.
  */
 
-import { execSync, spawnSync } from 'child_process'
+import { execSync } from 'child_process'
 import { unlinkSync } from 'fs'
 import { randomUUID } from 'crypto'
+import { ConvexHttpClient } from 'convex/browser'
+import { internal } from '../convex/_generated/api'
 
 const EXPORT_PATH = '/tmp/convex-prod-export.zip'
 const DEFAULT_FILE_COPY_LIMIT = 50
 const PARALLELISM = 5
-
-interface FileRef {
-  table: string
-  rowId: string
-  fieldPath: string
-  storageId: string
-  creationTime: number
-}
 
 function parseArgs() {
   const args = process.argv.slice(2)
@@ -55,63 +48,37 @@ function run(cmd: string) {
   execSync(cmd, { stdio: 'inherit' })
 }
 
-class FunctionNotFoundError extends Error {
-  constructor(fn: string) {
-    super(`Convex function not found: ${fn}`)
-    this.name = 'FunctionNotFoundError'
+function requireEnv(key: string): string {
+  const val = process.env[key]
+  if (!val) {
+    console.error(`[clone] FATAL: ${key} is not set. Add it to .env.local (see .env.example).`)
+    process.exit(1)
   }
+  return val
 }
 
-/**
- * Run a Convex function via `npx convex run` subprocess and return its
- * parsed JSON result. `target: 'prod'` adds `--prod`; `target: 'dev'`
- * omits it (CLI uses ambient dev config).
- *
- * KNOWN ISSUE: `npx convex run` prints return values using `util.inspect`
- * style (unquoted keys, multi-line), NOT JSON. This parser tries to
- * recover a JSON line from the tail of stdout, but for arrays or nested
- * objects it usually fails and returns null. See the diagnosis plan
- * `~/.claude/plans/velocity-and-clone-fixups.md` for the actual fix.
- */
-function convexRun<T = unknown>(
-  target: 'prod' | 'dev',
-  fn: string,
-  args: Record<string, unknown>
-): T {
-  const flags = target === 'prod' ? ['--prod'] : []
-  const argJson = JSON.stringify(args)
-  const result = spawnSync('npx', ['convex', 'run', ...flags, fn, argJson], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  const stderr = result.stderr ?? ''
-  if (result.status !== 0) {
-    if (/Could not find function for/.test(stderr)) {
-      throw new FunctionNotFoundError(fn)
-    }
-    process.stderr.write(stderr)
-    throw new Error(`convex run ${target} ${fn} failed (exit ${result.status})`)
-  }
-  const stdout = result.stdout.trim()
-  const lines = stdout.split('\n')
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].trim()
-    if (!line) continue
-    try {
-      return JSON.parse(line) as T
-    } catch {
-      // continue searching upward for the JSON line
-    }
-  }
-  return null as T
+function createClients() {
+  const devUrl = requireEnv('NEXT_PUBLIC_CONVEX_URL')
+  const devKey = requireEnv('CLONE_DEV_DEPLOY_KEY')
+  const prodUrl = requireEnv('CLONE_PROD_URL')
+  const prodKey = requireEnv('CLONE_PROD_DEPLOY_KEY')
+
+  const devClient = new ConvexHttpClient(devUrl)
+  ;(devClient as any).setAdminAuth(devKey)
+
+  const prodClient = new ConvexHttpClient(prodUrl)
+  ;(prodClient as any).setAdminAuth(prodKey)
+
+  return { devClient, prodClient }
 }
 
-/**
- * Download a file from prod and upload it to dev. Returns the new dev
- * storage id on success.
- */
-async function copyFile(ref: FileRef, runId: string): Promise<string | null> {
-  const url = convexRun<string | null>('prod', 'fileClone:getStorageUrl', {
+async function copyFile(
+  prodClient: ConvexHttpClient,
+  devClient: ConvexHttpClient,
+  ref: { table: string; rowId: string; fieldPath: string; storageId: string },
+  runId: string
+): Promise<string | null> {
+  const url: string | null = await (prodClient as any).query(internal.fileClone.getStorageUrl, {
     storageId: ref.storageId,
   })
   if (!url) return null
@@ -121,8 +88,10 @@ async function copyFile(ref: FileRef, runId: string): Promise<string | null> {
   const bytes = await res.arrayBuffer()
   const contentType = res.headers.get('Content-Type') ?? 'application/octet-stream'
 
-  const uploadUrl = convexRun<string>('dev', 'fileClone:generateUploadUrl', {})
-  if (!uploadUrl) return null
+  const uploadUrl: string = await (devClient as any).mutation(
+    internal.fileClone.generateUploadUrl,
+    {}
+  )
 
   const putRes = await fetch(uploadUrl, {
     method: 'POST',
@@ -136,17 +105,25 @@ async function copyFile(ref: FileRef, runId: string): Promise<string | null> {
 }
 
 async function phase2CopyFiles(
+  prodClient: ConvexHttpClient,
+  devClient: ConvexHttpClient,
   limit: number,
   dryRun: boolean,
   runId: string
 ): Promise<{ copied: number; failed: number; skipped: boolean }> {
   console.log(`\n== Phase 2: selective file copy (top ${limit}) ==`)
 
-  let refs: FileRef[] | null
+  let refs: Array<{
+    table: string
+    rowId: string
+    fieldPath: string
+    storageId: string
+    creationTime: number
+  }>
   try {
-    refs = convexRun<FileRef[]>('prod', 'fileClone:listRecentFileRefs', { limit })
-  } catch (err) {
-    if (err instanceof FunctionNotFoundError) {
+    refs = await (prodClient as any).query(internal.fileClone.listRecentFileRefs, { limit })
+  } catch (err: any) {
+    if (err?.message?.includes('Could not find') || err?.status === 404) {
       console.warn('\n[clone] Phase 2 skipped: the `fileClone` module is not deployed to prod yet.')
       console.warn(
         '[clone]   Deploy the latest branch to prod, then re-run `bun clone:prod --skip-db`.'
@@ -172,10 +149,10 @@ async function phase2CopyFiles(
     const batch = refs.slice(i, i + PARALLELISM)
     const results = await Promise.all(
       batch.map(async (ref) => {
-        const newId = await copyFile(ref, runId)
+        const newId = await copyFile(prodClient, devClient, ref, runId)
         if (!newId) return { ok: false as const }
         try {
-          convexRun('dev', 'fileClone:rewriteStorageRef', {
+          await (devClient as any).mutation(internal.fileClone.rewriteStorageRef, {
             table: ref.table,
             rowId: ref.rowId,
             fieldPath: ref.fieldPath,
@@ -239,7 +216,15 @@ async function main() {
     }
   }
 
-  const { copied, failed, skipped } = await phase2CopyFiles(limit, dryRun, runId)
+  const { prodClient, devClient } = createClients()
+
+  const { copied, failed, skipped } = await phase2CopyFiles(
+    prodClient,
+    devClient,
+    limit,
+    dryRun,
+    runId
+  )
   if (skipped) {
     console.log('\n[clone] Done (phase 2 skipped).')
   } else {
