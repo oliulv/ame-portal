@@ -137,7 +137,7 @@ export function buildContributionCalendarWeeksFromTypedDayCounts(
   end.setUTCDate(end.getUTCDate() + (6 - end.getUTCDay()))
 
   const weeks: MergedCalendarWeek[] = []
-  let cursor = new Date(start)
+  const cursor = new Date(start)
 
   while (cursor <= end) {
     const contributionDays: Array<{ date: string; contributionCount?: number }> = []

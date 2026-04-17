@@ -761,7 +761,8 @@ export default function FounderAnalyticsPage() {
                     restrictedCount={visibleRestricted}
                     actionHref="/founder/integrations?tab=github"
                     onDismiss={
-                      integrationStatus?.github && !integrationStatus.github.restrictedBannerDismissedAt
+                      integrationStatus?.github &&
+                      !integrationStatus.github.restrictedBannerDismissedAt
                         ? async () => {
                             try {
                               await dismissGithubRestrictedBanner()

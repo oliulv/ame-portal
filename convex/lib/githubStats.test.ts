@@ -228,10 +228,7 @@ describe('buildTypedDayCountsFromSearchResults', () => {
         { occurredAt: '2026-04-10T18:00:00Z' },
         { occurredAt: '2026-04-11T09:00:00Z' },
       ],
-      prs: [
-        { occurredAt: '2026-04-10T05:00:00Z' },
-        { occurredAt: '2026-04-10T08:00:00Z' },
-      ],
+      prs: [{ occurredAt: '2026-04-10T05:00:00Z' }, { occurredAt: '2026-04-10T08:00:00Z' }],
       issues: [{ occurredAt: '2026-04-11T03:00:00Z' }],
     })
 
@@ -243,10 +240,7 @@ describe('buildTypedDayCountsFromSearchResults', () => {
 
   it('skips hits missing occurredAt and clamps negative counts', () => {
     const typed = buildTypedDayCountsFromSearchResults({
-      commits: [
-        { count: 5 },
-        { occurredAt: '2026-04-10T00:00:00Z', count: -3 },
-      ],
+      commits: [{ count: 5 }, { occurredAt: '2026-04-10T00:00:00Z', count: -3 }],
       prs: [{ occurredAt: null }],
       issues: [{ occurredAt: '2026-04-11T00:00:00Z', count: 0 }],
     })
@@ -262,10 +256,7 @@ describe('search-derived contribution helpers', () => {
   it('computes the residual between GitHub total and visible typed contributions', () => {
     const typed = buildTypedDayCountsFromSearchResults({
       commits: [{ occurredAt: '2026-04-10T00:00:00Z', count: 2 }],
-      prs: [
-        { occurredAt: '2026-04-10T01:00:00Z' },
-        { occurredAt: '2026-04-11T01:00:00Z' },
-      ],
+      prs: [{ occurredAt: '2026-04-10T01:00:00Z' }, { occurredAt: '2026-04-11T01:00:00Z' }],
       issues: [{ occurredAt: '2026-04-11T02:00:00Z' }],
     })
 

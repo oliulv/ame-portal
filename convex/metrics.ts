@@ -1341,10 +1341,14 @@ export const fetchGithubMetrics = internalAction({
           } | null
         }
 
-        const data = await fetchGitHubGraphql<ContributionsSummary>(connection.accessToken, graphqlQuery, {
-          from: oneYearAgo.toISOString(),
-          to: now.toISOString(),
-        })
+        const data = await fetchGitHubGraphql<ContributionsSummary>(
+          connection.accessToken,
+          graphqlQuery,
+          {
+            from: oneYearAgo.toISOString(),
+            to: now.toISOString(),
+          }
+        )
 
         const contrib = data.viewer?.contributionsCollection
         if (!contrib) {
@@ -1383,7 +1387,10 @@ export const fetchGithubMetrics = internalAction({
             connCommits = searchData.commits
             connPrs = searchData.prs
             connIssues = searchData.issues
-            connRestricted = computeUnattributedContributionCount(totalContributionCount, founderTyped)
+            connRestricted = computeUnattributedContributionCount(
+              totalContributionCount,
+              founderTyped
+            )
           } catch (searchError) {
             logConvexError(
               `GitHub search fallback failed for startup ${args.startupId}, connection ${connection._id} (@${founderName}). Falling back to contributionsCollection detail nodes:`,

@@ -66,8 +66,8 @@ export function RestrictedContributionsBanner({
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             GitHub reported activity we couldn&apos;t fully classify into commits, PRs, or issues.
-            Installing the Acc-OS Tracking App on every org and private repo can reduce this,
-            but GitHub may still keep some activity coarse-grained.
+            Installing the Acc-OS Tracking App on every org and private repo can reduce this, but
+            GitHub may still keep some activity coarse-grained.
           </p>
           {(actionHref || onDismiss) && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
