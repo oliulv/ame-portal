@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useQuery } from 'convex/react'
+import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,10 @@ import { MetricAreaChart } from '@/components/analytics/metric-area-chart'
 import { VelocityScore } from '@/components/analytics/velocity-score'
 import { ContributionCalendar } from '@/components/analytics/contribution-calendar'
 import {
+  RestrictedContributionsBanner,
+  getRestrictedContributionsForAccount,
+} from '@/components/analytics/restricted-contributions-banner'
+import {
   Plug,
   TrendingUp,
   Eye,
@@ -29,6 +33,7 @@ import {
   User,
 } from 'lucide-react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 type AnalyticsTab = 'overview' | 'stripe' | 'traffic' | 'shipping'
 
@@ -234,6 +239,13 @@ export default function FounderAnalyticsPage() {
     api.metrics.getPerFounderGithubStats,
     startupId ? { startupId } : 'skip'
   )
+  const dismissGithubRestrictedBanner = useMutation(api.integrations.dismissGithubRestrictedBanner)
+  const myRestricted = getRestrictedContributionsForAccount(
+    perFounderStats,
+    integrationStatus?.github?.accountName
+  )
+  const visibleRestricted =
+    integrationStatus?.github?.restrictedBannerDismissedAt == null ? myRestricted : 0
 
   // Client-side range filtering for instant dropdown switching
   const velocityTimeSeries = useMemo(() => {
@@ -745,6 +757,26 @@ export default function FounderAnalyticsPage() {
                 </Card>
               ) : (
                 <>
+                  <RestrictedContributionsBanner
+                    restrictedCount={visibleRestricted}
+                    actionHref="/founder/integrations?tab=github"
+                    onDismiss={
+                      integrationStatus?.github &&
+                      !integrationStatus.github.restrictedBannerDismissedAt
+                        ? async () => {
+                            try {
+                              await dismissGithubRestrictedBanner()
+                            } catch (error) {
+                              toast.error(
+                                error instanceof Error
+                                  ? error.message
+                                  : 'Failed to hide GitHub warning'
+                              )
+                            }
+                          }
+                        : undefined
+                    }
+                  />
                   {/* Team / Per Founder selector */}
                   {(integrationStatus?.githubConnections?.length ?? 0) > 1 && (
                     <div className="flex items-center gap-2">

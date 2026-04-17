@@ -23,6 +23,10 @@ import { ContributionCalendar } from '@/components/analytics/contribution-calend
 import { SocialCard } from '@/components/analytics/social-card'
 import { GithubTeamStatus } from '@/components/analytics/github-team-status'
 import {
+  RestrictedContributionsBanner,
+  sumRestrictedContributions,
+} from '@/components/analytics/restricted-contributions-banner'
+import {
   ArrowLeft,
   RefreshCw,
   Plug,
@@ -710,6 +714,9 @@ export default function AdminStartupAnalyticsPage() {
                 />
               ) : (
                 <>
+                  <RestrictedContributionsBanner
+                    restrictedCount={sumRestrictedContributions(perFounderStats)}
+                  />
                   {/* GitHub connection overview */}
                   {integrationStatus?.founders && integrationStatus.founders.length > 0 && (
                     <GithubTeamStatus

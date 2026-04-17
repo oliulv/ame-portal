@@ -12,6 +12,16 @@ import {
   type TypedDayCounts,
   type MergedCalendarWeek,
 } from './lib/scoring'
+import {
+  normalizeGithubStatsMeta,
+  buildFounderTypedCalendar,
+  buildTypedDayCountsFromSearchResults,
+  computeUnattributedContributionCount,
+  buildContributionCalendarWeeksFromTypedDayCounts,
+  type ContributionsInput,
+  type FounderGithubStats,
+  type SearchContributionHit,
+} from './lib/githubStats'
 
 /**
  * Store metric snapshots (upserts by day to avoid duplicates).
@@ -410,8 +420,13 @@ export const getVelocityTimeSeriesPerFounder = query({
 })
 
 /**
- * Get per-founder GitHub stats (commits + PRs per connected account).
- * Returns { [founderName]: { commits: number, prs: number } }
+ * Get per-founder GitHub stats.
+ * Returns { [founderName]: { commits, prs, issues, restricted } }.
+ * `restricted` is the residual between GitHub's coarse total contribution
+ * count and the commit / PR / issue detail we could classify. Missing org
+ * installs are one cause, but GitHub also keeps some activity coarse-grained
+ * even when a GitHub App user token can read the private repo directly.
+ * Older rows without the field normalize to 0.
  */
 export const getPerFounderGithubStats = query({
   args: { startupId: v.id('startups') },
@@ -429,7 +444,9 @@ export const getPerFounderGithubStats = query({
       .order('desc')
       .first()
 
-    return (metric?.meta as Record<string, { commits: number; prs: number; issues: number }>) ?? {}
+    return normalizeGithubStatsMeta(
+      metric?.meta as Record<string, Partial<FounderGithubStats>> | undefined
+    )
   },
 })
 
@@ -986,10 +1003,268 @@ export const getAllActiveGithubConnections = internalQuery({
   },
 })
 
+type GitHubDateRange = {
+  from: string
+  to: string
+}
+
+type GitHubIssueSearchNode = {
+  createdAt?: string | null
+}
+
+type GitHubCommitSearchItem = {
+  commit?: {
+    author?: {
+      date?: string | null
+    } | null
+  } | null
+}
+
+function toDateOnly(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function parseDateOnly(date: string): Date {
+  return new Date(`${date}T00:00:00.000Z`)
+}
+
+function splitGitHubDateRange(range: GitHubDateRange): [GitHubDateRange, GitHubDateRange] | null {
+  const start = parseDateOnly(range.from)
+  const end = parseDateOnly(range.to)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return null
+
+  const diffDays = Math.floor((end.getTime() - start.getTime()) / 86400000)
+  if (diffDays < 1) return null
+
+  const mid = new Date(start)
+  mid.setUTCDate(mid.getUTCDate() + Math.floor(diffDays / 2))
+
+  const next = new Date(mid)
+  next.setUTCDate(next.getUTCDate() + 1)
+  if (next > end) return null
+
+  return [
+    { from: range.from, to: toDateOnly(mid) },
+    { from: toDateOnly(next), to: range.to },
+  ]
+}
+
+async function fetchGitHubGraphql<T>(
+  accessToken: string,
+  query: string,
+  variables: Record<string, unknown>
+): Promise<T> {
+  const response = await fetch('https://api.github.com/graphql', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+    body: JSON.stringify({ query, variables }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`GitHub GraphQL HTTP ${response.status}`)
+  }
+
+  const body = await response.json()
+  if (body.errors?.length) {
+    throw new Error(body.errors.map((e: any) => e.message).join('; '))
+  }
+  return body.data as T
+}
+
+async function fetchGitHubRest<T>(accessToken: string, url: URL, accept?: string): Promise<T> {
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: accept ?? 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`GitHub REST HTTP ${response.status}`)
+  }
+
+  return (await response.json()) as T
+}
+
+async function collectGithubIssueSearchHits(
+  accessToken: string,
+  login: string,
+  kind: 'pr' | 'issue',
+  range: GitHubDateRange
+): Promise<SearchContributionHit[]> {
+  const searchQuery =
+    `author:${login} is:${kind} created:${range.from}..${range.to} sort:created-desc` +
+    ' archived:false'
+
+  const query = `query($query: String!, $after: String) {
+    search(query: $query, type: ISSUE, first: 100, after: $after) {
+      issueCount
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        ... on PullRequest { createdAt }
+        ... on Issue { createdAt }
+      }
+    }
+  }`
+
+  type SearchResponse = {
+    search: {
+      issueCount: number
+      pageInfo: { hasNextPage: boolean; endCursor: string | null }
+      nodes: GitHubIssueSearchNode[]
+    }
+  }
+
+  const first = await fetchGitHubGraphql<SearchResponse>(accessToken, query, {
+    query: searchQuery,
+    after: null,
+  })
+
+  if (first.search.issueCount > 1000) {
+    const split = splitGitHubDateRange(range)
+    if (!split) {
+      logConvexError(
+        `GitHub ${kind} search exceeded 1000 results for @${login} in ${range.from}..${range.to}; truncating to the first 1000.`,
+        null
+      )
+    } else {
+      const [left, right] = split
+      const [leftHits, rightHits] = await Promise.all([
+        collectGithubIssueSearchHits(accessToken, login, kind, left),
+        collectGithubIssueSearchHits(accessToken, login, kind, right),
+      ])
+      return [...leftHits, ...rightHits]
+    }
+  }
+
+  const hits: SearchContributionHit[] = []
+  for (const node of first.search.nodes ?? []) {
+    if (node?.createdAt) hits.push({ occurredAt: node.createdAt })
+  }
+
+  let cursor = first.search.pageInfo.endCursor
+  let hasNextPage = first.search.pageInfo.hasNextPage
+  while (hasNextPage) {
+    const page = await fetchGitHubGraphql<SearchResponse>(accessToken, query, {
+      query: searchQuery,
+      after: cursor,
+    })
+    for (const node of page.search.nodes ?? []) {
+      if (node?.createdAt) hits.push({ occurredAt: node.createdAt })
+    }
+    cursor = page.search.pageInfo.endCursor
+    hasNextPage = page.search.pageInfo.hasNextPage
+  }
+
+  return hits
+}
+
+async function collectGithubCommitSearchHits(
+  accessToken: string,
+  login: string,
+  range: GitHubDateRange
+): Promise<SearchContributionHit[]> {
+  const query = `author:${login} author-date:${range.from}..${range.to}`
+
+  type CommitSearchResponse = {
+    total_count: number
+    items: GitHubCommitSearchItem[]
+  }
+
+  const firstUrl = new URL('https://api.github.com/search/commits')
+  firstUrl.searchParams.set('q', query)
+  firstUrl.searchParams.set('per_page', '100')
+  firstUrl.searchParams.set('page', '1')
+
+  const first = await fetchGitHubRest<CommitSearchResponse>(
+    accessToken,
+    firstUrl,
+    'application/vnd.github.cloak-preview+json'
+  )
+
+  if (first.total_count > 1000) {
+    const split = splitGitHubDateRange(range)
+    if (!split) {
+      logConvexError(
+        `GitHub commit search exceeded 1000 results for @${login} in ${range.from}..${range.to}; truncating to the first 1000.`,
+        null
+      )
+    } else {
+      const [left, right] = split
+      const [leftHits, rightHits] = await Promise.all([
+        collectGithubCommitSearchHits(accessToken, login, left),
+        collectGithubCommitSearchHits(accessToken, login, right),
+      ])
+      return [...leftHits, ...rightHits]
+    }
+  }
+
+  const hits: SearchContributionHit[] = []
+  for (const item of first.items ?? []) {
+    if (item?.commit?.author?.date) hits.push({ occurredAt: item.commit.author.date })
+  }
+
+  const totalPages = Math.min(10, Math.ceil(Math.min(first.total_count, 1000) / 100))
+  for (let page = 2; page <= totalPages; page++) {
+    const url = new URL('https://api.github.com/search/commits')
+    url.searchParams.set('q', query)
+    url.searchParams.set('per_page', '100')
+    url.searchParams.set('page', String(page))
+    const response = await fetchGitHubRest<CommitSearchResponse>(
+      accessToken,
+      url,
+      'application/vnd.github.cloak-preview+json'
+    )
+    for (const item of response.items ?? []) {
+      if (item?.commit?.author?.date) hits.push({ occurredAt: item.commit.author.date })
+    }
+  }
+
+  return hits
+}
+
+async function fetchGithubTypedCalendarFromSearch(
+  accessToken: string,
+  login: string,
+  range: GitHubDateRange
+): Promise<{
+  typedCalendar: TypedDayCounts
+  commits: number
+  prs: number
+  issues: number
+}> {
+  const [commitHits, prHits, issueHits] = await Promise.all([
+    collectGithubCommitSearchHits(accessToken, login, range),
+    collectGithubIssueSearchHits(accessToken, login, 'pr', range),
+    collectGithubIssueSearchHits(accessToken, login, 'issue', range),
+  ])
+
+  const typedCalendar = buildTypedDayCountsFromSearchResults({
+    commits: commitHits,
+    prs: prHits,
+    issues: issueHits,
+  })
+
+  return {
+    typedCalendar,
+    commits: commitHits.length,
+    prs: prHits.length,
+    issues: issueHits.length,
+  }
+}
+
 /**
  * Fetch and store GitHub metrics for a startup.
  * Aggregates contributions across ALL connected founders (summed, not averaged).
- * Uses GraphQL contributionsCollection with Git Velocity scoring.
+ * Uses contributionsCollection for coarse totals, then search endpoints for the
+ * typed commit / PR / issue detail that GitHub App user tokens can see on
+ * private installed repos.
  */
 export const fetchGithubMetrics = internalAction({
   args: { startupId: v.id('startups') },
@@ -1005,6 +1280,11 @@ export const fetchGithubMetrics = internalAction({
     // Fetch 1 year of data for the contribution calendar (scoring only uses last 4 weeks)
     const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
 
+    const range: GitHubDateRange = {
+      from: toDateOnly(oneYearAgo),
+      to: toDateOnly(now),
+    }
+
     const graphqlQuery = `query($from: DateTime!, $to: DateTime!) {
       viewer {
         login
@@ -1012,13 +1292,9 @@ export const fetchGithubMetrics = internalAction({
           totalCommitContributions
           totalPullRequestContributions
           totalIssueContributions
+          restrictedContributionsCount
           contributionCalendar {
-            weeks {
-              contributionDays {
-                date
-                contributionCount
-              }
-            }
+            totalContributions
           }
           commitContributionsByRepository(maxRepositories: 100) {
             contributions(first: 100, orderBy: { field: OCCURRED_AT, direction: DESC }) {
@@ -1039,12 +1315,10 @@ export const fetchGithubMetrics = internalAction({
     let totalCommits = 0
     let totalPrsOpened = 0
     let totalIssues = 0
+    let totalRestricted = 0
     let successfulFetches = 0
-    const calendarMap = new Map<string, number>() // date → sum of contributions
 
-    // Per-founder tracking
-    const perFounderCalendars: Record<string, Map<string, number>> = {}
-    const perFounderStats: Record<string, { commits: number; prs: number; issues: number }> = {}
+    const perFounderStats: Record<string, FounderGithubStats> = {}
     const perFounderTypedCalendars: Record<string, TypedDayCounts> = {}
     const mergedTypedCalendar: TypedDayCounts = {}
 
@@ -1052,112 +1326,93 @@ export const fetchGithubMetrics = internalAction({
       if (!connection.accessToken) continue
 
       try {
-        const response = await fetch('https://api.github.com/graphql', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${connection.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            query: graphqlQuery,
-            variables: {
-              from: oneYearAgo.toISOString(),
-              to: now.toISOString(),
-            },
-          }),
-        })
-
-        if (!response.ok) {
-          logConvexError(
-            `GitHub API error for startup ${args.startupId}, connection ${connection._id}:`,
-            new Error(`HTTP ${response.status}`)
-          )
-          continue // Don't fail the whole startup — skip this founder
+        type ContributionsSummary = {
+          viewer?: {
+            login?: string | null
+            contributionsCollection?: {
+              totalCommitContributions?: number | null
+              totalPullRequestContributions?: number | null
+              totalIssueContributions?: number | null
+              restrictedContributionsCount?: number | null
+              contributionCalendar?: {
+                totalContributions?: number | null
+              } | null
+            } & ContributionsInput
+          } | null
         }
 
-        const data = await response.json()
+        const data = await fetchGitHubGraphql<ContributionsSummary>(
+          connection.accessToken,
+          graphqlQuery,
+          {
+            from: oneYearAgo.toISOString(),
+            to: now.toISOString(),
+          }
+        )
 
-        // Check for GraphQL-level errors (returned as HTTP 200)
-        if (data.errors) {
-          logConvexError(
-            `GitHub GraphQL errors for startup ${args.startupId}, connection ${connection._id} (@${connection.accountName}):`,
-            new Error(data.errors.map((e: any) => `${e.type ?? 'ERROR'}: ${e.message}`).join('; '))
-          )
-          // If data is also present (partial response), continue processing it
-          if (!data.data) continue
-        }
-
-        const contrib = data.data?.viewer?.contributionsCollection
+        const contrib = data.viewer?.contributionsCollection
         if (!contrib) {
           logConvexError(
             `GitHub returned no contributionsCollection for startup ${args.startupId}, connection ${connection._id} (@${connection.accountName}). ` +
-              `viewer login: ${data.data?.viewer?.login ?? 'unknown'}`,
+              `viewer login: ${data.viewer?.login ?? 'unknown'}`,
             null
           )
           continue
         }
 
         successfulFetches++
-        const founderName = connection.accountName ?? connection._id
+        const founderName = connection.accountName ?? data.viewer?.login ?? connection._id
+        const searchLogin = data.viewer?.login ?? connection.accountName
+        const totalContributionCount = contrib.contributionCalendar?.totalContributions ?? 0
 
-        const connCommits = contrib.totalCommitContributions ?? 0
-        const connPrs = contrib.totalPullRequestContributions ?? 0
+        let connCommits = contrib.totalCommitContributions ?? 0
+        let connPrs = contrib.totalPullRequestContributions ?? 0
+        let connIssues = contrib.totalIssueContributions ?? 0
+        let connRestricted = contrib.restrictedContributionsCount ?? 0
+        let founderTyped = buildFounderTypedCalendar(contrib)
 
-        const connIssues = contrib.totalIssueContributions ?? 0
+        // GitHub App user tokens can read private repos, but
+        // `viewer.contributionsCollection` still hides the typed private nodes.
+        // Search endpoints do return those private commits/PRs/issues, so use
+        // search as the primary source of truth and fall back to the older
+        // contributionCollection detail nodes only if search fails.
+        if (searchLogin) {
+          try {
+            const searchData = await fetchGithubTypedCalendarFromSearch(
+              connection.accessToken,
+              searchLogin,
+              range
+            )
+            founderTyped = searchData.typedCalendar
+            connCommits = searchData.commits
+            connPrs = searchData.prs
+            connIssues = searchData.issues
+            connRestricted = computeUnattributedContributionCount(
+              totalContributionCount,
+              founderTyped
+            )
+          } catch (searchError) {
+            logConvexError(
+              `GitHub search fallback failed for startup ${args.startupId}, connection ${connection._id} (@${founderName}). Falling back to contributionsCollection detail nodes:`,
+              searchError
+            )
+          }
+        }
 
         // Sum across founders (not average)
         totalCommits += connCommits
         totalPrsOpened += connPrs
         totalIssues += connIssues
+        totalRestricted += connRestricted
 
         // Track per-founder stats
-        perFounderStats[founderName] = { commits: connCommits, prs: connPrs, issues: connIssues }
+        perFounderStats[founderName] = {
+          commits: connCommits,
+          prs: connPrs,
+          issues: connIssues,
+          restricted: connRestricted,
+        }
 
-        // Merge contribution calendars (sum per day) + track per-founder calendar
-        const founderCalendar = new Map<string, number>()
-        const weeks = contrib.contributionCalendar?.weeks ?? []
-        for (const week of weeks) {
-          for (const day of week.contributionDays ?? []) {
-            const count = day.contributionCount ?? 0
-            calendarMap.set(day.date, (calendarMap.get(day.date) ?? 0) + count)
-            founderCalendar.set(day.date, count)
-          }
-        }
-        perFounderCalendars[founderName] = founderCalendar
-
-        // Build per-type per-day calendar from detailed contribution data
-        const founderTyped: TypedDayCounts = {}
-        for (const repo of contrib.commitContributionsByRepository ?? []) {
-          for (const node of repo.contributions?.nodes ?? []) {
-            const date = (node.occurredAt as string).slice(0, 10)
-            founderTyped[date] ??= { commits: 0, prs: 0, issues: 0 }
-            founderTyped[date].commits += node.commitCount ?? 0
-          }
-        }
-        for (const node of contrib.pullRequestContributions?.nodes ?? []) {
-          const date = (node.occurredAt as string).slice(0, 10)
-          founderTyped[date] ??= { commits: 0, prs: 0, issues: 0 }
-          founderTyped[date].prs += 1
-        }
-        for (const node of contrib.issueContributions?.nodes ?? []) {
-          const date = (node.occurredAt as string).slice(0, 10)
-          founderTyped[date] ??= { commits: 0, prs: 0, issues: 0 }
-          founderTyped[date].issues += 1
-        }
-        // Reconcile typed calendar with merged calendar: the merged
-        // contributionCalendar includes code reviews and other types that the
-        // per-type fields don't capture. Attribute any gap to commits so the
-        // typed calendar never under-counts vs the merged calendar.
-        for (const [date, mergedCount] of founderCalendar) {
-          const typed = founderTyped[date] ?? { commits: 0, prs: 0, issues: 0 }
-          const typedTotal = typed.commits + typed.prs + typed.issues
-          if (mergedCount > typedTotal) {
-            founderTyped[date] = {
-              ...typed,
-              commits: typed.commits + (mergedCount - typedTotal),
-            }
-          }
-        }
         perFounderTypedCalendars[founderName] = founderTyped
 
         // Merge into team-level typed calendar
@@ -1189,23 +1444,10 @@ export const fetchGithubMetrics = internalAction({
     // Git Velocity scoring: unified formula with per-type weights and decay
     const velocityScore = computeVelocityScore(mergedTypedCalendar, now)
     const timestamp = now.toISOString()
-
-    // Reconstruct merged calendar in GitHub's format
-    const mergedCalendarWeeks: Array<{
-      contributionDays: Array<{ date: string; contributionCount: number }>
-    }> = []
-    const sortedDates = Array.from(calendarMap.entries()).sort(([a], [b]) => a.localeCompare(b))
-    let currentWeek: Array<{ date: string; contributionCount: number }> = []
-    for (const [date, count] of sortedDates) {
-      currentWeek.push({ date, contributionCount: count })
-      if (currentWeek.length === 7) {
-        mergedCalendarWeeks.push({ contributionDays: currentWeek })
-        currentWeek = []
-      }
-    }
-    if (currentWeek.length > 0) {
-      mergedCalendarWeeks.push({ contributionDays: currentWeek })
-    }
+    const mergedCalendarWeeks = buildContributionCalendarWeeksFromTypedDayCounts(
+      mergedTypedCalendar,
+      range
+    )
 
     await ctx.runMutation(internal.metrics.storeInternal, {
       snapshots: [
@@ -1241,6 +1483,14 @@ export const fetchGithubMetrics = internalAction({
           timestamp,
           window: 'daily' as const,
         },
+        {
+          startupId: args.startupId,
+          provider: 'github' as const,
+          metricKey: 'restricted_contributions',
+          value: totalRestricted,
+          timestamp,
+          window: 'daily' as const,
+        },
       ],
     })
 
@@ -1257,27 +1507,12 @@ export const fetchGithubMetrics = internalAction({
 
     // Store per-founder breakdown for multi-founder analytics
     if (Object.keys(perFounderStats).length > 0) {
-      // Convert per-founder calendar Maps to weeks format
-      const perFounderCalendarWeeks: Record<
-        string,
-        Array<{ contributionDays: Array<{ date: string; contributionCount: number }> }>
-      > = {}
-      for (const [name, dayMap] of Object.entries(perFounderCalendars)) {
-        const sorted = Array.from(dayMap.entries()).sort(([a], [b]) => a.localeCompare(b))
-        const weeks: Array<{
-          contributionDays: Array<{ date: string; contributionCount: number }>
-        }> = []
-        let week: Array<{ date: string; contributionCount: number }> = []
-        for (const [date, count] of sorted) {
-          week.push({ date, contributionCount: count })
-          if (week.length === 7) {
-            weeks.push({ contributionDays: week })
-            week = []
-          }
-        }
-        if (week.length > 0) weeks.push({ contributionDays: week })
-        perFounderCalendarWeeks[name] = weeks
-      }
+      const perFounderCalendarWeeks = Object.fromEntries(
+        Object.entries(perFounderTypedCalendars).map(([name, typed]) => [
+          name,
+          buildContributionCalendarWeeksFromTypedDayCounts(typed, range),
+        ])
+      )
 
       await ctx.runMutation(internal.metrics.storeInternalWithMeta, {
         startupId: args.startupId,
@@ -1932,5 +2167,384 @@ export const cleanupDuplicateSnapshots = internalAction({
       const batch = toDelete.slice(i, i + batchSize)
       await ctx.runMutation(internal.metrics.deleteMetricsRows, { ids: batch })
     }
+  },
+})
+
+/**
+ * DIAGNOSTIC — remove before shipping.
+ * Simulates what integrations:fullStatus would return for a given clerkId
+ * WITHOUT relying on ctx.auth.getUserIdentity (so we can run it from CLI).
+ * Returns the exact shape the founder-integrations page consumes.
+ */
+export const simulateFullStatusForClerkDiag = internalQuery({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const users = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .collect()
+    if (users.length === 0) return { error: 'no user row for clerkId' }
+    if (users.length > 1) return { error: 'duplicate user rows for clerkId', count: users.length }
+    const user = users[0]
+
+    const profiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .collect()
+    if (profiles.length === 0) return { error: 'no founderProfile', user: { _id: user._id } }
+
+    const startupId = profiles[0].startupId
+    const connections = await ctx.db
+      .query('integrationConnections')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
+      .collect()
+    const githubConns = connections.filter((c) => c.provider === 'github' && c.isActive)
+    const myGithub = githubConns.find((c) => c.connectedByUserId === user._id) ?? null
+
+    const annotated = githubConns.map((c) => ({
+      _id: c._id,
+      accountName: c.accountName,
+      connectedByUserId: c.connectedByUserId ?? null,
+      isMine_underCurrentLogic: myGithub ? c._id === myGithub._id : false,
+      connectedByEqualsMyUserId: c.connectedByUserId === user._id,
+    }))
+
+    return {
+      currentUser: { _id: user._id, clerkId: args.clerkId, role: user.role },
+      startupId,
+      myGithubFound: Boolean(myGithub),
+      myGithubId: myGithub?._id ?? null,
+      githubConnectionsCount: githubConns.length,
+      connections: annotated,
+    }
+  },
+})
+
+/**
+ * DIAGNOSTIC — remove before shipping.
+ * Pass your Clerk user id (find it in the Clerk dashboard, or log it out of
+ * the UI) to see all GitHub connections and whether each one's
+ * `connectedByUserId` resolves to your user row.
+ */
+export const lookupUserByClerkId = internalQuery({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const users = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .collect()
+    return users.map((u: any) => ({
+      _id: u._id,
+      clerkId: u.clerkId,
+      email: u.email,
+      fullName: u.fullName,
+      role: u.role,
+    }))
+  },
+})
+
+export const peekGithubStatsByStartupDiag = internalQuery({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    const statsByFounder = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'github_stats_by_founder')
+      )
+      .order('desc')
+      .first()
+    const restricted = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'restricted_contributions')
+      )
+      .order('desc')
+      .first()
+    const typedCal = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'typed_contribution_calendar')
+      )
+      .order('desc')
+      .first()
+    const typedCalByFounder = await ctx.db
+      .query('metricsData')
+      .withIndex('by_startupId_provider_metricKey', (q) =>
+        q
+          .eq('startupId', args.startupId)
+          .eq('provider', 'github')
+          .eq('metricKey', 'typed_contribution_calendar_by_founder')
+      )
+      .order('desc')
+      .first()
+    const typedMeta = (typedCal?.meta as Record<string, unknown>) ?? {}
+    const perFounderTyped =
+      (typedCalByFounder?.meta as Record<string, Record<string, unknown>>) ?? {}
+    return {
+      statsByFounderMeta: statsByFounder?.meta ?? null,
+      restrictedValue: restricted?.value ?? null,
+      typedCalendarDayCount: Object.keys(typedMeta).length,
+      typedCalendarFirstFive: Object.entries(typedMeta).slice(-5),
+      perFounderTypedKeys: Object.keys(perFounderTyped),
+      perFounderTypedDayCounts: Object.fromEntries(
+        Object.entries(perFounderTyped).map(([name, cal]) => [name, Object.keys(cal).length])
+      ),
+    }
+  },
+})
+
+export const lookupUserById = internalQuery({
+  args: { userId: v.id('users') },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId)
+    if (!user) return null
+    return {
+      _id: user._id,
+      clerkId: user.clerkId,
+      email: (user as any).email,
+      fullName: (user as any).fullName,
+      role: (user as any).role,
+    }
+  },
+})
+
+export const whoOwnsGithubConnectionsDiag = internalQuery({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const users = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .collect()
+
+    const myUserId = users[0]?._id
+
+    const githubConns = await ctx.db
+      .query('integrationConnections')
+      .filter((q) => q.and(q.eq(q.field('provider'), 'github'), q.eq(q.field('isActive'), true)))
+      .collect()
+
+    const annotated = await Promise.all(
+      githubConns.map(async (c) => {
+        const connUser = c.connectedByUserId ? await ctx.db.get(c.connectedByUserId) : null
+        return {
+          _id: c._id,
+          accountName: c.accountName,
+          startupId: c.startupId,
+          connectedByUserId: c.connectedByUserId,
+          connectedUserClerkId: connUser?.clerkId ?? null,
+          connectedUserFullName: (connUser as any)?.fullName ?? null,
+          isMineByUserId: c.connectedByUserId === myUserId,
+          isMineByClerkId: connUser?.clerkId === args.clerkId,
+        }
+      })
+    )
+
+    return {
+      currentUser: { _id: myUserId, clerkId: args.clerkId },
+      usersMatchingClerkId: users.map((u) => ({ _id: u._id, fullName: (u as any).fullName })),
+      connections: annotated,
+    }
+  },
+})
+
+/**
+ * DIAGNOSTIC — remove before shipping.
+ * Lists all active GitHub connections so you can find a connectionId to pass
+ * to debugGithubContributions.
+ */
+export const listGithubConnectionsDiag = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query('integrationConnections')
+      .filter((q) => q.and(q.eq(q.field('provider'), 'github'), q.eq(q.field('isActive'), true)))
+      .collect()
+    const annotated = await Promise.all(
+      rows.map(async (r) => {
+        const connUser = r.connectedByUserId ? await ctx.db.get(r.connectedByUserId) : null
+        const startup = await ctx.db.get(r.startupId)
+        return {
+          _id: r._id,
+          accountName: r.accountName,
+          startupId: r.startupId,
+          startupName: (startup as any)?.name ?? null,
+          status: r.status,
+          connectedByUserId: r.connectedByUserId ?? null,
+          connectedUserExists: r.connectedByUserId ? connUser !== null : null,
+          connectedUserClerkId: connUser?.clerkId ?? null,
+          connectedUserName: (connUser as any)?.fullName ?? null,
+          connectedUserRole: (connUser as any)?.role ?? null,
+          hasAccessToken: Boolean(r.accessToken),
+        }
+      })
+    )
+    return annotated
+  },
+})
+
+/**
+ * DIAGNOSTIC — remove before shipping.
+ * Dumps the raw GitHub GraphQL response for one connection so we can see
+ * exactly what the API returns vs what we store.
+ *
+ * Run from Convex dashboard:
+ *   1. runQuery: metrics:listGithubConnectionsDiag  → copy the _id
+ *   2. runAction: metrics:debugGithubContributions  { connectionId: "<id>" }
+ *      (or pass accountName to auto-find)
+ */
+export const debugGithubContributions = internalAction({
+  args: {
+    connectionId: v.optional(v.id('integrationConnections')),
+    accountName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    let connection: any = null
+    if (args.connectionId) {
+      connection = await ctx.runQuery(internal.integrations.getConnectionById, {
+        connectionId: args.connectionId,
+      })
+    } else if (args.accountName) {
+      const rows = (await ctx.runQuery(internal.metrics.listGithubConnectionsDiag, {})) as Array<{
+        _id: any
+        accountName?: string
+      }>
+      const match = rows.find((r) => r.accountName === args.accountName)
+      if (match) {
+        connection = await ctx.runQuery(internal.integrations.getConnectionById, {
+          connectionId: match._id,
+        })
+      }
+    }
+    if (!connection) return { error: 'Connection not found' }
+    if (!connection.accessToken) return { error: 'No access token' }
+
+    const now = new Date()
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+    const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10)
+
+    const query = `query($from: DateTime!, $to: DateTime!) {
+      viewer {
+        login
+        contributionsCollection(from: $from, to: $to) {
+          totalCommitContributions
+          totalPullRequestContributions
+          totalIssueContributions
+          totalPullRequestReviewContributions
+          restrictedContributionsCount
+          hasAnyRestrictedContributions
+          contributionCalendar { totalContributions }
+          commitContributionsByRepository(maxRepositories: 100) {
+            repository { nameWithOwner isPrivate }
+            contributions(first: 5, orderBy: { field: OCCURRED_AT, direction: DESC }) {
+              totalCount
+              nodes { commitCount occurredAt }
+            }
+          }
+          pullRequestContributions(first: 100, orderBy: { direction: DESC }) {
+            totalCount
+            nodes {
+              occurredAt
+              pullRequest { number title repository { nameWithOwner isPrivate } }
+            }
+          }
+          issueContributions(first: 100, orderBy: { direction: DESC }) {
+            totalCount
+            nodes {
+              occurredAt
+              issue { number title repository { nameWithOwner isPrivate } }
+            }
+          }
+        }
+      }
+    }`
+
+    const response = await fetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${connection.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        variables: { from: oneYearAgo.toISOString(), to: now.toISOString() },
+      }),
+    })
+
+    const status = response.status
+    const body: any = await response.json()
+    const contrib = body?.data?.viewer?.contributionsCollection
+
+    // Compute how many nodes fall in the last 28 days (the bar-chart window)
+    const prNodes = (contrib?.pullRequestContributions?.nodes ?? []).filter((n: any) => n != null)
+    const prNullCount = (contrib?.pullRequestContributions?.nodes ?? []).filter(
+      (n: any) => n == null
+    ).length
+    const issueNodes = (contrib?.issueContributions?.nodes ?? []).filter((n: any) => n != null)
+    const issueNullCount = (contrib?.issueContributions?.nodes ?? []).filter(
+      (n: any) => n == null
+    ).length
+
+    const prNodesLast28 = prNodes.filter(
+      (n: any) => typeof n?.occurredAt === 'string' && n.occurredAt.slice(0, 10) >= fourWeeksAgo
+    )
+    const issueNodesLast28 = issueNodes.filter(
+      (n: any) => typeof n?.occurredAt === 'string' && n.occurredAt.slice(0, 10) >= fourWeeksAgo
+    )
+
+    const repoList = (contrib?.commitContributionsByRepository ?? []).map((r: any) => ({
+      name: r?.repository?.nameWithOwner ?? null,
+      isPrivate: r?.repository?.isPrivate ?? null,
+      nodeCount: r?.contributions?.nodes?.length ?? 0,
+      totalCount: r?.contributions?.totalCount ?? 0,
+    }))
+
+    const summary = {
+      httpStatus: status,
+      graphqlErrors: body?.errors ?? null,
+      account: connection.accountName,
+      viewerLogin: body?.data?.viewer?.login,
+      totals: {
+        totalCommitContributions: contrib?.totalCommitContributions ?? null,
+        totalPullRequestContributions: contrib?.totalPullRequestContributions ?? null,
+        totalIssueContributions: contrib?.totalIssueContributions ?? null,
+        totalPullRequestReviewContributions: contrib?.totalPullRequestReviewContributions ?? null,
+        restrictedContributionsCount: contrib?.restrictedContributionsCount ?? null,
+        hasAnyRestrictedContributions: contrib?.hasAnyRestrictedContributions ?? null,
+        calendarTotal: contrib?.contributionCalendar?.totalContributions ?? null,
+      },
+      prContributions: {
+        totalCount: contrib?.pullRequestContributions?.totalCount ?? null,
+        nodesReturned: prNodes.length,
+        nodesNull: prNullCount,
+        nodesLast28Days: prNodesLast28.length,
+        firstThreeSample: prNodes.slice(0, 3),
+      },
+      issueContributions: {
+        totalCount: contrib?.issueContributions?.totalCount ?? null,
+        nodesReturned: issueNodes.length,
+        nodesNull: issueNullCount,
+        nodesLast28Days: issueNodesLast28.length,
+        firstThreeSample: issueNodes.slice(0, 3),
+      },
+      commitReposReturned: repoList.length,
+      commitReposSample: repoList.slice(0, 10),
+    }
+
+    console.log('=== GITHUB DIAGNOSTIC ===')
+    console.log(JSON.stringify(summary, null, 2))
+    console.log('=== END DIAGNOSTIC ===')
+
+    return summary
   },
 })

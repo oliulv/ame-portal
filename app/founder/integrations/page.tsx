@@ -38,6 +38,10 @@ import {
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
+import {
+  RestrictedContributionsBanner,
+  getRestrictedContributionsForAccount,
+} from '@/components/analytics/restricted-contributions-banner'
 
 const stripeConnectSchema = z.object({
   api_key: z.string().min(1, 'API key is required'),
@@ -105,6 +109,16 @@ function IntegrationsPageInner() {
   // Convex queries
   const trackerWebsites = useQuery(api.trackerWebsites.list)
   const fullStatus = useQuery(api.integrations.fullStatus)
+  const perFounderGithubStats = useQuery(
+    api.metrics.getPerFounderGithubStats,
+    fullStatus?.startupId ? { startupId: fullStatus.startupId } : 'skip'
+  )
+  const myRestricted = getRestrictedContributionsForAccount(
+    perFounderGithubStats,
+    fullStatus?.github?.accountName
+  )
+  const visibleRestricted =
+    fullStatus?.github?.restrictedBannerDismissedAt == null ? myRestricted : 0
 
   // Convex mutations and actions
   const createTrackerWebsite = useMutation(api.trackerWebsites.create)
@@ -112,6 +126,7 @@ function IntegrationsPageInner() {
   const connectStripe = useAction(api.integrations.connectStripe)
   const disconnectStripe = useMutation(api.integrations.disconnectStripe)
   const disconnectGithub = useMutation(api.integrations.disconnectGithub)
+  const dismissGithubRestrictedBanner = useMutation(api.integrations.dismissGithubRestrictedBanner)
   const saveSocialProfile = useMutation(api.integrations.saveSocialProfile)
 
   // Display OAuth error/success toasts from URL params
@@ -315,7 +330,11 @@ This enables session and pageview tracking. Place it on every page you want to t
       key: 'github',
       label: 'GitHub',
       icon: <Github className="h-4 w-4" />,
-      connected: (fullStatus?.githubConnections?.length ?? 0) > 0,
+      // Reflect THIS founder's connection, not the team's. Otherwise a
+      // disconnected founder still sees a green dot because a teammate has
+      // a connection, which contradicts the "Connect GitHub" CTA shown
+      // below.
+      connected: Boolean(fullStatus?.github),
     },
   ]
 
@@ -608,6 +627,23 @@ This enables session and pageview tracking. Place it on every page you want to t
       {/* ── GitHub Tab ────────────────────────────────────── */}
       {activeTab === 'github' && (
         <div className="space-y-4">
+          <RestrictedContributionsBanner
+            restrictedCount={visibleRestricted}
+            actionHref="/api/integrations/github/install"
+            onDismiss={
+              fullStatus?.github && !fullStatus.github.restrictedBannerDismissedAt
+                ? async () => {
+                    try {
+                      await dismissGithubRestrictedBanner()
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error ? error.message : 'Failed to hide GitHub warning'
+                      )
+                    }
+                  }
+                : undefined
+            }
+          />
           {/* Connect your own account — shown when this founder hasn't connected */}
           {!fullStatus?.github && (
             <Card>
@@ -699,8 +735,11 @@ This enables session and pageview tracking. Place it on every page you want to t
               <CardTitle className="text-base">How GitHub Scoring Works</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p>Your Git Velocity score is calculated from the last 4 weeks of activity:</p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <p>
+                Your Git Velocity score is calculated from the last 4 weeks of activity, with daily
+                temporal decay (recent days count more):
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-xs">
                 <div className="flex justify-between bg-muted px-3 py-2">
                   <span>Commit</span>
                   <span className="font-mono font-medium">10 pts</span>
@@ -709,10 +748,15 @@ This enables session and pageview tracking. Place it on every page you want to t
                   <span>PR opened</span>
                   <span className="font-mono font-medium">25 pts</span>
                 </div>
+                <div className="flex justify-between bg-muted px-3 py-2">
+                  <span>Issue opened</span>
+                  <span className="font-mono font-medium">15 pts</span>
+                </div>
               </div>
               <p>
                 For startups with multiple founders, contributions are summed across all connected
-                accounts.
+                accounts. Private-repo activity only counts when the Acc-OS Tracking App is
+                installed on those repos.
               </p>
             </CardContent>
           </Card>

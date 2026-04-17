@@ -207,6 +207,18 @@ export const storeGithubConnection = mutation({
       )
     }
 
+    // Enforce one GitHub account per founder per startup. If this user has
+    // any active github connection on this startup that isn't the one being
+    // upserted, reject. Founders must disconnect before switching accounts.
+    const otherMineActive = allGithubConns.find(
+      (c) => c.isActive && c.connectedByUserId === user._id && c.accountId !== args.accountId
+    )
+    if (otherMineActive) {
+      throw new Error(
+        `You already have a different GitHub account (@${otherMineActive.accountName ?? otherMineActive.accountId}) connected. Disconnect it before connecting a new one.`
+      )
+    }
+
     const data = {
       startupId: args.startupId,
       provider: 'github' as const,
@@ -219,6 +231,7 @@ export const storeGithubConnection = mutation({
       status: 'active' as const,
       isActive: true,
       connectedAt: new Date().toISOString(),
+      restrictedBannerDismissedAt: undefined,
     }
 
     let connectionId: any
@@ -263,7 +276,84 @@ export const disconnectGithub = mutation({
 
     if (myConnection) {
       await ctx.db.patch(myConnection._id, { status: 'disconnected', isActive: false })
+
+      // Scrub this founder's entries from per-founder meta immediately so the
+      // UI (banner, velocity chart, per-founder selector) reflects the
+      // disconnection without waiting for a background sync. We use
+      // accountName because that's the key the metas are stored under.
+      const founderKey = myConnection.accountName
+      if (founderKey) {
+        const perFounderMetaKeys = [
+          'github_stats_by_founder',
+          'contribution_calendar_by_founder',
+          'typed_contribution_calendar_by_founder',
+        ] as const
+        for (const metricKey of perFounderMetaKeys) {
+          const row = await ctx.db
+            .query('metricsData')
+            .withIndex('by_startupId_provider_metricKey', (q) =>
+              q.eq('startupId', startupIds[0]).eq('provider', 'github').eq('metricKey', metricKey)
+            )
+            .order('desc')
+            .first()
+          if (row?.meta && typeof row.meta === 'object') {
+            const meta = { ...(row.meta as Record<string, unknown>) }
+            if (founderKey in meta) {
+              delete meta[founderKey]
+              await ctx.db.patch(row._id, { meta })
+            }
+          }
+        }
+      }
+
+      // Trigger a fresh sync so team-wide aggregates (merged typed calendar,
+      // restricted_contributions, commits/prs/issues) also reflect the
+      // disconnection. This runs after the mutation commits so the
+      // disconnected connection is already excluded from fetches.
+      await ctx.scheduler.runAfter(0, internal.metrics.fetchGithubMetrics, {
+        startupId: startupIds[0],
+      })
     }
+  },
+})
+
+/**
+ * Founder-facing dismissal for the residual GitHub warning banner.
+ * This is per connected GitHub account, not startup-wide.
+ */
+export const dismissGithubRestrictedBanner = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireFounder(ctx)
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+    if (startupIds.length === 0) throw new Error('No startup found')
+
+    const connections = await ctx.db
+      .query('integrationConnections')
+      .withIndex('by_startupId_provider', (q) =>
+        q.eq('startupId', startupIds[0]).eq('provider', 'github')
+      )
+      .collect()
+
+    let myConnection = connections.find((c) => c.connectedByUserId === user._id) ?? null
+    if (!myConnection) {
+      for (const c of connections) {
+        if (!c.connectedByUserId) continue
+        const connUser = await ctx.db.get(c.connectedByUserId)
+        if (connUser?.clerkId === user.clerkId) {
+          myConnection = c
+          break
+        }
+      }
+    }
+
+    if (!myConnection || !myConnection.isActive) {
+      throw new Error('No active GitHub connection found for this founder')
+    }
+
+    await ctx.db.patch(myConnection._id, {
+      restrictedBannerDismissedAt: new Date().toISOString(),
+    })
   },
 })
 
@@ -371,7 +461,14 @@ export const fullStatus = query({
     const user = await requireFounder(ctx)
     const startupIds = await getFounderStartupIds(ctx, user._id)
     if (startupIds.length === 0)
-      return { stripe: null, github: null, githubConnections: [], founders: [], social: [] }
+      return {
+        startupId: null,
+        stripe: null,
+        github: null,
+        githubConnections: [],
+        founders: [],
+        social: [],
+      }
 
     const connections = await ctx.db
       .query('integrationConnections')
@@ -380,7 +477,21 @@ export const fullStatus = query({
 
     const stripe = connections.find((c) => c.provider === 'stripe' && c.isActive)
     const githubConns = connections.filter((c) => c.provider === 'github' && c.isActive)
-    const myGithub = githubConns.find((c) => c.connectedByUserId === user._id) ?? null
+    // Resolve "my" GitHub connection robustly. Direct match on user._id is
+    // the normal case; the clerkId fallback catches legacy rows where
+    // `connectedByUserId` was written against a user row that has since
+    // been superseded (same human, different user document).
+    let myGithub = githubConns.find((c) => c.connectedByUserId === user._id) ?? null
+    if (!myGithub) {
+      for (const c of githubConns) {
+        if (!c.connectedByUserId) continue
+        const connUser = await ctx.db.get(c.connectedByUserId)
+        if (connUser && connUser.clerkId === user.clerkId) {
+          myGithub = c
+          break
+        }
+      }
+    }
 
     const socialProfiles = await ctx.db
       .query('socialProfiles')
@@ -407,6 +518,7 @@ export const fullStatus = query({
       }))
 
     return {
+      startupId: startupIds[0],
       stripe: stripe
         ? {
             _id: stripe._id,
@@ -426,6 +538,7 @@ export const fullStatus = query({
             connectedAt: myGithub.connectedAt,
             lastSyncedAt: myGithub.lastSyncedAt,
             syncError: myGithub.syncError,
+            restrictedBannerDismissedAt: myGithub.restrictedBannerDismissedAt,
           }
         : null,
       // All active GitHub connections — for showing team members
