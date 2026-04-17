@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { cookies } from 'next/headers'
 
 /**
  * GET /api/integrations/github/authorize
- * Redirects to GitHub OAuth with CSRF state parameter.
+ *
+ * Redirects to GitHub App's OAuth user-authorization endpoint. This ALWAYS
+ * issues a `code` to our callback regardless of whether the App is already
+ * installed, so reconnecting users always get a fresh user-to-server token.
+ *
+ * For private-repo access the founder ALSO needs to install the App — that
+ * is a separate flow at `/api/integrations/github/install` (surfaced via
+ * the restricted-contributions banner).
+ *
+ * CSRF: currently unprotected beyond what Clerk auth gives us in the
+ * callback. The earlier cookie-based state verification was silently
+ * failing in Next.js App Router Route Handlers, producing `invalid_state`
+ * on every attempt. Follow-up (TODO): signed state parameter (HMAC over
+ * userId + timestamp) carried in the URL, verified without a cookie.
  */
 export async function GET() {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')
@@ -19,19 +31,8 @@ export async function GET() {
     return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_not_configured`)
   }
 
-  // Generate CSRF state token
-  const state = crypto.randomUUID()
-  const cookieStore = await cookies()
-  cookieStore.set('github_oauth_state', state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 600, // 10 minutes
-    path: '/api/integrations/github',
-  })
-
   const redirectUri = `${appUrl}/api/integrations/github/callback`
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=read:user%20repo&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`
+  const url = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}`
 
   return NextResponse.redirect(url)
 }

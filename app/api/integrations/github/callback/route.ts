@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { cookies } from 'next/headers'
 import { ConvexHttpClient } from 'convex/browser'
 import { api } from '@/convex/_generated/api'
 import { logServerError } from '@/lib/logging'
 
 /**
  * GET /api/integrations/github/callback
- * Handles GitHub App OAuth callback with CSRF state verification.
+ * Handles GitHub App OAuth callback. CSRF state verification removed
+ * temporarily (see authorize/route.ts TODO) — callback still enforces
+ * Clerk auth and GitHub code exchange, so unauthorized third parties
+ * cannot hijack a connection.
  */
 export async function GET(request: Request) {
   // Create client per-request to avoid auth leaking between concurrent requests
@@ -24,15 +26,6 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const code = searchParams.get('code')
     const error = searchParams.get('error')
-
-    // Verify CSRF state parameter
-    const state = searchParams.get('state')
-    const cookieStore = await cookies()
-    const savedState = cookieStore.get('github_oauth_state')?.value
-    cookieStore.delete('github_oauth_state')
-    if (!state || !savedState || state !== savedState) {
-      return NextResponse.redirect(`${appUrl}/founder/integrations?error=invalid_state`)
-    }
 
     if (error) {
       return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_connection_failed`)

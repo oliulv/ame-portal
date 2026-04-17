@@ -281,6 +281,7 @@ export default defineSchema({
     connectedAt: v.optional(v.string()),
     lastSyncedAt: v.optional(v.string()),
     syncError: v.optional(v.string()),
+    restrictedBannerDismissedAt: v.optional(v.string()),
     isActive: v.boolean(),
   })
     .index('by_startupId', ['startupId'])

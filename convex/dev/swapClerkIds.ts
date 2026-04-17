@@ -15,7 +15,7 @@ const SWAPS = [
   // Founder — pick any real founder from prod whose startup you want to test as
   // When you sign in as your dev founder account, you'll see their startup's data
   {
-    prodClerkId: 'user_3B7u1z0OLFQcIwrc8SfSexgfLyP',
+    prodClerkId: 'user_3AdV3Vrf5oLH6yiWmqXjjeI7G9n',
     devClerkId: 'user_3AnkoO5kRQnKeQ3UrMfJPohVbxz',
   },
 ]
