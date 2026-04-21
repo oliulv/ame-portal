@@ -37,6 +37,7 @@ import {
   LayoutDashboard,
   Users,
   User,
+  ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -748,6 +749,25 @@ export default function AdminStartupAnalyticsPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {shippingView !== 'team' &&
+                        integrationStatus?.githubConnections?.some(
+                          (conn) => conn.accountName === shippingView
+                        ) && (
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="icon"
+                            title="Open GitHub profile"
+                          >
+                            <a
+                              href={`https://github.com/${shippingView}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        )}
                     </div>
                   )}
 
