@@ -60,7 +60,7 @@ export function GithubTeamStatus({ founders, githubConnections }: GithubTeamStat
                         href={`https://github.com/${conn.accountName}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:underline"
+                        className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={(e) => e.stopPropagation()}
                       >
                         @{conn.accountName}
@@ -74,7 +74,7 @@ export function GithubTeamStatus({ founders, githubConnections }: GithubTeamStat
                     href={`https://github.com/${conn.accountName}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="hover:underline"
+                    className="rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     onClick={(e) => e.stopPropagation()}
                   >
                     @{conn.accountName}

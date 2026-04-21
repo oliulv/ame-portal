@@ -269,19 +269,33 @@ export default function StartupsPage() {
 
   const storageKey = `admin-startups-view:${cohortSlug}`
 
-  const [view, setView] = useState<'overview' | 'leaderboard'>(() => {
+  // Always initialize to 'overview' so server render and client hydration agree.
+  // The effect below drives the real value from URL/sessionStorage post-mount.
+  const [view, setView] = useState<'overview' | 'leaderboard'>('overview')
+
+  // Sync view state with URL + sessionStorage. Re-runs on cohort switch so the
+  // new cohort reads its own cached preference, not the previous cohort's.
+  useEffect(() => {
     const fromUrl = searchParams.get('view')
-    if (fromUrl === 'leaderboard' || fromUrl === 'overview') return fromUrl
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = window.sessionStorage.getItem(storageKey)
-        if (cached === 'leaderboard' || cached === 'overview') return cached
-      } catch {
-        /* sessionStorage unavailable (SSR, privacy mode) — fall through */
-      }
+    if (fromUrl === 'leaderboard' || fromUrl === 'overview') {
+      setView(fromUrl)
+      return
     }
-    return 'overview'
-  })
+    let cached: string | null = null
+    try {
+      cached = window.sessionStorage.getItem(storageKey)
+    } catch {
+      /* sessionStorage unavailable (privacy mode) — fall through */
+    }
+    if (cached === 'leaderboard' || cached === 'overview') {
+      setView(cached)
+      const nextParams = new URLSearchParams(searchParams.toString())
+      nextParams.set('view', cached)
+      router.replace(`?${nextParams.toString()}`, { scroll: false })
+      return
+    }
+    setView('overview')
+  }, [cohortSlug, searchParams, storageKey, router])
 
   const handleViewChange = (next: 'overview' | 'leaderboard') => {
     setView(next)
@@ -290,9 +304,9 @@ export default function StartupsPage() {
     } catch {
       /* noop */
     }
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('view', next)
-    router.replace(`?${params.toString()}`, { scroll: false })
+    const nextParams = new URLSearchParams(searchParams.toString())
+    nextParams.set('view', next)
+    router.replace(`?${nextParams.toString()}`, { scroll: false })
   }
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })

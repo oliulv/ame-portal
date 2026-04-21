@@ -758,6 +758,7 @@ export default function AdminStartupAnalyticsPage() {
                               href={`https://github.com/${shippingView}`}
                               target="_blank"
                               rel="noopener noreferrer"
+                              aria-label="Open GitHub profile"
                             >
                               <ExternalLink className="h-4 w-4" />
                             </a>
