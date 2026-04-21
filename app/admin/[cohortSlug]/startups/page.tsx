@@ -258,7 +258,7 @@ function ExpandableRow({
               ))}
             </div>
             <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
-              <span>Active categories: {entry.activeCategories}/5</span>
+              <span>Active categories: {entry.activeCategories}/4</span>
               {entry.favoriteMultiplier > 1 && (
                 <span className="text-yellow-600">
                   Favorite boost: x{entry.favoriteMultiplier.toFixed(3)}
@@ -694,7 +694,7 @@ export default function StartupsPage() {
                                   )}
                                   <span className="text-sm">{entry.startupName}</span>
                                   <Badge variant="outline" className="text-xs">
-                                    {entry.activeCategories}/5 active
+                                    {entry.activeCategories}/4 active
                                   </Badge>
                                   {entry.excludeFromMetrics && (
                                     <Badge variant="warning" className="text-xs">

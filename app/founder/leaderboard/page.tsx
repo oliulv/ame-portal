@@ -293,7 +293,7 @@ export default function FounderLeaderboardPage() {
                 <p className="text-sm text-muted-foreground">
                   {leaderboard.myRank
                     ? `Score: ${leaderboard.myScore.toFixed(1)} points`
-                    : 'Need activity in at least 3 of 5 categories to be ranked'}
+                    : 'Need activity in at least 3 of 4 categories to be ranked'}
                 </p>
               </div>
             </div>

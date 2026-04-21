@@ -5,7 +5,6 @@ export const CATEGORY_COLORS: Record<string, string> = {
   traffic: 'bg-blue-500',
   github: 'bg-purple-500',
   updates: 'bg-orange-500',
-  milestones: 'bg-yellow-500',
 }
 
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -13,15 +12,13 @@ export const CATEGORY_LABELS: Record<string, string> = {
   traffic: 'Traffic',
   github: 'GitHub',
   updates: 'Updates',
-  milestones: 'Milestones',
 }
 
 export const CATEGORY_WEIGHTS: Record<string, number> = {
-  revenue: 25,
-  traffic: 20,
-  github: 20,
-  updates: 20,
-  milestones: 15,
+  revenue: 35,
+  traffic: 25,
+  github: 25,
+  updates: 15,
 }
 
 const CATEGORY_DETAILS: Record<string, { signal: string; measurement: string; example: string }> = {
@@ -47,12 +44,6 @@ const CATEGORY_DETAILS: Record<string, { signal: string; measurement: string; ex
     measurement:
       'Binary (submitted or not) + streak bonus: +10% per consecutive week, up to +80% at 8 weeks',
     example: 'Submit every week for 8 weeks = nearly double the base score',
-  },
-  milestones: {
-    signal: 'Milestones shipped',
-    measurement: 'Count of approved milestones in the last 28 days, scaled against the cohort max',
-    example:
-      '3 milestones approved in the last month scores higher than 1, relative to everyone else',
   },
 }
 
@@ -133,7 +124,7 @@ export function ScoringExplainerContent() {
             <div className="border p-3 space-y-1">
               <h4 className="font-medium text-sm">Qualification Gate</h4>
               <p className="text-sm text-muted-foreground">
-                Need data in at least 3 of 5 categories to earn the &quot;Qualified&quot; tag (extra
+                Need data in at least 3 of 4 categories to earn the &quot;Qualified&quot; tag (extra
                 funding eligibility). Categories you haven&apos;t connected are simply excluded
                 &mdash; no penalty.
               </p>

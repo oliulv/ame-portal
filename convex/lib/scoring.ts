@@ -3,12 +3,12 @@
  *
  * Score range: 0.0 – ~100+ (displayed as-is in the UI).
  *
- * Categories (v1, no social):
- *   Revenue  25%  — MRR growth rate (week-over-week %), 4-week decayed sum
- *   Traffic  20%  — Session growth rate (week-over-week %), 4-week decayed sum
- *   GitHub   20%  — Velocity score (commits + PRs + issues) with 28-day daily decay
- *   Updates  20%  — Weekly update × streak multiplier, 4-week decayed sum
- *   Milestones 15% — Count of approved milestones in the last 28 days
+ * Categories (v1, no social, no milestones — milestones drive funding
+ * unlock, not scoring):
+ *   Revenue 35%  — MRR growth rate (week-over-week %), 4-week decayed sum
+ *   Traffic 25%  — Session growth rate (week-over-week %), 4-week decayed sum
+ *   GitHub  25%  — Velocity score (commits + PRs + issues) with 28-day daily decay
+ *   Updates 15%  — Weekly update × streak multiplier, 4-week decayed sum
  *
  * Policy:
  *   - Absolute weights — a startup with only 1 active category caps at
@@ -19,15 +19,14 @@
 
 // ── Constants ────────────────────────────────────────────────────────
 
-export const CATEGORY_KEYS = ['revenue', 'traffic', 'github', 'updates', 'milestones'] as const
+export const CATEGORY_KEYS = ['revenue', 'traffic', 'github', 'updates'] as const
 export type CategoryKey = (typeof CATEGORY_KEYS)[number]
 
 export const WEIGHTS: Record<CategoryKey, number> = {
-  revenue: 0.25,
-  traffic: 0.2,
-  github: 0.2,
-  updates: 0.2,
-  milestones: 0.15,
+  revenue: 0.35,
+  traffic: 0.25,
+  github: 0.25,
+  updates: 0.15,
 }
 
 export const DECAY_RATE = 0.03

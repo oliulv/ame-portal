@@ -35,7 +35,6 @@ function emptyRaw(overrides: Partial<StartupRawData> = {}): StartupRawData {
     sessionMetrics: [],
     velocityCalendar: {},
     weeklyUpdates: [],
-    approvedMilestones: [],
     ...overrides,
   }
 }
@@ -54,7 +53,7 @@ describe('assembleCategoryRaw', () => {
   it('1. empty raw → all perCatRaw = 0, all perCatActive = false', () => {
     const weeks = buildWeeks(ROLLING_WEEKS + 1)
     const result = assembleCategoryRaw(emptyRaw(), weeks, NOW)
-    for (const key of ['revenue', 'traffic', 'github', 'updates', 'milestones'] as const) {
+    for (const key of ['revenue', 'traffic', 'github', 'updates'] as const) {
       expect(result.perCatRaw[key]).toBe(0)
       expect(result.perCatActive[key]).toBe(false)
     }
@@ -158,73 +157,6 @@ describe('assembleCategoryRaw', () => {
     const result = assembleCategoryRaw(raw, weeks, NOW)
     expect(result.perCatActive.updates).toBe(true)
     expect(result.perCatRaw.updates).toBeGreaterThan(0)
-  })
-
-  it('7. milestones: 2 approved inside 28d + 1 outside → active, raw = 2', () => {
-    const weeks = buildWeeks(ROLLING_WEEKS + 1)
-    const recent1 = new Date(NOW.getTime() - 5 * 86400_000).toISOString()
-    const recent2 = new Date(NOW.getTime() - 20 * 86400_000).toISOString()
-    const old = new Date(NOW.getTime() - 40 * 86400_000).toISOString()
-    const raw = emptyRaw({
-      approvedMilestones: [
-        { status: 'approved', approvedAt: recent1 },
-        { status: 'approved', approvedAt: recent2 },
-        { status: 'approved', approvedAt: old },
-      ] as any,
-    })
-    const result = assembleCategoryRaw(raw, weeks, NOW)
-    expect(result.perCatActive.milestones).toBe(true)
-    expect(result.perCatRaw.milestones).toBe(2)
-  })
-
-  it('8. milestones with approvedAt undefined are filtered out (belt + braces)', () => {
-    // fetchStartupRawData filters these, but assembleCategoryRaw does a second check.
-    const weeks = buildWeeks(ROLLING_WEEKS + 1)
-    const raw = emptyRaw({
-      approvedMilestones: [
-        { status: 'approved', approvedAt: undefined },
-        { status: 'approved', approvedAt: new Date(NOW.getTime() - 1000).toISOString() },
-      ] as any,
-    })
-    const result = assembleCategoryRaw(raw, weeks, NOW)
-    expect(result.perCatRaw.milestones).toBe(1)
-  })
-
-  // ── T1: milestone boundary + malformed approvedAt ─────────────────
-
-  it('9. milestones: approvedAt exactly at windowCutoff is excluded (strict >)', () => {
-    // Gate is `t > windowCutoff`, so exactly-at-boundary drops out.
-    const weeks = buildWeeks(ROLLING_WEEKS + 1)
-    const windowCutoffMs = NOW.getTime() - 28 * 86400_000
-    const raw = emptyRaw({
-      approvedMilestones: [
-        { status: 'approved', approvedAt: new Date(windowCutoffMs).toISOString() },
-      ] as any,
-    })
-    const result = assembleCategoryRaw(raw, weeks, NOW)
-    expect(result.perCatRaw.milestones).toBe(0)
-    expect(result.perCatActive.milestones).toBe(false)
-  })
-
-  it('10. milestones: approvedAt just inside windowCutoff (+1ms) counts', () => {
-    const weeks = buildWeeks(ROLLING_WEEKS + 1)
-    const windowCutoffMs = NOW.getTime() - 28 * 86400_000
-    const raw = emptyRaw({
-      approvedMilestones: [
-        { status: 'approved', approvedAt: new Date(windowCutoffMs + 1).toISOString() },
-      ] as any,
-    })
-    const result = assembleCategoryRaw(raw, weeks, NOW)
-    expect(result.perCatRaw.milestones).toBe(1)
-  })
-
-  it('11. milestones: malformed approvedAt string is skipped, not thrown', () => {
-    const weeks = buildWeeks(ROLLING_WEEKS + 1)
-    const raw = emptyRaw({
-      approvedMilestones: [{ status: 'approved', approvedAt: 'not-an-iso-date' }] as any,
-    })
-    expect(() => assembleCategoryRaw(raw, weeks, NOW)).not.toThrow()
-    expect(assembleCategoryRaw(raw, weeks, NOW).perCatRaw.milestones).toBe(0)
   })
 
   // ── T3: traffic/updates inactive-side tests (mirrors #3 for revenue) ──

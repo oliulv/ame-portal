@@ -79,7 +79,6 @@ bun test -- -t "slugify"        # Filter by test name
 
 - `convex/lib/scoring.ts` — scoring engine (growth rates, power-law normalization, computeLeaderboardScore, favorite multiplier)
 - `convex/leaderboard.ts` — leaderboard orchestration: pure helpers (assembleCategoryRaw, deriveFavorites, assignRanks) with full unit coverage
-- `convex/migrations/classifyMilestoneForBackfill.ts` — pure classifier used by the approvedAt backfill migration
 - `convex/lib/streak.ts` — weekly-update streak computation (deadlines, duplicates, malformed weekOf)
 - `convex/lib/stripeMrr.ts` — MRR normalization from Stripe billing intervals
 - `convex/lib/slugify.ts` — URL slug generation and uniqueness

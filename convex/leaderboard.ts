@@ -35,7 +35,6 @@ export interface ScoreBreakdown {
     traffic: { raw: number; normalized: number; weighted: number }
     github: { raw: number; normalized: number; weighted: number }
     updates: { raw: number; normalized: number; weighted: number }
-    milestones: { raw: number; normalized: number; weighted: number }
   }
   activeCategories: number
   qualified: boolean
@@ -68,8 +67,6 @@ export interface StartupRawData {
   sessionMetrics: Doc<'metricsData'>[]
   velocityCalendar: TypedDayCounts
   weeklyUpdates: Doc<'weeklyUpdates'>[]
-  /** Milestones that are currently `status === 'approved'` AND have a non-empty `approvedAt`. */
-  approvedMilestones: Doc<'milestones'>[]
 }
 
 async function readVelocityCalendar(
@@ -129,24 +126,12 @@ async function fetchStartupRawData(
     .withIndex('by_startupId', (q: any) => q.eq('startupId', startup._id))
     .collect()
 
-  const allMilestones = await ctx.db
-    .query('milestones')
-    .withIndex('by_startupId', (q: any) => q.eq('startupId', startup._id))
-    .collect()
-  // Belt + braces: filter on both status AND approvedAt so stale rows from
-  // a future status-mutation path that forgets to clear approvedAt can't
-  // sneak into the 28-day window check downstream.
-  const approvedMilestones = allMilestones.filter(
-    (m: Doc<'milestones'>) => m.status === 'approved' && !!m.approvedAt
-  )
-
   return {
     startup,
     mrrMetrics,
     sessionMetrics,
     velocityCalendar,
     weeklyUpdates,
-    approvedMilestones,
   }
 }
 
@@ -167,11 +152,10 @@ export interface AssembledCategoryRaw {
  * ordered most-recent-first: `weeks[0]` is the newest.
  *
  * Active-gate rules:
- *   revenue    — ≥1 MRR snapshot > 0 in last 28 days
- *   traffic    — ≥1 day with sessions > 0 in last 28 days
- *   github     — ≥1 contribution day in last 28 days
- *   updates    — ≥1 weekly update submitted in last 28 days
- *   milestones — ≥1 approved milestone with approvedAt > now - 28 days
+ *   revenue — ≥1 MRR snapshot > 0 in last 28 days
+ *   traffic — ≥1 day with sessions > 0 in last 28 days
+ *   github  — ≥1 contribution day in last 28 days
+ *   updates — ≥1 weekly update submitted in last 28 days
  */
 export function assembleCategoryRaw(
   raw: StartupRawData,
@@ -262,30 +246,18 @@ export function assembleCategoryRaw(
     }
   }
 
-  // ── Milestones (absolute count in window) ─────────────────────────
-  let milestonesRaw = 0
-  for (const m of raw.approvedMilestones) {
-    if (!m.approvedAt) continue
-    const t = new Date(m.approvedAt).getTime()
-    if (!Number.isFinite(t)) continue
-    if (t > windowCutoff) milestonesRaw++
-  }
-  const milestonesActive = milestonesRaw > 0
-
   return {
     perCatRaw: {
       revenue: revenueRaw,
       traffic: trafficRaw,
       github: githubRaw,
       updates: updatesRaw,
-      milestones: milestonesRaw,
     },
     perCatActive: {
       revenue: revenueActiveSnapshot,
       traffic: trafficActive,
       github: githubActive,
       updates: updatesActive,
-      milestones: milestonesActive,
     },
     updateStreak: streak,
   }
@@ -417,7 +389,6 @@ async function computeCohortLeaderboard(
       traffic: 0,
       github: 0,
       updates: 0,
-      milestones: 0,
     }
     for (const a of assemblies) {
       for (const key of Object.keys(max) as CategoryKey[]) {
@@ -483,7 +454,6 @@ async function computeCohortLeaderboard(
         traffic: current.categories.traffic,
         github: current.categories.github,
         updates: current.categories.updates,
-        milestones: current.categories.milestones,
       },
       activeCategories: current.activeCategories,
       qualified: current.qualified,

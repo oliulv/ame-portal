@@ -318,7 +318,7 @@ describe('computeFavoriteMultiplier', () => {
 // ── computeLeaderboardScore ──────────────────────────────────────────
 
 describe('computeLeaderboardScore', () => {
-  it('1. full cohort, all 5 active: weighted sum matches hand calc', () => {
+  it('1. full cohort, all 4 active: weighted sum matches hand calc', () => {
     // Each category raw=50 out of cohortMax=100. normalized = 0.5^0.7 ≈ 0.6156
     // weighted per cat = 0.6156 × 100 × WEIGHTS[key]
     // baseScore = Σ 0.6156 × 100 × 1.0 (sum of weights) = 61.56
@@ -331,17 +331,17 @@ describe('computeLeaderboardScore', () => {
     expect(result.baseScore).toBeCloseTo(expectedBase, 2)
     expect(result.totalScore).toBeCloseTo(expectedBase, 2)
     expect(result.favoriteMultiplier).toBe(1)
-    expect(result.activeCategories).toBe(5)
+    expect(result.activeCategories).toBe(4)
   })
 
-  it('2. single active (only milestones, raw=3, cohortMax=3): totalScore = 15', () => {
-    const raw = cat(0, { milestones: 3 })
-    const active = cat(false, { milestones: true })
-    const max = cat(0, { milestones: 3 })
+  it('2. single active (only updates, raw=18, cohortMax=18): totalScore = 15', () => {
+    const raw = cat(0, { updates: 18 })
+    const active = cat(false, { updates: true })
+    const max = cat(0, { updates: 18 })
     const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
-    // normalized = (3/3)^0.7 × 100 = 100, weighted = 100 × 0.15 = 15
-    expect(result.categories.milestones.normalized).toBe(100)
-    expect(result.categories.milestones.weighted).toBeCloseTo(15, 6)
+    // normalized = (18/18)^0.7 × 100 = 100, weighted = 100 × 0.15 = 15
+    expect(result.categories.updates.normalized).toBe(100)
+    expect(result.categories.updates.weighted).toBeCloseTo(15, 6)
     expect(result.baseScore).toBeCloseTo(15, 6)
     expect(result.totalScore).toBeCloseTo(15, 6)
     expect(result.activeCategories).toBe(1)
@@ -434,13 +434,13 @@ describe('computeLeaderboardScore', () => {
     expect(result.favoriteMultiplier).toBeLessThan(1.5)
   })
 
-  it('11. absolute milestones (3 vs cohortMax 3): normalized 100, weighted 15', () => {
-    const raw = cat(0, { milestones: 3 })
-    const active = cat(false, { milestones: true })
-    const max = cat(0, { milestones: 3 })
+  it('11. revenue at cohort max gets full revenue weight (normalized 100, weighted 35)', () => {
+    const raw = cat(0, { revenue: 200 })
+    const active = cat(false, { revenue: true })
+    const max = cat(0, { revenue: 200 })
     const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
-    expect(result.categories.milestones.normalized).toBe(100)
-    expect(result.categories.milestones.weighted).toBeCloseTo(15, 6)
+    expect(result.categories.revenue.normalized).toBe(100)
+    expect(result.categories.revenue.weighted).toBeCloseTo(35, 6)
   })
 
   it('12. active gate: raw > 0 + inactive flag → weighted = 0', () => {
@@ -525,8 +525,8 @@ describe('computeLeaderboardScore', () => {
 // ── Constants sanity checks ──────────────────────────────────────────
 
 describe('constants', () => {
-  it('should have 5 category keys', () => {
-    expect(CATEGORY_KEYS.length).toBe(5)
+  it('should have 4 category keys', () => {
+    expect(CATEGORY_KEYS.length).toBe(4)
   })
 
   it('should have weights that sum to 1.0', () => {
