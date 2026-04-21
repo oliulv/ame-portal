@@ -74,31 +74,13 @@
 
 **Depends on:** Decision on whether to store raw IP (GDPR — probably hash only), and on how to handle the existing unvalidated history (delete, flag, or grandfather).
 
-## Remove `consistencyBonus: 0` Placeholder From Leaderboard Return Shape
-
-**What:** The leaderboard scoring PR soft-removed the consistency-bonus UI but kept `consistencyBonus: 0` in the Convex return shape for one release, to avoid TypeErrors in cached Vercel bundles that still reference `entry.consistencyBonus.toFixed(1)`. A follow-up PR should fully remove the field from the `ScoreBreakdown` type in `convex/leaderboard.ts` and drop the two `consistencyBonus: 0` assignments in the two result-builder paths.
-
-**Why:** Dead placeholder fields accumulate and mislead. The one-release bridge is a deploy-race guard, not a permanent API shape.
-
-**Context:** Before removing, grep for remaining consumers: `rg consistencyBonus` should return only `convex/leaderboard.ts`. If anything in `app/` or `components/` still references it, those consumers need to be cleaned first.
-
-**Depends on:** The scoring PR shipping and living in production for ≥1 full Vercel bundle refresh cycle (realistically 1-2 days).
-
-## UI Cleanups Deferred From Leaderboard Scoring PR
-
-**What:** Five small admin-UI fixes pulled out of the scoring PR to keep that diff focused. Each is a quick follow-up.
-
-1. **Remove FAV column on admin leaderboard** — `app/admin/[cohortSlug]/startups/page.tsx:635-637` (header) and `:190-194` (cell). Also decrement `colSpan={7}` → `{6}` on the expansion row at `:237`.
-2. **Clickable GitHub usernames on shipping tab** — wrap `@{conn.accountName}` in `components/analytics/github-team-status.tsx:57,61` as `<a href="https://github.com/{accountName}" target="_blank" rel="noopener noreferrer">`. Plus a small external-link icon button next to the per-founder `SelectTrigger` on `app/admin/[cohortSlug]/startups/[slug]/analytics/page.tsx:730-752` that opens the selected founder's profile.
-3. **Align Sync button with range dropdown** — `app/admin/[cohortSlug]/startups/[slug]/analytics/page.tsx:324` uses `size="sm"` (h-8) next to a default `SelectTrigger` (h-9). Drop `size="sm"` so both are h-9.
-4. **Session-scoped tab caching on admin startups page** — `app/admin/[cohortSlug]/startups/page.tsx:275-276` only reads `?view=` once. Switch to a `sessionStorage` initializer keyed by cohort slug, with URL `router.replace` on change, and a `typeof window`/try-catch guard.
-5. **Kill the tab-switch jump** — drop the `view === 'leaderboard'` skip on `api.leaderboard.computeLeaderboard` at `app/admin/[cohortSlug]/startups/page.tsx:288-291` so the query warms alongside overview queries. Optionally also mirror the last defined response into local state so brief fetch windows don't show `Skeleton`.
-
-**Why:** None block the scoring fix, all are visible admin-UX friction.
-
-**Depends on:** Nothing. Can ship individually or batched.
-
 ## Completed
+
+### UI Cleanups Deferred From Leaderboard Scoring PR
+**Completed:** 2026-04-21. All 5 items shipped as the UI polish follow-up PR (FAV column removal, clickable GitHub usernames, Sync button height alignment, session-scoped tab caching, query ungating to kill tab-switch jump).
+
+### Remove `consistencyBonus: 0` Placeholder From Leaderboard Return Shape
+**Completed:** 2026-04-21. Field removed from `ScoreBreakdown` type and from the result-builder in `convex/leaderboard.ts` once the scoring PR had been live long enough for cached Vercel bundles to refresh.
 
 ### Rename `weeklyValues` Field in `scoring.test.ts`
 **Completed:** v0.1.2.0 (2026-04-21). The misleading test-fixture field was removed entirely along with `computeStartupScore` + `computeConsistencyBonus` tests in the scoring correctness PR. The new `computeLeaderboardScore` tests use clearer per-category scalar inputs (no shared-shape `CategoryMetric` fixture field at all).

@@ -24,7 +24,6 @@ import {
   Edit,
   BarChart3,
   ExternalLink,
-  Star,
   Flame,
   ChevronDown,
   ChevronUp,
@@ -187,16 +186,6 @@ function ExpandableRow({
             <RankChangeArrow rankChange={entry.rankChange} />
           </span>
         </td>
-        <td className="px-4 py-3 whitespace-nowrap text-center">
-          {entry.hasFavoriteInWindow && (
-            <span className="inline-flex items-center gap-1">
-              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-              {entry.favoritesInWindow > 1 && (
-                <span className="text-xs text-muted-foreground">{entry.favoritesInWindow}</span>
-              )}
-            </span>
-          )}
-        </td>
         <td className="px-4 py-3 whitespace-nowrap text-center text-sm">
           {entry.updateStreak > 0 && (
             <span className="inline-flex items-center gap-1">
@@ -239,7 +228,7 @@ function ExpandableRow({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={7} className="px-4 py-4 bg-muted/30">
+          <td colSpan={6} className="px-4 py-4 bg-muted/30">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {Object.entries(entry.categories).map(([key, cat]: [string, any]) => (
                 <div key={key} className="space-y-1">
@@ -278,22 +267,61 @@ export default function StartupsPage() {
   const searchParams = useSearchParams()
   const cohortSlug = params.cohortSlug as string
 
-  const initialView = searchParams.get('view') === 'leaderboard' ? 'leaderboard' : 'overview'
-  const [view, setView] = useState<'overview' | 'leaderboard'>(initialView)
+  const storageKey = `admin-startups-view:${cohortSlug}`
+
+  // Always initialize to 'overview' so server render and client hydration agree.
+  // The effect below drives the real value from URL/sessionStorage post-mount.
+  const [view, setView] = useState<'overview' | 'leaderboard'>('overview')
+
+  // Sync view state with URL + sessionStorage. Re-runs on cohort switch so the
+  // new cohort reads its own cached preference, not the previous cohort's.
+  useEffect(() => {
+    const fromUrl = searchParams.get('view')
+    if (fromUrl === 'leaderboard' || fromUrl === 'overview') {
+      setView(fromUrl)
+      return
+    }
+    let cached: string | null = null
+    try {
+      cached = window.sessionStorage.getItem(storageKey)
+    } catch {
+      /* sessionStorage unavailable (privacy mode) — fall through */
+    }
+    if (cached === 'leaderboard' || cached === 'overview') {
+      setView(cached)
+      const nextParams = new URLSearchParams(searchParams.toString())
+      nextParams.set('view', cached)
+      router.replace(`?${nextParams.toString()}`, { scroll: false })
+      return
+    }
+    setView('overview')
+  }, [cohortSlug, searchParams, storageKey, router])
+
+  const handleViewChange = (next: 'overview' | 'leaderboard') => {
+    setView(next)
+    try {
+      window.sessionStorage.setItem(storageKey, next)
+    } catch {
+      /* noop */
+    }
+    const nextParams = new URLSearchParams(searchParams.toString())
+    nextParams.set('view', next)
+    router.replace(`?${nextParams.toString()}`, { scroll: false })
+  }
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
   const fundingOverview = useQuery(
     api.milestones.fundingOverview,
-    cohort && view === 'overview' ? { cohortId: cohort._id } : 'skip'
+    cohort ? { cohortId: cohort._id } : 'skip'
   )
   const integrationStatus = useQuery(
     api.integrations.statusByCohort,
-    cohort && view === 'overview' ? { cohortId: cohort._id } : 'skip'
+    cohort ? { cohortId: cohort._id } : 'skip'
   )
   const leaderboard = useQuery(
     api.leaderboard.computeLeaderboard,
-    cohort && view === 'leaderboard' ? { cohortId: cohort._id } : 'skip'
+    cohort ? { cohortId: cohort._id } : 'skip'
   )
 
   const [showExplainer, setShowExplainer] = useState(false)
@@ -390,7 +418,7 @@ export default function StartupsPage() {
       {/* Segmented control */}
       <div className="inline-flex items-center border bg-muted p-1 gap-1">
         <button
-          onClick={() => setView('overview')}
+          onClick={() => handleViewChange('overview')}
           className={cn(
             'px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer',
             view === 'overview'
@@ -401,7 +429,7 @@ export default function StartupsPage() {
           Overview
         </button>
         <button
-          onClick={() => setView('leaderboard')}
+          onClick={() => handleViewChange('leaderboard')}
           className={cn(
             'px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer',
             view === 'leaderboard'
@@ -637,9 +665,6 @@ export default function StartupsPage() {
                       </th>
                       <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
                         Score
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">
-                        Fav
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-16">
                         Streak

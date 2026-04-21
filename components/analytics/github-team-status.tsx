@@ -54,11 +54,32 @@ export function GithubTeamStatus({ founders, githubConnections }: GithubTeamStat
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                 <span className="text-sm font-medium">
-                  {conn.userName ?? `@${conn.accountName}`}
+                  {conn.userName ??
+                    (conn.accountName ? (
+                      <a
+                        href={`https://github.com/${conn.accountName}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        @{conn.accountName}
+                      </a>
+                    ) : null)}
                 </span>
               </div>
               <span className="text-xs text-muted-foreground">
-                @{conn.accountName}
+                {conn.accountName ? (
+                  <a
+                    href={`https://github.com/${conn.accountName}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    @{conn.accountName}
+                  </a>
+                ) : null}
                 {conn.lastSyncedAt && (
                   <> &middot; synced {new Date(conn.lastSyncedAt).toLocaleDateString()}</>
                 )}

@@ -37,6 +37,7 @@ import {
   LayoutDashboard,
   Users,
   User,
+  ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -321,7 +322,7 @@ export default function AdminStartupAnalyticsPage() {
                 </div>
               )}
             </div>
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+            <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               Sync
             </Button>
@@ -748,6 +749,21 @@ export default function AdminStartupAnalyticsPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {shippingView !== 'team' &&
+                        integrationStatus?.githubConnections?.some(
+                          (conn) => conn.accountName === shippingView
+                        ) && (
+                          <Button asChild variant="ghost" size="icon" title="Open GitHub profile">
+                            <a
+                              href={`https://github.com/${shippingView}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label="Open GitHub profile"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        )}
                     </div>
                   )}
 
