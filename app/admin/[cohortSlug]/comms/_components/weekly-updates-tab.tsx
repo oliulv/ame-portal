@@ -16,29 +16,40 @@ import {
 import { Star, StarOff, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Id } from '@/convex/_generated/dataModel'
+import { getMonday } from '@/convex/lib/dateUtils'
 
 // Weekly updates launched 2026-03-16
 const WEEKLY_UPDATES_START = '2026-03-16'
 
 function getAvailableWeeks(): string[] {
   const weeks: string[] = []
-  const now = new Date()
-  const day = now.getDay()
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1)
-  now.setDate(diff)
-  const current = now.toISOString().slice(0, 10)
-  const d = new Date(current + 'T00:00:00Z')
-  const start = new Date(WEEKLY_UPDATES_START + 'T00:00:00Z')
+  const current = getMonday(new Date())
+  const d = new Date(current + 'T00:00:00.000Z')
+  const start = new Date(WEEKLY_UPDATES_START + 'T00:00:00.000Z')
   while (d >= start) {
     weeks.push(d.toISOString().slice(0, 10))
-    d.setDate(d.getDate() - 7)
+    d.setUTCDate(d.getUTCDate() - 7)
   }
   return weeks
 }
 
+// Default to the most recent week whose Monday-9am-UTC submit deadline has
+// passed. Mirrors the rule in convex/weeklyUpdates.ts and convex/lib/streak.ts
+// so the admin opens to a reviewable week instead of the still-in-progress one.
+function getDefaultSelectedWeek(weeks: string[]): string {
+  const now = Date.now()
+  for (const weekOf of weeks) {
+    const deadline = new Date(weekOf + 'T00:00:00.000Z')
+    deadline.setUTCDate(deadline.getUTCDate() + 7)
+    deadline.setUTCHours(9, 0, 0, 0)
+    if (deadline.getTime() <= now) return weekOf
+  }
+  return weeks[0]
+}
+
 export function WeeklyUpdatesTab({ cohortId }: { cohortId: Id<'cohorts'> }) {
   const weeks = useMemo(() => getAvailableWeeks(), [])
-  const [selectedWeek, setSelectedWeek] = useState(weeks[0])
+  const [selectedWeek, setSelectedWeek] = useState(() => getDefaultSelectedWeek(weeks))
 
   const updates = useQuery(api.weeklyUpdates.list, {
     cohortId,

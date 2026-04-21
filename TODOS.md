@@ -71,3 +71,37 @@
 **Why:** UI regressions are currently caught only by manual QA. Component tests catch rendering bugs; E2E tests catch integration issues across the full stack.
 
 **Depends on:** `happy-dom`, `@testing-library/react`, and Playwright setup.
+
+## Tracker Anti-Gaming (IP + Session Verification)
+
+**What:** The in-house traffic tracker accepts session pings without verifying the source. Startups can script fake sessions to inflate the `tracker/sessions` metric that drives the Traffic category on the leaderboard (up to 20% of total score). At minimum: hash + store the source IP per event, rate-limit per IP per day, and reject obviously synthetic patterns (burst of N sessions from one IP, no pageview follow-up, headless UA). Longer term: proof-of-work beacon, server-side validation against the tracker script's origin header, or an anomaly-detection job that flags suspicious spikes.
+
+**Why:** At least one startup is already trying to game the leaderboard for extra funding. A 20%-weighted category that accepts unvalidated numeric inputs is a direct incentive to cheat. This undermines the whole "funds flow to outliers" thesis and corrodes trust in the rankings.
+
+**Context:** Current ingest in `convex/metrics.ts` around the `sessions` metric bucket counts unique `sessionId` values per day from `trackerEvents`. `sessionId` is client-generated, no IP is stored, no rate limit. Options: (a) add `sourceIp` field to `trackerEvents` via HTTP action that reads `x-forwarded-for`, hash it, dedupe sessions by ip-hash too; (b) add a `suspect` flag that a cron sets based on heuristics and have the leaderboard discount suspect sessions; (c) require a `verify` beacon round-trip before a session counts. Start with (a) — lowest effort, catches the naive scripters.
+
+**Depends on:** Decision on whether to store raw IP (GDPR — probably hash only), and on how to handle the existing unvalidated history (delete, flag, or grandfather).
+
+## Remove `consistencyBonus: 0` Placeholder From Leaderboard Return Shape
+
+**What:** The leaderboard scoring PR soft-removed the consistency-bonus UI but kept `consistencyBonus: 0` in the Convex return shape for one release, to avoid TypeErrors in cached Vercel bundles that still reference `entry.consistencyBonus.toFixed(1)`. A follow-up PR should fully remove the field from the `ScoreBreakdown` type in `convex/leaderboard.ts` and drop the two `consistencyBonus: 0` assignments in the two result-builder paths.
+
+**Why:** Dead placeholder fields accumulate and mislead. The one-release bridge is a deploy-race guard, not a permanent API shape.
+
+**Context:** Before removing, grep for remaining consumers: `rg consistencyBonus` should return only `convex/leaderboard.ts`. If anything in `app/` or `components/` still references it, those consumers need to be cleaned first.
+
+**Depends on:** The scoring PR shipping and living in production for ≥1 full Vercel bundle refresh cycle (realistically 1-2 days).
+
+## UI Cleanups Deferred From Leaderboard Scoring PR
+
+**What:** Five small admin-UI fixes pulled out of the scoring PR to keep that diff focused. Each is a quick follow-up.
+
+1. **Remove FAV column on admin leaderboard** — `app/admin/[cohortSlug]/startups/page.tsx:635-637` (header) and `:190-194` (cell). Also decrement `colSpan={7}` → `{6}` on the expansion row at `:237`.
+2. **Clickable GitHub usernames on shipping tab** — wrap `@{conn.accountName}` in `components/analytics/github-team-status.tsx:57,61` as `<a href="https://github.com/{accountName}" target="_blank" rel="noopener noreferrer">`. Plus a small external-link icon button next to the per-founder `SelectTrigger` on `app/admin/[cohortSlug]/startups/[slug]/analytics/page.tsx:730-752` that opens the selected founder's profile.
+3. **Align Sync button with range dropdown** — `app/admin/[cohortSlug]/startups/[slug]/analytics/page.tsx:324` uses `size="sm"` (h-8) next to a default `SelectTrigger` (h-9). Drop `size="sm"` so both are h-9.
+4. **Session-scoped tab caching on admin startups page** — `app/admin/[cohortSlug]/startups/page.tsx:275-276` only reads `?view=` once. Switch to a `sessionStorage` initializer keyed by cohort slug, with URL `router.replace` on change, and a `typeof window`/try-catch guard.
+5. **Kill the tab-switch jump** — drop the `view === 'leaderboard'` skip on `api.leaderboard.computeLeaderboard` at `app/admin/[cohortSlug]/startups/page.tsx:288-291` so the query warms alongside overview queries. Optionally also mirror the last defined response into local state so brief fetch windows don't show `Skeleton`.
+
+**Why:** None block the scoring fix, all are visible admin-UX friction.
+
+**Depends on:** Nothing. Can ship individually or batched.
