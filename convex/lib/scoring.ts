@@ -1,14 +1,20 @@
 /**
  * Shared scoring engine for leaderboard rankings.
  *
- * Score range: 0.0 – 1.0 (displayed as 0–100 in the UI).
+ * Score range: 0.0 – ~100+ (displayed as-is in the UI).
  *
  * Categories (v1, no social):
- *   Revenue  25%  — MRR growth rate (week-over-week %)
- *   Traffic  20%  — Session growth rate (week-over-week %)
- *   GitHub   20%  — Commits + PRs (summed across founders)
- *   Updates  20%  — Weekly update submitted (binary) + streak bonus
- *   Milestones 15% — Approved / due milestones (completion rate)
+ *   Revenue  25%  — MRR growth rate (week-over-week %), 4-week decayed sum
+ *   Traffic  20%  — Session growth rate (week-over-week %), 4-week decayed sum
+ *   GitHub   20%  — Velocity score (commits + PRs + issues) with 28-day daily decay
+ *   Updates  20%  — Weekly update × streak multiplier, 4-week decayed sum
+ *   Milestones 15% — Count of approved milestones in the last 28 days
+ *
+ * Policy:
+ *   - Absolute weights — a startup with only 1 active category caps at
+ *     that category's weight × 100 (breadth matters, no re-weighting).
+ *   - No participation floor. Zero raw → zero normalized → zero weighted.
+ *   - Admin favorites apply an exp-decay multiplier over a 28-day window.
  */
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -34,6 +40,20 @@ export const ROLLING_WEEKS = 4
 export const QUALIFICATION_THRESHOLD = 3
 export const GROWTH_RATE_CAP_MAX = 200 // +200%
 export const GROWTH_RATE_CAP_MIN = -100 // -100%
+
+// Favorite multiplier parameters. Each favorite in the 28-day window adds
+// a decaying boost to the multiplier. Max stackable boost with 8 recent
+// favorites (2/wk × 4 wks, no decay): ~0.80 → multiplier ~1.80. In practice
+// decay trims this to ~1.37 for 8 evenly-spaced favs.
+export const FAVORITE_WEIGHT = 0.1
+export const FAVORITE_DECAY_RATE = 0.1
+export const FAVORITE_WINDOW_DAYS = 28
+
+// Active-category gate window. A category is "active" iff it has data
+// newer than this cutoff. Currently equal to FAVORITE_WINDOW_DAYS, but
+// named separately because the two are semantically independent — one
+// can move without the other.
+export const ACTIVE_WINDOW_DAYS = 28
 
 export type TypedDayCounts = Record<string, { commits: number; prs: number; issues: number }>
 
@@ -125,14 +145,6 @@ export function computeVelocityBreakdown(calendar: TypedDayCounts, asOf?: Date):
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export interface CategoryMetric {
-  key: CategoryKey
-  /** Weekly raw values (most-recent week first, length = ROLLING_WEEKS). */
-  weeklyValues: number[]
-  /** True when the startup has had at least one data point in the last 30 days. */
-  active: boolean
-}
-
 export interface ScoringConfig {
   normalizationPower: number // 0.3 – 1.0, default 0.7
 }
@@ -145,10 +157,11 @@ export interface CategoryScore {
 
 export interface ScoreResult {
   totalScore: number
+  baseScore: number
+  favoriteMultiplier: number
   categories: Record<CategoryKey, CategoryScore>
   activeCategories: number
   qualified: boolean
-  consistencyBonus: number
 }
 
 // ── Pure scoring functions ───────────────────────────────────────────
@@ -185,26 +198,6 @@ export function computeGrowthRate(current: number, previous: number): number | n
   return Math.max(GROWTH_RATE_CAP_MIN, Math.min(GROWTH_RATE_CAP_MAX, rate))
 }
 
-/**
- * Consistency bonus based on coefficient of variation of weekly scores.
- * Requires >= 4 weekly scores; otherwise returns 0.
- *
- * CV < 0.2  → +0.05
- * CV 0.2–0.5 → 0
- * CV > 0.5  → -0.05
- */
-export function computeConsistencyBonus(weeklyScores: number[]): number {
-  const valid = weeklyScores.filter((s) => s > 0)
-  if (valid.length < ROLLING_WEEKS) return 0
-  const mean = valid.reduce((a, b) => a + b, 0) / valid.length
-  if (mean === 0) return 0
-  const variance = valid.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / valid.length
-  const cv = Math.sqrt(variance) / mean
-  if (cv < 0.2) return 0.05
-  if (cv > 0.5) return -0.05
-  return 0
-}
-
 /** Check if a startup qualifies for extra funding (>= 3/5 active categories). */
 export function isQualified(activeCategoryCount: number): boolean {
   return activeCategoryCount >= QUALIFICATION_THRESHOLD
@@ -223,114 +216,83 @@ export function computeUpdateScore(submitted: boolean, streak: number): number {
   return base + bonus
 }
 
+/**
+ * Compute the favorite multiplier for a startup given favorites within the
+ * 28-day window. Each favorite contributes `FAVORITE_WEIGHT × exp(-FAVORITE_DECAY_RATE × daysAgo)`.
+ * Out-of-window favorites (daysAgo > FAVORITE_WINDOW_DAYS) contribute 0.
+ * Negative daysAgo (future weekOf, edge case from direct DB mutation) is
+ * clamped to 0 so a future-dated favorite doesn't silently amplify.
+ *
+ * No favorites → multiplier = 1 exactly.
+ */
+export function computeFavoriteMultiplier(favorites: Array<{ daysAgo: number }>): number {
+  let totalBoost = 0
+  for (const fav of favorites) {
+    const clamped = Math.max(0, fav.daysAgo)
+    if (clamped > FAVORITE_WINDOW_DAYS) continue
+    totalBoost += FAVORITE_WEIGHT * Math.exp(-FAVORITE_DECAY_RATE * clamped)
+  }
+  return 1 + totalBoost
+}
+
 // ── Main scoring function ────────────────────────────────────────────
 
 /**
  * Compute the composite score for a single startup given its per-category
- * weekly metric values, the cohort maximums, and scoring config.
+ * raw scalars and active flags. The caller is responsible for reducing
+ * category-specific weekly data (growth rates, velocity scores, absolute
+ * counts) to a single number per category before calling this function —
+ * the category-specific math intentionally lives outside this pure helper.
  *
- * `maxInCohort` maps each category to the highest decayed-raw value among
- * ALL startups in the cohort for this scoring cycle.
+ * Weights are ABSOLUTE, not re-weighted for active categories. A startup
+ * with only milestones active caps at 100 × 0.15 = 15. Breadth matters.
+ *
+ * `maxInCohort` is the per-category maximum raw value across the cohort
+ * for this scoring cycle. Used for power-law normalization. Zero max →
+ * normalized = 0 (no divide-by-zero, no NaN).
+ *
+ * `favorites` is the list of admin favorites for this startup within the
+ * 28-day window, represented as `{ daysAgo: number }` so this function
+ * stays free of time parsing. Caller computes daysAgo from each favorite's
+ * weekOf. Out-of-window favorites are filtered here.
  */
-export function computeStartupScore(
-  metrics: CategoryMetric[],
+export function computeLeaderboardScore(
+  perCatRaw: Record<CategoryKey, number>,
+  perCatActive: Record<CategoryKey, boolean>,
   maxInCohort: Record<CategoryKey, number>,
-  config: ScoringConfig
+  config: ScoringConfig,
+  favorites: Array<{ daysAgo: number }>
 ): ScoreResult {
   const categories = {} as Record<CategoryKey, CategoryScore>
   let activeCount = 0
-  let activeWeightSum = 0
-
-  // Step 1-2: Compute decayed raw per category
-  for (const metric of metrics) {
-    let decayedRaw = 0
-    for (let w = 0; w < metric.weeklyValues.length; w++) {
-      decayedRaw += metric.weeklyValues[w] * temporalDecay(w)
-    }
-
-    // Step 3: Normalize against cohort
-    const normalized = powerLawNormalize(
-      decayedRaw,
-      maxInCohort[metric.key],
-      config.normalizationPower
-    )
-
-    if (metric.active) {
-      activeCount++
-      activeWeightSum += WEIGHTS[metric.key]
-    }
-
-    categories[metric.key] = {
-      raw: decayedRaw,
-      normalized,
-      weighted: 0, // computed below after we know active weights
-    }
-  }
-
-  // Fill in any missing categories
-  for (const key of CATEGORY_KEYS) {
-    if (!categories[key]) {
-      categories[key] = { raw: 0, normalized: 0, weighted: 0 }
-    }
-  }
-
-  // Step 4: Weight and sum active categories only
   let baseScore = 0
-  if (activeWeightSum > 0) {
-    for (const metric of metrics) {
-      if (metric.active) {
-        const reWeighted =
-          categories[metric.key].normalized * (WEIGHTS[metric.key] / activeWeightSum)
-        categories[metric.key].weighted = reWeighted
-        baseScore += reWeighted
-      }
+
+  for (const key of CATEGORY_KEYS) {
+    const raw = perCatRaw[key] ?? 0
+    const active = perCatActive[key] ?? false
+
+    const normalized =
+      powerLawNormalize(raw, maxInCohort[key] ?? 0, config.normalizationPower) * 100
+
+    let weighted = 0
+    if (active) {
+      activeCount++
+      weighted = normalized * WEIGHTS[key]
+      baseScore += weighted
     }
+
+    categories[key] = { raw, normalized, weighted }
   }
 
-  // Step 5: Consistency bonus
-  const weeklyComposites = computeWeeklyComposites(metrics, maxInCohort, config)
-  const consistencyBonus = computeConsistencyBonus(weeklyComposites)
-
-  // Step 6: Final score capped at 1.0
-  const totalScore = Math.min(baseScore + consistencyBonus, 1.0)
+  const favoriteMultiplier = computeFavoriteMultiplier(favorites)
+  const totalScore = baseScore * favoriteMultiplier
 
   return {
     totalScore,
+    baseScore,
+    favoriteMultiplier,
     categories,
     activeCategories: activeCount,
     qualified: isQualified(activeCount),
-    consistencyBonus,
   }
-}
-
-/**
- * Helper: compute per-week composite scores for consistency calculation.
- * Each week gets a mini-score using the same normalization.
- */
-function computeWeeklyComposites(
-  metrics: CategoryMetric[],
-  maxInCohort: Record<CategoryKey, number>,
-  config: ScoringConfig
-): number[] {
-  const weekCount = metrics[0]?.weeklyValues.length ?? 0
-  const composites: number[] = []
-
-  for (let w = 0; w < weekCount; w++) {
-    let weekScore = 0
-    let weekActiveWeight = 0
-    for (const metric of metrics) {
-      if (!metric.active) continue
-      const val = metric.weeklyValues[w] ?? 0
-      const norm = powerLawNormalize(val, maxInCohort[metric.key], config.normalizationPower)
-      weekActiveWeight += WEIGHTS[metric.key]
-      weekScore += norm * WEIGHTS[metric.key]
-    }
-    if (weekActiveWeight > 0) {
-      composites.push(weekScore / weekActiveWeight)
-    } else {
-      composites.push(0)
-    }
-  }
-
-  return composites
 }

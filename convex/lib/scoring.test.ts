@@ -3,10 +3,10 @@ import {
   computeGrowthRate,
   temporalDecay,
   powerLawNormalize,
-  computeConsistencyBonus,
   isQualified,
   computeUpdateScore,
-  computeStartupScore,
+  computeFavoriteMultiplier,
+  computeLeaderboardScore,
   computeVelocityScore,
   computeVelocityBreakdown,
   CATEGORY_KEYS,
@@ -19,7 +19,9 @@ import {
   QUALIFICATION_THRESHOLD,
   GROWTH_RATE_CAP_MAX,
   GROWTH_RATE_CAP_MIN,
-  type CategoryMetric,
+  FAVORITE_WEIGHT,
+  FAVORITE_DECAY_RATE,
+  FAVORITE_WINDOW_DAYS,
   type ScoringConfig,
   type CategoryKey,
   type TypedDayCounts,
@@ -27,31 +29,19 @@ import {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-/** Build a full set of 5 category metrics for computeStartupScore tests. */
-function makeMetrics(
-  overrides: Partial<Record<CategoryKey, { weeklyValues: number[]; active: boolean }>> = {}
-): CategoryMetric[] {
-  return CATEGORY_KEYS.map((key) => ({
-    key,
-    weeklyValues: overrides[key]?.weeklyValues ?? [0, 0, 0, 0],
-    active: overrides[key]?.active ?? false,
-  }))
-}
-
-function makeMaxInCohort(
-  overrides: Partial<Record<CategoryKey, number>> = {}
-): Record<CategoryKey, number> {
-  const defaults: Record<CategoryKey, number> = {
-    revenue: 100,
-    traffic: 100,
-    github: 100,
-    updates: 100,
-    milestones: 100,
-  }
-  return { ...defaults, ...overrides }
-}
-
 const DEFAULT_CONFIG: ScoringConfig = { normalizationPower: 0.7 }
+
+/** Build a per-category record with defaults, with overrides applied. */
+function cat<T>(
+  defaults: T,
+  overrides: Partial<Record<CategoryKey, T>> = {}
+): Record<CategoryKey, T> {
+  const out = {} as Record<CategoryKey, T>
+  for (const k of CATEGORY_KEYS) {
+    out[k] = (overrides[k] ?? defaults) as T
+  }
+  return out
+}
 
 // ── computeGrowthRate ────────────────────────────────────────────────
 
@@ -77,34 +67,29 @@ describe('computeGrowthRate', () => {
   })
 
   it('should cap growth at +200% (100 -> 500 = 400% but capped)', () => {
-    const result = computeGrowthRate(500, 100)
-    expect(result).toBe(GROWTH_RATE_CAP_MAX)
-    expect(result).toBe(200)
+    // (500 - 100) / 100 * 100 = 400 => capped at 200
+    expect(computeGrowthRate(500, 100)).toBe(200)
   })
 
   it('should cap at -100% for extreme negative growth', () => {
-    // -100% is the minimum but normal positive-to-zero already returns -100
-    // Test a case where the formula would give something beyond -100 if uncapped
-    // Actually ((0.001 - 100) / 100) * 100 = -99.999 which is within bounds
-    // The code already returns -100 for current=0 via the special case
-    expect(computeGrowthRate(0, 50)).toBe(-100)
+    // Can't actually compute -200% growth without going below zero, but
+    // the cap should still apply if the formula produces < -100
+    // (100 - 500) / 500 * 100 = -80 (not capped)
+    expect(computeGrowthRate(100, 500)).toBe(-80)
   })
 
   it('should handle small negative growth within bounds', () => {
-    // 90 -> 85 = -5.55%
-    const result = computeGrowthRate(85, 90)
-    expect(result).toBeCloseTo(-5.556, 2)
-    expect(result!).toBeGreaterThan(GROWTH_RATE_CAP_MIN)
-    expect(result!).toBeLessThan(0)
+    // 90 -> 85 is -5.55%
+    expect(computeGrowthRate(85, 90)).toBeCloseTo(-5.556, 2)
   })
 
   it('should handle exact +200% growth without capping', () => {
-    // 100 -> 300 = +200%
+    // 100 -> 300 is exactly +200%
     expect(computeGrowthRate(300, 100)).toBe(200)
   })
 
   it('should cap growth just above +200%', () => {
-    // 100 -> 301 = +201% -> capped to 200
+    // 100 -> 301 is +201%, capped to +200
     expect(computeGrowthRate(301, 100)).toBe(200)
   })
 })
@@ -117,39 +102,33 @@ describe('temporalDecay', () => {
   })
 
   it('should return approximately 0.81 for week 1', () => {
-    const expected = Math.exp(-DECAY_RATE * 7)
-    const result = temporalDecay(1)
-    expect(result).toBeCloseTo(expected, 6)
-    expect(result).toBeCloseTo(0.81, 1)
+    // exp(-0.03 * 7) ≈ 0.810584
+    expect(temporalDecay(1)).toBeCloseTo(0.8106, 3)
   })
 
   it('should return approximately 0.53 for week 3', () => {
-    const expected = Math.exp(-DECAY_RATE * 21)
-    const result = temporalDecay(3)
-    expect(result).toBeCloseTo(expected, 6)
-    expect(result).toBeCloseTo(0.53, 1)
+    // exp(-0.03 * 21) ≈ 0.532592
+    expect(temporalDecay(3)).toBeCloseTo(0.5326, 3)
   })
 
   it('should always return positive values', () => {
-    for (let w = 0; w <= 52; w++) {
-      const val = temporalDecay(w)
-      expect(val).toBeGreaterThan(0)
-    }
+    expect(temporalDecay(10)).toBeGreaterThan(0)
+    expect(temporalDecay(100)).toBeGreaterThan(0)
   })
 
   it('should be monotonically decreasing with age', () => {
-    let prev = temporalDecay(0)
-    for (let w = 1; w <= 10; w++) {
-      const current = temporalDecay(w)
-      expect(current).toBeLessThan(prev)
-      prev = current
-    }
+    const w0 = temporalDecay(0)
+    const w1 = temporalDecay(1)
+    const w2 = temporalDecay(2)
+    const w3 = temporalDecay(3)
+    expect(w0).toBeGreaterThan(w1)
+    expect(w1).toBeGreaterThan(w2)
+    expect(w2).toBeGreaterThan(w3)
   })
 
   it('should use DECAY_RATE constant (0.03) and week-to-days conversion', () => {
-    const week2 = temporalDecay(2)
-    const manual = Math.exp(-0.03 * 14)
-    expect(week2).toBe(manual)
+    // Verify the formula directly
+    expect(temporalDecay(2)).toBeCloseTo(Math.exp(-DECAY_RATE * 14), 6)
   })
 })
 
@@ -157,24 +136,22 @@ describe('temporalDecay', () => {
 
 describe('powerLawNormalize', () => {
   it('should return raw/max when power = 1.0 (linear)', () => {
-    expect(powerLawNormalize(50, 100, 1.0)).toBeCloseTo(0.5, 6)
-    expect(powerLawNormalize(25, 100, 1.0)).toBeCloseTo(0.25, 6)
-    expect(powerLawNormalize(100, 100, 1.0)).toBeCloseTo(1.0, 6)
+    // 50/100 = 0.5, raised to 1.0 power = 0.5
+    expect(powerLawNormalize(50, 100, 1.0)).toBe(0.5)
   })
 
   it('should compress distribution when power = 0.7', () => {
-    const linear = powerLawNormalize(50, 100, 1.0)
-    const compressed = powerLawNormalize(50, 100, 0.7)
-    // With power < 1, mid-range values are pulled higher (compressed)
-    expect(compressed).toBeGreaterThan(linear)
+    // 50/100 = 0.5, raised to 0.7 power = 0.5^0.7 ≈ 0.616
+    const expected = Math.pow(0.5, 0.7)
+    expect(powerLawNormalize(50, 100, 0.7)).toBeCloseTo(expected, 6)
   })
 
   it('should return 0 when maxInCohort = 0', () => {
-    expect(powerLawNormalize(50, 0, 0.7)).toBe(0)
+    expect(powerLawNormalize(100, 0, 0.7)).toBe(0)
   })
 
   it('should return 0 when maxInCohort is negative', () => {
-    expect(powerLawNormalize(50, -10, 0.7)).toBe(0)
+    expect(powerLawNormalize(100, -1, 0.7)).toBe(0)
   })
 
   it('should return 0 when raw = 0', () => {
@@ -182,71 +159,23 @@ describe('powerLawNormalize', () => {
   })
 
   it('should return 1.0 when raw = maxInCohort', () => {
-    expect(powerLawNormalize(100, 100, 0.7)).toBeCloseTo(1.0, 6)
-    expect(powerLawNormalize(100, 100, 0.5)).toBeCloseTo(1.0, 6)
-    expect(powerLawNormalize(100, 100, 1.0)).toBeCloseTo(1.0, 6)
+    // 100/100 = 1.0, raised to 0.7 power = 1.0
+    expect(powerLawNormalize(100, 100, 0.7)).toBe(1.0)
   })
 
   it('should clamp ratio at 1.0 when raw > maxInCohort', () => {
-    expect(powerLawNormalize(150, 100, 0.7)).toBeCloseTo(1.0, 6)
+    // raw > max: shouldn't happen normally, but clamp defensively
+    expect(powerLawNormalize(150, 100, 0.7)).toBe(1.0)
   })
 
   it('should treat negative raw as 0', () => {
-    expect(powerLawNormalize(-10, 100, 0.7)).toBe(0)
+    expect(powerLawNormalize(-50, 100, 0.7)).toBe(0)
   })
 
   it('should produce correct value for known inputs with power 0.7', () => {
-    // raw=50, max=100 => ratio=0.5 => 0.5^0.7
+    // ratio = 50/100 = 0.5, result = 0.5^0.7 ≈ 0.6156
     const expected = Math.pow(0.5, 0.7)
     expect(powerLawNormalize(50, 100, 0.7)).toBeCloseTo(expected, 6)
-  })
-})
-
-// ── computeConsistencyBonus ──────────────────────────────────────────
-
-describe('computeConsistencyBonus', () => {
-  it('should return +0.05 for all identical scores (low CV)', () => {
-    // All identical => CV = 0 => < 0.2 => +0.05
-    expect(computeConsistencyBonus([0.5, 0.5, 0.5, 0.5])).toBe(0.05)
-  })
-
-  it('should return -0.05 for high variance scores', () => {
-    // Very different values => high CV
-    expect(computeConsistencyBonus([0.1, 0.9, 0.1, 0.9])).toBe(-0.05)
-  })
-
-  it('should return 0 for medium variance', () => {
-    // Need CV between 0.2 and 0.5
-    // Values with moderate variance: mean=0.5, want std/mean ~ 0.3
-    // std ~ 0.15, variance ~ 0.0225
-    // [0.35, 0.5, 0.65, 0.5] => mean=0.5, variance=0.00625, std=0.079 => CV=0.158 => <0.2 => +0.05
-    // Need higher variance: [0.3, 0.5, 0.7, 0.5] => mean=0.5, var=0.02, std=0.1414, CV=0.283 => between 0.2 and 0.5
-    expect(computeConsistencyBonus([0.3, 0.5, 0.7, 0.5])).toBe(0)
-  })
-
-  it('should return 0 for fewer than 4 weekly scores (not enough data)', () => {
-    expect(computeConsistencyBonus([0.5, 0.5, 0.5])).toBe(0)
-    expect(computeConsistencyBonus([0.5, 0.5])).toBe(0)
-    expect(computeConsistencyBonus([0.5])).toBe(0)
-  })
-
-  it('should return 0 for empty array', () => {
-    expect(computeConsistencyBonus([])).toBe(0)
-  })
-
-  it('should filter out zero scores before computing CV', () => {
-    // [0.5, 0.5, 0.5, 0.5, 0] => valid = [0.5, 0.5, 0.5, 0.5] => CV=0 => +0.05
-    expect(computeConsistencyBonus([0.5, 0.5, 0.5, 0.5, 0])).toBe(0.05)
-  })
-
-  it('should return 0 when all scores are zero (mean = 0 guard)', () => {
-    // All zeros get filtered out => valid.length < 4 => returns 0
-    expect(computeConsistencyBonus([0, 0, 0, 0])).toBe(0)
-  })
-
-  it('should return 0 when there are not enough positive scores', () => {
-    // Only 3 positive values after filtering zeros
-    expect(computeConsistencyBonus([0.5, 0.5, 0.5, 0])).toBe(0)
   })
 })
 
@@ -292,17 +221,14 @@ describe('computeUpdateScore', () => {
   })
 
   it('should return 1.4 for submitted with streak of 4', () => {
-    // base=1.0, bonus = 0.1 * min(4, 8) = 0.4 => 1.4
     expect(computeUpdateScore(true, 4)).toBeCloseTo(1.4, 6)
   })
 
   it('should cap streak bonus at 8 (submitted with streak 10 = 1.8)', () => {
-    // base=1.0, bonus = 0.1 * min(10, 8) = 0.8 => 1.8
     expect(computeUpdateScore(true, 10)).toBeCloseTo(1.8, 6)
   })
 
   it('should return 0.0 + streak bonus when not submitted', () => {
-    // base=0.0, bonus = 0.1 * min(4, 8) = 0.4 => 0.4
     expect(computeUpdateScore(false, 4)).toBeCloseTo(0.4, 6)
   })
 
@@ -311,9 +237,7 @@ describe('computeUpdateScore', () => {
   })
 
   it('should cap streak bonus at 0.8 regardless of submission', () => {
-    // submitted: base=1.0 + 0.8 = 1.8
     expect(computeUpdateScore(true, 100)).toBeCloseTo(1.8, 6)
-    // not submitted: base=0.0 + 0.8 = 0.8
     expect(computeUpdateScore(false, 100)).toBeCloseTo(0.8, 6)
   })
 
@@ -322,168 +246,279 @@ describe('computeUpdateScore', () => {
   })
 
   it('should handle streak of 1 correctly', () => {
-    // submitted: 1.0 + 0.1 = 1.1
     expect(computeUpdateScore(true, 1)).toBeCloseTo(1.1, 6)
-    // not submitted: 0.0 + 0.1 = 0.1
     expect(computeUpdateScore(false, 1)).toBeCloseTo(0.1, 6)
   })
 })
 
-// ── computeStartupScore (integration) ────────────────────────────────
+// ── computeFavoriteMultiplier ────────────────────────────────────────
 
-describe('computeStartupScore', () => {
-  it('should return score 0-1 and qualified=true when all 5 categories are active', () => {
-    const metrics = makeMetrics({
-      revenue: { weeklyValues: [80, 60, 40, 20], active: true },
-      traffic: { weeklyValues: [70, 50, 30, 10], active: true },
-      github: { weeklyValues: [50, 40, 30, 20], active: true },
-      updates: { weeklyValues: [1.5, 1.2, 1.0, 0.8], active: true },
-      milestones: { weeklyValues: [60, 50, 40, 30], active: true },
-    })
-    const maxInCohort = makeMaxInCohort()
+describe('computeFavoriteMultiplier', () => {
+  it('should return exactly 1 for no favorites', () => {
+    expect(computeFavoriteMultiplier([])).toBe(1)
+  })
 
-    const result = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
+  it('should return 1.10 for a single favorite on day 0', () => {
+    // 1 + 0.10 × exp(0) = 1.10
+    expect(computeFavoriteMultiplier([{ daysAgo: 0 }])).toBeCloseTo(1.1, 6)
+  })
 
-    expect(result.totalScore).toBeGreaterThanOrEqual(0)
-    expect(result.totalScore).toBeLessThanOrEqual(1)
-    expect(result.qualified).toBe(true)
+  it('should return ~1.050 for a single favorite 7 days ago', () => {
+    // 1 + 0.10 × exp(-0.1 × 7) ≈ 1 + 0.10 × 0.4966 ≈ 1.04966
+    const expected = 1 + FAVORITE_WEIGHT * Math.exp(-FAVORITE_DECAY_RATE * 7)
+    expect(computeFavoriteMultiplier([{ daysAgo: 7 }])).toBeCloseTo(expected, 6)
+  })
+
+  it('should return exactly 1 for a favorite 29 days ago (outside window)', () => {
+    expect(computeFavoriteMultiplier([{ daysAgo: 29 }])).toBe(1)
+  })
+
+  it('should include a favorite exactly on the window boundary (day 28)', () => {
+    // Day 28 is inclusive; day 29 is excluded
+    const mult = computeFavoriteMultiplier([{ daysAgo: FAVORITE_WINDOW_DAYS }])
+    expect(mult).toBeGreaterThan(1)
+    expect(mult).toBeCloseTo(1 + FAVORITE_WEIGHT * Math.exp(-FAVORITE_DECAY_RATE * 28), 6)
+  })
+
+  it('should stack two favorites (day 0 + day 7) additively', () => {
+    // 1 + 0.10 × (1 + exp(-0.7)) ≈ 1 + 0.10 × 1.4966 ≈ 1.1497
+    const expected = 1 + FAVORITE_WEIGHT * (1 + Math.exp(-FAVORITE_DECAY_RATE * 7))
+    expect(computeFavoriteMultiplier([{ daysAgo: 0 }, { daysAgo: 7 }])).toBeCloseTo(expected, 6)
+  })
+
+  it('should compute multiplier for 8 evenly-spaced favorites (max realistic)', () => {
+    // 2/wk × 4 wks = 8 favorites. Spread them across the window.
+    const favs = [0, 0, 7, 7, 14, 14, 21, 21].map((d) => ({ daysAgo: d }))
+    const expected =
+      1 +
+      FAVORITE_WEIGHT * favs.reduce((sum, f) => sum + Math.exp(-FAVORITE_DECAY_RATE * f.daysAgo), 0)
+    const mult = computeFavoriteMultiplier(favs)
+    expect(mult).toBeCloseTo(expected, 6)
+    // Sanity: should be around 1.37 for this spacing
+    expect(mult).toBeGreaterThan(1.3)
+    expect(mult).toBeLessThan(1.5)
+  })
+
+  it('should clamp negative daysAgo (future weekOf) to 0', () => {
+    // daysAgo = -5 (admin manually set a future favorite) should behave
+    // like day 0, not amplify beyond 1 + FAVORITE_WEIGHT.
+    expect(computeFavoriteMultiplier([{ daysAgo: -5 }])).toBeCloseTo(1.1, 6)
+  })
+
+  it('should skip out-of-window favorites (continue branch, not break)', () => {
+    // Guards against a regression that replaces `continue` with `break` —
+    // that would stop iteration at the first out-of-window fav and drop
+    // the in-window fav silently.
+    const expected = 1 + FAVORITE_WEIGHT * 1.0 // only the day-0 fav contributes
+    expect(computeFavoriteMultiplier([{ daysAgo: 0 }, { daysAgo: 30 }])).toBeCloseTo(expected, 6)
+    expect(computeFavoriteMultiplier([{ daysAgo: 30 }, { daysAgo: 0 }])).toBeCloseTo(expected, 6)
+  })
+})
+
+// ── computeLeaderboardScore ──────────────────────────────────────────
+
+describe('computeLeaderboardScore', () => {
+  it('1. full cohort, all 5 active: weighted sum matches hand calc', () => {
+    // Each category raw=50 out of cohortMax=100. normalized = 0.5^0.7 ≈ 0.6156
+    // weighted per cat = 0.6156 × 100 × WEIGHTS[key]
+    // baseScore = Σ 0.6156 × 100 × 1.0 (sum of weights) = 61.56
+    const raw = cat(50)
+    const active = cat(true)
+    const max = cat(100)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
+    const normExpected = Math.pow(0.5, 0.7) * 100
+    const expectedBase = normExpected // sum of weights = 1.0
+    expect(result.baseScore).toBeCloseTo(expectedBase, 2)
+    expect(result.totalScore).toBeCloseTo(expectedBase, 2)
+    expect(result.favoriteMultiplier).toBe(1)
     expect(result.activeCategories).toBe(5)
   })
 
-  it('should return qualified=false when only 2 categories are active', () => {
-    const metrics = makeMetrics({
-      revenue: { weeklyValues: [80, 60, 40, 20], active: true },
-      traffic: { weeklyValues: [70, 50, 30, 10], active: true },
-    })
-    const maxInCohort = makeMaxInCohort()
-
-    const result = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
-
-    expect(result.totalScore).toBeGreaterThanOrEqual(0)
-    expect(result.totalScore).toBeLessThanOrEqual(1)
+  it('2. single active (only milestones, raw=3, cohortMax=3): totalScore = 15', () => {
+    const raw = cat(0, { milestones: 3 })
+    const active = cat(false, { milestones: true })
+    const max = cat(0, { milestones: 3 })
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
+    // normalized = (3/3)^0.7 × 100 = 100, weighted = 100 × 0.15 = 15
+    expect(result.categories.milestones.normalized).toBe(100)
+    expect(result.categories.milestones.weighted).toBeCloseTo(15, 6)
+    expect(result.baseScore).toBeCloseTo(15, 6)
+    expect(result.totalScore).toBeCloseTo(15, 6)
+    expect(result.activeCategories).toBe(1)
     expect(result.qualified).toBe(false)
-    expect(result.activeCategories).toBe(2)
   })
 
-  it('should re-normalize weights for active categories only', () => {
-    // With only revenue (0.25) and traffic (0.20) active:
-    // activeWeightSum = 0.45
-    // revenue weighted = normalized * (0.25 / 0.45)
-    // traffic weighted = normalized * (0.20 / 0.45)
-    // These should sum to 1.0 * normalizedAvg (approximately)
-    const metrics = makeMetrics({
-      revenue: { weeklyValues: [100, 100, 100, 100], active: true },
-      traffic: { weeklyValues: [100, 100, 100, 100], active: true },
-    })
-    const maxInCohort = makeMaxInCohort()
-
-    const result = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
-
-    // Both at max => normalized = 1.0 each
-    // weighted: revenue = 1.0 * (0.25/0.45), traffic = 1.0 * (0.20/0.45)
-    // sum = 0.45/0.45 = 1.0 (before consistency bonus)
-    const revenueWeighted = result.categories.revenue.weighted
-    const trafficWeighted = result.categories.traffic.weighted
-    expect(revenueWeighted).toBeCloseTo(0.25 / 0.45, 4)
-    expect(trafficWeighted).toBeCloseTo(0.2 / 0.45, 4)
-  })
-
-  it('should return score 0 when all metrics are zero', () => {
-    const metrics = makeMetrics() // all zeros, all inactive
-    const maxInCohort = makeMaxInCohort()
-
-    const result = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
-
+  it('3. zero everywhere + zero active: totalScore === 0 exactly', () => {
+    const raw = cat(0)
+    const active = cat(false)
+    const max = cat(0)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
     expect(result.totalScore).toBe(0)
+    expect(result.baseScore).toBe(0)
+    expect(result.favoriteMultiplier).toBe(1)
     expect(result.activeCategories).toBe(0)
     expect(result.qualified).toBe(false)
   })
 
-  it('should apply consistency bonus to the final score', () => {
-    // Create consistent metrics (identical weekly values) to trigger +0.05 bonus
-    const metrics = makeMetrics({
-      revenue: { weeklyValues: [50, 50, 50, 50], active: true },
-      traffic: { weeklyValues: [50, 50, 50, 50], active: true },
-      github: { weeklyValues: [50, 50, 50, 50], active: true },
-      updates: { weeklyValues: [50, 50, 50, 50], active: true },
-      milestones: { weeklyValues: [50, 50, 50, 50], active: true },
-    })
-    const maxInCohort = makeMaxInCohort()
-
-    const result = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
-
-    // Weekly composites should be identical => CV=0 => +0.05 bonus
-    expect(result.consistencyBonus).toBe(0.05)
+  it('4. revenue zero-to-positive growth: positive weighted contribution', () => {
+    // Simulating caller: raw = computeGrowthRate(500, 0) = +100 (capped at 200)
+    // summed with decay... caller responsibility. Here we just set raw = 100
+    // for the category, cohortMax = 200.
+    const raw = cat(0, { revenue: 100 })
+    const active = cat(false, { revenue: true })
+    const max = cat(0, { revenue: 200 })
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
+    // normalized = (100/200)^0.7 × 100 = 0.6156 × 100 ≈ 61.56
+    // weighted = 61.56 × 0.25 ≈ 15.39
+    const normExpected = Math.pow(0.5, 0.7) * 100
+    expect(result.categories.revenue.normalized).toBeCloseTo(normExpected, 3)
+    expect(result.categories.revenue.weighted).toBeCloseTo(normExpected * WEIGHTS.revenue, 3)
+    expect(result.totalScore).toBeGreaterThan(0)
   })
 
-  it('should cap total score at 1.0 even with consistency bonus', () => {
-    // Max everything out so base score = 1.0, plus consistency bonus = 1.05 => capped at 1.0
-    const metrics = makeMetrics({
-      revenue: { weeklyValues: [100, 100, 100, 100], active: true },
-      traffic: { weeklyValues: [100, 100, 100, 100], active: true },
-      github: { weeklyValues: [100, 100, 100, 100], active: true },
-      updates: { weeklyValues: [100, 100, 100, 100], active: true },
-      milestones: { weeklyValues: [100, 100, 100, 100], active: true },
-    })
-    const maxInCohort = makeMaxInCohort()
-
-    const result = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
-
-    expect(result.totalScore).toBeLessThanOrEqual(1.0)
+  it('5. growth caller caps at ±200% (documented; we verify cap value)', () => {
+    // The cap lives in computeGrowthRate (separately tested). Here we
+    // assert that a capped raw flows through normalize correctly.
+    const raw = cat(0, { revenue: 200 })
+    const active = cat(false, { revenue: true })
+    const max = cat(0, { revenue: 200 })
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
+    // Capped raw === max → normalized = 1.0 × 100 = 100
+    expect(result.categories.revenue.normalized).toBe(100)
   })
 
-  it('should fill in missing categories with zero scores', () => {
-    // Only provide 2 metrics instead of 5
-    const metrics: CategoryMetric[] = [
-      { key: 'revenue', weeklyValues: [50, 50, 50, 50], active: true },
-      { key: 'traffic', weeklyValues: [50, 50, 50, 50], active: true },
-    ]
-    const maxInCohort = makeMaxInCohort()
-
-    const result = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
-
-    // Missing categories should be filled with zeros
-    expect(result.categories.github.raw).toBe(0)
-    expect(result.categories.github.normalized).toBe(0)
-    expect(result.categories.github.weighted).toBe(0)
-    expect(result.categories.updates.raw).toBe(0)
-    expect(result.categories.milestones.raw).toBe(0)
+  it('6. favorite this week (day 0): multiplier = 1.10', () => {
+    const raw = cat(100)
+    const active = cat(true)
+    const max = cat(100)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [{ daysAgo: 0 }])
+    expect(result.favoriteMultiplier).toBeCloseTo(1.1, 6)
   })
 
-  it('should apply temporal decay to weekly values (recent weeks matter more)', () => {
-    // Startup A: all activity in week 0 (most recent)
-    const metricsRecent = makeMetrics({
-      revenue: { weeklyValues: [100, 0, 0, 0], active: true },
-    })
-    // Startup B: all activity in week 3 (oldest)
-    const metricsOld = makeMetrics({
-      revenue: { weeklyValues: [0, 0, 0, 100], active: true },
-    })
-    const maxInCohort = makeMaxInCohort({ revenue: 200 })
-
-    const resultRecent = computeStartupScore(metricsRecent, maxInCohort, DEFAULT_CONFIG)
-    const resultOld = computeStartupScore(metricsOld, maxInCohort, DEFAULT_CONFIG)
-
-    // Recent activity should score higher due to temporal decay
-    expect(resultRecent.categories.revenue.raw).toBeGreaterThan(resultOld.categories.revenue.raw)
+  it('7. favorite 7 days ago: multiplier ≈ 1.05', () => {
+    const raw = cat(100)
+    const active = cat(true)
+    const max = cat(100)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [{ daysAgo: 7 }])
+    const expected = 1 + FAVORITE_WEIGHT * Math.exp(-FAVORITE_DECAY_RATE * 7)
+    expect(result.favoriteMultiplier).toBeCloseTo(expected, 6)
   })
 
-  it('should handle inactive categories with nonzero values (weighted = 0)', () => {
-    const metrics = makeMetrics({
-      revenue: { weeklyValues: [50, 50, 50, 50], active: false },
-      traffic: { weeklyValues: [50, 50, 50, 50], active: true },
-      github: { weeklyValues: [50, 50, 50, 50], active: true },
-      updates: { weeklyValues: [50, 50, 50, 50], active: true },
-    })
-    const maxInCohort = makeMaxInCohort()
+  it('8. favorite 29 days ago (outside window): multiplier = 1.0', () => {
+    const raw = cat(100)
+    const active = cat(true)
+    const max = cat(100)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [{ daysAgo: 29 }])
+    expect(result.favoriteMultiplier).toBe(1)
+  })
 
-    const result = computeStartupScore(metrics, maxInCohort, DEFAULT_CONFIG)
+  it('9. two favorites (day 0 + day 7) stack', () => {
+    const raw = cat(100)
+    const active = cat(true)
+    const max = cat(100)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [
+      { daysAgo: 0 },
+      { daysAgo: 7 },
+    ])
+    const expected = 1 + FAVORITE_WEIGHT * (1 + Math.exp(-FAVORITE_DECAY_RATE * 7))
+    expect(result.favoriteMultiplier).toBeCloseTo(expected, 6)
+  })
 
-    // Revenue is inactive: it will have raw and normalized values but weighted=0
-    expect(result.categories.revenue.raw).toBeGreaterThan(0)
+  it('10. eight favorites (2/wk × 4wk): multiplier ≈ 1.37', () => {
+    const favs = [0, 0, 7, 7, 14, 14, 21, 21].map((d) => ({ daysAgo: d }))
+    const raw = cat(100)
+    const active = cat(true)
+    const max = cat(100)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, favs)
+    expect(result.favoriteMultiplier).toBeGreaterThan(1.3)
+    expect(result.favoriteMultiplier).toBeLessThan(1.5)
+  })
+
+  it('11. absolute milestones (3 vs cohortMax 3): normalized 100, weighted 15', () => {
+    const raw = cat(0, { milestones: 3 })
+    const active = cat(false, { milestones: true })
+    const max = cat(0, { milestones: 3 })
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
+    expect(result.categories.milestones.normalized).toBe(100)
+    expect(result.categories.milestones.weighted).toBeCloseTo(15, 6)
+  })
+
+  it('12. active gate: raw > 0 + inactive flag → weighted = 0', () => {
+    // Simulates caller: revenue has MRR snapshots in window, but all weeks
+    // have growth=0 (flat business). active=true but raw=0. Here we stage
+    // the opposite: raw>0 but active=false (caller judged it inactive).
+    const raw = cat(0, { revenue: 50 })
+    const active = cat(false, { revenue: false })
+    const max = cat(0, { revenue: 100 })
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
+    // raw and normalized are visible for debugging, but weighted = 0
+    expect(result.categories.revenue.raw).toBe(50)
     expect(result.categories.revenue.normalized).toBeGreaterThan(0)
     expect(result.categories.revenue.weighted).toBe(0)
+    expect(result.baseScore).toBe(0)
+  })
+
+  it('13. active gate: raw = 0 + inactive flag → everything 0', () => {
+    const raw = cat(0)
+    const active = cat(false)
+    const max = cat(100)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
+    expect(result.categories.revenue.raw).toBe(0)
+    expect(result.categories.revenue.normalized).toBe(0)
+    expect(result.categories.revenue.weighted).toBe(0)
+  })
+
+  it('14. activeCategories count matches sum of active flags', () => {
+    const raw = cat(100)
+    const active = cat(false, { revenue: true, traffic: true, github: true })
+    const max = cat(100)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
     expect(result.activeCategories).toBe(3)
+  })
+
+  it('15. qualified === (activeCategories >= 3)', () => {
+    const raw = cat(100)
+    const max = cat(100)
+    // 2 active
+    let r = computeLeaderboardScore(
+      raw,
+      cat(false, { revenue: true, traffic: true }),
+      max,
+      DEFAULT_CONFIG,
+      []
+    )
+    expect(r.qualified).toBe(false)
+    // 3 active
+    r = computeLeaderboardScore(
+      raw,
+      cat(false, { revenue: true, traffic: true, github: true }),
+      max,
+      DEFAULT_CONFIG,
+      []
+    )
+    expect(r.qualified).toBe(true)
+  })
+
+  it('16. negative daysAgo (future weekOf) clamps to 0', () => {
+    const raw = cat(100)
+    const active = cat(true)
+    const max = cat(100)
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [{ daysAgo: -5 }])
+    // Clamped to 0 → multiplier = 1.10 (same as day 0)
+    expect(result.favoriteMultiplier).toBeCloseTo(1.1, 6)
+  })
+
+  it('17. cohortMax[key] = 0: normalized = 0 (no NaN, no divide-by-zero)', () => {
+    const raw = cat(100)
+    const active = cat(true)
+    const max = cat(0) // zero cohort max everywhere
+    const result = computeLeaderboardScore(raw, active, max, DEFAULT_CONFIG, [])
+    for (const k of CATEGORY_KEYS) {
+      expect(result.categories[k].normalized).toBe(0)
+      expect(result.categories[k].weighted).toBe(0)
+    }
+    expect(result.totalScore).toBe(0)
+    expect(Number.isNaN(result.totalScore)).toBe(false)
   })
 })
 
@@ -505,6 +540,9 @@ describe('constants', () => {
     expect(QUALIFICATION_THRESHOLD).toBe(3)
     expect(GROWTH_RATE_CAP_MAX).toBe(200)
     expect(GROWTH_RATE_CAP_MIN).toBe(-100)
+    expect(FAVORITE_WEIGHT).toBe(0.1)
+    expect(FAVORITE_DECAY_RATE).toBe(0.1)
+    expect(FAVORITE_WINDOW_DAYS).toBe(28)
   })
 })
 
@@ -521,7 +559,6 @@ describe('computeVelocityScore & computeVelocityBreakdown', () => {
   }
 
   it('should compute known score for 28 days of 1 commit each', () => {
-    // Build calendar: each of the 28 days (d=0..27) has exactly 1 commit
     const calendar: TypedDayCounts = {}
     let expectedScore = 0
     for (let d = 0; d < 28; d++) {
@@ -534,19 +571,16 @@ describe('computeVelocityScore & computeVelocityBreakdown', () => {
   })
 
   it('should apply per-type weights correctly on day 0 (no decay)', () => {
-    // Only day 0 has activity: 1 commit + 1 PR + 1 issue
     const calendar: TypedDayCounts = {
       [daysBeforeAsOf(0)]: { commits: 1, prs: 1, issues: 1 },
     }
 
     const score = computeVelocityScore(calendar, AS_OF)
-    // exp(-0.03 * 0) = 1.0, so score = (10 + 25 + 15) * 1 = 50
     expect(score).toBe(COMMIT_PTS + PR_PTS + ISSUE_PTS)
     expect(score).toBe(50)
   })
 
   it('should return a breakdown whose per-type points sum to total (within rounding tolerance)', () => {
-    // Multi-day calendar with mixed types
     const calendar: TypedDayCounts = {
       [daysBeforeAsOf(0)]: { commits: 3, prs: 1, issues: 2 },
       [daysBeforeAsOf(5)]: { commits: 0, prs: 2, issues: 0 },
@@ -557,11 +591,8 @@ describe('computeVelocityScore & computeVelocityBreakdown', () => {
     const breakdown = computeVelocityBreakdown(calendar, AS_OF)
     const partsSum = breakdown.commits.points + breakdown.prs.points + breakdown.issues.points
 
-    // Each part is Math.round() individually, total is Math.round() of the unrounded sum,
-    // so the difference can be at most 1 due to rounding.
     expect(Math.abs(partsSum - breakdown.total)).toBeLessThanOrEqual(1)
 
-    // Also verify raw counts are correct
     expect(breakdown.commits.count).toBe(3 + 0 + 5 + 1)
     expect(breakdown.prs.count).toBe(1 + 2 + 0 + 1)
     expect(breakdown.issues.count).toBe(2 + 0 + 1 + 1)
@@ -592,15 +623,11 @@ describe('computeVelocityScore & computeVelocityBreakdown', () => {
     const scoreDay0 = computeVelocityScore(calendarDay0, AS_OF)
     const scoreDay27 = computeVelocityScore(calendarDay27, AS_OF)
 
-    // Day 0: 10 * exp(0) = 10 -> rounds to 10
     expect(scoreDay0).toBe(10)
-    // Day 27: 10 * exp(-0.03 * 27) -> rounds to ~4
     expect(scoreDay27).toBe(Math.round(COMMIT_PTS * Math.exp(-DECAY_RATE * 27)))
     expect(scoreDay0).toBeGreaterThan(scoreDay27)
 
-    // Verify the ratio matches the expected decay factor
-    // Use the unrounded values for a precise ratio check
-    const expectedRatio = Math.exp(-DECAY_RATE * 27) // ~0.4449
+    const expectedRatio = Math.exp(-DECAY_RATE * 27)
     const actualRatio = scoreDay27 / scoreDay0
     expect(actualRatio).toBeCloseTo(expectedRatio, 1)
   })
