@@ -753,12 +753,7 @@ export default function AdminStartupAnalyticsPage() {
                         integrationStatus?.githubConnections?.some(
                           (conn) => conn.accountName === shippingView
                         ) && (
-                          <Button
-                            asChild
-                            variant="ghost"
-                            size="icon"
-                            title="Open GitHub profile"
-                          >
+                          <Button asChild variant="ghost" size="icon" title="Open GitHub profile">
                             <a
                               href={`https://github.com/${shippingView}`}
                               target="_blank"
