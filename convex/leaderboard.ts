@@ -38,12 +38,6 @@ export interface ScoreBreakdown {
   }
   activeCategories: number
   qualified: boolean
-  /**
-   * Always 0 as of the scoring correctness PR. Retained for one release
-   * so cached Vercel client bundles that still read this field do not
-   * throw. A follow-up PR (see TODOS.md) will remove it entirely.
-   */
-  consistencyBonus: number
   rankChange: number | null // positive = moved up, negative = moved down, null = no prior data
   /** True iff the startup has at least one admin favorite in the last 28 days. */
   hasFavoriteInWindow: boolean
@@ -457,7 +451,6 @@ async function computeCohortLeaderboard(
       },
       activeCategories: current.activeCategories,
       qualified: current.qualified,
-      consistencyBonus: 0, // soft-removal bridge — see ScoreBreakdown comment
       rankChange,
       hasFavoriteInWindow: entry.favorites.hasAny,
       favoritesInWindow: entry.favorites.count,
