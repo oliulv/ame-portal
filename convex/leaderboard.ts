@@ -4,44 +4,22 @@ import { requireAdmin, requireAuth, requireSuperAdmin } from './auth'
 import type { Doc, Id } from './_generated/dataModel'
 import { getWeekBoundaries } from './lib/dateUtils'
 import {
-  WEIGHTS as SCORING_WEIGHTS,
+  ACTIVE_WINDOW_DAYS,
+  FAVORITE_WINDOW_DAYS,
   ROLLING_WEEKS,
-  QUALIFICATION_THRESHOLD,
-  DECAY_RATE,
-  computeConsistencyBonus,
+  computeGrowthRate,
+  computeLeaderboardScore,
   computeUpdateScore,
   computeVelocityScore,
   convertMergedCalendar,
+  temporalDecay,
+  type CategoryKey,
+  type ScoringConfig,
+  type ScoreResult,
   type TypedDayCounts,
   type MergedCalendarWeek,
 } from './lib/scoring'
 import { computeStreak } from './lib/streak'
-
-// Legacy weights map including social at 0 for backward compatibility
-// The shared scoring lib uses 5-category weights; this map keeps old code paths working
-// while social scores contribute 0 to the total.
-const WEIGHTS = {
-  ...SCORING_WEIGHTS,
-  social: 0,
-} as const
-
-// Legacy constants and helpers used by the existing scoring code.
-// These will be removed when the full dedup refactor replaces inline scoring
-// with calls to computeStartupScore from the shared lib.
-const MAX_CAP = 100 // Score range is 0-100 in UI (0-1 internally)
-const QUALIFICATION_GATE = QUALIFICATION_THRESHOLD
-
-function temporalDecay(daysOld: number): number {
-  return Math.exp(-DECAY_RATE * daysOld)
-}
-
-function powerLawNormalize(values: number[], p: number): number[] {
-  if (values.length === 0) return []
-  const transformed = values.map((v) => Math.pow(1 + Math.max(0, v), p))
-  const maxVal = Math.max(...transformed)
-  if (maxVal === 0) return values.map(() => 0)
-  return transformed.map((t) => (t / maxVal) * 100)
-}
 
 // ── Score Breakdown Type ─────────────────────────────────────────────
 
@@ -57,22 +35,40 @@ export interface ScoreBreakdown {
     traffic: { raw: number; normalized: number; weighted: number }
     github: { raw: number; normalized: number; weighted: number }
     updates: { raw: number; normalized: number; weighted: number }
-    milestones: { raw: number; normalized: number; weighted: number }
   }
   activeCategories: number
   qualified: boolean
+  /**
+   * Always 0 as of the scoring correctness PR. Retained for one release
+   * so cached Vercel client bundles that still read this field do not
+   * throw. A follow-up PR (see TODOS.md) will remove it entirely.
+   */
   consistencyBonus: number
   rankChange: number | null // positive = moved up, negative = moved down, null = no prior data
-  isFavoriteThisWeek: boolean
+  /** True iff the startup has at least one admin favorite in the last 28 days. */
+  hasFavoriteInWindow: boolean
+  /** Count of admin favorites in the last 28 days (drives the multiplier). */
+  favoritesInWindow: number
+  /** Combined multiplier applied to baseScore. 1.0 when no favorites in window. */
   favoriteMultiplier: number
   updateStreak: number
   excludeFromMetrics: boolean
 }
 
-/**
- * Read the velocity calendar for a startup (typed → fallback to merged).
- * Single source of truth for velocity scoring across all consumers.
- */
+type Week = { start: Date; end: Date; weekOf: string }
+type WeekWindow = Week[]
+
+// ── Raw-data fetch (DB-reading, per startup) ─────────────────────────
+
+/** Everything scoring needs for one startup, post-DB-read. Pure downstream. */
+export interface StartupRawData {
+  startup: Doc<'startups'>
+  mrrMetrics: Doc<'metricsData'>[]
+  sessionMetrics: Doc<'metricsData'>[]
+  velocityCalendar: TypedDayCounts
+  weeklyUpdates: Doc<'weeklyUpdates'>[]
+}
+
 async function readVelocityCalendar(
   ctx: { db: any },
   startupId: Id<'startups'>
@@ -91,7 +87,6 @@ async function readVelocityCalendar(
   const typed = (typedMetric?.meta as TypedDayCounts | undefined) ?? {}
   if (Object.keys(typed).length > 0) return typed
 
-  // Fallback: merged contribution calendar
   const mergedMetric = await ctx.db
     .query('metricsData')
     .withIndex('by_startupId_provider_metricKey', (q: any) =>
@@ -106,7 +101,381 @@ async function readVelocityCalendar(
   return {}
 }
 
-// ── Main Leaderboard Query ───────────────────────────────────────────
+async function fetchStartupRawData(
+  ctx: { db: any },
+  startup: Doc<'startups'>
+): Promise<StartupRawData> {
+  const mrrMetrics = await ctx.db
+    .query('metricsData')
+    .withIndex('by_startupId_provider_metricKey', (q: any) =>
+      q.eq('startupId', startup._id).eq('provider', 'stripe').eq('metricKey', 'mrr')
+    )
+    .collect()
+
+  const sessionMetrics = await ctx.db
+    .query('metricsData')
+    .withIndex('by_startupId_provider_metricKey', (q: any) =>
+      q.eq('startupId', startup._id).eq('provider', 'tracker').eq('metricKey', 'sessions')
+    )
+    .collect()
+
+  const velocityCalendar = await readVelocityCalendar(ctx, startup._id)
+
+  const weeklyUpdates = await ctx.db
+    .query('weeklyUpdates')
+    .withIndex('by_startupId', (q: any) => q.eq('startupId', startup._id))
+    .collect()
+
+  return {
+    startup,
+    mrrMetrics,
+    sessionMetrics,
+    velocityCalendar,
+    weeklyUpdates,
+  }
+}
+
+// ── Pure assembly: raw rows + weeks + now → per-category scalars ─────
+
+export interface AssembledCategoryRaw {
+  perCatRaw: Record<CategoryKey, number>
+  perCatActive: Record<CategoryKey, boolean>
+  updateStreak: number
+}
+
+/**
+ * Pure function: given fetched rows + a sliding window of `ROLLING_WEEKS + 1`
+ * week boundaries (so ROLLING_WEEKS growth pairs are possible) + `now`,
+ * produce a single scalar raw value and an active flag per category.
+ *
+ * The caller must pass at least `ROLLING_WEEKS + 1` weeks. Weeks are
+ * ordered most-recent-first: `weeks[0]` is the newest.
+ *
+ * Active-gate rules:
+ *   revenue — ≥1 MRR snapshot > 0 in last 28 days
+ *   traffic — ≥1 day with sessions > 0 in last 28 days
+ *   github  — ≥1 contribution day in last 28 days
+ *   updates — ≥1 weekly update submitted in last 28 days
+ */
+export function assembleCategoryRaw(
+  raw: StartupRawData,
+  weeks: WeekWindow,
+  now: Date
+): AssembledCategoryRaw {
+  const windowCutoff = now.getTime() - ACTIVE_WINDOW_DAYS * 86400_000
+
+  // ── Revenue (MRR growth, decayed sum across window) ────────────────
+  let revenueRaw = 0
+  let revenueActiveSnapshot = false
+  for (let i = 0; i < ROLLING_WEEKS; i++) {
+    const week = weeks[i]
+    const prevWeek = weeks[i + 1]
+    const thisMrr =
+      raw.mrrMetrics
+        .filter(
+          (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
+        )
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
+    const prevMrr = prevWeek
+      ? (raw.mrrMetrics
+          .filter(
+            (m) =>
+              m.timestamp >= prevWeek.start.toISOString() &&
+              m.timestamp < prevWeek.end.toISOString()
+          )
+          .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0)
+      : 0
+    if (thisMrr > 0 && week.end.getTime() > windowCutoff) revenueActiveSnapshot = true
+    const growth = computeGrowthRate(thisMrr, prevMrr)
+    if (growth !== null) revenueRaw += growth * temporalDecay(i)
+  }
+
+  // ── Traffic (session growth, decayed sum) ─────────────────────────
+  let trafficRaw = 0
+  let trafficActive = false
+  for (let i = 0; i < ROLLING_WEEKS; i++) {
+    const week = weeks[i]
+    const prevWeek = weeks[i + 1]
+    const thisSessions = raw.sessionMetrics
+      .filter(
+        (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
+      )
+      .reduce((sum, m) => sum + m.value, 0)
+    const prevSessions = prevWeek
+      ? raw.sessionMetrics
+          .filter(
+            (m) =>
+              m.timestamp >= prevWeek.start.toISOString() &&
+              m.timestamp < prevWeek.end.toISOString()
+          )
+          .reduce((sum, m) => sum + m.value, 0)
+      : 0
+    if (thisSessions > 0 && week.end.getTime() > windowCutoff) trafficActive = true
+    const growth = computeGrowthRate(thisSessions, prevSessions)
+    if (growth !== null) trafficRaw += growth * temporalDecay(i)
+  }
+
+  // ── GitHub (velocity score; has internal 28-day decay) ────────────
+  const githubRaw = computeVelocityScore(raw.velocityCalendar, now)
+  // Active if any day in the last 28 had >0 contributions
+  let githubActive = false
+  const today = new Date(now.getTime())
+  today.setUTCHours(0, 0, 0, 0)
+  for (let daysAgo = 0; daysAgo < ACTIVE_WINDOW_DAYS; daysAgo++) {
+    const d = new Date(today.getTime())
+    d.setUTCDate(d.getUTCDate() - daysAgo)
+    const dateStr = d.toISOString().slice(0, 10)
+    const counts = raw.velocityCalendar[dateStr]
+    if (counts && counts.commits + counts.prs + counts.issues > 0) {
+      githubActive = true
+      break
+    }
+  }
+
+  // ── Updates (decayed sum of weekBase across submitted weeks) ──────
+  const streak = computeStreak(raw.weeklyUpdates as any, now)
+  const weekBase = computeUpdateScore(true, streak) * 10
+  let updatesRaw = 0
+  let updatesActive = false
+  for (let i = 0; i < ROLLING_WEEKS; i++) {
+    const week = weeks[i]
+    const update = raw.weeklyUpdates.find((u) => u.weekOf === week.weekOf)
+    if (update) {
+      updatesRaw += weekBase * temporalDecay(i)
+      if (week.end.getTime() > windowCutoff) updatesActive = true
+    }
+  }
+
+  return {
+    perCatRaw: {
+      revenue: revenueRaw,
+      traffic: trafficRaw,
+      github: githubRaw,
+      updates: updatesRaw,
+    },
+    perCatActive: {
+      revenue: revenueActiveSnapshot,
+      traffic: trafficActive,
+      github: githubActive,
+      updates: updatesActive,
+    },
+    updateStreak: streak,
+  }
+}
+
+// ── Favorites (derived from weeklyUpdates, pure) ─────────────────────
+
+/** Extract favorites within the 28-day window from a startup's weeklyUpdates. */
+export function deriveFavorites(
+  weeklyUpdates: Array<{ weekOf: string; isFavorite?: boolean }>,
+  now: Date
+): { favorites: Array<{ daysAgo: number }>; count: number; hasAny: boolean } {
+  const favorites: Array<{ daysAgo: number }> = []
+  for (const u of weeklyUpdates) {
+    if (!u.isFavorite) continue
+    const weekDate = new Date(u.weekOf + 'T00:00:00.000Z')
+    const ts = weekDate.getTime()
+    if (!Number.isFinite(ts)) continue
+    const daysAgo = Math.floor((now.getTime() - ts) / 86400_000)
+    // Keep favorites within window; the scorer additionally clamps negative
+    // daysAgo and filters > 28.
+    if (daysAgo <= FAVORITE_WINDOW_DAYS) favorites.push({ daysAgo })
+  }
+  return {
+    favorites,
+    count: favorites.length,
+    hasAny: favorites.length > 0,
+  }
+}
+
+// ── Ranking (pure) ───────────────────────────────────────────────────
+
+export interface AssignRanksResult {
+  /** Final rank per qualified startup (1-indexed, sorted by score desc). */
+  rankings: Map<string, number>
+  /** `prevRank - rank` per startup; null when we lack prev data for them. */
+  rankChangeByStartup: Map<string, number | null>
+}
+
+/**
+ * Pure ranking helper. Given current and previous score maps plus the set
+ * of startups that qualify for ranking (activeCategories ≥ 3 AND
+ * !excludeFromMetrics), produce the final rank order and per-startup rank
+ * change.
+ *
+ * `rankChange = prevRank - currentRank`: positive means moved up.
+ * null when either current or prev rank is missing for that startup.
+ */
+export function assignRanks(
+  currentScores: Map<string, number>,
+  prevScores: Map<string, number>,
+  qualified: Set<string>
+): AssignRanksResult {
+  const currentRanked = [...currentScores.entries()]
+    .filter(([id]) => qualified.has(id))
+    .sort((a, b) => b[1] - a[1])
+  const rankings = new Map<string, number>()
+  currentRanked.forEach(([id], i) => rankings.set(id, i + 1))
+
+  const prevRanked = [...prevScores.entries()]
+    .filter(([id]) => qualified.has(id))
+    .sort((a, b) => b[1] - a[1])
+  const prevRankings = new Map<string, number>()
+  prevRanked.forEach(([id], i) => prevRankings.set(id, i + 1))
+
+  const rankChangeByStartup = new Map<string, number | null>()
+  for (const id of rankings.keys()) {
+    const prevRank = prevRankings.get(id)
+    const currentRank = rankings.get(id)
+    if (prevRank == null || currentRank == null) {
+      rankChangeByStartup.set(id, null)
+    } else {
+      rankChangeByStartup.set(id, prevRank - currentRank)
+    }
+  }
+
+  return { rankings, rankChangeByStartup }
+}
+
+// ── Cohort compute (shared by admin + founder queries) ───────────────
+
+interface CohortLeaderboardResult {
+  ranked: ScoreBreakdown[]
+  unranked: ScoreBreakdown[]
+  normalizationPower: number
+}
+
+async function computeCohortLeaderboard(
+  ctx: { db: any },
+  cohortId: Id<'cohorts'>
+): Promise<CohortLeaderboardResult | null> {
+  const cohort = await ctx.db.get(cohortId)
+  if (!cohort) return null
+
+  const normalizationPower = cohort.leaderboardConfig?.normalizationPower ?? 0.7
+  const config: ScoringConfig = { normalizationPower }
+
+  const startups = await ctx.db
+    .query('startups')
+    .withIndex('by_cohortId', (q: any) => q.eq('cohortId', cohortId))
+    .collect()
+
+  const now = new Date()
+  // Need ROLLING_WEEKS + 2 boundaries: weeks[0..ROLLING_WEEKS] for current
+  // window, weeks[1..ROLLING_WEEKS+1] for the shifted (prev-ranking) window.
+  const allWeeks = getWeekBoundaries(ROLLING_WEEKS + 2)
+  const currentWeeks = allWeeks.slice(0, ROLLING_WEEKS + 1)
+  const shiftedWeeks = allWeeks.slice(1, ROLLING_WEEKS + 2)
+
+  // Per-startup: fetch raw once, assemble twice (current + shifted), derive favorites once.
+  const perStartup: Array<{
+    startup: Doc<'startups'>
+    currentAssembly: AssembledCategoryRaw
+    shiftedAssembly: AssembledCategoryRaw
+    favorites: ReturnType<typeof deriveFavorites>
+  }> = []
+  for (const startup of startups) {
+    const raw = await fetchStartupRawData(ctx, startup)
+    const currentAssembly = assembleCategoryRaw(raw, currentWeeks, now)
+    const shiftedAssembly = assembleCategoryRaw(raw, shiftedWeeks, now)
+    const favorites = deriveFavorites(raw.weeklyUpdates, now)
+    perStartup.push({ startup, currentAssembly, shiftedAssembly, favorites })
+  }
+
+  // Cohort-wide max per category, per window.
+  const cohortMaxFor = (assemblies: AssembledCategoryRaw[]): Record<CategoryKey, number> => {
+    const max: Record<CategoryKey, number> = {
+      revenue: 0,
+      traffic: 0,
+      github: 0,
+      updates: 0,
+    }
+    for (const a of assemblies) {
+      for (const key of Object.keys(max) as CategoryKey[]) {
+        if (a.perCatRaw[key] > max[key]) max[key] = a.perCatRaw[key]
+      }
+    }
+    return max
+  }
+  const currentMax = cohortMaxFor(perStartup.map((p) => p.currentAssembly))
+  const shiftedMax = cohortMaxFor(perStartup.map((p) => p.shiftedAssembly))
+
+  // Score each startup under both windows.
+  const currentScores = new Map<string, number>()
+  const prevScores = new Map<string, number>()
+  const perStartupCurrent = new Map<string, ScoreResult>()
+  const qualifiedSet = new Set<string>()
+
+  for (const entry of perStartup) {
+    const favorites = entry.favorites.favorites
+    const current = computeLeaderboardScore(
+      entry.currentAssembly.perCatRaw,
+      entry.currentAssembly.perCatActive,
+      currentMax,
+      config,
+      favorites
+    )
+    const shifted = computeLeaderboardScore(
+      entry.shiftedAssembly.perCatRaw,
+      entry.shiftedAssembly.perCatActive,
+      shiftedMax,
+      config,
+      favorites
+    )
+    const id = String(entry.startup._id)
+    currentScores.set(id, current.totalScore)
+    prevScores.set(id, shifted.totalScore)
+    perStartupCurrent.set(id, current)
+    if (current.qualified && entry.startup.excludeFromMetrics !== true) {
+      qualifiedSet.add(id)
+    }
+  }
+
+  const { rankings, rankChangeByStartup } = assignRanks(currentScores, prevScores, qualifiedSet)
+
+  const ranked: ScoreBreakdown[] = []
+  const unranked: ScoreBreakdown[] = []
+
+  for (const entry of perStartup) {
+    const id = String(entry.startup._id)
+    const current = perStartupCurrent.get(id)!
+    const rank = rankings.get(id) ?? null
+    const rankChange = rankChangeByStartup.get(id) ?? null
+
+    const breakdown: ScoreBreakdown = {
+      startupId: entry.startup._id,
+      startupName: entry.startup.name,
+      startupSlug: entry.startup.slug,
+      startupLogoUrl: entry.startup.logoUrl,
+      rank,
+      totalScore: Math.round(current.totalScore * 100) / 100,
+      categories: {
+        revenue: current.categories.revenue,
+        traffic: current.categories.traffic,
+        github: current.categories.github,
+        updates: current.categories.updates,
+      },
+      activeCategories: current.activeCategories,
+      qualified: current.qualified,
+      consistencyBonus: 0, // soft-removal bridge — see ScoreBreakdown comment
+      rankChange,
+      hasFavoriteInWindow: entry.favorites.hasAny,
+      favoritesInWindow: entry.favorites.count,
+      favoriteMultiplier: Math.round(current.favoriteMultiplier * 1000) / 1000,
+      updateStreak: entry.currentAssembly.updateStreak,
+      excludeFromMetrics: entry.startup.excludeFromMetrics === true,
+    }
+
+    if (rank !== null) ranked.push(breakdown)
+    else unranked.push(breakdown)
+  }
+
+  ranked.sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
+
+  return { ranked, unranked, normalizationPower }
+}
+
+// ── Public queries ───────────────────────────────────────────────────
 
 /**
  * Compute the full leaderboard for a cohort.
@@ -115,430 +484,12 @@ async function readVelocityCalendar(
 export const computeLeaderboard = query({
   args: {
     cohortId: v.id('cohorts'),
-    weekOf: v.optional(v.string()), // Optional: specific week to score
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx)
-
-    const cohort = await ctx.db.get(args.cohortId)
-    if (!cohort) throw new Error('Cohort not found')
-
-    const p = cohort.leaderboardConfig?.normalizationPower ?? 0.7
-
-    // Get all startups
-    const startups = await ctx.db
-      .query('startups')
-      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
-      .collect()
-
-    const weeks = getWeekBoundaries(ROLLING_WEEKS + 1) // +1 for prev-week lookback
-    const now = new Date()
-
-    // Collect raw scores per startup per category
-    const rawScores: Map<
-      string,
-      {
-        startup: Doc<'startups'>
-        weeklyMrrGrowth: number[]
-        weeklyTraffic: number[]
-        weeklyGithub: number[]
-        weeklySocial: number[]
-        totalMrrGrowth: number
-        totalTraffic: number
-        totalGithub: number
-        totalSocial: number
-        updatesScore: number
-        updateStreak: number
-        milestonesScore: number
-        isFavoriteThisWeek: boolean
-        anomalies: Array<{ category: string; value: number; threshold: number }>
-      }
-    > = new Map()
-
-    for (const startup of startups) {
-      // ── Revenue Growth (WoW MRR % change) ───────────────────
-      const customerMrrs = await ctx.db
-        .query('customerMrr')
-        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
-        .collect()
-
-      // Group MRR by month
-      const monthlyMrr = new Map<string, number>()
-      for (const row of customerMrrs) {
-        monthlyMrr.set(row.month, (monthlyMrr.get(row.month) ?? 0) + row.mrr)
-      }
-
-      // Get weekly MRR snapshots from metricsData
-      const mrrMetrics = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q.eq('startupId', startup._id).eq('provider', 'stripe').eq('metricKey', 'mrr')
-        )
-        .collect()
-
-      const weeklyMrrGrowth: number[] = []
-      for (let i = 0; i < weeks.length; i++) {
-        const week = weeks[i]
-        const prevWeek = weeks[i + 1]
-        // Find MRR at start and end of week
-        const thisWeekMrr =
-          mrrMetrics
-            .filter(
-              (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-            )
-            .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-
-        const prevWeekMrr = prevWeek
-          ? (mrrMetrics
-              .filter(
-                (m) =>
-                  m.timestamp >= prevWeek.start.toISOString() &&
-                  m.timestamp < prevWeek.end.toISOString()
-              )
-              .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0)
-          : 0
-
-        const growthPct = prevWeekMrr > 0 ? ((thisWeekMrr - prevWeekMrr) / prevWeekMrr) * 100 : 0
-        weeklyMrrGrowth.push(growthPct)
-      }
-
-      // ── Traffic Growth (WoW session % change) ────────────────
-      const sessionMetrics = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q.eq('startupId', startup._id).eq('provider', 'tracker').eq('metricKey', 'sessions')
-        )
-        .collect()
-
-      const weeklyTraffic: number[] = []
-      for (let i = 0; i < weeks.length; i++) {
-        const week = weeks[i]
-        const prevWeek = weeks[i + 1]
-        const thisWeekSessions = sessionMetrics
-          .filter(
-            (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-          )
-          .reduce((sum, m) => sum + m.value, 0)
-
-        const prevWeekSessions = prevWeek
-          ? sessionMetrics
-              .filter(
-                (m) =>
-                  m.timestamp >= prevWeek.start.toISOString() &&
-                  m.timestamp < prevWeek.end.toISOString()
-              )
-              .reduce((sum, m) => sum + m.value, 0)
-          : 0
-
-        const growthPct =
-          prevWeekSessions > 0
-            ? ((thisWeekSessions - prevWeekSessions) / prevWeekSessions) * 100
-            : 0
-        weeklyTraffic.push(growthPct)
-      }
-
-      // ── GitHub Activity (compute from calendar — single source of truth) ─
-      const velocityCalendar = await readVelocityCalendar(ctx, startup._id)
-      const weeklyGithub: number[] = []
-      for (const week of weeks) {
-        weeklyGithub.push(computeVelocityScore(velocityCalendar, week.end))
-      }
-
-      // ── Social Growth (follower growth %) ────────────────────
-      const socialFollowers = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q
-            .eq('startupId', startup._id)
-            .eq('provider', 'apify')
-            .eq('metricKey', 'twitter_followers')
-        )
-        .collect()
-
-      // Also try linkedin and instagram
-      const linkedinFollowers = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q
-            .eq('startupId', startup._id)
-            .eq('provider', 'apify')
-            .eq('metricKey', 'linkedin_followers')
-        )
-        .collect()
-
-      const allSocialMetrics = [...socialFollowers, ...linkedinFollowers]
-      const weeklySocial: number[] = []
-      for (let i = 0; i < weeks.length; i++) {
-        const week = weeks[i]
-        const prevWeek = weeks[i + 1]
-        const thisWeekFollowers =
-          allSocialMetrics
-            .filter(
-              (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-            )
-            .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-        const prevWeekFollowers = prevWeek
-          ? (allSocialMetrics
-              .filter(
-                (m) =>
-                  m.timestamp >= prevWeek.start.toISOString() &&
-                  m.timestamp < prevWeek.end.toISOString()
-              )
-              .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0)
-          : 0
-        const growthPct =
-          prevWeekFollowers > 0
-            ? ((thisWeekFollowers - prevWeekFollowers) / prevWeekFollowers) * 100
-            : 0
-        weeklySocial.push(growthPct)
-      }
-
-      // ── Weekly Updates Score ──────────────────────────────────
-      const weeklyUpdates = await ctx.db
-        .query('weeklyUpdates')
-        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
-        .collect()
-
-      let updatesScore = 0
-      const streak = computeStreak(weeklyUpdates, now)
-      const isFavoriteThisWeek = weeklyUpdates.some(
-        (u) => u.weekOf === weeks[0].weekOf && u.isFavorite
-      )
-
-      // Base 10 points per submitted week, scaled by the shared
-      // computeUpdateScore helper (1.0 → +0%, 1.8 → +80% at an 8-week streak).
-      const weekBase = computeUpdateScore(true, streak) * 10
-
-      for (const week of weeks) {
-        const update = weeklyUpdates.find((u) => u.weekOf === week.weekOf)
-        if (update) {
-          let weekPoints = weekBase
-          if (update.isFavorite) weekPoints += 25
-
-          const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-          updatesScore += weekPoints * temporalDecay(daysOld)
-        }
-      }
-
-      // ── Milestones Score ──────────────────────────────────────
-      const milestones = await ctx.db
-        .query('milestones')
-        .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
-        .collect()
-
-      const totalMilestones = milestones.length
-      const approvedMilestones = milestones.filter((m) => m.status === 'approved').length
-      const milestonesScore = totalMilestones > 0 ? (approvedMilestones / totalMilestones) * 100 : 0
-
-      // ── Apply temporal decay to weekly scores ─────────────────
-      let totalMrrGrowth = 0
-      let totalTraffic = 0
-      let totalGithub = 0
-      let totalSocial = 0
-
-      for (let i = 0; i < weeks.length; i++) {
-        const daysOld = (now.getTime() - weeks[i].start.getTime()) / (1000 * 60 * 60 * 24)
-        const decay = temporalDecay(daysOld)
-        totalMrrGrowth += weeklyMrrGrowth[i] * decay
-        totalTraffic += weeklyTraffic[i] * decay
-        totalSocial += weeklySocial[i] * decay
-      }
-      // computeVelocityScore already includes 28-day decay — use latest directly
-      totalGithub = weeklyGithub[0] ?? 0
-
-      // ── Anomaly detection ─────────────────────────────────────
-      const anomalies: Array<{ category: string; value: number; threshold: number }> = []
-      const checkAnomaly = (name: string, values: number[]) => {
-        const valid = values.filter((v) => v !== 0)
-        if (valid.length < 3) return
-        const mean = valid.reduce((a, b) => a + b, 0) / valid.length
-        const stdDev = Math.sqrt(
-          valid.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / valid.length
-        )
-        const latest = values[0]
-        if (latest > mean + 2 * stdDev) {
-          anomalies.push({ category: name, value: latest, threshold: mean + 2 * stdDev })
-        }
-      }
-      checkAnomaly('revenue', weeklyMrrGrowth)
-      checkAnomaly('traffic', weeklyTraffic)
-      checkAnomaly('github', weeklyGithub)
-      checkAnomaly('social', weeklySocial)
-
-      rawScores.set(startup._id, {
-        startup,
-        weeklyMrrGrowth,
-        weeklyTraffic,
-        weeklyGithub,
-        weeklySocial,
-        totalMrrGrowth,
-        totalTraffic,
-        totalGithub,
-        totalSocial,
-        updatesScore,
-        updateStreak: streak,
-        milestonesScore,
-        isFavoriteThisWeek,
-        anomalies,
-      })
-    }
-
-    // ── Power law normalization for unbounded metrics ────────────
-    const revenueValues = Array.from(rawScores.values()).map((s) => s.totalMrrGrowth)
-    const trafficValues = Array.from(rawScores.values()).map((s) => s.totalTraffic)
-    const githubValues = Array.from(rawScores.values()).map((s) => s.totalGithub)
-    const socialValues = Array.from(rawScores.values()).map((s) => s.totalSocial)
-
-    const normalizedRevenue = powerLawNormalize(revenueValues, p)
-    const normalizedTraffic = powerLawNormalize(trafficValues, p)
-    const normalizedGithub = powerLawNormalize(githubValues, p)
-    const normalizedSocial = powerLawNormalize(socialValues, p)
-
-    // ── Build final scores ──────────────────────────────────────
-    const entries = Array.from(rawScores.entries())
-    const results: ScoreBreakdown[] = []
-
-    for (let idx = 0; idx < entries.length; idx++) {
-      const [startupId, data] = entries[idx]
-
-      // Apply 40% cap
-      const cappedRevenue = Math.min(normalizedRevenue[idx], MAX_CAP)
-      const cappedTraffic = Math.min(normalizedTraffic[idx], MAX_CAP)
-      const cappedGithub = Math.min(normalizedGithub[idx], MAX_CAP)
-      const cappedSocial = Math.min(normalizedSocial[idx], MAX_CAP)
-      const cappedUpdates = Math.min(data.updatesScore, MAX_CAP)
-      const cappedMilestones = Math.min(data.milestonesScore, MAX_CAP)
-
-      // Apply weights
-      const weightedRevenue = cappedRevenue * WEIGHTS.revenue
-      const weightedTraffic = cappedTraffic * WEIGHTS.traffic
-      const weightedGithub = cappedGithub * WEIGHTS.github
-      const weightedSocial = cappedSocial * WEIGHTS.social
-      const weightedUpdates = cappedUpdates * WEIGHTS.updates
-      const weightedMilestones = cappedMilestones * WEIGHTS.milestones
-
-      let totalScore =
-        weightedRevenue +
-        weightedTraffic +
-        weightedGithub +
-        weightedSocial +
-        weightedUpdates +
-        weightedMilestones
-
-      // Count active categories (non-zero) — 5 categories, no social
-      const activeCategories = [
-        data.totalMrrGrowth,
-        data.totalTraffic,
-        data.totalGithub,
-        data.updatesScore,
-        data.milestonesScore,
-      ].filter((v) => v > 0).length
-
-      const qualified = activeCategories >= QUALIFICATION_THRESHOLD
-
-      // Consistency bonus — compute per-week composite scores (not flat array)
-      const weeklyComposites: number[] = []
-      for (let w = 0; w < weeks.length; w++) {
-        weeklyComposites.push(
-          Math.abs(data.weeklyMrrGrowth[w] ?? 0) +
-            Math.abs(data.weeklyTraffic[w] ?? 0) +
-            Math.abs(data.weeklyGithub[w] ?? 0)
-        )
-      }
-      const consistencyBonus = computeConsistencyBonus(weeklyComposites)
-      totalScore *= 1 + consistencyBonus / 100
-
-      // Admin favorite multiplier
-      const favoriteMultiplier = data.isFavoriteThisWeek ? 1.25 : 1
-      totalScore *= favoriteMultiplier
-
-      results.push({
-        startupId: startupId as Id<'startups'>,
-        startupName: data.startup.name,
-        startupSlug: data.startup.slug,
-        startupLogoUrl: data.startup.logoUrl,
-        rank: null,
-        totalScore: Math.round(totalScore * 100) / 100,
-        categories: {
-          revenue: {
-            raw: data.totalMrrGrowth,
-            normalized: normalizedRevenue[idx],
-            weighted: weightedRevenue,
-          },
-          traffic: {
-            raw: data.totalTraffic,
-            normalized: normalizedTraffic[idx],
-            weighted: weightedTraffic,
-          },
-          github: {
-            raw: data.totalGithub,
-            normalized: normalizedGithub[idx],
-            weighted: weightedGithub,
-          },
-          updates: {
-            raw: data.updatesScore,
-            normalized: data.updatesScore,
-            weighted: weightedUpdates,
-          },
-          milestones: {
-            raw: data.milestonesScore,
-            normalized: data.milestonesScore,
-            weighted: weightedMilestones,
-          },
-        },
-        activeCategories,
-        qualified,
-        consistencyBonus,
-        rankChange: null, // computed after ranking
-        isFavoriteThisWeek: data.isFavoriteThisWeek,
-        favoriteMultiplier,
-        updateStreak: data.updateStreak,
-        excludeFromMetrics: data.startup.excludeFromMetrics === true,
-      })
-    }
-
-    // ── Rank qualified startups ─────────────────────────────────
-    const ranked = results
-      .filter((r) => r.qualified && !r.excludeFromMetrics)
-      .sort((a, b) => b.totalScore - a.totalScore)
-
-    ranked.forEach((r, i) => {
-      r.rank = i + 1
-    })
-
-    // ── Compute rank changes (compare to last week's ranking) ──
-    // Re-score using previous week's data (shift weekly arrays by 1)
-    const prevScores: Array<{ startupId: Id<'startups'>; score: number }> = []
-    for (const [, data] of rawScores) {
-      let prevMrr = 0
-      let prevTraffic = 0
-      let prevSocial = 0
-      for (let i = 1; i < weeks.length; i++) {
-        const daysOld = (now.getTime() - weeks[i].start.getTime()) / (1000 * 60 * 60 * 24)
-        const decay = temporalDecay(daysOld)
-        prevMrr += data.weeklyMrrGrowth[i] * decay
-        prevTraffic += data.weeklyTraffic[i] * decay
-        prevSocial += data.weeklySocial[i] * decay
-      }
-      const prevGithub = data.weeklyGithub[1] ?? 0
-      prevScores.push({
-        startupId: data.startup._id,
-        score: prevMrr + prevTraffic + prevGithub + prevSocial,
-      })
-    }
-    prevScores.sort((a, b) => b.score - a.score)
-    const prevRankMap = new Map(prevScores.map((s, i) => [s.startupId, i + 1]))
-
-    for (const r of ranked) {
-      const prev = prevRankMap.get(r.startupId)
-      if (prev != null && r.rank != null) {
-        r.rankChange = prev - r.rank // positive = moved up
-      }
-    }
-
-    const unranked = results.filter((r) => !r.qualified || r.excludeFromMetrics)
-
-    return { ranked, unranked, normalizationPower: p }
+    const result = await computeCohortLeaderboard(ctx, args.cohortId)
+    if (!result) throw new Error('Cohort not found')
+    return result
   },
 })
 
@@ -551,12 +502,10 @@ export const computeLeaderboardForFounder = query({
   handler: async (ctx) => {
     const user = await requireAuth(ctx)
 
-    // Get founder's startup to determine their cohort
     const founderProfile = await ctx.db
       .query('founderProfiles')
       .withIndex('by_userId', (q) => q.eq('userId', user._id))
       .first()
-
     if (!founderProfile) return null
 
     const startup = await ctx.db.get(founderProfile.startupId)
@@ -565,308 +514,20 @@ export const computeLeaderboardForFounder = query({
     const cohort = await ctx.db.get(startup.cohortId)
     if (!cohort) return null
 
-    // Reuse the same computation (we duplicate it here to avoid circular deps)
-    // In practice, we call the admin version with the cohort ID
-    const p = cohort.leaderboardConfig?.normalizationPower ?? 0.7
+    const result = await computeCohortLeaderboard(ctx, startup.cohortId)
+    if (!result) return null
 
-    const startups = await ctx.db
-      .query('startups')
-      .withIndex('by_cohortId', (q) => q.eq('cohortId', startup.cohortId))
-      .collect()
-
-    const weeks = getWeekBoundaries(ROLLING_WEEKS + 1) // +1 for prev-week lookback
-    const now = new Date()
-
-    // Simplified scoring for founder view - compute same metrics
-    const results: Array<{
-      startupId: Id<'startups'>
-      startupName: string
-      startupSlug?: string
-      startupLogoUrl?: string
-      rank: number | null
-      totalScore: number
-      activeCategories: number
-      qualified: boolean
-      rankChange: number | null
-      isFavoriteThisWeek: boolean
-      updateStreak: number
-      excludeFromMetrics: boolean
-    }> = []
-
-    // Collect raw unbounded scores for normalization
-    const rawData: Array<{
-      startup: Doc<'startups'>
-      weeklyMrrGrowth: number[]
-      weeklyTraffic: number[]
-      weeklyGithub: number[]
-      totalMrrGrowth: number
-      totalTraffic: number
-      totalGithub: number
-      totalSocial: number
-      updatesScore: number
-      updateStreak: number
-      milestonesScore: number
-      isFavoriteThisWeek: boolean
-    }> = []
-
-    for (const s of startups) {
-      // Revenue
-      const mrrMetrics = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q.eq('startupId', s._id).eq('provider', 'stripe').eq('metricKey', 'mrr')
-        )
-        .collect()
-
-      let totalMrrGrowth = 0
-      const weeklyMrrGrowth: number[] = []
-      for (let i = 0; i < weeks.length; i++) {
-        const week = weeks[i]
-        const prevWeek = weeks[i + 1]
-        const thisVal =
-          mrrMetrics
-            .filter(
-              (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-            )
-            .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-        const prevVal = prevWeek
-          ? (mrrMetrics
-              .filter(
-                (m) =>
-                  m.timestamp >= prevWeek.start.toISOString() &&
-                  m.timestamp < prevWeek.end.toISOString()
-              )
-              .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0)
-          : 0
-        const growth = prevVal > 0 ? ((thisVal - prevVal) / prevVal) * 100 : 0
-        weeklyMrrGrowth.push(growth)
-        const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-        totalMrrGrowth += growth * temporalDecay(daysOld)
-      }
-
-      // Traffic
-      const sessionMetrics = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q.eq('startupId', s._id).eq('provider', 'tracker').eq('metricKey', 'sessions')
-        )
-        .collect()
-      let totalTraffic = 0
-      const weeklyTraffic: number[] = []
-      for (let i = 0; i < weeks.length; i++) {
-        const week = weeks[i]
-        const prevWeek = weeks[i + 1]
-        const thisVal = sessionMetrics
-          .filter(
-            (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-          )
-          .reduce((s, m) => s + m.value, 0)
-        const prevVal = prevWeek
-          ? sessionMetrics
-              .filter(
-                (m) =>
-                  m.timestamp >= prevWeek.start.toISOString() &&
-                  m.timestamp < prevWeek.end.toISOString()
-              )
-              .reduce((s, m) => s + m.value, 0)
-          : 0
-        const growth = prevVal > 0 ? ((thisVal - prevVal) / prevVal) * 100 : 0
-        weeklyTraffic.push(growth)
-        const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-        totalTraffic += growth * temporalDecay(daysOld)
-      }
-
-      // GitHub (compute from calendar — single source of truth)
-      const velocityCalendar = await readVelocityCalendar(ctx, s._id)
-      const weeklyGithub: number[] = []
-      for (const week of weeks) {
-        weeklyGithub.push(computeVelocityScore(velocityCalendar, week.end))
-      }
-      const totalGithub = weeklyGithub[0] ?? 0
-
-      // Social
-      const socialMetrics = await ctx.db
-        .query('metricsData')
-        .withIndex('by_startupId_provider_metricKey', (q) =>
-          q.eq('startupId', s._id).eq('provider', 'apify').eq('metricKey', 'twitter_followers')
-        )
-        .collect()
-      let totalSocial = 0
-      for (let i = 0; i < weeks.length; i++) {
-        const week = weeks[i]
-        const prevWeek = weeks[i + 1]
-        const thisVal =
-          socialMetrics
-            .filter(
-              (m) => m.timestamp >= week.start.toISOString() && m.timestamp < week.end.toISOString()
-            )
-            .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0
-        const prevVal = prevWeek
-          ? (socialMetrics
-              .filter(
-                (m) =>
-                  m.timestamp >= prevWeek.start.toISOString() &&
-                  m.timestamp < prevWeek.end.toISOString()
-              )
-              .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.value ?? 0)
-          : 0
-        const growth = prevVal > 0 ? ((thisVal - prevVal) / prevVal) * 100 : 0
-        const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-        totalSocial += growth * temporalDecay(daysOld)
-      }
-
-      // Updates
-      const updates = await ctx.db
-        .query('weeklyUpdates')
-        .withIndex('by_startupId', (q) => q.eq('startupId', s._id))
-        .collect()
-      let updatesScore = 0
-      const streak = computeStreak(updates, now)
-      const weekBase = computeUpdateScore(true, streak) * 10
-      const isFavorite = updates.some((u) => u.weekOf === weeks[0].weekOf && u.isFavorite)
-      for (const week of weeks) {
-        const update = updates.find((u) => u.weekOf === week.weekOf)
-        if (update) {
-          let pts = weekBase
-          if (update.isFavorite) pts += 25
-          const daysOld = (now.getTime() - week.start.getTime()) / (1000 * 60 * 60 * 24)
-          updatesScore += pts * temporalDecay(daysOld)
-        }
-      }
-
-      // Milestones
-      const milestones = await ctx.db
-        .query('milestones')
-        .withIndex('by_startupId', (q) => q.eq('startupId', s._id))
-        .collect()
-      const milestonesScore =
-        milestones.length > 0
-          ? (milestones.filter((m) => m.status === 'approved').length / milestones.length) * 100
-          : 0
-
-      rawData.push({
-        startup: s,
-        weeklyMrrGrowth,
-        weeklyTraffic,
-        weeklyGithub,
-        totalMrrGrowth,
-        totalTraffic,
-        totalGithub,
-        totalSocial,
-        updatesScore,
-        updateStreak: streak,
-        milestonesScore,
-        isFavoriteThisWeek: isFavorite,
-      })
-    }
-
-    // Normalize
-    const normRevenue = powerLawNormalize(
-      rawData.map((d) => d.totalMrrGrowth),
-      p
-    )
-    const normTraffic = powerLawNormalize(
-      rawData.map((d) => d.totalTraffic),
-      p
-    )
-    const normGithub = powerLawNormalize(
-      rawData.map((d) => d.totalGithub),
-      p
-    )
-    const normSocial = powerLawNormalize(
-      rawData.map((d) => d.totalSocial),
-      p
-    )
-
-    for (let i = 0; i < rawData.length; i++) {
-      const d = rawData[i]
-      const rev = Math.min(normRevenue[i], MAX_CAP) * WEIGHTS.revenue
-      const trf = Math.min(normTraffic[i], MAX_CAP) * WEIGHTS.traffic
-      const git = Math.min(normGithub[i], MAX_CAP) * WEIGHTS.github
-      const soc = Math.min(normSocial[i], MAX_CAP) * WEIGHTS.social
-      const upd = Math.min(d.updatesScore, MAX_CAP) * WEIGHTS.updates
-      const mil = Math.min(d.milestonesScore, MAX_CAP) * WEIGHTS.milestones
-
-      let total = rev + trf + git + soc + upd + mil
-      const activeCats = [
-        d.totalMrrGrowth,
-        d.totalTraffic,
-        d.totalGithub,
-        d.updatesScore,
-        d.milestonesScore,
-      ].filter((v) => v > 0).length
-
-      // Consistency bonus (same as admin version)
-      const weeklyComposites: number[] = []
-      for (let w = 0; w < weeks.length; w++) {
-        weeklyComposites.push(
-          Math.abs(d.weeklyMrrGrowth[w] ?? 0) +
-            Math.abs(d.weeklyTraffic[w] ?? 0) +
-            Math.abs(d.weeklyGithub[w] ?? 0)
-        )
-      }
-      const consistencyBonus = computeConsistencyBonus(weeklyComposites)
-      total *= 1 + consistencyBonus / 100
-
-      if (d.isFavoriteThisWeek) total *= 1.25
-
-      results.push({
-        startupId: d.startup._id,
-        startupName: d.startup.name,
-        startupSlug: d.startup.slug,
-        startupLogoUrl: d.startup.logoUrl,
-        rank: null,
-        totalScore: Math.round(total * 100) / 100,
-        activeCategories: activeCats,
-        qualified: activeCats >= QUALIFICATION_THRESHOLD,
-        rankChange: null,
-        isFavoriteThisWeek: d.isFavoriteThisWeek,
-        updateStreak: d.updateStreak,
-        excludeFromMetrics: d.startup.excludeFromMetrics === true,
-      })
-    }
-
-    // Rank
-    const ranked = results
-      .filter((r) => r.qualified && !r.excludeFromMetrics)
-      .sort((a, b) => b.totalScore - a.totalScore)
-    ranked.forEach((r, i) => {
-      r.rank = i + 1
-    })
-
-    // Compute rank changes (compare to last week's ranking)
-    const prevScores: Array<{ startupId: Id<'startups'>; score: number }> = []
-    for (const d of rawData) {
-      let prevScore = 0
-      for (let w = 1; w < weeks.length; w++) {
-        const daysOld = (now.getTime() - weeks[w].start.getTime()) / (1000 * 60 * 60 * 24)
-        const decay = temporalDecay(daysOld)
-        prevScore += (d.weeklyMrrGrowth[w] ?? 0) * decay
-        prevScore += (d.weeklyTraffic[w] ?? 0) * decay
-      }
-      prevScore += d.weeklyGithub[1] ?? 0
-      prevScores.push({ startupId: d.startup._id, score: prevScore })
-    }
-    prevScores.sort((a, b) => b.score - a.score)
-    const prevRankMap = new Map(prevScores.map((s, i) => [s.startupId, i + 1]))
-    for (const r of ranked) {
-      const prev = prevRankMap.get(r.startupId)
-      if (prev != null && r.rank != null) {
-        r.rankChange = prev - r.rank
-      }
-    }
-
-    const unranked = results.filter((r) => !r.qualified || r.excludeFromMetrics)
-
-    // Find current user's startup rank
-    const myRank = results.find((r) => r.startupId === founderProfile.startupId)
+    const myEntry =
+      result.ranked.find((r) => r.startupId === founderProfile.startupId) ??
+      result.unranked.find((r) => r.startupId === founderProfile.startupId)
 
     return {
-      ranked,
-      unranked,
+      ranked: result.ranked,
+      unranked: result.unranked,
+      normalizationPower: result.normalizationPower,
       myStartupId: founderProfile.startupId,
-      myRank: myRank?.rank ?? null,
-      myScore: myRank?.totalScore ?? 0,
+      myRank: myEntry?.rank ?? null,
+      myScore: myEntry?.totalScore ?? 0,
       cohortName: cohort.label,
     }
   },

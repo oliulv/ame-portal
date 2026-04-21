@@ -5,7 +5,6 @@ export const CATEGORY_COLORS: Record<string, string> = {
   traffic: 'bg-blue-500',
   github: 'bg-purple-500',
   updates: 'bg-orange-500',
-  milestones: 'bg-yellow-500',
 }
 
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -13,15 +12,13 @@ export const CATEGORY_LABELS: Record<string, string> = {
   traffic: 'Traffic',
   github: 'GitHub',
   updates: 'Updates',
-  milestones: 'Milestones',
 }
 
 export const CATEGORY_WEIGHTS: Record<string, number> = {
-  revenue: 25,
-  traffic: 20,
-  github: 20,
-  updates: 20,
-  milestones: 15,
+  revenue: 35,
+  traffic: 25,
+  github: 25,
+  updates: 15,
 }
 
 const CATEGORY_DETAILS: Record<string, { signal: string; measurement: string; example: string }> = {
@@ -47,11 +44,6 @@ const CATEGORY_DETAILS: Record<string, { signal: string; measurement: string; ex
     measurement:
       'Binary (submitted or not) + streak bonus: +10% per consecutive week, up to +80% at 8 weeks',
     example: 'Submit every week for 8 weeks = nearly double the base score',
-  },
-  milestones: {
-    signal: 'Milestone completion rate',
-    measurement: 'Approved milestones / total due milestones over the cohort lifetime',
-    example: '4 of 5 milestones completed = 80% completion rate',
   },
 }
 
@@ -132,23 +124,17 @@ export function ScoringExplainerContent() {
             <div className="border p-3 space-y-1">
               <h4 className="font-medium text-sm">Qualification Gate</h4>
               <p className="text-sm text-muted-foreground">
-                Need data in at least 3 of 5 categories to earn the &quot;Qualified&quot; tag (extra
+                Need data in at least 3 of 4 categories to earn the &quot;Qualified&quot; tag (extra
                 funding eligibility). Categories you haven&apos;t connected are simply excluded
                 &mdash; no penalty.
               </p>
             </div>
             <div className="border p-3 space-y-1">
-              <h4 className="font-medium text-sm">Consistency Bonus</h4>
+              <h4 className="font-medium text-sm">Admin Favorite</h4>
               <p className="text-sm text-muted-foreground">
-                Steady week-over-week performance earns up to +5%. High variance (big spikes then
-                nothing) incurs a -5% penalty.
-              </p>
-            </div>
-            <div className="border p-3 space-y-1">
-              <h4 className="font-medium text-sm">40% Cap</h4>
-              <p className="text-sm text-muted-foreground">
-                No single category can contribute more than 40% of your total score, even if you
-                dominate in one area. Breadth matters.
+                The admin picks up to 2 favorite updates per week. Favoriting gives the startup a
+                small score boost that fades over the next 28 days &mdash; recent favorites matter
+                more, and multiple favorites in the window stack.
               </p>
             </div>
             <div className="border p-3 space-y-1">

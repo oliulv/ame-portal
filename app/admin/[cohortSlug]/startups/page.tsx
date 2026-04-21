@@ -188,8 +188,13 @@ function ExpandableRow({
           </span>
         </td>
         <td className="px-4 py-3 whitespace-nowrap text-center">
-          {entry.isFavoriteThisWeek && (
-            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 inline" />
+          {entry.hasFavoriteInWindow && (
+            <span className="inline-flex items-center gap-1">
+              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+              {entry.favoritesInWindow > 1 && (
+                <span className="text-xs text-muted-foreground">{entry.favoritesInWindow}</span>
+              )}
+            </span>
           )}
         </td>
         <td className="px-4 py-3 whitespace-nowrap text-center text-sm">
@@ -253,10 +258,11 @@ function ExpandableRow({
               ))}
             </div>
             <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
-              <span>Active categories: {entry.activeCategories}/5</span>
-              <span>Consistency bonus: +{entry.consistencyBonus.toFixed(1)}%</span>
+              <span>Active categories: {entry.activeCategories}/4</span>
               {entry.favoriteMultiplier > 1 && (
-                <span className="text-yellow-600">Favorite boost: x{entry.favoriteMultiplier}</span>
+                <span className="text-yellow-600">
+                  Favorite boost: x{entry.favoriteMultiplier.toFixed(3)}
+                </span>
               )}
             </div>
           </td>
@@ -688,7 +694,7 @@ export default function StartupsPage() {
                                   )}
                                   <span className="text-sm">{entry.startupName}</span>
                                   <Badge variant="outline" className="text-xs">
-                                    {entry.activeCategories}/5 active
+                                    {entry.activeCategories}/4 active
                                   </Badge>
                                   {entry.excludeFromMetrics && (
                                     <Badge variant="warning" className="text-xs">

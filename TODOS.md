@@ -56,14 +56,6 @@
 
 **Depends on:** Agreement on retention policy and admin-facing UI for reviewing the log.
 
-## Rename `weeklyValues` Field in `scoring.test.ts`
-
-**What:** Test data in `convex/lib/scoring.test.ts` uses the key `weeklyValues` inside a `revenue:` object to represent week-over-week MRR growth rates, which is misleading. Rename to `weeklyMrrGrowth` next time those tests are touched.
-
-**Why:** The misleading name was a contributor to the MRR-vs-weekly-revenue copy confusion the fix PR addressed. Low priority, but worth cleaning up to prevent the same confusion resurfacing in reviews.
-
-**Depends on:** Nothing.
-
 ## React Component + E2E Tests
 
 **What:** Add component tests (happy-dom + React Testing Library) for key UI components and E2E tests (Playwright) for critical user flows (login, invoice submission, leaderboard).
@@ -105,3 +97,8 @@
 **Why:** None block the scoring fix, all are visible admin-UX friction.
 
 **Depends on:** Nothing. Can ship individually or batched.
+
+## Completed
+
+### Rename `weeklyValues` Field in `scoring.test.ts`
+**Completed:** v0.1.2.0 (2026-04-21). The misleading test-fixture field was removed entirely along with `computeStartupScore` + `computeConsistencyBonus` tests in the scoring correctness PR. The new `computeLeaderboardScore` tests use clearer per-category scalar inputs (no shared-shape `CategoryMetric` fixture field at all).
