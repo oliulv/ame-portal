@@ -274,15 +274,15 @@ export default function StartupsPage() {
   const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
   const fundingOverview = useQuery(
     api.milestones.fundingOverview,
-    cohort && view === 'overview' ? { cohortId: cohort._id } : 'skip'
+    cohort ? { cohortId: cohort._id } : 'skip'
   )
   const integrationStatus = useQuery(
     api.integrations.statusByCohort,
-    cohort && view === 'overview' ? { cohortId: cohort._id } : 'skip'
+    cohort ? { cohortId: cohort._id } : 'skip'
   )
   const leaderboard = useQuery(
     api.leaderboard.computeLeaderboard,
-    cohort && view === 'leaderboard' ? { cohortId: cohort._id } : 'skip'
+    cohort ? { cohortId: cohort._id } : 'skip'
   )
 
   const [showExplainer, setShowExplainer] = useState(false)
