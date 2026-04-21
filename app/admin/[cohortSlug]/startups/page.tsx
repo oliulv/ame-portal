@@ -267,8 +267,33 @@ export default function StartupsPage() {
   const searchParams = useSearchParams()
   const cohortSlug = params.cohortSlug as string
 
-  const initialView = searchParams.get('view') === 'leaderboard' ? 'leaderboard' : 'overview'
-  const [view, setView] = useState<'overview' | 'leaderboard'>(initialView)
+  const storageKey = `admin-startups-view:${cohortSlug}`
+
+  const [view, setView] = useState<'overview' | 'leaderboard'>(() => {
+    const fromUrl = searchParams.get('view')
+    if (fromUrl === 'leaderboard' || fromUrl === 'overview') return fromUrl
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = window.sessionStorage.getItem(storageKey)
+        if (cached === 'leaderboard' || cached === 'overview') return cached
+      } catch {
+        /* sessionStorage unavailable (SSR, privacy mode) — fall through */
+      }
+    }
+    return 'overview'
+  })
+
+  const handleViewChange = (next: 'overview' | 'leaderboard') => {
+    setView(next)
+    try {
+      window.sessionStorage.setItem(storageKey, next)
+    } catch {
+      /* noop */
+    }
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('view', next)
+    router.replace(`?${params.toString()}`, { scroll: false })
+  }
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
@@ -379,7 +404,7 @@ export default function StartupsPage() {
       {/* Segmented control */}
       <div className="inline-flex items-center border bg-muted p-1 gap-1">
         <button
-          onClick={() => setView('overview')}
+          onClick={() => handleViewChange('overview')}
           className={cn(
             'px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer',
             view === 'overview'
@@ -390,7 +415,7 @@ export default function StartupsPage() {
           Overview
         </button>
         <button
-          onClick={() => setView('leaderboard')}
+          onClick={() => handleViewChange('leaderboard')}
           className={cn(
             'px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer',
             view === 'leaderboard'
