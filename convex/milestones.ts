@@ -546,7 +546,10 @@ export const approve = mutation({
       startup._id
     )
 
-    await ctx.db.patch(args.id, { status: 'approved' })
+    await ctx.db.patch(args.id, {
+      status: 'approved',
+      approvedAt: new Date().toISOString(),
+    })
 
     await ctx.db.insert('milestoneEvents', {
       milestoneId: args.id,
@@ -599,6 +602,10 @@ export const requestChanges = mutation({
     await ctx.db.patch(args.id, {
       status: 'changes_requested',
       adminComment: comment,
+      // Clear approvedAt defensively even though the current state machine
+      // never allows approved → changes_requested directly. Belt + braces
+      // for the leaderboard's 28-day active gate.
+      approvedAt: undefined,
     })
 
     await ctx.db.insert('milestoneEvents', {
@@ -676,6 +683,10 @@ export const submit = mutation({
       planStorageId: args.planStorageId,
       planFileName: args.planFileName,
       lastSubmittedAt: submittedAt,
+      // Defensive: current state machine blocks approved → submitted, but
+      // clear approvedAt anyway so the leaderboard's 28-day gate cannot
+      // count rows that are no longer approved.
+      approvedAt: undefined,
     })
 
     await ctx.db.insert('milestoneEvents', {
@@ -733,6 +744,10 @@ export const withdraw = mutation({
       planLink: undefined,
       planStorageId: undefined,
       planFileName: undefined,
+      // Clear approvedAt defensively (withdraw only fires from submitted
+      // today, but the leaderboard's 28-day active gate should not rely
+      // on upstream state machine invariants).
+      approvedAt: undefined,
     })
 
     // Notify admins about the withdrawal

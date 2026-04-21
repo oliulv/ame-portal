@@ -172,6 +172,11 @@ export default defineSchema({
     // so the admin inbox can order and display "Submitted X" without an
     // N+1 join. Rewritten on every submit (initial and re-submissions).
     lastSubmittedAt: v.optional(v.number()),
+    // ISO timestamp set when status transitions to 'approved'. Cleared by
+    // requestChanges and withdraw so the leaderboard's 28-day active gate
+    // can't count rows that are no longer approved. Backfilled for pre-
+    // existing approved rows from milestoneEvents.
+    approvedAt: v.optional(v.string()),
   })
     .index('by_startupId', ['startupId'])
     .index('by_milestoneTemplateId', ['milestoneTemplateId']),
