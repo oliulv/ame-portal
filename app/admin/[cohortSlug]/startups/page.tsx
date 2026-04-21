@@ -24,7 +24,6 @@ import {
   Edit,
   BarChart3,
   ExternalLink,
-  Star,
   Flame,
   ChevronDown,
   ChevronUp,
@@ -187,16 +186,6 @@ function ExpandableRow({
             <RankChangeArrow rankChange={entry.rankChange} />
           </span>
         </td>
-        <td className="px-4 py-3 whitespace-nowrap text-center">
-          {entry.hasFavoriteInWindow && (
-            <span className="inline-flex items-center gap-1">
-              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-              {entry.favoritesInWindow > 1 && (
-                <span className="text-xs text-muted-foreground">{entry.favoritesInWindow}</span>
-              )}
-            </span>
-          )}
-        </td>
         <td className="px-4 py-3 whitespace-nowrap text-center text-sm">
           {entry.updateStreak > 0 && (
             <span className="inline-flex items-center gap-1">
@@ -239,7 +228,7 @@ function ExpandableRow({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={7} className="px-4 py-4 bg-muted/30">
+          <td colSpan={6} className="px-4 py-4 bg-muted/30">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {Object.entries(entry.categories).map(([key, cat]: [string, any]) => (
                 <div key={key} className="space-y-1">
@@ -637,9 +626,6 @@ export default function StartupsPage() {
                       </th>
                       <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
                         Score
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-10">
-                        Fav
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-16">
                         Streak
