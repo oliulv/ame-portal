@@ -321,7 +321,7 @@ export default function AdminStartupAnalyticsPage() {
                 </div>
               )}
             </div>
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+            <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               Sync
             </Button>
