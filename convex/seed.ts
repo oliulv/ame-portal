@@ -468,17 +468,37 @@ export const default_ = internalMutation({
           status = 'submitted'
         }
 
-        await ctx.db.insert('milestones', {
+        // Stagger approvedAt within the 28-day leaderboard window so seeded
+        // rows contribute to the milestones category on fresh dev/preview DBs.
+        // Without this, approved rows would have approvedAt=undefined and
+        // get dropped by the leaderboard's belt+braces filter.
+        const approvedAt =
+          status === 'approved'
+            ? new Date(Date.now() - (3 + j * 4) * 24 * 60 * 60 * 1000).toISOString()
+            : undefined
+
+        const milestoneId = await ctx.db.insert('milestones', {
           startupId,
           milestoneTemplateId: templateIds[j] as any,
           title: tmpl.title,
           description: tmpl.description,
           amount: tmpl.amount,
           status,
+          approvedAt,
           sortOrder: tmpl.sortOrder,
           requireLink: tmpl.requireLink ?? false,
           requireFile: tmpl.requireFile ?? false,
         })
+
+        // Write a matching 'approved' milestoneEvents row so backfill and
+        // any event-walking code sees a clean audit trail.
+        if (status === 'approved') {
+          await ctx.db.insert('milestoneEvents', {
+            milestoneId,
+            action: 'approved',
+            userId: superAdminId,
+          })
+        }
       }
 
       // Create invitation (accepted for completed/in_progress startups)

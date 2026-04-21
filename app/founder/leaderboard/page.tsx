@@ -368,8 +368,15 @@ export default function FounderLeaderboardPage() {
                         Excluded
                       </Badge>
                     )}
-                    {entry.isFavoriteThisWeek && (
-                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    {entry.hasFavoriteInWindow && (
+                      <span className="inline-flex items-center gap-1">
+                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                        {entry.favoritesInWindow > 1 && (
+                          <span className="text-xs text-muted-foreground">
+                            {entry.favoritesInWindow}
+                          </span>
+                        )}
+                      </span>
                     )}
                   </div>
                 </td>

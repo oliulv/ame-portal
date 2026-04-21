@@ -49,9 +49,10 @@ const CATEGORY_DETAILS: Record<string, { signal: string; measurement: string; ex
     example: 'Submit every week for 8 weeks = nearly double the base score',
   },
   milestones: {
-    signal: 'Milestone completion rate',
-    measurement: 'Approved milestones / total due milestones over the cohort lifetime',
-    example: '4 of 5 milestones completed = 80% completion rate',
+    signal: 'Milestones shipped',
+    measurement: 'Count of approved milestones in the last 28 days, scaled against the cohort max',
+    example:
+      '3 milestones approved in the last month scores higher than 1, relative to everyone else',
   },
 }
 
@@ -138,17 +139,11 @@ export function ScoringExplainerContent() {
               </p>
             </div>
             <div className="border p-3 space-y-1">
-              <h4 className="font-medium text-sm">Consistency Bonus</h4>
+              <h4 className="font-medium text-sm">Admin Favorite</h4>
               <p className="text-sm text-muted-foreground">
-                Steady week-over-week performance earns up to +5%. High variance (big spikes then
-                nothing) incurs a -5% penalty.
-              </p>
-            </div>
-            <div className="border p-3 space-y-1">
-              <h4 className="font-medium text-sm">40% Cap</h4>
-              <p className="text-sm text-muted-foreground">
-                No single category can contribute more than 40% of your total score, even if you
-                dominate in one area. Breadth matters.
+                The admin picks up to 2 favorite updates per week. Favoriting gives the startup a
+                small score boost that fades over the next 28 days &mdash; recent favorites matter
+                more, and multiple favorites in the window stack.
               </p>
             </div>
             <div className="border p-3 space-y-1">
