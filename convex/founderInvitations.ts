@@ -80,18 +80,26 @@ export const create = mutation({
 
     const startupId = startupIds[0]
 
-    // Check for existing invitation or team member with this email
-    const existing = await ctx.db
+    // Check for existing invitation or team member with this email. Case-insensitive so
+    // "Bob@Ex.com" and "bob@ex.com" are treated as the same person — otherwise a founder
+    // can bypass the "already accepted" guard by toggling the casing.
+    const startupInvites = await ctx.db
       .query('invitations')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
-      .filter((q) => q.eq(q.field('email'), args.email))
-      .first()
+      .collect()
 
-    if (existing?.acceptedAt) {
+    const emailLower = args.email.toLowerCase()
+    const matchingInvites = startupInvites.filter((inv) => inv.email.toLowerCase() === emailLower)
+    const existingAccepted = matchingInvites.find((inv) => inv.acceptedAt)
+    const existingPending = matchingInvites.find(
+      (inv) => !inv.acceptedAt && new Date(inv.expiresAt) > new Date()
+    )
+
+    if (existingAccepted) {
       throw new Error('This email has already accepted an invitation for this startup')
     }
 
-    if (existing && !existing.acceptedAt && new Date(existing.expiresAt) > new Date()) {
+    if (existingPending) {
       throw new Error('A pending invitation already exists for this email')
     }
 
