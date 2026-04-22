@@ -18,6 +18,11 @@ import {
 } from './lib/invoiceLogic'
 import { isStorageIdOnInvoice } from './lib/invoiceAccess'
 
+// Upload claim TTL. A founder must attach a claimed storageId to an invoice
+// (or cancel it) within this window. Longer than a typical upload + extract +
+// confirm loop, short enough that stale claims don't accumulate.
+const STORAGE_CLAIM_TTL_MS = 60 * 60 * 1000 // 1h
+
 /**
  * Generate a pre-signed upload URL for invoice files.
  */
@@ -30,13 +35,49 @@ export const generateUploadUrl = mutation({
 })
 
 /**
- * Delete a stored file (cleanup for cancelled uploads).
+ * Claim ownership of a freshly-uploaded storage blob. Called by the client
+ * immediately after a successful upload. Rejects if the storageId has
+ * already been claimed by another user — the legitimate uploader writes
+ * the claim before any other party learns the storageId, so a race is only
+ * exploitable by someone who already has the ID (not useful).
+ */
+export const claimStorageUpload = mutation({
+  args: { storageId: v.id('_storage') },
+  handler: async (ctx, args) => {
+    const user = await requireAuth(ctx)
+    const existing = await ctx.db
+      .query('storageClaims')
+      .withIndex('by_storageId', (q) => q.eq('storageId', args.storageId))
+      .unique()
+    if (existing) {
+      if (existing.uploaderUserId === user._id) return
+      throw new ConvexError('Storage already claimed by another user')
+    }
+    await ctx.db.insert('storageClaims', {
+      storageId: args.storageId,
+      uploaderUserId: user._id,
+      createdAt: Date.now(),
+    })
+  },
+})
+
+/**
+ * Delete a stored file (cleanup for cancelled uploads). Gated on the
+ * storageClaims record — only the user who uploaded the blob can delete it.
  */
 export const deleteStorageFile = mutation({
   args: { storageId: v.id('_storage') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    const user = await requireAuth(ctx)
+    const claim = await ctx.db
+      .query('storageClaims')
+      .withIndex('by_storageId', (q) => q.eq('storageId', args.storageId))
+      .unique()
+    if (!claim || claim.uploaderUserId !== user._id) {
+      throw new ConvexError('Not authorized to delete this file')
+    }
     await ctx.storage.delete(args.storageId)
+    await ctx.db.delete(claim._id)
   },
 })
 
@@ -147,6 +188,26 @@ export const create = mutation({
       throw new ConvexError(
         `Amount exceeds available balance. You have £${available.toFixed(2)} available.`
       )
+    }
+
+    // Verify the caller uploaded every storage blob they are about to attach,
+    // then consume the claims. Stops a founder from attaching another user's
+    // leaked storage ID to their own invoice (the getFileUrl whitelist alone
+    // doesn't help if arbitrary IDs can be whitelisted at create time).
+    const allStorageIds = [args.storageId, ...args.receiptStorageIds]
+    const now = Date.now()
+    for (const sid of allStorageIds) {
+      const claim = await ctx.db
+        .query('storageClaims')
+        .withIndex('by_storageId', (q) => q.eq('storageId', sid))
+        .unique()
+      if (!claim || claim.uploaderUserId !== user._id) {
+        throw new ConvexError('Upload not claimed by caller')
+      }
+      if (now - claim.createdAt > STORAGE_CLAIM_TTL_MS) {
+        throw new ConvexError('Upload claim expired — please re-upload the file')
+      }
+      await ctx.db.delete(claim._id)
     }
 
     const invoiceId = await ctx.db.insert('invoices', {

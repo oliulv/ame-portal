@@ -107,10 +107,22 @@ export function NotificationsTab({
   const handleVerify = async (data: SmsVerificationFormData) => {
     setIsVerifying(true)
     try {
-      await confirmVerification({ code: data.code })
-      setShowVerification(false)
-      codeForm.reset()
-      toast.success('Phone number verified successfully')
+      const result = await confirmVerification({ code: data.code })
+      if (result.ok) {
+        setShowVerification(false)
+        codeForm.reset()
+        toast.success('Phone number verified successfully')
+      } else {
+        const reasonMessages: Record<typeof result.reason, string> = {
+          no_record: 'No SMS number found. Please enter your number first.',
+          already_verified: 'Number is already verified.',
+          none: 'No verification code pending. Please request a new one.',
+          expired: 'Verification code has expired. Please request a new one.',
+          locked: 'Too many incorrect attempts. Please request a new code.',
+          wrong: 'Incorrect verification code.',
+        }
+        toast.error(reasonMessages[result.reason])
+      }
     } catch (err) {
       toast.error(errorMessage(err, 'Verification failed'))
     } finally {

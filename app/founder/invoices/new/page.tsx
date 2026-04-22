@@ -78,6 +78,7 @@ export default function NewInvoicePage() {
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const generateUploadUrl = useMutation(api.invoices.generateUploadUrl)
+  const claimStorageUpload = useMutation(api.invoices.claimStorageUpload)
   const createInvoice = useMutation(api.invoices.create)
   const deleteStorageFile = useMutation(api.invoices.deleteStorageFile)
   const extractInvoiceData = useAction(api.ai.extractInvoiceData)
@@ -173,6 +174,7 @@ export default function NewInvoicePage() {
         if (controller.signal.aborted) return
 
         const { storageId: invoiceStorageId } = await invoiceResult.json()
+        await claimStorageUpload({ storageId: invoiceStorageId as Id<'_storage'> })
         extractionStorageIds.current.push(invoiceStorageId)
 
         const receiptStorageIds: string[] = []
@@ -186,6 +188,7 @@ export default function NewInvoicePage() {
           })
           if (!result.ok) throw new Error(`Failed to upload receipt for extraction`)
           const { storageId } = await result.json()
+          await claimStorageUpload({ storageId: storageId as Id<'_storage'> })
           receiptStorageIds.push(storageId)
           extractionStorageIds.current.push(storageId)
         }
@@ -357,6 +360,7 @@ export default function NewInvoicePage() {
       })
       if (!invoiceUploadResult.ok) throw new Error('Failed to upload invoice file')
       const { storageId: invoiceStorageId } = await invoiceUploadResult.json()
+      await claimStorageUpload({ storageId: invoiceStorageId as Id<'_storage'> })
 
       // Upload all receipt files sequentially
       const receiptStorageIds: string[] = []
@@ -369,6 +373,7 @@ export default function NewInvoicePage() {
         })
         if (!result.ok) throw new Error(`Failed to upload receipt: ${file.name}`)
         const { storageId } = await result.json()
+        await claimStorageUpload({ storageId: storageId as Id<'_storage'> })
         receiptStorageIds.push(storageId)
       }
 

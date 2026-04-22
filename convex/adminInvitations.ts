@@ -202,7 +202,12 @@ export const accept = mutation({
     if (invitation.acceptedAt) throw new Error('Already accepted')
     if (new Date(invitation.expiresAt) < new Date()) throw new Error('Invitation expired')
 
-    // Create or update user record
+    // Create or update user record. Never downgrade an existing higher-privilege
+    // user: an admin who can issue invitations should not be able to strip a
+    // super_admin's role by inviting them as `admin` and waiting for them to
+    // click accept.
+    const ROLE_PRIORITY = { founder: 0, admin: 1, super_admin: 2 } as const
+
     const existingUser = await ctx.db
       .query('users')
       .withIndex('by_clerkId', (q) => q.eq('clerkId', clerkId))
@@ -210,7 +215,9 @@ export const accept = mutation({
 
     let userId
     if (existingUser) {
-      await ctx.db.patch(existingUser._id, { role: invitation.role })
+      if (ROLE_PRIORITY[invitation.role] > ROLE_PRIORITY[existingUser.role]) {
+        await ctx.db.patch(existingUser._id, { role: invitation.role })
+      }
       userId = existingUser._id
     } else {
       userId = await ctx.db.insert('users', {

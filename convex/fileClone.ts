@@ -24,6 +24,7 @@ const FILE_REF_FIELDS = {
   milestoneEvents: ['planStorageId'],
   resources: ['storageId'],
   resourceSubmissions: ['storageId'],
+  storageClaims: ['storageId'],
 } as const satisfies Record<string, readonly string[]>
 
 type FileRefTable = keyof typeof FILE_REF_FIELDS

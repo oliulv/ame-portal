@@ -266,6 +266,19 @@ export default defineSchema({
     scheduledFnId: v.id('_scheduled_functions'),
   }).index('by_startupId', ['startupId']),
 
+  // ── Storage Claims ────────────────────────────────────────────
+  // Records which user uploaded a given _storage blob. Written after a
+  // successful upload via `claimStorageUpload`, consumed by `invoices.create`
+  // and `deleteStorageFile`. Prevents a founder from attaching another
+  // founder's leaked storage ID to their own invoice to exfiltrate the file.
+  storageClaims: defineTable({
+    storageId: v.id('_storage'),
+    uploaderUserId: v.id('users'),
+    createdAt: v.number(),
+  })
+    .index('by_storageId', ['storageId'])
+    .index('by_uploader', ['uploaderUserId']),
+
   // ── Integration Connections ────────────────────────────────────────
   integrationConnections: defineTable({
     startupId: v.id('startups'),

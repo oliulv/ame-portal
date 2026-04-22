@@ -3,7 +3,7 @@ import { internal } from './_generated/api'
 import { v, ConvexError } from 'convex/values'
 import { requireAuth } from './auth'
 import type { Id } from './_generated/dataModel'
-import { randomNumericCode, sha256Hex, timingSafeEqual } from './lib/random'
+import { randomNumericCode, sha256Hex } from './lib/random'
 import { evaluateOtp, OTP_MAX_ATTEMPTS } from './lib/otp'
 
 // ── Verification Flow ──────────────────────────────────────────
@@ -152,11 +152,26 @@ export const requestVerification = mutation({
 })
 
 /**
- * Confirm OTP verification code — checked synchronously in this mutation.
+ * Confirm OTP verification code.
+ *
+ * Returns a structured result rather than throwing on wrong-code. Convex
+ * mutations are transactional — throwing rolls back the otpAttempts patch,
+ * which would let an attacker brute-force without incrementing the lockout
+ * counter. By returning `{ ok: false, reason: 'wrong' }` the increment is
+ * committed. The client translates the reason into a user-facing toast.
  */
 export const confirmVerification = mutation({
   args: { code: v.string() },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<
+    | { ok: true }
+    | {
+        ok: false
+        reason: 'no_record' | 'already_verified' | 'none' | 'expired' | 'locked' | 'wrong'
+      }
+  > => {
     const user = await requireAuth(ctx)
 
     const smsRecord = await ctx.db
@@ -164,19 +179,14 @@ export const confirmVerification = mutation({
       .withIndex('by_userId', (q) => q.eq('userId', user._id))
       .first()
 
-    if (!smsRecord) {
-      throw new ConvexError('No SMS number found. Please enter your number first.')
-    }
-
-    if (smsRecord.isVerified) {
-      throw new ConvexError('Number is already verified.')
-    }
+    if (!smsRecord) return { ok: false, reason: 'no_record' }
+    if (smsRecord.isVerified) return { ok: false, reason: 'already_verified' }
 
     const candidateHash = await sha256Hex(args.code)
 
     // Prefer the hash; fall back to legacy plaintext column for rows written
-    // before the OTP hash rollout. Legacy rows get migrated on first use by
-    // just proceeding with the plaintext comparison once, then clearing it.
+    // before the OTP hash rollout. Legacy rows get fully migrated on success
+    // or on max-attempts invalidation — both clear otpCode and otpCodeHash.
     const effectiveHash =
       smsRecord.otpCodeHash ?? (smsRecord.otpCode ? await sha256Hex(smsRecord.otpCode) : undefined)
 
@@ -191,30 +201,16 @@ export const confirmVerification = mutation({
     )
 
     if (!decision.ok) {
-      if (decision.reason === 'none') {
-        throw new ConvexError('No verification code pending. Please request a new one.')
+      if (decision.reason === 'wrong') {
+        const invalidate = decision.attempts >= OTP_MAX_ATTEMPTS
+        await ctx.db.patch(smsRecord._id, {
+          otpAttempts: decision.attempts,
+          ...(invalidate
+            ? { otpCodeHash: undefined, otpCode: undefined, otpExpiresAt: undefined }
+            : {}),
+        })
       }
-      if (decision.reason === 'expired') {
-        throw new ConvexError('Verification code has expired. Please request a new one.')
-      }
-      if (decision.reason === 'locked') {
-        throw new ConvexError('Too many incorrect attempts. Please request a new code.')
-      }
-      // wrong — increment, and invalidate on the Nth miss
-      const invalidate = decision.attempts >= OTP_MAX_ATTEMPTS
-      await ctx.db.patch(smsRecord._id, {
-        otpAttempts: decision.attempts,
-        ...(invalidate
-          ? { otpCodeHash: undefined, otpCode: undefined, otpExpiresAt: undefined }
-          : {}),
-      })
-      throw new ConvexError('Incorrect verification code.')
-    }
-
-    // Extra constant-time belt for the match path — evaluateOtp already
-    // confirmed equality, but this keeps the compare out of JS string ops.
-    if (effectiveHash && !timingSafeEqual(effectiveHash, candidateHash)) {
-      throw new ConvexError('Incorrect verification code.')
+      return { ok: false, reason: decision.reason }
     }
 
     // Code is correct — mark as verified, clear all OTP state
@@ -244,6 +240,8 @@ export const confirmVerification = mutation({
         eventReminders: true,
       })
     }
+
+    return { ok: true }
   },
 })
 
