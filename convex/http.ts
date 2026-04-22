@@ -1,9 +1,32 @@
 import { httpRouter } from 'convex/server'
 import { httpAction } from './functions'
-import { internal } from './_generated/api'
+import { internal, components } from './_generated/api'
 import { logConvexError } from './lib/logging'
+import { RateLimiter, MINUTE, DAY } from '@convex-dev/rate-limiter'
+import {
+  truncateIp,
+  deriveSessionId,
+  deriveIpHash,
+  utcDayKey,
+  TrackerIdentError,
+  SecretMissingError,
+} from './lib/clientIdent'
+import { timingSafeEqual } from './lib/random'
 
 const http = httpRouter()
+
+// ── Rate limiter component (Convex first-party) ───────────────────────
+//
+// Two limits:
+//   trackerEvent: events/min per (ipHash, websiteId). Token bucket so legit
+//     bursts (e.g. someone clicking around fast) ride out.
+//   trackerNewSession: distinct sessionIds an IP can mint per day per site.
+//     Prevents UA-rotation from inflating the unique-session count that
+//     drives the leaderboard's traffic category.
+const rateLimiter = new RateLimiter(components.rateLimiter, {
+  trackerEvent: { kind: 'token bucket', rate: 60, period: MINUTE, capacity: 120 },
+  trackerNewSession: { kind: 'fixed window', rate: 15, period: DAY },
+})
 
 // ── CORS headers for tracker ──────────────────────────────────────────
 const corsHeaders = {
@@ -28,9 +51,45 @@ http.route({
   method: 'POST',
   handler: httpAction(async (ctx, request) => {
     try {
+      // ── Fail-closed: required server secrets ──────────────────────
+      const hashSecret = process.env.TRACKER_HASH_SECRET
+      const proxySecret = process.env.TRACKER_PROXY_SECRET
+      if (!hashSecret || !proxySecret) {
+        logConvexError('Tracker collect: TRACKER_HASH_SECRET or TRACKER_PROXY_SECRET not set', null)
+        return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // ── Proxy authentication ──────────────────────────────────────
+      // The Convex .site URL is publicly reachable. Without this check, an
+      // attacker could POST directly with any forged x-tracker-client-ip.
+      // The Next.js proxy is the only thing that knows TRACKER_PROXY_SECRET,
+      // so a missing/wrong header means "not from our proxy" → silent drop.
+      const presentedSecret = request.headers.get('x-tracker-proxy-secret') ?? ''
+      if (
+        presentedSecret.length !== proxySecret.length ||
+        !timingSafeEqual(presentedSecret, proxySecret)
+      ) {
+        logConvexError('Tracker collect: proxy secret mismatch', null)
+        return silentSuccess(null)
+      }
+
+      // ── Required client headers (set by the Next.js proxy) ────────
+      const clientIp = (request.headers.get('x-tracker-client-ip') ?? '').trim()
+      const userAgent = request.headers.get('x-tracker-client-ua') ?? ''
+      if (!clientIp) {
+        logConvexError('Tracker collect: missing x-tracker-client-ip', null)
+        return new Response(JSON.stringify({ error: 'Missing client IP' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // ── Body ──────────────────────────────────────────────────────
       const body = await request.json()
       const { type, payload } = body
-
       if (!type || !payload || !payload.website) {
         return new Response(JSON.stringify({ error: 'Invalid request' }), {
           status: 400,
@@ -38,18 +97,44 @@ http.route({
         })
       }
 
-      // Session dedup: use x-umami-cache header if present, otherwise generate new
-      const incomingCache = request.headers.get('x-umami-cache')
-      const sessionId =
-        incomingCache ||
-        payload.id ||
-        `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+      // ── Derive identifiers ────────────────────────────────────────
+      let ipTruncated: string
+      try {
+        ipTruncated = truncateIp(clientIp)
+      } catch (error) {
+        // Mis-formatted IP from the proxy — fail closed, log loudly.
+        logConvexError('Tracker collect: bad client IP', error)
+        return new Response(JSON.stringify({ error: 'Bad client IP' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
 
-      // Store the event via internal mutation
+      const dayUtc = utcDayKey()
+      const websiteIdStr = String(payload.website)
+      const sessionIdWithUa = await deriveSessionId({
+        ipTruncated,
+        userAgent,
+        websiteId: websiteIdStr,
+        dayUtc,
+        secret: hashSecret,
+      })
+      const sessionIdFallback = await deriveSessionId({
+        ipTruncated,
+        userAgent: '',
+        websiteId: websiteIdStr,
+        dayUtc,
+        secret: hashSecret,
+      })
+      const ipHash = await deriveIpHash({ ipTruncated, secret: hashSecret })
+
+      // ── Insert via internal mutation (transactional rate-limit) ───
       await ctx.runMutation(internal.http.insertTrackerEvent, {
-        websiteId: payload.website,
+        websiteId: websiteIdStr,
         eventName: type === 'event' && payload.name ? payload.name : undefined,
-        sessionId,
+        sessionIdWithUa,
+        sessionIdFallback,
+        ipHash,
         url: payload.url || '',
         referrer: payload.referrer || undefined,
         tag: payload.tag || undefined,
@@ -58,18 +143,28 @@ http.route({
         title: payload.title || undefined,
         hostname: payload.hostname || undefined,
         data: payload.data || undefined,
+        dayUtc,
       })
 
-      // Return session ID in both response body and header for session dedup
-      return new Response(JSON.stringify({ success: true, sessionId }), {
+      // Echo a sessionId on the response for client cache parity. The
+      // value is server-derived and changes if the user moves IP/UA — the
+      // client treats it as opaque.
+      return new Response(JSON.stringify({ success: true, sessionId: sessionIdWithUa }), {
         status: 200,
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json',
-          'x-umami-cache': sessionId,
+          'x-umami-cache': sessionIdWithUa,
         },
       })
     } catch (error) {
+      if (error instanceof TrackerIdentError || error instanceof SecretMissingError) {
+        logConvexError('Tracker collect: ident error', error)
+        return new Response(JSON.stringify({ error: 'Bad request' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
       logConvexError('Tracker collect error:', error)
       return new Response(JSON.stringify({ error: 'Internal server error' }), {
         status: 500,
@@ -78,6 +173,20 @@ http.route({
     }
   }),
 })
+
+function silentSuccess(sessionId: string | null): Response {
+  return new Response(
+    JSON.stringify(sessionId ? { success: true, sessionId } : { success: true }),
+    {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+        ...(sessionId ? { 'x-umami-cache': sessionId } : {}),
+      },
+    }
+  )
+}
 
 // ── Clerk webhook ─────────────────────────────────────────────────────
 http.route({
@@ -144,9 +253,11 @@ import { cascadeDeleteUserData } from './lib/userCleanup'
 
 export const insertTrackerEvent = internalMutation({
   args: {
-    websiteId: v.string(), // Passed as string from external, validated below
+    websiteId: v.string(),
     eventName: v.optional(v.string()),
-    sessionId: v.string(),
+    sessionIdWithUa: v.string(),
+    sessionIdFallback: v.string(),
+    ipHash: v.string(),
     url: v.string(),
     referrer: v.optional(v.string()),
     tag: v.optional(v.string()),
@@ -155,21 +266,58 @@ export const insertTrackerEvent = internalMutation({
     title: v.optional(v.string()),
     hostname: v.optional(v.string()),
     data: v.optional(v.any()),
+    dayUtc: v.string(),
   },
   handler: async (ctx, args) => {
-    // Validate website exists — websiteId comes from an external source as a string
+    // Validate website exists — websiteId comes from an external source as a string.
     const normalizedId = ctx.db.normalizeId('trackerWebsites', args.websiteId)
     if (!normalizedId) return
-
     const website = await ctx.db.get(normalizedId)
     if (!website) return
 
-    // Extract UTM params from URL
+    // Domain enforcement — when the website is registered with a domain,
+    // refuse events whose payload.hostname doesn't match. Prevents trivial
+    // cross-site forgery where someone copies another startup's tracker id.
+    if (website.domain && args.hostname && !hostnameMatches(args.hostname, website.domain)) {
+      return
+    }
+
+    // Event rate limit: silent drop on overflow. Attacker sees no signal.
+    const evtKey = `${args.ipHash}:${args.websiteId}`
+    const evtLimit = await rateLimiter.limit(ctx, 'trackerEvent', { key: evtKey })
+    if (!evtLimit.ok) return
+
+    // Pick which sessionId to record:
+    //  - If the UA-keyed sessionId is already known for this site today,
+    //    reuse it (this is the common case — a returning visitor's pageview).
+    //  - If not, attempt to spend a new-session token. Token granted →
+    //    record as a new unique session under the UA-keyed id.
+    //  - Token denied → collapse onto the fallback sessionId (no UA in the
+    //    hash). Defeats UA rotation: events still land but stop minting
+    //    unique sessions.
+    const startOfDayMs = utcDayStartMs(args.dayUtc)
+    const existing = await ctx.db
+      .query('trackerEvents')
+      .withIndex('by_websiteId_sessionId', (q) =>
+        q.eq('websiteId', normalizedId).eq('sessionId', args.sessionIdWithUa)
+      )
+      .filter((q) => q.gte(q.field('_creationTime'), startOfDayMs))
+      .first()
+
+    let finalSessionId: string
+    if (existing) {
+      finalSessionId = args.sessionIdWithUa
+    } else {
+      const nsKey = `${args.ipHash}:${args.websiteId}:${args.dayUtc}`
+      const nsLimit = await rateLimiter.limit(ctx, 'trackerNewSession', { key: nsKey })
+      finalSessionId = nsLimit.ok ? args.sessionIdWithUa : args.sessionIdFallback
+    }
+
     const utmParams = extractUTMParams(args.url)
 
     await ctx.db.insert('trackerEvents', {
       websiteId: normalizedId,
-      sessionId: args.sessionId,
+      sessionId: finalSessionId,
       eventName: args.eventName,
       url: normalizeUrl(args.url),
       referrer: args.referrer ? normalizeUrl(args.referrer) : undefined,
@@ -184,6 +332,7 @@ export const insertTrackerEvent = internalMutation({
       title: args.title,
       hostname: args.hostname,
       data: args.data,
+      sourceIpHash: args.ipHash,
     })
 
     await ctx.db.patch(normalizedId, { lastEventAt: new Date().toISOString() })
@@ -236,4 +385,22 @@ function extractUTMParams(url: string): {
   } catch {
     return {}
   }
+}
+
+/**
+ * Check whether an event's reported hostname matches the registered domain
+ * for the website. Subdomains of the registered domain are accepted (so
+ * setting `example.com` covers both apex and `app.example.com`).
+ */
+function hostnameMatches(hostname: string, domain: string): boolean {
+  const h = hostname.trim().toLowerCase()
+  const d = domain.trim().toLowerCase()
+  if (!d) return true
+  return h === d || h.endsWith(`.${d}`)
+}
+
+function utcDayStartMs(dayUtc: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayUtc)
+  if (!m) return 0
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
 }
