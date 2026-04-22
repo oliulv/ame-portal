@@ -411,9 +411,16 @@ export default defineSchema({
     title: v.optional(v.string()),
     hostname: v.optional(v.string()),
     data: v.optional(v.any()),
+    /**
+     * HMAC of the truncated client IP, scoped to the deployment's
+     * TRACKER_HASH_SECRET. Optional because rows predating the
+     * anti-gaming work have no IP recorded.
+     */
+    sourceIpHash: v.optional(v.string()),
   })
     .index('by_websiteId', ['websiteId'])
-    .index('by_websiteId_eventName', ['websiteId', 'eventName']),
+    .index('by_websiteId_eventName', ['websiteId', 'eventName'])
+    .index('by_websiteId_sessionId', ['websiteId', 'sessionId']),
 
   // ── Cohort Events ─────────────────────────────────────────────
   cohortEvents: defineTable({

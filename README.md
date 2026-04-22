@@ -20,6 +20,21 @@ bun dev
 
 Visit http://localhost:3000
 
+### Required env vars
+
+The traffic tracker endpoint uses two server-only secrets. Set both in
+your Convex env (dev and prod) before running locally or deploying:
+
+```bash
+npx convex env set TRACKER_HASH_SECRET "$(openssl rand -hex 32)"
+npx convex env set TRACKER_PROXY_SECRET "$(openssl rand -hex 32)"
+```
+
+Set the same `TRACKER_PROXY_SECRET` in your Vercel project env so the
+Next.js proxy route can authenticate to Convex. The hash secret is only
+needed inside Convex — rotating it invalidates all live tracker session
+ids, so rotate at UTC midnight when impact is minimal.
+
 ## Architecture
 
 ### Admin Portal (`/admin`)

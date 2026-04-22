@@ -1,6 +1,6 @@
 {
   "name": "accelerateme-internal-tool",
-  "version": "0.1.5.0",
+  "version": "0.2.0.0",
   "private": true,
   "scripts": {
     "dev": "npx convex dev --once && npx convex dev & next dev",
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.1",
+    "@convex-dev/rate-limiter": "^0.3.2",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",

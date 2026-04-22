@@ -35,6 +35,7 @@ import type * as invoiceBatching from "../invoiceBatching.js";
 import type * as invoiceValidation from "../invoiceValidation.js";
 import type * as invoices from "../invoices.js";
 import type * as leaderboard from "../leaderboard.js";
+import type * as lib_clientIdent from "../lib/clientIdent.js";
 import type * as lib_dateUtils from "../lib/dateUtils.js";
 import type * as lib_githubStats from "../lib/githubStats.js";
 import type * as lib_inviteAccept from "../lib/inviteAccept.js";
@@ -46,6 +47,7 @@ import type * as lib_otp from "../lib/otp.js";
 import type * as lib_providers from "../lib/providers.js";
 import type * as lib_random from "../lib/random.js";
 import type * as lib_scoring from "../lib/scoring.js";
+import type * as lib_scrubMath from "../lib/scrubMath.js";
 import type * as lib_slugify from "../lib/slugify.js";
 import type * as lib_streak from "../lib/streak.js";
 import type * as lib_stripeMrr from "../lib/stripeMrr.js";
@@ -55,6 +57,7 @@ import type * as metrics from "../metrics.js";
 import type * as migrations_backfillConnectedByUserId from "../migrations/backfillConnectedByUserId.js";
 import type * as migrations_backfillIsPartnership from "../migrations/backfillIsPartnership.js";
 import type * as migrations_backfillMilestoneLastSubmittedAt from "../migrations/backfillMilestoneLastSubmittedAt.js";
+import type * as migrations_scrubRedefineMeSpikes from "../migrations/scrubRedefineMeSpikes.js";
 import type * as migrations_stripBankDetailsVerified from "../migrations/stripBankDetailsVerified.js";
 import type * as migrations_stripUpdateStreak from "../migrations/stripUpdateStreak.js";
 import type * as migrations_updateSupabasePerk from "../migrations/updateSupabasePerk.js";
@@ -104,6 +107,7 @@ declare const fullApi: ApiFromModules<{
   invoiceValidation: typeof invoiceValidation;
   invoices: typeof invoices;
   leaderboard: typeof leaderboard;
+  "lib/clientIdent": typeof lib_clientIdent;
   "lib/dateUtils": typeof lib_dateUtils;
   "lib/githubStats": typeof lib_githubStats;
   "lib/inviteAccept": typeof lib_inviteAccept;
@@ -115,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   "lib/providers": typeof lib_providers;
   "lib/random": typeof lib_random;
   "lib/scoring": typeof lib_scoring;
+  "lib/scrubMath": typeof lib_scrubMath;
   "lib/slugify": typeof lib_slugify;
   "lib/streak": typeof lib_streak;
   "lib/stripeMrr": typeof lib_stripeMrr;
@@ -124,6 +129,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/backfillConnectedByUserId": typeof migrations_backfillConnectedByUserId;
   "migrations/backfillIsPartnership": typeof migrations_backfillIsPartnership;
   "migrations/backfillMilestoneLastSubmittedAt": typeof migrations_backfillMilestoneLastSubmittedAt;
+  "migrations/scrubRedefineMeSpikes": typeof migrations_scrubRedefineMeSpikes;
   "migrations/stripBankDetailsVerified": typeof migrations_stripBankDetailsVerified;
   "migrations/stripUpdateStreak": typeof migrations_stripUpdateStreak;
   "migrations/updateSupabasePerk": typeof migrations_updateSupabasePerk;
@@ -166,4 +172,139 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  rateLimiter: {
+    lib: {
+      checkRateLimit: FunctionReference<
+        "query",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count?: number;
+          key?: string;
+          name: string;
+          reserve?: boolean;
+          throws?: boolean;
+        },
+        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
+      >;
+      clearAll: FunctionReference<
+        "mutation",
+        "internal",
+        { before?: number },
+        null
+      >;
+      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+      getValue: FunctionReference<
+        "query",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          key?: string;
+          name: string;
+          sampleShards?: number;
+        },
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          shard: number;
+          ts: number;
+          value: number;
+        }
+      >;
+      rateLimit: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count?: number;
+          key?: string;
+          name: string;
+          reserve?: boolean;
+          throws?: boolean;
+        },
+        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
+      >;
+      resetRateLimit: FunctionReference<
+        "mutation",
+        "internal",
+        { key?: string; name: string },
+        null
+      >;
+    };
+    time: {
+      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+    };
+  };
+};
