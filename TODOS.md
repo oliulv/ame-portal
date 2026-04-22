@@ -64,17 +64,30 @@
 
 **Depends on:** `happy-dom`, `@testing-library/react`, and Playwright setup.
 
-## Tracker Anti-Gaming (IP + Session Verification)
+## Tracker Proof-of-Work / Challenge Beacon
 
-**What:** The in-house traffic tracker accepts session pings without verifying the source. Startups can script fake sessions to inflate the `tracker/sessions` metric that drives the Traffic category on the leaderboard (up to 20% of total score). At minimum: hash + store the source IP per event, rate-limit per IP per day, and reject obviously synthetic patterns (burst of N sessions from one IP, no pageview follow-up, headless UA). Longer term: proof-of-work beacon, server-side validation against the tracker script's origin header, or an anomaly-detection job that flags suspicious spikes.
+**What:** Add a server-issued, short-lived signed token that `tracker.js` must fetch (and include in every event POST) before its events are accepted. Origin-bound, nonce-backed, set as an httpOnly cookie so a scripted POST without a real prior page-load fails verification.
 
-**Why:** At least one startup is already trying to game the leaderboard for extra funding. A 20%-weighted category that accepts unvalidated numeric inputs is a direct incentive to cheat. This undermines the whole "funds flow to outliers" thesis and corrodes trust in the rankings.
+**Why:** The IP-hash + rate-limit work hardens against single-IP scripters but does nothing against an attacker with distributed residential proxies. A challenge beacon raises the bar: the attacker's script also has to do a round-trip and persist a cookie per "session," which is harder to scale cheaply. Codex flagged this during the eng review as the only thing that meaningfully bites distributed-IP attacks.
 
-**Context:** Current ingest in `convex/metrics.ts` around the `sessions` metric bucket counts unique `sessionId` values per day from `trackerEvents`. `sessionId` is client-generated, no IP is stored, no rate limit. Options: (a) add `sourceIp` field to `trackerEvents` via HTTP action that reads `x-forwarded-for`, hash it, dedupe sessions by ip-hash too; (b) add a `suspect` flag that a cron sets based on heuristics and have the leaderboard discount suspect sessions; (c) require a `verify` beacon round-trip before a session counts. Start with (a) — lowest effort, catches the naive scripters.
+**Context:** New endpoint (e.g. `/api/tracker/challenge`) returns a signed token bound to (origin, ip-hash, timestamp, nonce). `tracker.js` fetches once on first interaction, stores the cookie, includes the token in subsequent POSTs. `convex/http.ts` validates the token before insert. Token TTL ~30 min. Adds a round-trip on session start and a tracker-script update — coordinate with startups before deploying.
 
-**Depends on:** Decision on whether to store raw IP (GDPR — probably hash only), and on how to handle the existing unvalidated history (delete, flag, or grandfather).
+**Depends on:** Tracker Anti-Gaming (IP fix) shipping first so we can see whether that alone resolves the gaming. Decision on cookie-vs-localStorage for token persistence (cookie is more attacker-resistant but sets an HTTP cookie on every site embedding the tracker — a small UX implication).
+
+## Fix Tracker Rollup Cron Zero-Fill
+
+**What:** `convex/metrics.ts:fetchTrackerMetrics_cron` (line 1644) only upserts `metricsData` buckets for days that have at least one `trackerEvents` row. Days with zero events keep any stale prior `metricsData` value indefinitely. Fix: emit `value: 0` rows for every day in the 30-day window that has no events.
+
+**Why:** This bug was sidestepped in the tracker-anti-gaming PR by having the spike-scrub migration patch `metricsData` rows directly. But it remains latent: any future manual delete (or another scrub migration) will hit the same trap — events get deleted, metric stays stale, leaderboard reads the lie. Will eventually bite someone.
+
+**Context:** The fix is small (~10 LOC in the cron's bucket-emit loop) but changes the cron's behavior for every site, not just the one that hit the bug. Worth its own PR with explicit verification that no live site relies on the current "skip empty days" behavior. Probably safe but warrants the careful rollout this PR doesn't have time for.
+
+**Depends on:** Nothing strictly. Could ship anytime.
 
 ## Completed
+
+### Tracker Anti-Gaming (IP + Session Verification)
+**Completed:** branch `tracker-anti-gaming` (2026-04-22 plan, ships with v0.1.6.0). Server-derived sessionId via HMAC(ip||ua||websiteId||utcDay), `sourceIpHash` stored on trackerEvents, two-layer rate limit via `@convex-dev/rate-limiter` (60 events/min/IP/site + 15 new sessions/IP/site/day), shared proxy-secret to lock the public Convex endpoint to Next.js-originated traffic, fail-closed on missing secrets, domain enforcement against `trackerWebsites.domain`. Spike-scrub migration `scrubRedefineMeSpikes` cleaned 4/17 + 4/19 spikes on "redefine me" tracker by deleting the largest sessionId clusters down to baseline; leaderboard recomputed via direct `metricsData` upsert (sidestepping the rollup cron's zero-fill bug, separately tracked above).
 
 ### UI Cleanups Deferred From Leaderboard Scoring PR
 **Completed:** 2026-04-21. All 5 items shipped as the UI polish follow-up PR (FAV column removal, clickable GitHub usernames, Sync button height alignment, session-scoped tab caching, query ungating to kill tab-switch jump).
