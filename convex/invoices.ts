@@ -7,6 +7,7 @@ import {
   requireAdminWithPermission,
   requireFounder,
   requireAuth,
+  requireStartupAccess,
   getFounderStartupIds,
 } from './auth'
 import { validateInvoiceFileName, extractInvoiceNumber } from './invoiceValidation'
@@ -15,6 +16,12 @@ import {
   computeNextInvoiceNumber,
   computeAvailableBalance,
 } from './lib/invoiceLogic'
+import { isStorageIdOnInvoice } from './lib/invoiceAccess'
+
+// Upload claim TTL. A founder must attach a claimed storageId to an invoice
+// (or cancel it) within this window. Longer than a typical upload + extract +
+// confirm loop, short enough that stale claims don't accumulate.
+const STORAGE_CLAIM_TTL_MS = 60 * 60 * 1000 // 1h
 
 /**
  * Generate a pre-signed upload URL for invoice files.
@@ -28,22 +35,69 @@ export const generateUploadUrl = mutation({
 })
 
 /**
- * Delete a stored file (cleanup for cancelled uploads).
+ * Claim ownership of a freshly-uploaded storage blob. Called by the client
+ * immediately after a successful upload. Rejects if the storageId has
+ * already been claimed by another user — the legitimate uploader writes
+ * the claim before any other party learns the storageId, so a race is only
+ * exploitable by someone who already has the ID (not useful).
  */
-export const deleteStorageFile = mutation({
+export const claimStorageUpload = mutation({
   args: { storageId: v.id('_storage') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
-    await ctx.storage.delete(args.storageId)
+    const user = await requireAuth(ctx)
+    const existing = await ctx.db
+      .query('storageClaims')
+      .withIndex('by_storageId', (q) => q.eq('storageId', args.storageId))
+      .unique()
+    if (existing) {
+      if (existing.uploaderUserId === user._id) return
+      throw new ConvexError('Storage already claimed by another user')
+    }
+    await ctx.db.insert('storageClaims', {
+      storageId: args.storageId,
+      uploaderUserId: user._id,
+      createdAt: Date.now(),
+    })
   },
 })
 
 /**
- * Get a URL for a stored file.
+ * Delete a stored file (cleanup for cancelled uploads). Gated on the
+ * storageClaims record — only the user who uploaded the blob can delete it.
  */
-export const getFileUrl = query({
+export const deleteStorageFile = mutation({
   args: { storageId: v.id('_storage') },
   handler: async (ctx, args) => {
+    const user = await requireAuth(ctx)
+    const claim = await ctx.db
+      .query('storageClaims')
+      .withIndex('by_storageId', (q) => q.eq('storageId', args.storageId))
+      .unique()
+    if (!claim || claim.uploaderUserId !== user._id) {
+      throw new ConvexError('Not authorized to delete this file')
+    }
+    await ctx.storage.delete(args.storageId)
+    await ctx.db.delete(claim._id)
+  },
+})
+
+/**
+ * Get a URL for a stored file. Requires the caller to identify which invoice
+ * the file belongs to, and is gated on startup access. Prevents handing out
+ * signed URLs for storage IDs that belong to other startups.
+ */
+export const getFileUrl = query({
+  args: {
+    invoiceId: v.id('invoices'),
+    storageId: v.id('_storage'),
+  },
+  handler: async (ctx, args) => {
+    const invoice = await ctx.db.get(args.invoiceId)
+    if (!invoice) throw new Error('Invoice not found')
+    await requireStartupAccess(ctx, invoice.startupId)
+    if (!isStorageIdOnInvoice(invoice, args.storageId)) {
+      throw new Error('File not found on invoice')
+    }
     return await ctx.storage.getUrl(args.storageId)
   },
 })
@@ -134,6 +188,26 @@ export const create = mutation({
       throw new ConvexError(
         `Amount exceeds available balance. You have £${available.toFixed(2)} available.`
       )
+    }
+
+    // Verify the caller uploaded every storage blob they are about to attach,
+    // then consume the claims. Stops a founder from attaching another user's
+    // leaked storage ID to their own invoice (the getFileUrl whitelist alone
+    // doesn't help if arbitrary IDs can be whitelisted at create time).
+    const allStorageIds = [args.storageId, ...args.receiptStorageIds]
+    const now = Date.now()
+    for (const sid of allStorageIds) {
+      const claim = await ctx.db
+        .query('storageClaims')
+        .withIndex('by_storageId', (q) => q.eq('storageId', sid))
+        .unique()
+      if (!claim || claim.uploaderUserId !== user._id) {
+        throw new ConvexError('Upload not claimed by caller')
+      }
+      if (now - claim.createdAt > STORAGE_CLAIM_TTL_MS) {
+        throw new ConvexError('Upload claim expired — please re-upload the file')
+      }
+      await ctx.db.delete(claim._id)
     }
 
     const invoiceId = await ctx.db.insert('invoices', {
@@ -334,13 +408,16 @@ export const getNextSubmitted = query({
 })
 
 /**
- * Get a single invoice by ID.
+ * Get a single invoice by ID. Gated on startup access: admins see all,
+ * founders only invoices for startups they belong to.
  */
 export const getById = query({
   args: { id: v.id('invoices') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
-    return await ctx.db.get(args.id)
+    const invoice = await ctx.db.get(args.id)
+    if (!invoice) return null
+    await requireStartupAccess(ctx, invoice.startupId)
+    return invoice
   },
 })
 
@@ -576,26 +653,33 @@ export const sendToXero = internalAction({
 })
 
 /**
- * Get component invoices for a batch invoice.
+ * Get component invoices for a batch invoice. Silently drops any invoice
+ * the caller cannot access so a malformed ID list doesn't break the view
+ * for legitimate callers.
  */
 export const getComponentInvoices = query({
   args: { ids: v.array(v.id('invoices')) },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    const user = await requireAuth(ctx)
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+    const startupIds = isAdmin
+      ? new Set<string>()
+      : new Set<string>(await getFounderStartupIds(ctx, user._id))
+
     const results = []
     for (const id of args.ids) {
       const inv = await ctx.db.get(id)
-      if (inv) {
-        results.push({
-          _id: inv._id,
-          vendorName: inv.vendorName,
-          amountGbp: inv.amountGbp,
-          invoiceDate: inv.invoiceDate,
-          fileName: inv.fileName,
-          storageId: inv.storageId,
-          description: inv.description,
-        })
-      }
+      if (!inv) continue
+      if (!isAdmin && !startupIds.has(inv.startupId)) continue
+      results.push({
+        _id: inv._id,
+        vendorName: inv.vendorName,
+        amountGbp: inv.amountGbp,
+        invoiceDate: inv.invoiceDate,
+        fileName: inv.fileName,
+        storageId: inv.storageId,
+        description: inv.description,
+      })
     }
     return results
   },

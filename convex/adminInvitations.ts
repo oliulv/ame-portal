@@ -3,17 +3,28 @@ import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireAdmin } from './auth'
 import { generateToken, getExpiration } from './lib/tokens'
+import { evaluateInviteAccept } from './lib/inviteAccept'
 
 /**
- * Get an admin invitation by token (public, used in accept flow).
+ * Get an admin invitation by token (public, used in accept flow). Returns a
+ * minimal projection — no token, no role, no cohortId, no internal IDs —
+ * so a successful lookup by a guessed token leaks only the invited
+ * email/name and expiry state, and never reveals the privilege tier.
  */
 export const getByToken = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const inv = await ctx.db
       .query('adminInvitations')
       .withIndex('by_token', (q) => q.eq('token', args.token))
       .unique()
+    if (!inv) return null
+    return {
+      email: inv.email,
+      invitedName: inv.invitedName,
+      expiresAt: inv.expiresAt,
+      acceptedAt: inv.acceptedAt,
+    }
   },
 })
 
@@ -161,32 +172,56 @@ export const revoke = mutation({
 
 /**
  * Accept an admin invitation.
+ *
+ * Security: the caller must be authenticated with Clerk, and the Clerk
+ * identity email must match the invitation email (case-insensitive). We
+ * derive `clerkId` from `ctx.auth.getUserIdentity()` rather than accepting
+ * it as a client-supplied argument — a token-holder cannot bind an admin
+ * or super_admin invitation to an arbitrary Clerk account.
  */
 export const accept = mutation({
-  args: { token: v.string(), clerkId: v.string() },
+  args: { token: v.string() },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+    const clerkId = identity.subject
+    const clerkEmail = identity.email
+
     const invitation = await ctx.db
       .query('adminInvitations')
       .withIndex('by_token', (q) => q.eq('token', args.token))
       .unique()
 
     if (!invitation) throw new Error('Invitation not found')
+
+    const decision = evaluateInviteAccept(invitation, clerkEmail, new Date())
+    if (decision.ok === false && decision.reason === 'wrong_email') {
+      throw new Error('This invitation was sent to a different email address')
+    }
+
     if (invitation.acceptedAt) throw new Error('Already accepted')
     if (new Date(invitation.expiresAt) < new Date()) throw new Error('Invitation expired')
 
-    // Create or update user record
+    // Create or update user record. Never downgrade an existing higher-privilege
+    // user: an admin who can issue invitations should not be able to strip a
+    // super_admin's role by inviting them as `admin` and waiting for them to
+    // click accept.
+    const ROLE_PRIORITY = { founder: 0, admin: 1, super_admin: 2 } as const
+
     const existingUser = await ctx.db
       .query('users')
-      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', clerkId))
       .unique()
 
     let userId
     if (existingUser) {
-      await ctx.db.patch(existingUser._id, { role: invitation.role })
+      if (ROLE_PRIORITY[invitation.role] > ROLE_PRIORITY[existingUser.role]) {
+        await ctx.db.patch(existingUser._id, { role: invitation.role })
+      }
       userId = existingUser._id
     } else {
       userId = await ctx.db.insert('users', {
-        clerkId: args.clerkId,
+        clerkId,
         role: invitation.role,
         email: invitation.email,
         fullName: invitation.invitedName,

@@ -54,7 +54,7 @@ export default function AdminInvitePage() {
     const doAccept = async () => {
       setStatus('accepting')
       try {
-        await acceptAdminInvite({ token, clerkId: userId })
+        await acceptAdminInvite({ token })
         setStatus('success')
         router.push('/admin')
       } catch (err) {

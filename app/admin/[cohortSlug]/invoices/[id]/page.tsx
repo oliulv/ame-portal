@@ -50,15 +50,20 @@ import {
 import { toast } from 'sonner'
 
 function ReceiptLink({
+  invoiceId,
   storageId,
   fileName,
   onPreview,
 }: {
+  invoiceId: Id<'invoices'>
   storageId: string
   fileName: string
   onPreview: (url: string, title: string) => void
 }) {
-  const url = useQuery(api.invoices.getFileUrl, { storageId: storageId as any })
+  const url = useQuery(api.invoices.getFileUrl, {
+    invoiceId,
+    storageId: storageId as Id<'_storage'>,
+  })
   if (!url) return <span className="text-sm text-muted-foreground">Loading file...</span>
   return (
     <div className="inline-flex items-center gap-2">
@@ -105,7 +110,7 @@ export default function InvoiceDetailPage() {
   )
   const fileUrl = useQuery(
     api.invoices.getFileUrl,
-    invoice?.storageId ? { storageId: invoice.storageId } : 'skip'
+    invoice?.storageId ? { invoiceId, storageId: invoice.storageId } : 'skip'
   )
 
   // Separate original invoices from receipts for batch invoices
@@ -437,6 +442,7 @@ export default function InvoiceDetailPage() {
                     {receiptStorageIds.map((sid, i) => (
                       <ReceiptLink
                         key={sid}
+                        invoiceId={invoiceId}
                         storageId={sid}
                         fileName={receiptFileNames[i] || `Receipt ${i + 1}`}
                         onPreview={openPdfViewer}
@@ -471,6 +477,7 @@ export default function InvoiceDetailPage() {
                       <TableRow key={comp._id}>
                         <TableCell>
                           <ReceiptLink
+                            invoiceId={comp._id}
                             storageId={comp.storageId}
                             fileName={comp.fileName}
                             onPreview={openPdfViewer}

@@ -1,22 +1,13 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { signState } from '@/lib/oauthState'
 
 /**
  * GET /api/integrations/github/authorize
  *
- * Redirects to GitHub App's OAuth user-authorization endpoint. This ALWAYS
- * issues a `code` to our callback regardless of whether the App is already
- * installed, so reconnecting users always get a fresh user-to-server token.
- *
- * For private-repo access the founder ALSO needs to install the App — that
- * is a separate flow at `/api/integrations/github/install` (surfaced via
- * the restricted-contributions banner).
- *
- * CSRF: currently unprotected beyond what Clerk auth gives us in the
- * callback. The earlier cookie-based state verification was silently
- * failing in Next.js App Router Route Handlers, producing `invalid_state`
- * on every attempt. Follow-up (TODO): signed state parameter (HMAC over
- * userId + timestamp) carried in the URL, verified without a cookie.
+ * Redirects to GitHub App's OAuth user-authorization endpoint with a signed
+ * CSRF `state` parameter scoped to the current Clerk user. The callback
+ * verifies the state before exchanging the code — see ../callback/route.ts.
  */
 export async function GET() {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')
@@ -31,8 +22,13 @@ export async function GET() {
     return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_not_configured`)
   }
 
+  const state = signState({ u: userId })
   const redirectUri = `${appUrl}/api/integrations/github/callback`
-  const url = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}`
+  const url =
+    `https://github.com/login/oauth/authorize` +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&state=${encodeURIComponent(state)}`
 
   return NextResponse.redirect(url)
 }

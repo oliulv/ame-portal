@@ -4,6 +4,7 @@ import { v } from 'convex/values'
 import { requireAdmin } from './auth'
 import { generateToken, getExpiration } from './lib/tokens'
 import { evaluateUserCleanup } from './lib/userCleanup'
+import { evaluateInviteAccept } from './lib/inviteAccept'
 
 /**
  * List invitations for a specific startup.
@@ -71,15 +72,26 @@ export const listTeamAndPending = query({
 })
 
 /**
- * Get an invitation by token (public, used in accept flow).
+ * Get an invitation by token (public, used in accept flow). Returns a
+ * minimal projection — no token, no internal IDs, no admin attribution —
+ * so a successful lookup by a guessed token leaks only the invited
+ * email/name and expiry state, which the client needs to render the
+ * accept UI.
  */
 export const getByToken = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const inv = await ctx.db
       .query('invitations')
       .withIndex('by_token', (q) => q.eq('token', args.token))
       .unique()
+    if (!inv) return null
+    return {
+      email: inv.email,
+      fullName: inv.fullName,
+      expiresAt: inv.expiresAt,
+      acceptedAt: inv.acceptedAt,
+    }
   },
 })
 
@@ -147,21 +159,38 @@ export const create = mutation({
 
 /**
  * Accept an invitation (called when founder clicks invite link).
+ *
+ * Security: the caller must be authenticated with Clerk, and the Clerk
+ * identity email must match the invitation email (case-insensitive). We
+ * derive `clerkId` from `ctx.auth.getUserIdentity()` rather than accepting
+ * it as a client-supplied argument — a token-holder cannot bind the
+ * invitation to an arbitrary Clerk account.
  */
 export const accept = mutation({
-  args: { token: v.string(), clerkId: v.string() },
+  args: { token: v.string() },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+    const clerkId = identity.subject
+    const clerkEmail = identity.email
+
     const invitation = await ctx.db
       .query('invitations')
       .withIndex('by_token', (q) => q.eq('token', args.token))
       .unique()
-
     if (!invitation) throw new Error('Invitation not found')
+
+    const decision = evaluateInviteAccept(invitation, clerkEmail, new Date())
+
+    if (decision.ok === false && decision.reason === 'wrong_email') {
+      throw new Error('This invitation was sent to a different email address')
+    }
+
     if (invitation.acceptedAt) {
       // Idempotent: if this same user already accepted, return silently
       const existingUser = await ctx.db
         .query('users')
-        .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+        .withIndex('by_clerkId', (q) => q.eq('clerkId', clerkId))
         .unique()
       if (existingUser) {
         const existingProfile = await ctx.db
@@ -178,7 +207,7 @@ export const accept = mutation({
     // Create user record
     const existingUser = await ctx.db
       .query('users')
-      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', clerkId))
       .unique()
 
     let userId
@@ -195,7 +224,7 @@ export const accept = mutation({
       }
     } else {
       userId = await ctx.db.insert('users', {
-        clerkId: args.clerkId,
+        clerkId,
         role: 'founder',
         // Set email/fullName from invitation for new users — ensureUser()
         // will sync from Clerk on subsequent logins.
