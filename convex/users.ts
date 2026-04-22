@@ -268,6 +268,7 @@ export const cleanupOrphanedData = internalMutation({
       adminCohorts: 0,
       perkClaims: 0,
       eventRegistrations: 0,
+      integrationConnections: 0,
     }
 
     // 1. founderProfiles where userId → non-existent user
@@ -277,27 +278,33 @@ export const cleanupOrphanedData = internalMutation({
     for (const profile of allProfiles) {
       const user = await ctx.db.get(profile.userId)
       if (!user) {
-        // Track startupId + email for invitation cleanup
+        // Track startupId + email (lowercased) for case-insensitive invitation cleanup
         if (!orphanedProfilesByStartup.has(profile.startupId)) {
           orphanedProfilesByStartup.set(profile.startupId, new Set())
         }
-        orphanedProfilesByStartup.get(profile.startupId)!.add(profile.personalEmail)
+        orphanedProfilesByStartup.get(profile.startupId)!.add(profile.personalEmail.toLowerCase())
         await ctx.db.delete(profile._id)
         summary.founderProfiles++
       }
     }
 
     // 2. invitations with acceptedAt where no matching founderProfile exists
-    //    (also clean up invitations matching orphaned profiles we just deleted)
+    //    (also clean up invitations matching orphaned profiles we just deleted).
+    //    All email comparisons are case-insensitive — exact match misses case-drifted rows.
     const allInvitations = await ctx.db.query('invitations').collect()
     for (const invitation of allInvitations) {
-      // Case A: accepted invitation but no matching founderProfile
+      const inviteEmailLower = invitation.email.toLowerCase()
+
+      // Case A: accepted invitation but no matching founderProfile (case-insensitive)
       if (invitation.acceptedAt) {
-        const matchingProfile = await ctx.db
+        const startupProfiles = await ctx.db
           .query('founderProfiles')
           .withIndex('by_startupId', (q) => q.eq('startupId', invitation.startupId))
-          .filter((q) => q.eq(q.field('personalEmail'), invitation.email))
-          .first()
+          .collect()
+
+        const matchingProfile = startupProfiles.find(
+          (p) => p.personalEmail.toLowerCase() === inviteEmailLower
+        )
 
         if (!matchingProfile) {
           await ctx.db.delete(invitation._id)
@@ -308,9 +315,29 @@ export const cleanupOrphanedData = internalMutation({
 
       // Case B: invitation matches a profile we just deleted as orphaned
       const orphanedEmails = orphanedProfilesByStartup.get(invitation.startupId)
-      if (orphanedEmails?.has(invitation.email)) {
+      if (orphanedEmails?.has(inviteEmailLower)) {
         await ctx.db.delete(invitation._id)
         summary.invitations++
+      }
+    }
+
+    // 6. integrationConnections where connectedByUserId → non-existent user.
+    //    Detach (null out + disconnect) so the next founder can reconnect cleanly.
+    //    Don't delete — the row may hold financial/audit history (Stripe, GitHub).
+    const allConnections = await ctx.db.query('integrationConnections').collect()
+    for (const conn of allConnections) {
+      if (!conn.connectedByUserId) continue
+      const user = await ctx.db.get(conn.connectedByUserId)
+      if (!user) {
+        await ctx.db.patch(conn._id, {
+          connectedByUserId: undefined,
+          isActive: false,
+          status: 'disconnected',
+          accessToken: undefined,
+          refreshToken: undefined,
+          tokenExpiresAt: undefined,
+        })
+        summary.integrationConnections++
       }
     }
 
