@@ -33,6 +33,12 @@ describe('truncateIp — IPv4', () => {
     expect(truncateIp('0.0.0.0')).toBe('0.0.0.0')
   })
 
+  test('canonicalizes leading zeros', () => {
+    // "01.02.03.04" and "1.2.3.4" must produce the same fingerprint.
+    expect(truncateIp('01.02.03.04')).toBe('1.2.3.4')
+    expect(truncateIp('001.002.003.004')).toBe('1.2.3.4')
+  })
+
   test('strips whitespace', () => {
     expect(truncateIp('  10.0.0.1  ')).toBe('10.0.0.1')
   })
@@ -40,6 +46,11 @@ describe('truncateIp — IPv4', () => {
   test('rejects invalid octet', () => {
     expect(() => truncateIp('256.1.1.1')).toThrow(TrackerIdentError)
     expect(() => truncateIp('-1.1.1.1')).toThrow(TrackerIdentError)
+  })
+
+  test('rejects IPs beyond max length', () => {
+    const tooLong = '1.2.3.4' + 'x'.repeat(100)
+    expect(() => truncateIp(tooLong)).toThrow(TrackerIdentError)
   })
 })
 
@@ -55,8 +66,9 @@ describe('truncateIp — IPv4-mapped IPv6', () => {
 })
 
 describe('truncateIp — IPv6 /64 truncation', () => {
-  test('keeps first four groups, zeros rest', () => {
-    expect(truncateIp('2001:db8:abcd:0012:1:2:3:4')).toBe('2001:db8:abcd:0012::')
+  test('keeps first four groups, zeros rest, strips leading zeros', () => {
+    // Canonical form collapses leading zeros so "0012" and "12" match.
+    expect(truncateIp('2001:db8:abcd:0012:1:2:3:4')).toBe('2001:db8:abcd:12::')
   })
 
   test('expands "::" mid-address before truncating', () => {
@@ -69,6 +81,13 @@ describe('truncateIp — IPv6 /64 truncation', () => {
 
   test('lowercases', () => {
     expect(truncateIp('2001:DB8:ABCD:12:1:2:3:4')).toBe('2001:db8:abcd:12::')
+  })
+
+  test('canonicalizes leading zeros identically across representations', () => {
+    // "2001:0db8:abcd:0012" and "2001:db8:abcd:12" represent the same prefix.
+    const a = truncateIp('2001:0db8:abcd:0012:1:2:3:4')
+    const b = truncateIp('2001:db8:abcd:12:1:2:3:4')
+    expect(a).toBe(b)
   })
 
   test('rejects multiple "::"', () => {
@@ -175,6 +194,15 @@ describe('deriveSessionId', () => {
   test('treats undefined user-agent as empty (still deterministic, no NaN-ish hash)', async () => {
     const id = await deriveSessionId({ ...base, userAgent: undefined as unknown as string })
     expect(id).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  test('caps user-agent length (two UAs differing only past the cap collide)', async () => {
+    const uaA = 'X'.repeat(600) + 'A'
+    const uaB = 'X'.repeat(600) + 'B'
+    const a = await deriveSessionId({ ...base, userAgent: uaA })
+    const b = await deriveSessionId({ ...base, userAgent: uaB })
+    // Both UAs are truncated to MAX_UA_LENGTH, so the trailing byte is cut.
+    expect(a).toBe(b)
   })
 })
 

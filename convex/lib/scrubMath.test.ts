@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test'
 import { computeBaseline, planSessionTrim } from './scrubMath'
 
 describe('computeBaseline — happy path', () => {
-  test('mean of preceding 7 days', () => {
+  test('mean of preceding 7 days (only days with traffic)', () => {
     const dayCounts = [
       { date: '2026-04-10', count: 50 },
       { date: '2026-04-11', count: 60 },
@@ -16,11 +16,14 @@ describe('computeBaseline — happy path', () => {
     // (50+60+40+70+80+30+50)/7 = 380/7 = 54.28 → 54
     expect(r.baseline).toBe(54)
     expect(r.contributingDays).toHaveLength(7)
+    expect(r.daysWithTraffic).toHaveLength(7)
     expect(r.excludedDays).toEqual([])
   })
 
-  test('honours custom window', () => {
+  test('honours custom window (still requires minimum days-with-traffic)', () => {
+    // 3 days with traffic, windowDays=3 → baseline = (50+100+200)/3 = 117.
     const dayCounts = [
+      { date: '2026-04-14', count: 50 },
       { date: '2026-04-15', count: 100 },
       { date: '2026-04-16', count: 200 },
     ]
@@ -28,10 +31,10 @@ describe('computeBaseline — happy path', () => {
       dayCounts,
       spikeDate: '2026-04-17',
       otherSpikeDates: [],
-      windowDays: 2,
+      windowDays: 3,
     })
-    expect(r.baseline).toBe(150)
-    expect(r.contributingDays).toEqual(['2026-04-15', '2026-04-16'])
+    expect(r.baseline).toBe(117)
+    expect(r.contributingDays).toEqual(['2026-04-14', '2026-04-15', '2026-04-16'])
   })
 })
 
@@ -59,25 +62,40 @@ describe('computeBaseline — exclude other spike dates', () => {
   })
 })
 
-describe('computeBaseline — missing days', () => {
-  test('missing days count as zero (still averaged over the full window)', () => {
+describe('computeBaseline — sparse data refuses to wipe', () => {
+  test('zero days with traffic → null baseline (too_sparse)', () => {
+    const r = computeBaseline({ dayCounts: [], spikeDate: '2026-04-17', otherSpikeDates: [] })
+    expect(r.baseline).toBeNull()
+    expect(r.insufficientReason).toBe('too_sparse')
+    expect(r.contributingDays).toHaveLength(7)
+    expect(r.daysWithTraffic).toHaveLength(0)
+  })
+
+  test('1-2 days with traffic → null baseline (too_sparse)', () => {
     const dayCounts = [
       { date: '2026-04-15', count: 100 },
       { date: '2026-04-16', count: 100 },
     ]
     const r = computeBaseline({ dayCounts, spikeDate: '2026-04-17', otherSpikeDates: [] })
-    // Only 2 days have data, the other 5 are zero. 200/7 = 28.57 → 29
-    expect(r.baseline).toBe(29)
-    expect(r.contributingDays).toHaveLength(7)
+    // Below MIN_DAYS_WITH_TRAFFIC=3 → refuse, do not return baseline=29 like before.
+    expect(r.baseline).toBeNull()
+    expect(r.insufficientReason).toBe('too_sparse')
+    expect(r.daysWithTraffic).toEqual(['2026-04-15', '2026-04-16'])
   })
 
-  test('all days missing returns zero baseline', () => {
-    const r = computeBaseline({ dayCounts: [], spikeDate: '2026-04-17', otherSpikeDates: [] })
-    expect(r.baseline).toBe(0)
-    expect(r.contributingDays).toHaveLength(7)
+  test('3 days with traffic → baseline computed from those 3 days only', () => {
+    const dayCounts = [
+      { date: '2026-04-14', count: 30 },
+      { date: '2026-04-15', count: 60 },
+      { date: '2026-04-16', count: 90 },
+    ]
+    const r = computeBaseline({ dayCounts, spikeDate: '2026-04-17', otherSpikeDates: [] })
+    // (30+60+90)/3 = 60. Empty days are NOT counted as zero.
+    expect(r.baseline).toBe(60)
+    expect(r.daysWithTraffic).toHaveLength(3)
   })
 
-  test('all days excluded returns zero baseline + empty contributing', () => {
+  test('all days excluded → null baseline (no_window)', () => {
     const dayCounts = [{ date: '2026-04-16', count: 100 }]
     const r = computeBaseline({
       dayCounts,
@@ -92,7 +110,8 @@ describe('computeBaseline — missing days', () => {
         '2026-04-16',
       ],
     })
-    expect(r.baseline).toBe(0)
+    expect(r.baseline).toBeNull()
+    expect(r.insufficientReason).toBe('no_window')
     expect(r.contributingDays).toHaveLength(0)
     expect(r.excludedDays).toHaveLength(7)
   })
@@ -202,6 +221,20 @@ describe('planSessionTrim — empty + edge', () => {
     const r = planSessionTrim({ sessionGroups: [], baseline: 50 })
     expect(r.sessionIdsToDelete).toEqual([])
     expect(r.remainingSessions).toBe(0)
+    expect(r.eventsToDelete).toBe(0)
+  })
+
+  test('null baseline (insufficient data) refuses to delete', () => {
+    const r = planSessionTrim({
+      sessionGroups: [
+        { sessionId: 'huge', eventCount: 9999 },
+        { sessionId: 'small', eventCount: 1 },
+      ],
+      baseline: null,
+    })
+    // Even with an obvious bot, refuse to act when baseline is untrustworthy.
+    expect(r.sessionIdsToDelete).toEqual([])
+    expect(r.remainingSessions).toBe(2)
     expect(r.eventsToDelete).toBe(0)
   })
 })

@@ -27,11 +27,23 @@ export interface BaselineInput {
 }
 
 export interface BaselineResult {
-  /** Rounded mean of contributing-day session counts. */
-  baseline: number
+  /** Rounded mean of days with non-zero traffic in the window. Null when
+   * the window is too sparse to trust (would otherwise risk wiping a site's
+   * data via a near-zero baseline). */
+  baseline: number | null
+  /** All non-excluded days in the window. */
   contributingDays: string[]
+  /** Subset of contributingDays that had at least 1 session. */
+  daysWithTraffic: string[]
   excludedDays: string[]
+  /** When baseline is null, why we refused to compute. */
+  insufficientReason?: 'no_window' | 'too_sparse'
 }
+
+/** Minimum days-with-traffic required before we trust the baseline. Below
+ * this we refuse to delete — better to let the operator widen the window
+ * than to wipe a site that just has a quiet history. */
+const MIN_DAYS_WITH_TRAFFIC = 3
 
 export function computeBaseline(input: BaselineInput): BaselineResult {
   const window = input.windowDays ?? 7
@@ -44,8 +56,9 @@ export function computeBaseline(input: BaselineInput): BaselineResult {
     wanted.push(formatUtcDay(new Date(target.getTime() - i * 86_400_000)))
   }
 
-  const contributing: number[] = []
   const contributingDays: string[] = []
+  const daysWithTraffic: string[] = []
+  const trafficCounts: number[] = []
   const excludedDays: string[] = []
 
   for (const day of wanted) {
@@ -53,17 +66,38 @@ export function computeBaseline(input: BaselineInput): BaselineResult {
       excludedDays.push(day)
       continue
     }
-    contributing.push(byDate.get(day) ?? 0)
     contributingDays.push(day)
+    const count = byDate.get(day) ?? 0
+    if (count > 0) {
+      daysWithTraffic.push(day)
+      trafficCounts.push(count)
+    }
   }
 
-  if (contributing.length === 0) {
-    return { baseline: 0, contributingDays, excludedDays }
+  if (contributingDays.length === 0) {
+    return {
+      baseline: null,
+      contributingDays,
+      daysWithTraffic,
+      excludedDays,
+      insufficientReason: 'no_window',
+    }
   }
-  const sum = contributing.reduce((a, b) => a + b, 0)
+  if (daysWithTraffic.length < MIN_DAYS_WITH_TRAFFIC) {
+    return {
+      baseline: null,
+      contributingDays,
+      daysWithTraffic,
+      excludedDays,
+      insufficientReason: 'too_sparse',
+    }
+  }
+
+  const sum = trafficCounts.reduce((a, b) => a + b, 0)
   return {
-    baseline: Math.round(sum / contributing.length),
+    baseline: Math.round(sum / trafficCounts.length),
     contributingDays,
+    daysWithTraffic,
     excludedDays,
   }
 }
@@ -75,7 +109,9 @@ export interface SessionGroup {
 
 export interface TrimPlanInput {
   sessionGroups: SessionGroup[]
-  baseline: number
+  /** When null, planSessionTrim returns an empty plan — the migration must
+   * not delete on insufficient baseline. */
+  baseline: number | null
 }
 
 export interface TrimPlanResult {
@@ -88,8 +124,18 @@ export interface TrimPlanResult {
  * Pick the largest session clusters first — bot scripts tend to fan out
  * many events onto one session id, so the heaviest clusters are usually
  * the inflated ones. Preserves the long tail of small real sessions.
+ *
+ * Refuses to plan if `baseline` is null — caller (the migration) should
+ * surface the `insufficientReason` instead of deleting blindly.
  */
 export function planSessionTrim(input: TrimPlanInput): TrimPlanResult {
+  if (input.baseline === null) {
+    return {
+      sessionIdsToDelete: [],
+      remainingSessions: input.sessionGroups.length,
+      eventsToDelete: 0,
+    }
+  }
   const current = input.sessionGroups.length
   if (current <= input.baseline) {
     return { sessionIdsToDelete: [], remainingSessions: current, eventsToDelete: 0 }

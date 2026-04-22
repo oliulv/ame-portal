@@ -40,30 +40,44 @@ export function utcDayKey(epochMs: number = Date.now()): string {
 const IPV4_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
 const IPV4_MAPPED_RE = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i
 
+/** Hard cap on IP header length. Anything longer is malformed or hostile. */
+const MAX_IP_LENGTH = 64
+/** Hard cap on user-agent string length used in session derivation. Longer
+ * UAs are truncated; this prevents an attacker from burning CPU on multi-MB
+ * Mozilla strings. 512 chars covers every real browser UA. */
+export const MAX_UA_LENGTH = 512
+
 export function truncateIp(ip: string): string {
   const trimmed = (ip ?? '').trim()
   if (!trimmed) throw new TrackerIdentError('empty IP')
+  if (trimmed.length > MAX_IP_LENGTH) {
+    throw new TrackerIdentError(`IP too long (${trimmed.length} chars)`)
+  }
 
   const mapped = IPV4_MAPPED_RE.exec(trimmed)
-  if (mapped) return validateIpv4(mapped[1])
+  if (mapped) return canonicalizeIpv4(mapped[1])
 
-  if (IPV4_RE.test(trimmed)) return validateIpv4(trimmed)
+  if (IPV4_RE.test(trimmed)) return canonicalizeIpv4(trimmed)
 
   if (trimmed.includes(':')) return truncateIpv6To64(trimmed)
 
   throw new TrackerIdentError(`unrecognized IP format: ${trimmed}`)
 }
 
-function validateIpv4(addr: string): string {
+/** Validates and canonicalizes an IPv4 address. Strips leading zeros so
+ * "01.02.03.04" and "1.2.3.4" hash to the same fingerprint. */
+function canonicalizeIpv4(addr: string): string {
   const parts = addr.split('.')
   if (parts.length !== 4) throw new TrackerIdentError(`invalid IPv4: ${addr}`)
+  const nums: number[] = []
   for (const p of parts) {
     const n = Number(p)
     if (!Number.isInteger(n) || n < 0 || n > 255) {
       throw new TrackerIdentError(`invalid IPv4 octet "${p}" in: ${addr}`)
     }
+    nums.push(n)
   }
-  return addr
+  return nums.join('.')
 }
 
 function truncateIpv6To64(addr: string): string {
@@ -99,7 +113,10 @@ function truncateIpv6To64(addr: string): string {
   }
 
   // Keep first 4 groups (/64), zero the rest, render with trailing "::".
-  return `${groups.slice(0, 4).join(':')}::`
+  // Strip leading zeros from each group so "2001:0db8" and "2001:db8" hash
+  // identically.
+  const canonical = groups.slice(0, 4).map((g) => parseInt(g, 16).toString(16))
+  return `${canonical.join(':')}::`
 }
 
 // ── HMAC helpers ──────────────────────────────────────────────────────
@@ -135,9 +152,9 @@ export async function deriveSessionId(input: SessionDerivationInput): Promise<st
   if (!input.ipTruncated) throw new TrackerIdentError('ipTruncated required')
   if (!input.websiteId) throw new TrackerIdentError('websiteId required')
   if (!input.dayUtc) throw new TrackerIdentError('dayUtc required')
-  const msg = ['s', input.ipTruncated, input.userAgent ?? '', input.websiteId, input.dayUtc].join(
-    '|'
-  )
+  // Cap UA length before hashing so a malicious 1MB UA can't burn CPU.
+  const ua = (input.userAgent ?? '').slice(0, MAX_UA_LENGTH)
+  const msg = ['s', input.ipTruncated, ua, input.websiteId, input.dayUtc].join('|')
   return hmacSha256Hex(input.secret, msg)
 }
 
