@@ -44,6 +44,22 @@ export const run = internalMutation({
     const dryRun = args.dryRun ?? false
     const windowDays = args.windowDays ?? 7
 
+    // ── Validate spike-date input ───────────────────────────────────
+    if (args.spikeDates.length === 0) {
+      throw new Error('spikeDates must not be empty')
+    }
+    const dedupedSpikes = Array.from(new Set(args.spikeDates))
+    if (dedupedSpikes.length !== args.spikeDates.length) {
+      throw new Error(
+        `spikeDates contains duplicates: ${args.spikeDates.join(',')} — refusing to run`
+      )
+    }
+    for (const d of dedupedSpikes) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        throw new Error(`spikeDate "${d}" must be UTC YYYY-MM-DD`)
+      }
+    }
+
     // ── Find the website (refuse if 0 or >1 match by name) ──────────
     const websites = await ctx.db.query('trackerWebsites').collect()
     const matches = websites.filter(
@@ -63,27 +79,42 @@ export const run = internalMutation({
 
     // ── Pull the lookback window's worth of events once ─────────────
     // Find the earliest spike date and walk back `windowDays` more.
-    const sortedSpikes = [...args.spikeDates].sort()
+    const sortedSpikes = [...dedupedSpikes].sort()
     const earliestSpike = parseUtcDay(sortedSpikes[0])
     const latestSpike = parseUtcDay(sortedSpikes[sortedSpikes.length - 1])
     const lookbackStartMs = earliestSpike.getTime() - windowDays * 86_400_000
     const lookbackEndMs = latestSpike.getTime() + 86_400_000 // include the latest spike day
 
+    // Convex per-mutation read budget is finite. Bail before .collect()
+    // if the table is too large to safely scan in one transaction.
+    // Pragmatic cap: the redefine-me scrub processes ~3-5k events; 8k is
+    // well under Convex's typical mutation read ceiling.
+    const MAX_EVENTS_PER_RUN = 8_000
     const allEvents: Array<Doc<'trackerEvents'>> = await ctx.db
       .query('trackerEvents')
       .withIndex('by_websiteId', (q) => q.eq('websiteId', website._id))
       .collect()
+    if (allEvents.length > MAX_EVENTS_PER_RUN) {
+      throw new Error(
+        `Website "${website.name}" has ${allEvents.length} events (cap ${MAX_EVENTS_PER_RUN}). ` +
+          `This migration is one-shot and not safe at this scale. Refactor to paginate before re-running.`
+      )
+    }
     const inWindow = allEvents.filter(
       (e) => e._creationTime >= lookbackStartMs && e._creationTime < lookbackEndMs
     )
 
     // ── Build day → unique session count map for baseline computation
+    // Events without a sessionId are dropped from the count entirely (rather
+    // than synthesized as one-event sessions). Pre-anti-gaming events are
+    // the main source — counting them as fake sessions would inflate the
+    // current-day count and over-trigger deletes.
     const dayCountsMap = new Map<string, Set<string>>()
     for (const event of inWindow) {
+      if (!event.sessionId) continue
       const day = utcDayOf(event._creationTime)
-      const sid = event.sessionId ?? `_no_session_${event._id}`
       const set = dayCountsMap.get(day) ?? new Set<string>()
-      set.add(sid)
+      set.add(event.sessionId)
       dayCountsMap.set(day, set)
     }
     const dayCounts: DayCount[] = Array.from(dayCountsMap.entries()).map(([date, sids]) => ({
@@ -95,7 +126,8 @@ export const run = internalMutation({
     interface SpikePlan {
       spikeDate: string
       currentSessions: number
-      baseline: number
+      baseline: number | null
+      insufficientReason?: 'no_window' | 'too_sparse'
       sessionIdsToDelete: string[]
       eventsToDelete: number
       remainingSessions: number
@@ -109,11 +141,12 @@ export const run = internalMutation({
         (e) => e._creationTime >= startMs && e._creationTime < endMs
       )
 
-      // Group by sessionId to compute clusters.
+      // Group by sessionId. Drop events without a sessionId — they predate
+      // anti-gaming and aren't part of the bot inflation pattern.
       const groupMap = new Map<string, number>()
       for (const event of dayEvents) {
-        const sid = event.sessionId ?? `_no_session_${event._id}`
-        groupMap.set(sid, (groupMap.get(sid) ?? 0) + 1)
+        if (!event.sessionId) continue
+        groupMap.set(event.sessionId, (groupMap.get(event.sessionId) ?? 0) + 1)
       }
       const sessionGroups: SessionGroup[] = Array.from(groupMap.entries()).map(
         ([sessionId, eventCount]) => ({ sessionId, eventCount })
@@ -135,6 +168,7 @@ export const run = internalMutation({
         spikeDate,
         currentSessions: sessionGroups.length,
         baseline: baselineRes.baseline,
+        insufficientReason: baselineRes.insufficientReason,
         sessionIdsToDelete: trim.sessionIdsToDelete,
         eventsToDelete: trim.eventsToDelete,
         remainingSessions: trim.remainingSessions,
@@ -144,16 +178,38 @@ export const run = internalMutation({
     console.log(
       `scrubRedefineMeSpikes: website "${website.name}" (_id: ${website._id})\nplan:\n` +
         plans
-          .map(
-            (p) =>
+          .map((p) => {
+            if (p.baseline === null) {
+              return (
+                `  ${p.spikeDate}: REFUSING — baseline insufficient (${p.insufficientReason}). ` +
+                `current=${p.currentSessions}, no delete planned. ` +
+                `Widen the window or add more spike dates and re-run.`
+              )
+            }
+            return (
               `  ${p.spikeDate}: current=${p.currentSessions}, baseline=${p.baseline}, ` +
-              `delete ${p.sessionIdsToDelete.length} clusters / ${p.eventsToDelete} events, remaining=${p.remainingSessions}`
-          )
+              `delete ${p.sessionIdsToDelete.length} clusters [${p.sessionIdsToDelete
+                .slice(0, 5)
+                .join(',')}${p.sessionIdsToDelete.length > 5 ? ',...' : ''}] ` +
+              `/ ${p.eventsToDelete} events, remaining=${p.remainingSessions}`
+            )
+          })
           .join('\n')
     )
 
     if (dryRun) {
       return { dryRun: true, websiteId: website._id, plans }
+    }
+
+    // Refuse to execute if any spike has insufficient baseline. Operator
+    // has to widen the window or split the run.
+    const refused = plans.filter((p) => p.baseline === null)
+    if (refused.length > 0) {
+      throw new Error(
+        `Refusing to execute: ${refused.length} spike(s) have insufficient baseline ` +
+          `(${refused.map((p) => `${p.spikeDate}:${p.insufficientReason}`).join(', ')}). ` +
+          `Re-run dry-run with a wider windowDays or add the right spikeDates.`
+      )
     }
 
     // ── Execute ─────────────────────────────────────────────────────
@@ -167,8 +223,7 @@ export const run = internalMutation({
         (e) => e._creationTime >= startMs && e._creationTime < endMs
       )
       for (const event of dayEvents) {
-        const sid = event.sessionId ?? `_no_session_${event._id}`
-        if (deleteSet.has(sid)) {
+        if (event.sessionId && deleteSet.has(event.sessionId)) {
           await ctx.db.delete(event._id)
           totalDeleted++
         }
@@ -176,10 +231,7 @@ export const run = internalMutation({
 
       // ── Direct metricsData upsert for this spike day ──────────────
       // Recompute pageviews + sessions from surviving events on this day.
-      const surviving = dayEvents.filter((e) => {
-        const sid = e.sessionId ?? `_no_session_${e._id}`
-        return !deleteSet.has(sid)
-      })
+      const surviving = dayEvents.filter((e) => !(e.sessionId && deleteSet.has(e.sessionId)))
       const survivingSessions = new Set(
         surviving.map((e) => e.sessionId).filter((s): s is string => Boolean(s))
       )

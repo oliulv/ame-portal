@@ -24,7 +24,13 @@ const http = httpRouter()
 //     Prevents UA-rotation from inflating the unique-session count that
 //     drives the leaderboard's traffic category.
 const rateLimiter = new RateLimiter(components.rateLimiter, {
+  // Per-IP per-website event ceiling. Token bucket so legit bursts ride out.
   trackerEvent: { kind: 'token bucket', rate: 60, period: MINUTE, capacity: 120 },
+  // Per-IP global event ceiling. Defense-in-depth: stops a single IP from
+  // multiplying its quota by spraying across many websiteIds.
+  trackerEventGlobal: { kind: 'token bucket', rate: 240, period: MINUTE, capacity: 480 },
+  // Per-IP per-website new-session ceiling. Defeats UA rotation as a
+  // session-minting vector (events still land but collapse onto fallback).
   trackerNewSession: { kind: 'fixed window', rate: 15, period: DAY },
 })
 
@@ -174,18 +180,34 @@ http.route({
   }),
 })
 
+/**
+ * 200 OK with a stable success-shape, used for every silent-drop path
+ * (proxy-secret mismatch, rate-limit overflow, domain mismatch). The
+ * body and headers are byte-identical to a real success — attackers
+ * can't distinguish accept from drop by inspecting the response.
+ *
+ * For paths where the real sessionId can't be safely echoed (proxy-secret
+ * fail), we emit a fresh opaque token so the response shape doesn't
+ * leak the failure mode.
+ */
 function silentSuccess(sessionId: string | null): Response {
-  return new Response(
-    JSON.stringify(sessionId ? { success: true, sessionId } : { success: true }),
-    {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-        ...(sessionId ? { 'x-umami-cache': sessionId } : {}),
-      },
-    }
-  )
+  const echo = sessionId ?? randomOpaqueToken()
+  return new Response(JSON.stringify({ success: true, sessionId: echo }), {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/json',
+      'x-umami-cache': echo,
+    },
+  })
+}
+
+function randomOpaqueToken(): string {
+  const buf = new Uint8Array(32)
+  crypto.getRandomValues(buf)
+  let out = ''
+  for (let i = 0; i < buf.length; i++) out += buf[i].toString(16).padStart(2, '0')
+  return out
 }
 
 // ── Clerk webhook ─────────────────────────────────────────────────────
@@ -276,13 +298,22 @@ export const insertTrackerEvent = internalMutation({
     if (!website) return
 
     // Domain enforcement — when the website is registered with a domain,
-    // refuse events whose payload.hostname doesn't match. Prevents trivial
-    // cross-site forgery where someone copies another startup's tracker id.
-    if (website.domain && args.hostname && !hostnameMatches(args.hostname, website.domain)) {
-      return
+    // require the event's hostname to be present AND to match. Prevents
+    // trivial cross-site forgery where an attacker copies another startup's
+    // tracker id and either omits the hostname or supplies a wrong one.
+    if (website.domain) {
+      if (!args.hostname || !hostnameMatches(args.hostname, website.domain)) {
+        return
+      }
     }
 
-    // Event rate limit: silent drop on overflow. Attacker sees no signal.
+    // Event rate limits: silent drop on overflow. Attacker sees no signal.
+    // Global cap first so an attacker can't dodge per-website limits by
+    // spraying requests across many websiteIds.
+    const globalLimit = await rateLimiter.limit(ctx, 'trackerEventGlobal', {
+      key: args.ipHash,
+    })
+    if (!globalLimit.ok) return
     const evtKey = `${args.ipHash}:${args.websiteId}`
     const evtLimit = await rateLimiter.limit(ctx, 'trackerEvent', { key: evtKey })
     if (!evtLimit.ok) return
@@ -401,6 +432,9 @@ function hostnameMatches(hostname: string, domain: string): boolean {
 
 function utcDayStartMs(dayUtc: string): number {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayUtc)
-  if (!m) return 0
+  // The action computes dayUtc via utcDayKey() so an invalid value here
+  // is a programmer bug. Throw rather than returning 0 (which would widen
+  // the index filter to the entire history of events).
+  if (!m) throw new Error(`utcDayStartMs: invalid dayUtc "${dayUtc}"`)
   return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
 }
