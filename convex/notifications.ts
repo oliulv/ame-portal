@@ -3,6 +3,8 @@ import { internal } from './_generated/api'
 import { v, ConvexError } from 'convex/values'
 import { requireAuth } from './auth'
 import type { Id } from './_generated/dataModel'
+import { randomNumericCode, sha256Hex, timingSafeEqual } from './lib/random'
+import { evaluateOtp, OTP_MAX_ATTEMPTS } from './lib/otp'
 
 // ── Verification Flow ──────────────────────────────────────────
 
@@ -112,8 +114,9 @@ export const requestVerification = mutation({
       }
     }
 
-    // Generate 6-digit OTP
-    const otpCode = String(Math.floor(100000 + Math.random() * 900000))
+    // Generate 6-digit OTP via CSPRNG. Only the hash is persisted.
+    const otpCode = randomNumericCode(6)
+    const otpCodeHash = await sha256Hex(otpCode)
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 min
 
     if (existing) {
@@ -122,7 +125,9 @@ export const requestVerification = mutation({
         isVerified: false,
         verifiedAt: undefined,
         lastOtpRequestedAt: new Date().toISOString(),
-        otpCode,
+        otpCode: undefined,
+        otpCodeHash,
+        otpAttempts: 0,
         otpExpiresAt,
       })
     } else {
@@ -132,7 +137,8 @@ export const requestVerification = mutation({
         isVerified: false,
         notificationsEnabled: true,
         lastOtpRequestedAt: new Date().toISOString(),
-        otpCode,
+        otpCodeHash,
+        otpAttempts: 0,
         otpExpiresAt,
       })
     }
@@ -166,23 +172,58 @@ export const confirmVerification = mutation({
       throw new ConvexError('Number is already verified.')
     }
 
-    if (!smsRecord.otpCode || !smsRecord.otpExpiresAt) {
-      throw new ConvexError('No verification code pending. Please request a new one.')
-    }
+    const candidateHash = await sha256Hex(args.code)
 
-    if (new Date(smsRecord.otpExpiresAt) < new Date()) {
-      throw new ConvexError('Verification code has expired. Please request a new one.')
-    }
+    // Prefer the hash; fall back to legacy plaintext column for rows written
+    // before the OTP hash rollout. Legacy rows get migrated on first use by
+    // just proceeding with the plaintext comparison once, then clearing it.
+    const effectiveHash =
+      smsRecord.otpCodeHash ?? (smsRecord.otpCode ? await sha256Hex(smsRecord.otpCode) : undefined)
 
-    if (smsRecord.otpCode !== args.code) {
+    const decision = evaluateOtp(
+      {
+        otpCodeHash: effectiveHash,
+        otpExpiresAt: smsRecord.otpExpiresAt,
+        otpAttempts: smsRecord.otpAttempts,
+      },
+      candidateHash,
+      new Date()
+    )
+
+    if (!decision.ok) {
+      if (decision.reason === 'none') {
+        throw new ConvexError('No verification code pending. Please request a new one.')
+      }
+      if (decision.reason === 'expired') {
+        throw new ConvexError('Verification code has expired. Please request a new one.')
+      }
+      if (decision.reason === 'locked') {
+        throw new ConvexError('Too many incorrect attempts. Please request a new code.')
+      }
+      // wrong — increment, and invalidate on the Nth miss
+      const invalidate = decision.attempts >= OTP_MAX_ATTEMPTS
+      await ctx.db.patch(smsRecord._id, {
+        otpAttempts: decision.attempts,
+        ...(invalidate
+          ? { otpCodeHash: undefined, otpCode: undefined, otpExpiresAt: undefined }
+          : {}),
+      })
       throw new ConvexError('Incorrect verification code.')
     }
 
-    // Code is correct — mark as verified
+    // Extra constant-time belt for the match path — evaluateOtp already
+    // confirmed equality, but this keeps the compare out of JS string ops.
+    if (effectiveHash && !timingSafeEqual(effectiveHash, candidateHash)) {
+      throw new ConvexError('Incorrect verification code.')
+    }
+
+    // Code is correct — mark as verified, clear all OTP state
     await ctx.db.patch(smsRecord._id, {
       isVerified: true,
       verifiedAt: new Date().toISOString(),
       otpCode: undefined,
+      otpCodeHash: undefined,
+      otpAttempts: undefined,
       otpExpiresAt: undefined,
     })
 

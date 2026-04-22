@@ -55,7 +55,7 @@ export default function InvitePage() {
     const doAccept = async () => {
       setIsAccepting(true)
       try {
-        await acceptInvite({ token, clerkId: userId })
+        await acceptInvite({ token })
         setHasAccepted(true)
         router.push('/founder/onboarding')
       } catch (err) {

@@ -26,15 +26,20 @@ import {
 } from '@/lib/invoice-status'
 
 function PdfFileLink({
+  invoiceId,
   storageId,
   fileName,
   onPreview,
 }: {
+  invoiceId: Id<'invoices'>
   storageId: string
   fileName: string
   onPreview: (url: string, title: string) => void
 }) {
-  const url = useQuery(api.invoices.getFileUrl, { storageId: storageId as any })
+  const url = useQuery(api.invoices.getFileUrl, {
+    invoiceId,
+    storageId: storageId as Id<'_storage'>,
+  })
   if (!url) return <span className="text-sm text-muted-foreground">Loading file...</span>
   const isPdf = fileName.toLowerCase().endsWith('.pdf')
   return (
@@ -87,7 +92,7 @@ export default function FounderInvoiceDetailPage() {
 
   const fileUrl = useQuery(
     api.invoices.getFileUrl,
-    invoice?.storageId ? { storageId: invoice.storageId } : 'skip'
+    invoice?.storageId ? { invoiceId, storageId: invoice.storageId } : 'skip'
   )
 
   // Component invoices for batch display
@@ -186,6 +191,7 @@ export default function FounderInvoiceDetailPage() {
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <PdfFileLink
+                          invoiceId={comp._id}
                           storageId={comp.storageId}
                           fileName={comp.fileName}
                           onPreview={openPreview}
@@ -257,6 +263,7 @@ export default function FounderInvoiceDetailPage() {
                 <p className="mb-1 text-sm text-muted-foreground">Invoice file</p>
                 {fileUrl ? (
                   <PdfFileLink
+                    invoiceId={invoiceId}
                     storageId={invoice.storageId}
                     fileName={invoice.fileName || 'View invoice'}
                     onPreview={openPreview}
@@ -278,6 +285,7 @@ export default function FounderInvoiceDetailPage() {
                     {receiptStorageIds.map((sid, i) => (
                       <PdfFileLink
                         key={sid}
+                        invoiceId={invoiceId}
                         storageId={sid}
                         fileName={receiptFileNames[i] || `Receipt ${i + 1}`}
                         onPreview={openPreview}

@@ -7,6 +7,7 @@ import {
   requireAdminWithPermission,
   requireFounder,
   requireAuth,
+  requireStartupAccess,
   getFounderStartupIds,
 } from './auth'
 import { validateInvoiceFileName, extractInvoiceNumber } from './invoiceValidation'
@@ -15,6 +16,7 @@ import {
   computeNextInvoiceNumber,
   computeAvailableBalance,
 } from './lib/invoiceLogic'
+import { isStorageIdOnInvoice } from './lib/invoiceAccess'
 
 /**
  * Generate a pre-signed upload URL for invoice files.
@@ -39,11 +41,22 @@ export const deleteStorageFile = mutation({
 })
 
 /**
- * Get a URL for a stored file.
+ * Get a URL for a stored file. Requires the caller to identify which invoice
+ * the file belongs to, and is gated on startup access. Prevents handing out
+ * signed URLs for storage IDs that belong to other startups.
  */
 export const getFileUrl = query({
-  args: { storageId: v.id('_storage') },
+  args: {
+    invoiceId: v.id('invoices'),
+    storageId: v.id('_storage'),
+  },
   handler: async (ctx, args) => {
+    const invoice = await ctx.db.get(args.invoiceId)
+    if (!invoice) throw new Error('Invoice not found')
+    await requireStartupAccess(ctx, invoice.startupId)
+    if (!isStorageIdOnInvoice(invoice, args.storageId)) {
+      throw new Error('File not found on invoice')
+    }
     return await ctx.storage.getUrl(args.storageId)
   },
 })
@@ -334,13 +347,16 @@ export const getNextSubmitted = query({
 })
 
 /**
- * Get a single invoice by ID.
+ * Get a single invoice by ID. Gated on startup access: admins see all,
+ * founders only invoices for startups they belong to.
  */
 export const getById = query({
   args: { id: v.id('invoices') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
-    return await ctx.db.get(args.id)
+    const invoice = await ctx.db.get(args.id)
+    if (!invoice) return null
+    await requireStartupAccess(ctx, invoice.startupId)
+    return invoice
   },
 })
 
@@ -576,26 +592,33 @@ export const sendToXero = internalAction({
 })
 
 /**
- * Get component invoices for a batch invoice.
+ * Get component invoices for a batch invoice. Silently drops any invoice
+ * the caller cannot access so a malformed ID list doesn't break the view
+ * for legitimate callers.
  */
 export const getComponentInvoices = query({
   args: { ids: v.array(v.id('invoices')) },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    const user = await requireAuth(ctx)
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+    const startupIds = isAdmin
+      ? new Set<string>()
+      : new Set<string>(await getFounderStartupIds(ctx, user._id))
+
     const results = []
     for (const id of args.ids) {
       const inv = await ctx.db.get(id)
-      if (inv) {
-        results.push({
-          _id: inv._id,
-          vendorName: inv.vendorName,
-          amountGbp: inv.amountGbp,
-          invoiceDate: inv.invoiceDate,
-          fileName: inv.fileName,
-          storageId: inv.storageId,
-          description: inv.description,
-        })
-      }
+      if (!inv) continue
+      if (!isAdmin && !startupIds.has(inv.startupId)) continue
+      results.push({
+        _id: inv._id,
+        vendorName: inv.vendorName,
+        amountGbp: inv.amountGbp,
+        invoiceDate: inv.invoiceDate,
+        fileName: inv.fileName,
+        storageId: inv.storageId,
+        description: inv.description,
+      })
     }
     return results
   },

@@ -484,7 +484,11 @@ export default defineSchema({
     verifiedAt: v.optional(v.string()),
     notificationsEnabled: v.boolean(),
     lastOtpRequestedAt: v.optional(v.string()),
+    // DEPRECATED — legacy plaintext code. New writes use otpCodeHash only.
+    // Kept as optional during one OTP TTL rollout window, then removed.
     otpCode: v.optional(v.string()),
+    otpCodeHash: v.optional(v.string()),
+    otpAttempts: v.optional(v.number()),
     otpExpiresAt: v.optional(v.string()),
   })
     .index('by_userId', ['userId'])

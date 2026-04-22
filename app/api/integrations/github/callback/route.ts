@@ -3,13 +3,13 @@ import { auth } from '@clerk/nextjs/server'
 import { ConvexHttpClient } from 'convex/browser'
 import { api } from '@/convex/_generated/api'
 import { logServerError } from '@/lib/logging'
+import { verifyState } from '@/lib/oauthState'
 
 /**
  * GET /api/integrations/github/callback
- * Handles GitHub App OAuth callback. CSRF state verification removed
- * temporarily (see authorize/route.ts TODO) — callback still enforces
- * Clerk auth and GitHub code exchange, so unauthorized third parties
- * cannot hijack a connection.
+ * Handles GitHub App OAuth callback. Verifies the signed CSRF `state`
+ * produced by the authorize route — rejects if the state is missing,
+ * tampered, expired, or bound to a different Clerk user than the caller.
  */
 export async function GET(request: Request) {
   // Create client per-request to avoid auth leaking between concurrent requests
@@ -25,6 +25,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const code = searchParams.get('code')
+    const state = searchParams.get('state')
     const error = searchParams.get('error')
 
     if (error) {
@@ -33,6 +34,11 @@ export async function GET(request: Request) {
 
     if (!code) {
       return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_missing_code`)
+    }
+
+    const parsedState = verifyState<{ u: string }>(state)
+    if (!parsedState || parsedState.u !== userId) {
+      return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_invalid_state`)
     }
 
     const clientId = process.env.GITHUB_APP_CLIENT_ID
