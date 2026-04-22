@@ -23,12 +23,12 @@ import type { Doc, Id } from '../_generated/dataModel'
  * Idempotent: re-running on cleaned data is a no-op (current count <=
  * baseline → empty trim plan).
  *
- * Run dry-run on prod first:
- *   npx convex run --prod migrations/scrubRedefineMeSpikes:run --args \
+ * Run dry-run on prod first (args is a positional, no --args flag):
+ *   npx convex run --prod migrations/scrubRedefineMeSpikes:run \
  *     '{"websiteName":"redefine me","spikeDates":["2026-04-17","2026-04-19"],"dryRun":true}'
  *
  * Then for real:
- *   npx convex run --prod migrations/scrubRedefineMeSpikes:run --args \
+ *   npx convex run --prod migrations/scrubRedefineMeSpikes:run \
  *     '{"websiteName":"redefine me","spikeDates":["2026-04-17","2026-04-19"]}'
  */
 export const run = internalMutation({
