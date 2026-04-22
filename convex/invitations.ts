@@ -97,14 +97,19 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx)
 
-    // Check if email already has an accepted invitation for this startup
-    const existing = await ctx.db
+    // Check if this email already has an accepted invitation for this startup.
+    // Compare case-insensitively so "Alice@ex.com" and "alice@ex.com" don't slip past.
+    const startupInvites = await ctx.db
       .query('invitations')
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
-      .filter((q) => q.eq(q.field('email'), args.email))
-      .first()
+      .collect()
 
-    if (existing?.acceptedAt) {
+    const emailLower = args.email.toLowerCase()
+    const existingAccepted = startupInvites.find(
+      (inv) => inv.email.toLowerCase() === emailLower && inv.acceptedAt
+    )
+
+    if (existingAccepted) {
       throw new Error('This email has already accepted an invitation for this startup')
     }
 
@@ -247,16 +252,23 @@ export const removeFounder = mutation({
     const invitation = await ctx.db.get(args.id)
     if (!invitation) throw new Error('Invitation not found')
 
-    // Delete the founderProfile linked to this invitation's email + startup
-    // and capture the userId for cleanup evaluation
+    // Delete the founderProfile linked to this invitation and capture userId for cleanup.
+    // Match case-insensitively against personalEmail AND the user's current email so we
+    // still find the profile if the founder renamed personalEmail post-accept.
     let userId: (typeof profiles)[0]['userId'] | null = null
     const profiles = await ctx.db
       .query('founderProfiles')
       .withIndex('by_startupId', (q) => q.eq('startupId', invitation.startupId))
       .collect()
 
+    const invitationEmailLower = invitation.email.toLowerCase()
     for (const profile of profiles) {
-      if (profile.personalEmail === invitation.email) {
+      let matches = profile.personalEmail.toLowerCase() === invitationEmailLower
+      if (!matches) {
+        const profileUser = await ctx.db.get(profile.userId)
+        matches = profileUser?.email?.toLowerCase() === invitationEmailLower
+      }
+      if (matches) {
         userId = profile.userId
         await ctx.db.delete(profile._id)
       }
@@ -294,16 +306,28 @@ export const removeTeamMember = mutation({
     if (!profile) throw new Error('Founder profile not found')
 
     const userId = profile.userId
+    const profileUser = await ctx.db.get(userId)
 
-    // Delete the matching invitation (by startupId + email)
-    const invitations = await ctx.db
+    // Delete any invitation on this startup whose email matches the profile's
+    // personalEmail OR the user's current email (case-insensitive). Exact-match
+    // filters miss the record when founders rename personalEmail post-accept or
+    // when the invitation was created with different case, leaving an orphan
+    // invitation that blocks re-invite with "already accepted".
+    const allStartupInvites = await ctx.db
       .query('invitations')
       .withIndex('by_startupId', (q) => q.eq('startupId', profile.startupId))
-      .filter((q) => q.eq(q.field('email'), profile.personalEmail))
       .collect()
 
-    for (const invitation of invitations) {
-      await ctx.db.delete(invitation._id)
+    const targetEmails = new Set(
+      [profile.personalEmail, profileUser?.email]
+        .filter((e): e is string => !!e)
+        .map((e) => e.toLowerCase())
+    )
+
+    for (const invitation of allStartupInvites) {
+      if (targetEmails.has(invitation.email.toLowerCase())) {
+        await ctx.db.delete(invitation._id)
+      }
     }
 
     // Delete the founderProfile

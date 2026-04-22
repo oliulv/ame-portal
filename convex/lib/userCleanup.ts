@@ -9,30 +9,72 @@ import { logConvexError, logConvexInfo } from './logging'
  * Cascade-delete all data associated with a user.
  * Cleans up: founderProfiles (+ matching invitations), adminCohorts,
  * perkClaims, eventRegistrations, and the user record itself.
+ * Also detaches the user from integrationConnections they authored so the
+ * next founder can reconnect — the row itself survives for audit/financial history.
  *
- * Skips audit/financial references (invoices, integrationConnections,
- * adminInvitations.createdByUserId, invitations.createdByAdminId).
+ * Skips audit/financial references (invoices, adminInvitations.createdByUserId,
+ * invitations.createdByAdminId).
  */
 export async function cascadeDeleteUserData(ctx: MutationCtx, userId: Id<'users'>) {
+  const user = await ctx.db.get(userId)
+  const userEmail = user?.email?.toLowerCase() ?? null
+
   // Delete founderProfiles and their matching invitations
   const founderProfiles = await ctx.db
     .query('founderProfiles')
     .withIndex('by_userId', (q) => q.eq('userId', userId))
     .collect()
 
+  // Capture startupIds before deleting profiles so we can scope the integrationConnections
+  // scan below to just the startups this user was involved with.
+  const startupIds = founderProfiles.map((p) => p.startupId)
+
   for (const profile of founderProfiles) {
-    // Find and delete the matching invitation (by startupId + email)
-    const invitations = await ctx.db
+    // Find and delete any invitation on this startup whose email matches the
+    // profile's personalEmail OR the user's current email (case-insensitive).
+    // This survives (a) founders updating personalEmail post-accept and (b) case drift.
+    const allStartupInvites = await ctx.db
       .query('invitations')
       .withIndex('by_startupId', (q) => q.eq('startupId', profile.startupId))
-      .filter((q) => q.eq(q.field('email'), profile.personalEmail))
       .collect()
 
-    for (const invitation of invitations) {
-      await ctx.db.delete(invitation._id)
+    const targetEmails = new Set(
+      [profile.personalEmail, userEmail].filter((e): e is string => !!e).map((e) => e.toLowerCase())
+    )
+
+    for (const invitation of allStartupInvites) {
+      if (targetEmails.has(invitation.email.toLowerCase())) {
+        await ctx.db.delete(invitation._id)
+      }
     }
 
     await ctx.db.delete(profile._id)
+  }
+
+  // Detach user from any integrationConnections they authored. We keep the row
+  // (financial/audit history + the startup may still be actively syncing) but null
+  // out connectedByUserId and disconnect it so the next founder can re-auth cleanly.
+  // Without this, integrations.ts:201 blocks the new founder with "already connected
+  // by another team member" because it compares against a now-deleted user ID.
+  // Scoped to startups this user was a founder of — avoids a full-table scan.
+  for (const startupId of startupIds) {
+    const startupConnections = await ctx.db
+      .query('integrationConnections')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
+      .collect()
+
+    for (const conn of startupConnections) {
+      if (conn.connectedByUserId === userId) {
+        await ctx.db.patch(conn._id, {
+          connectedByUserId: undefined,
+          isActive: false,
+          status: 'disconnected',
+          accessToken: undefined,
+          refreshToken: undefined,
+          tokenExpiresAt: undefined,
+        })
+      }
+    }
   }
 
   // Delete admin cohort assignments

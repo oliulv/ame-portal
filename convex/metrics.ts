@@ -843,14 +843,23 @@ export const updateConnectionSyncStatus = internalMutation({
     lastSyncedAt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Guard against reviving a detached connection: if the row was marked
+    // isActive:false (e.g. because the founder who owned it was just deleted and
+    // cascadeDeleteUserData detached it), a concurrent sync must not flip status
+    // back to 'active'. Let lastSyncedAt through since it's informational.
+    const existing = await ctx.db.get(args.connectionId)
+    if (!existing) return
+    const isDetached = existing.isActive === false
+
     const patch: Record<string, unknown> = {}
-    if (args.status !== undefined) patch.status = args.status
-    if (args.syncError !== undefined) patch.syncError = args.syncError
+    if (args.status !== undefined && !isDetached) patch.status = args.status
+    if (args.syncError !== undefined && !isDetached) patch.syncError = args.syncError
     if (args.lastSyncedAt !== undefined) patch.lastSyncedAt = args.lastSyncedAt
     // Clear syncError when status recovers to active
-    if (args.status === 'active' && args.syncError === undefined) {
+    if (args.status === 'active' && args.syncError === undefined && !isDetached) {
       patch.syncError = undefined
     }
+    if (Object.keys(patch).length === 0) return
     await ctx.db.patch(args.connectionId, patch)
   },
 })
