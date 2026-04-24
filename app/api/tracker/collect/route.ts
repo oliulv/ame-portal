@@ -1,18 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { logServerError, logServerWarn } from '@/lib/logging'
 
-// Vercel populates these on every incoming request. `x-real-ip` is the
-// trusted single-IP value behind their edge; `x-forwarded-for` is the
-// classic comma-separated list with the client at index 0. We prefer
-// `x-real-ip` and fall back to the leftmost forwarded entry. `req.ip`
-// would also work on Vercel runtimes but isn't always present in local dev.
+const CLIENT_IP_HEADERS = [
+  'x-real-ip',
+  'x-vercel-forwarded-for',
+  'cf-connecting-ip',
+  'true-client-ip',
+  'x-forwarded-for',
+]
+
 function readClientIp(request: NextRequest): string {
-  const realIp = request.headers.get('x-real-ip')
-  if (realIp && realIp.trim().length > 0) return realIp.trim()
-  const forwarded = request.headers.get('x-forwarded-for') ?? ''
-  const first = forwarded.split(',')[0]?.trim()
-  if (first) return first
+  for (const header of CLIENT_IP_HEADERS) {
+    const parsed = readIpHeader(request.headers.get(header))
+    if (parsed) return parsed
+  }
   const direct = (request as unknown as { ip?: string }).ip
   return direct ?? ''
+}
+
+function readIpHeader(value: string | null): string | null {
+  if (!value) return null
+  for (const part of value.split(',')) {
+    let candidate = part.trim().replace(/^"|"$/g, '')
+    if (!candidate || candidate.toLowerCase() === 'unknown') continue
+
+    if (candidate.startsWith('[')) {
+      const end = candidate.indexOf(']')
+      if (end > 0) candidate = candidate.slice(1, end)
+    } else {
+      const ipv4WithPort = /^(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)$/.exec(candidate)
+      if (ipv4WithPort) candidate = ipv4WithPort[1]
+    }
+
+    if (candidate) return candidate
+  }
+  return null
 }
 
 const corsHeaders = {
@@ -25,13 +47,28 @@ const corsHeaders = {
 
 function getConvexSiteUrl(): string {
   if (process.env.CONVEX_SITE_URL) {
-    return process.env.CONVEX_SITE_URL
+    return normalizeConvexSiteUrl(process.env.CONVEX_SITE_URL)
   }
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL
   if (convexUrl) {
-    return convexUrl.replace(/\.cloud$/, '.site')
+    return normalizeConvexSiteUrl(convexUrl)
   }
   throw new Error('Missing NEXT_PUBLIC_CONVEX_URL or CONVEX_SITE_URL')
+}
+
+function normalizeConvexSiteUrl(url: string): string {
+  return url
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\.cloud$/, '.site')
+}
+
+function parseJsonOrNull(raw: string): unknown | null {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
 }
 
 export async function OPTIONS() {
@@ -44,6 +81,9 @@ export async function POST(request: NextRequest) {
     if (!proxySecret) {
       // Server misconfigured. Fail loud rather than silently regressing
       // to the unauthenticated path.
+      logServerError('Tracker collect proxy misconfigured', undefined, {
+        reason: 'missing_tracker_proxy_secret',
+      })
       return NextResponse.json(
         { error: 'Server misconfigured' },
         { status: 500, headers: corsHeaders }
@@ -54,6 +94,13 @@ export async function POST(request: NextRequest) {
     const siteUrl = getConvexSiteUrl()
     const clientIp = readClientIp(request)
     const userAgent = request.headers.get('user-agent') ?? ''
+    if (!clientIp) {
+      logServerWarn('Tracker collect proxy missing client IP', {
+        hasXRealIp: request.headers.has('x-real-ip'),
+        hasXVercelForwardedFor: request.headers.has('x-vercel-forwarded-for'),
+        hasXForwardedFor: request.headers.has('x-forwarded-for'),
+      })
+    }
 
     const response = await fetch(`${siteUrl}/tracker/collect`, {
       method: 'POST',
@@ -66,12 +113,32 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     })
 
-    const data = await response.json()
+    const raw = await response.text()
+    const data = parseJsonOrNull(raw)
+    if (data === null) {
+      logServerWarn('Tracker collect upstream returned non-JSON', {
+        status: response.status,
+        siteHost: new URL(siteUrl).host,
+        bodyPrefix: raw.slice(0, 200),
+      })
+      return NextResponse.json(
+        { error: 'Tracker upstream error' },
+        { status: response.ok ? 502 : response.status, headers: corsHeaders }
+      )
+    }
+    if (!response.ok) {
+      logServerWarn('Tracker collect upstream returned error', {
+        status: response.status,
+        siteHost: new URL(siteUrl).host,
+        body: data,
+      })
+    }
     return NextResponse.json(data, {
       status: response.status,
       headers: corsHeaders,
     })
-  } catch {
+  } catch (error) {
+    logServerError('Tracker collect proxy error', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500, headers: corsHeaders }
