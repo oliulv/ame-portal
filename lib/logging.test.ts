@@ -68,15 +68,6 @@ describe('serializeUnknown', () => {
   })
 
   describe('key redaction', () => {
-    // NOTE: The redaction check (line 38) runs AFTER primitive type checks
-    // (lines 19-27) and the Error check (line 29). This means:
-    //   - Primitives (string, number, boolean, bigint) are returned before
-    //     the redaction check, so they are NOT redacted even with a sensitive key.
-    //   - Errors are serialized before the redaction check, so they bypass it.
-    //   - Only object/array values at sensitive keys are redacted.
-    //
-    // The tests below verify the actual behavior of the implementation.
-
     it('should redact object values with key "password"', () => {
       expect(serializeUnknown({ data: 1 }, 0, 'password')).toBe('[REDACTED]')
     })
@@ -130,24 +121,19 @@ describe('serializeUnknown', () => {
       expect(serializeUnknown({ data: 1 }, 0, 'Authorization')).toBe('[REDACTED]')
     })
 
-    it('should NOT redact primitive values even with sensitive keys', () => {
-      // Primitives return before the redaction check fires
-      expect(serializeUnknown('secret123', 0, 'password')).toBe('secret123')
-      expect(serializeUnknown(42, 0, 'token')).toBe(42)
-      expect(serializeUnknown(true, 0, 'secret')).toBe(true)
+    it('should redact primitive values with sensitive keys', () => {
+      expect(serializeUnknown('secret123', 0, 'password')).toBe('[REDACTED]')
+      expect(serializeUnknown(42, 0, 'token')).toBe('[REDACTED]')
+      expect(serializeUnknown(true, 0, 'secret')).toBe('[REDACTED]')
     })
 
-    it('should NOT redact Error values even if key matches', () => {
+    it('should redact Error values with sensitive keys', () => {
       const err = new Error('oops')
-      const result = serializeUnknown(err, 0, 'password') as Record<string, unknown>
-      expect(result).toHaveProperty('name', 'Error')
-      expect(result).toHaveProperty('message', 'oops')
+      expect(serializeUnknown(err, 0, 'password')).toBe('[REDACTED]')
     })
 
     it('should redact sensitive keys within nested object serialization', () => {
-      // When an object has a key matching the pattern with an object/array value,
-      // the recursive call passes the key and the redaction fires
-      const input = { token: { bearer: 'abc' } }
+      const input = { token: 'abc' }
       const result = serializeUnknown(input) as Record<string, unknown>
       expect(result.token).toBe('[REDACTED]')
     })
@@ -253,19 +239,18 @@ describe('serializeUnknown', () => {
     })
 
     it('should redact sensitive keys with object values in nested structures', () => {
-      const input = { config: { password: { hash: 'abc123' } } }
+      const input = { config: { password: 'abc123' } }
       const result = serializeUnknown(input) as Record<string, unknown>
       const config = result.config as Record<string, unknown>
       expect(config.password).toBe('[REDACTED]')
     })
 
-    it('should NOT redact primitive values at sensitive keys in nested objects', () => {
-      // String values return before the redaction check, so they pass through
+    it('should redact primitive values at sensitive keys in nested objects', () => {
       const input = { config: { database: { password: 'hunter2' } } }
       const result = serializeUnknown(input) as Record<string, unknown>
       const config = result.config as Record<string, unknown>
       const db = config.database as Record<string, unknown>
-      expect(db.password).toBe('hunter2')
+      expect(db.password).toBe('[REDACTED]')
     })
   })
 

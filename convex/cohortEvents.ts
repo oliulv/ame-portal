@@ -1,7 +1,13 @@
 import { query, mutation } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
-import { requireAdmin, requireFounder, getFounderStartupIds } from './auth'
+import {
+  getAdminAccessibleCohortIds,
+  requireAdmin,
+  requireAdminForCohort,
+  requireFounder,
+  getFounderStartupIds,
+} from './auth'
 
 /**
  * List all events for a cohort (admin).
@@ -9,7 +15,7 @@ import { requireAdmin, requireFounder, getFounderStartupIds } from './auth'
 export const list = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const events = await ctx.db
       .query('cohortEvents')
@@ -26,8 +32,13 @@ export const list = query({
 export const listAll = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx)
-    const events = await ctx.db.query('cohortEvents').collect()
+    const admin = await requireAdmin(ctx)
+    let events = await ctx.db.query('cohortEvents').collect()
+    const accessibleCohortIds = await getAdminAccessibleCohortIds(ctx, admin)
+    if (accessibleCohortIds !== null) {
+      const allowed = new Set(accessibleCohortIds)
+      events = events.filter((event) => allowed.has(event.cohortId))
+    }
     // Enrich with cohort info
     const enriched = await Promise.all(
       events.map(async (event) => {
@@ -51,7 +62,7 @@ export const create = mutation({
     lumaEmbedUrl: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const existing = await ctx.db
       .query('cohortEvents')
@@ -92,11 +103,10 @@ export const update = mutation({
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const { id, ...updates } = args
     const event = await ctx.db.get(id)
     if (!event) throw new Error('Event not found')
+    await requireAdminForCohort(ctx, event.cohortId)
 
     const patch: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(updates)) {
@@ -134,10 +144,9 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id('cohortEvents') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const event = await ctx.db.get(args.id)
     if (!event) throw new Error('Event not found')
+    await requireAdminForCohort(ctx, event.cohortId)
 
     // Notify founders before deleting
     if (event.isActive) {
@@ -239,6 +248,12 @@ export const register = mutation({
 
     const event = await ctx.db.get(args.eventId)
     if (!event) throw new Error('Event not found')
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+    if (startupIds.length === 0) throw new Error('No startup found')
+    const startup = await ctx.db.get(startupIds[0])
+    if (!startup || startup.cohortId !== event.cohortId) {
+      throw new Error('Not authorized for this event')
+    }
 
     // Check if already registered
     const existing = await ctx.db
@@ -263,6 +278,14 @@ export const unregister = mutation({
   args: { eventId: v.id('cohortEvents') },
   handler: async (ctx, args) => {
     const user = await requireFounder(ctx)
+    const event = await ctx.db.get(args.eventId)
+    if (!event) throw new Error('Event not found')
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+    if (startupIds.length === 0) throw new Error('No startup found')
+    const startup = await ctx.db.get(startupIds[0])
+    if (!startup || startup.cohortId !== event.cohortId) {
+      throw new Error('Not authorized for this event')
+    }
 
     const existing = await ctx.db
       .query('eventRegistrations')

@@ -1,7 +1,14 @@
 import { query, mutation } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
-import { requireAuth, requireFounder, requireAdmin, getFounderStartupIds } from './auth'
+import {
+  requireAuth,
+  requireFounder,
+  requireAdminForCohort,
+  requireAdminForStartup,
+  requireStartupAccess,
+  getFounderStartupIds,
+} from './auth'
 import { getMonday } from './lib/dateUtils'
 import { computeStreak } from './lib/streak'
 
@@ -81,7 +88,7 @@ export const list = query({
     weekOf: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     // Get all startups in cohort
     const startups = await ctx.db
@@ -119,14 +126,14 @@ export const listForStartup = query({
     startupId: v.optional(v.id('startups')),
   },
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx)
-
     let startupId = args.startupId
     if (!startupId) {
+      const user = await requireAuth(ctx)
       const startupIds = await getFounderStartupIds(ctx, user._id)
       if (startupIds.length === 0) return []
       startupId = startupIds[0]
     }
+    await requireStartupAccess(ctx, startupId)
 
     const updates = await ctx.db
       .query('weeklyUpdates')
@@ -168,10 +175,9 @@ export const setFavorite = mutation({
     isFavorite: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const user = await requireAdmin(ctx)
-
     const update = await ctx.db.get(args.updateId)
     if (!update) throw new Error('Update not found')
+    const { user } = await requireAdminForStartup(ctx, update.startupId)
 
     if (args.isFavorite) {
       // Check max 2 favorites per week
@@ -214,14 +220,14 @@ export const getCurrentStreak = query({
     startupId: v.optional(v.id('startups')),
   },
   handler: async (ctx, args) => {
-    const user = await requireAuth(ctx)
-
     let startupId = args.startupId
     if (!startupId) {
+      const user = await requireAuth(ctx)
       const startupIds = await getFounderStartupIds(ctx, user._id)
       if (startupIds.length === 0) return 0
       startupId = startupIds[0]
     }
+    await requireStartupAccess(ctx, startupId)
 
     const updates = await ctx.db
       .query('weeklyUpdates')
@@ -241,7 +247,7 @@ export const getWeeklySummary = query({
     weekOf: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const startups = await ctx.db
       .query('startups')

@@ -52,6 +52,8 @@ import type * as lib_slugify from "../lib/slugify.js";
 import type * as lib_streak from "../lib/streak.js";
 import type * as lib_stripeMrr from "../lib/stripeMrr.js";
 import type * as lib_tokens from "../lib/tokens.js";
+import type * as lib_trackerDomain from "../lib/trackerDomain.js";
+import type * as lib_trackerRollup from "../lib/trackerRollup.js";
 import type * as lib_userCleanup from "../lib/userCleanup.js";
 import type * as metrics from "../metrics.js";
 import type * as migrations_backfillConnectedByUserId from "../migrations/backfillConnectedByUserId.js";
@@ -124,6 +126,8 @@ declare const fullApi: ApiFromModules<{
   "lib/streak": typeof lib_streak;
   "lib/stripeMrr": typeof lib_stripeMrr;
   "lib/tokens": typeof lib_tokens;
+  "lib/trackerDomain": typeof lib_trackerDomain;
+  "lib/trackerRollup": typeof lib_trackerRollup;
   "lib/userCleanup": typeof lib_userCleanup;
   metrics: typeof metrics;
   "migrations/backfillConnectedByUserId": typeof migrations_backfillConnectedByUserId;

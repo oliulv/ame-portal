@@ -2,7 +2,7 @@ import { internalMutation, internalAction, internalQuery, query, mutation } from
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import type { Id } from './_generated/dataModel'
-import { requireAdmin } from './auth'
+import { requireAdminForCohort, requireAdminForStartup } from './auth'
 
 /**
  * Schedule (or reschedule) a batch for a startup.
@@ -73,7 +73,7 @@ export const cancelBatchIfEmpty = internalMutation({
 export const getPendingBatch = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
     const pending = await ctx.db
       .query('pendingBatches')
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
@@ -90,7 +90,7 @@ export const getPendingBatch = query({
 export const listPendingBatches = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
     const startups = await ctx.db
       .query('startups')
       .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
@@ -123,7 +123,7 @@ export const listPendingBatches = query({
 export const triggerBatchNow = mutation({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
     const pending = await ctx.db
       .query('pendingBatches')
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))

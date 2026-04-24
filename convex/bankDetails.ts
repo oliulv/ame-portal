@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireFounder, requireAdmin } from './auth'
+import { requireFounder, requireAdminForStartup } from './auth'
 
 /**
  * Get bank details for the current founder's startup.
@@ -30,7 +30,7 @@ export const get = query({
 export const getByStartupId = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
 
     return await ctx.db
       .query('bankDetails')

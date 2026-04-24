@@ -43,6 +43,72 @@ export async function requireAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<'us
 }
 
 /**
+ * Check whether an admin user may access a cohort.
+ * Super admins see every cohort; regular admins only see assigned cohorts.
+ */
+export async function adminCanAccessCohort(
+  ctx: QueryCtx | MutationCtx,
+  user: Doc<'users'>,
+  cohortId: Doc<'cohorts'>['_id']
+): Promise<boolean> {
+  if (user.role === 'super_admin') return true
+  if (user.role !== 'admin') return false
+
+  const assignment = await ctx.db
+    .query('adminCohorts')
+    .withIndex('by_userId_cohortId', (q) => q.eq('userId', user._id).eq('cohortId', cohortId))
+    .unique()
+
+  return assignment !== null
+}
+
+/**
+ * Require an admin to have access to a specific cohort.
+ */
+export async function requireAdminForCohort(
+  ctx: QueryCtx | MutationCtx,
+  cohortId: Doc<'cohorts'>['_id']
+): Promise<Doc<'users'>> {
+  const user = await requireAdmin(ctx)
+  const allowed = await adminCanAccessCohort(ctx, user, cohortId)
+  if (!allowed) {
+    throw new Error('Not authorized for this cohort')
+  }
+  return user
+}
+
+/**
+ * List cohort IDs visible to an admin user.
+ */
+export async function getAdminAccessibleCohortIds(
+  ctx: QueryCtx | MutationCtx,
+  user: Doc<'users'>
+): Promise<Doc<'cohorts'>['_id'][] | null> {
+  if (user.role === 'super_admin') return null
+  if (user.role !== 'admin') return []
+
+  const assignments = await ctx.db
+    .query('adminCohorts')
+    .withIndex('by_userId', (q) => q.eq('userId', user._id))
+    .collect()
+
+  return assignments.map((a) => a.cohortId)
+}
+
+/**
+ * Require an admin to have access to a startup's cohort and return the startup.
+ */
+export async function requireAdminForStartup(
+  ctx: QueryCtx | MutationCtx,
+  startupId: Doc<'startups'>['_id']
+): Promise<{ user: Doc<'users'>; startup: Doc<'startups'> }> {
+  const startup = await ctx.db.get(startupId)
+  if (!startup) throw new Error('Startup not found')
+  const user = await requireAdminForCohort(ctx, startup.cohortId)
+  return { user, startup }
+}
+
+/**
  * Require the user to be a super admin.
  */
 export async function requireSuperAdmin(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'>> {
@@ -133,6 +199,10 @@ export async function requireAdminWithPermission(
 ): Promise<Doc<'users'>> {
   const user = await requireAdmin(ctx)
   if (user.role === 'super_admin') return user
+  const allowed = await adminCanAccessCohort(ctx, user, cohortId)
+  if (!allowed) {
+    throw new Error('Not authorized for this cohort')
+  }
   const has = await hasPermission(ctx, user._id, cohortId, permission, startupId)
   if (!has) {
     throw new Error(`Permission required: ${permission}`)
@@ -157,8 +227,9 @@ export async function getFounderStartupIds(
 
 /**
  * Require the current user to have access to a specific startup.
- * Admins/super_admins have access to all startups.
- * Founders only have access to startups linked via their founderProfiles.
+ * Super admins have access to all startups. Regular admins only have access
+ * to startups in assigned cohorts. Founders only have access to startups
+ * linked via their founderProfiles.
  */
 export async function requireStartupAccess(
   ctx: QueryCtx | MutationCtx,
@@ -166,9 +237,25 @@ export async function requireStartupAccess(
 ): Promise<Doc<'users'>> {
   const user = await requireAuth(ctx)
 
-  // Admins and super_admins can access any startup
-  if (user.role === 'admin' || user.role === 'super_admin') {
+  const startup = await ctx.db.get(startupId)
+  if (!startup) {
+    throw new Error('Startup not found')
+  }
+
+  if (user.role === 'super_admin') {
     return user
+  }
+
+  if (user.role === 'admin') {
+    const allowed = await adminCanAccessCohort(ctx, user, startup.cohortId)
+    if (allowed) return user
+
+    // Admins can also use founder-facing flows for startups where they have
+    // an explicit founderProfile.
+    const startupIds = await getFounderStartupIds(ctx, user._id)
+    if (startupIds.includes(startupId)) return user
+
+    throw new Error('Not authorized for this startup')
   }
 
   // Founders must own the startup

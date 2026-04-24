@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin } from './auth'
+import { requireAdminForCohort } from './auth'
 
 /**
  * List milestone templates for a cohort (admin).
@@ -8,7 +8,7 @@ import { requireAdmin } from './auth'
 export const list = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const templates = await ctx.db
       .query('milestoneTemplates')
@@ -35,7 +35,7 @@ export const create = mutation({
     requireFile: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const existing = await ctx.db
       .query('milestoneTemplates')
@@ -104,11 +104,10 @@ export const update = mutation({
     requireFile: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const { id, ...updates } = args
     const template = await ctx.db.get(id)
     if (!template) throw new Error('Milestone template not found')
+    await requireAdminForCohort(ctx, template.cohortId)
 
     const wasActive = template.isActive
     const willBeActive = updates.isActive ?? wasActive
@@ -185,10 +184,9 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id('milestoneTemplates') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const template = await ctx.db.get(args.id)
     if (!template) throw new Error('Milestone template not found')
+    await requireAdminForCohort(ctx, template.cohortId)
 
     await ctx.db.delete(args.id)
   },
@@ -200,10 +198,11 @@ export const remove = mutation({
 export const reorder = mutation({
   args: { templateIds: v.array(v.id('milestoneTemplates')) },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     for (let i = 0; i < args.templateIds.length; i++) {
-      await ctx.db.patch(args.templateIds[i], { sortOrder: i })
+      const template = await ctx.db.get(args.templateIds[i])
+      if (!template) throw new Error('Milestone template not found')
+      await requireAdminForCohort(ctx, template.cohortId)
+      await ctx.db.patch(template._id, { sortOrder: i })
     }
   },
 })

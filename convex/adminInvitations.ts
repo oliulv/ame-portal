@@ -1,7 +1,7 @@
 import { query, mutation, internalAction } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
-import { requireAdmin } from './auth'
+import { getAdminAccessibleCohortIds, requireAdmin, requireAdminForCohort } from './auth'
 import { generateToken, getExpiration } from './lib/tokens'
 import { evaluateInviteAccept } from './lib/inviteAccept'
 
@@ -34,16 +34,24 @@ export const getByToken = query({
 export const list = query({
   args: { cohortId: v.optional(v.id('cohorts')) },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    const admin = await requireAdmin(ctx)
 
     if (args.cohortId) {
+      await requireAdminForCohort(ctx, args.cohortId)
       return await ctx.db
         .query('adminInvitations')
         .filter((q) => q.eq(q.field('cohortId'), args.cohortId))
         .collect()
     }
 
-    return await ctx.db.query('adminInvitations').collect()
+    const invitations = await ctx.db.query('adminInvitations').collect()
+    const accessibleCohortIds = await getAdminAccessibleCohortIds(ctx, admin)
+    if (accessibleCohortIds === null) return invitations
+
+    const allowed = new Set(accessibleCohortIds)
+    return invitations.filter(
+      (invitation) => invitation.cohortId && allowed.has(invitation.cohortId)
+    )
   },
 })
 
@@ -61,6 +69,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const inviter = await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     // Verify cohort exists
     const cohort = await ctx.db.get(args.cohortId)
@@ -115,10 +124,9 @@ export const create = mutation({
 export const resend = mutation({
   args: { id: v.id('adminInvitations'), appUrl: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const invitation = await ctx.db.get(args.id)
     if (!invitation) throw new Error('Invitation not found')
+    if (invitation.cohortId) await requireAdminForCohort(ctx, invitation.cohortId)
     if (invitation.acceptedAt) throw new Error('Already accepted')
     if (new Date(invitation.expiresAt) < new Date()) throw new Error('Invitation expired')
 
@@ -143,10 +151,9 @@ export const resend = mutation({
 export const remove = mutation({
   args: { id: v.id('adminInvitations') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const invitation = await ctx.db.get(args.id)
     if (!invitation) throw new Error('Invitation not found')
+    if (invitation.cohortId) await requireAdminForCohort(ctx, invitation.cohortId)
 
     await ctx.db.delete(args.id)
   },
@@ -158,10 +165,9 @@ export const remove = mutation({
 export const revoke = mutation({
   args: { id: v.id('adminInvitations') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const invitation = await ctx.db.get(args.id)
     if (!invitation) throw new Error('Invitation not found')
+    if (invitation.cohortId) await requireAdminForCohort(ctx, invitation.cohortId)
     if (invitation.acceptedAt) throw new Error('Cannot revoke accepted invitation')
 
     await ctx.db.patch(args.id, {

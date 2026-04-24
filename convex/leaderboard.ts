@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireAuth, requireSuperAdmin } from './auth'
+import { requireAdminForCohort, requireAuth, requireSuperAdmin } from './auth'
 import type { Doc, Id } from './_generated/dataModel'
 import { getWeekBoundaries } from './lib/dateUtils'
 import {
@@ -479,7 +479,7 @@ export const computeLeaderboard = query({
     cohortId: v.id('cohorts'),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
     const result = await computeCohortLeaderboard(ctx, args.cohortId)
     if (!result) throw new Error('Cohort not found')
     return result

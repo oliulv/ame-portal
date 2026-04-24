@@ -16,6 +16,7 @@ function serializeUnknown(
   key = '',
   seen: WeakSet<object> = new WeakSet()
 ): unknown {
+  if (REDACTED_KEY_PATTERN.test(key)) return '[REDACTED]'
   if (value === null || value === undefined) return value
   if (typeof value === 'string') {
     return value.length > MAX_STRING_LENGTH
@@ -34,8 +35,6 @@ function serializeUnknown(
       cause: serializeUnknown(value.cause, depth + 1, 'cause', seen),
     }
   }
-
-  if (REDACTED_KEY_PATTERN.test(key)) return '[REDACTED]'
 
   if (Array.isArray(value)) {
     if (depth >= MAX_DEPTH) return `[Array(${value.length})]`

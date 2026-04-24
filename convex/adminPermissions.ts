@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireSuperAdmin, hasPermission } from './auth'
+import { requireAdmin, requireSuperAdmin, hasPermission, adminCanAccessCohort } from './auth'
 
 const permissionValue = v.union(
   v.literal('approve_milestones'),
@@ -25,6 +25,8 @@ export const checkMyPermission = query({
   handler: async (ctx, args) => {
     const user = await requireAdmin(ctx)
     if (user.role === 'super_admin') return true
+    const allowed = await adminCanAccessCohort(ctx, user, args.cohortId)
+    if (!allowed) return false
     return hasPermission(ctx, user._id, args.cohortId, args.permission, args.startupId)
   },
 })

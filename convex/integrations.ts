@@ -7,7 +7,13 @@ import {
   internalQuery,
 } from './functions'
 import { v } from 'convex/values'
-import { requireFounder, requireAdmin, requireStartupAccess, getFounderStartupIds } from './auth'
+import {
+  requireFounder,
+  requireAdminForCohort,
+  requireAdminForStartup,
+  requireStartupAccess,
+  getFounderStartupIds,
+} from './auth'
 import { api, internal } from './_generated/api'
 import { logConvexError } from './lib/logging'
 
@@ -563,7 +569,7 @@ export const fullStatus = query({
 export const statusForAdmin = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
 
     const connections = await ctx.db
       .query('integrationConnections')
@@ -771,7 +777,7 @@ export const updateConnectionToken = internalMutation({
 export const statusByCohort = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const startups = await ctx.db
       .query('startups')

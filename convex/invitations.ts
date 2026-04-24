@@ -1,7 +1,7 @@
 import { query, mutation, internalAction } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
-import { requireAdmin } from './auth'
+import { requireAdminForStartup } from './auth'
 import { generateToken, getExpiration } from './lib/tokens'
 import { evaluateUserCleanup } from './lib/userCleanup'
 import { evaluateInviteAccept } from './lib/inviteAccept'
@@ -12,7 +12,7 @@ import { evaluateInviteAccept } from './lib/inviteAccept'
 export const list = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
 
     return await ctx.db
       .query('invitations')
@@ -28,7 +28,7 @@ export const list = query({
 export const listTeamAndPending = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
 
     // Team members from founderProfiles
     const profiles = await ctx.db
@@ -107,7 +107,7 @@ export const create = mutation({
     appUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const admin = await requireAdmin(ctx)
+    const { user: admin } = await requireAdminForStartup(ctx, args.startupId)
 
     // Check if this email already has an accepted invitation for this startup.
     // Compare case-insensitively so "Alice@ex.com" and "alice@ex.com" don't slip past.
@@ -276,10 +276,9 @@ export const accept = mutation({
 export const removeFounder = mutation({
   args: { id: v.id('invitations') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const invitation = await ctx.db.get(args.id)
     if (!invitation) throw new Error('Invitation not found')
+    await requireAdminForStartup(ctx, invitation.startupId)
 
     // Delete the founderProfile linked to this invitation and capture userId for cleanup.
     // Match case-insensitively against personalEmail AND the user's current email so we
@@ -329,10 +328,9 @@ export const removeFounder = mutation({
 export const removeTeamMember = mutation({
   args: { id: v.id('founderProfiles') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const profile = await ctx.db.get(args.id)
     if (!profile) throw new Error('Founder profile not found')
+    await requireAdminForStartup(ctx, profile.startupId)
 
     const userId = profile.userId
     const profileUser = await ctx.db.get(userId)
@@ -373,10 +371,9 @@ export const removeTeamMember = mutation({
 export const resend = mutation({
   args: { id: v.id('invitations'), appUrl: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const invitation = await ctx.db.get(args.id)
     if (!invitation) throw new Error('Invitation not found')
+    await requireAdminForStartup(ctx, invitation.startupId)
     if (invitation.acceptedAt) throw new Error('Invitation already accepted')
 
     const startup = await ctx.db.get(invitation.startupId)

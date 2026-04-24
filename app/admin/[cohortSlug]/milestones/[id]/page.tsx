@@ -68,7 +68,7 @@ export default function AdminMilestoneDetailPage() {
 
   const fileUrl = useQuery(
     api.milestones.getFileUrl,
-    milestone?.planStorageId ? { storageId: milestone.planStorageId } : 'skip'
+    milestone?.planStorageId ? { milestoneId, storageId: milestone.planStorageId } : 'skip'
   )
 
   if (milestone === undefined || currentUser === undefined) {
