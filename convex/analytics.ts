@@ -1,6 +1,8 @@
 import { query } from './functions'
 import { v } from 'convex/values'
-import { requireAuth } from './auth'
+import { requireAuth, requireStartupAccess } from './auth'
+import type { QueryCtx } from './functions'
+import type { Id } from './_generated/dataModel'
 
 /**
  * Real-time active users: sessions with activity in last 5 minutes.
@@ -8,7 +10,7 @@ import { requireAuth } from './auth'
 export const realtimeActiveUsers = query({
   args: { websiteIds: v.array(v.id('trackerWebsites')) },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireTrackerWebsiteAccess(ctx, args.websiteIds)
 
     const fiveMinAgo = Date.now() - 5 * 60 * 1000
     const activeSessions = new Set<string>()
@@ -46,7 +48,7 @@ export const statsSummary = query({
     compareEndDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireTrackerWebsiteAccess(ctx, args.websiteIds)
 
     const startTime = new Date(args.startDate).getTime()
     const endTime = new Date(args.endDate).getTime()
@@ -111,7 +113,7 @@ export const pageviewsByTime = query({
     ),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireTrackerWebsiteAccess(ctx, args.websiteIds)
 
     const startTime = new Date(args.startDate).getTime()
     const endTime = new Date(args.endDate).getTime()
@@ -169,7 +171,7 @@ export const dimensionBreakdown = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireTrackerWebsiteAccess(ctx, args.websiteIds)
 
     const startTime = new Date(args.startDate).getTime()
     const endTime = new Date(args.endDate).getTime()
@@ -215,7 +217,7 @@ export const sessionList = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx)
+    await requireTrackerWebsiteAccess(ctx, args.websiteIds)
 
     const startTime = new Date(args.startDate).getTime()
     const endTime = new Date(args.endDate).getTime()
@@ -283,6 +285,21 @@ export const sessionList = query({
 })
 
 // ── Helpers ──────────────────────────────────────────────────────────
+
+async function requireTrackerWebsiteAccess(ctx: QueryCtx, websiteIds: Id<'trackerWebsites'>[]) {
+  await requireAuth(ctx)
+
+  const startupIds = new Set<Id<'startups'>>()
+  for (const websiteId of new Set(websiteIds)) {
+    const website = await ctx.db.get(websiteId)
+    if (!website) throw new Error('Tracker website not found')
+    startupIds.add(website.startupId)
+  }
+
+  for (const startupId of startupIds) {
+    await requireStartupAccess(ctx, startupId)
+  }
+}
 
 function getBucketKey(timestamp: number, granularity: string): string {
   const d = new Date(timestamp)
