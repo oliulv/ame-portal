@@ -1,7 +1,7 @@
 import { httpRouter } from 'convex/server'
 import { httpAction } from './functions'
 import { internal, components } from './_generated/api'
-import { logConvexError } from './lib/logging'
+import { logConvexError, logConvexWarn } from './lib/logging'
 import { RateLimiter, MINUTE, DAY } from '@convex-dev/rate-limiter'
 import {
   truncateIp,
@@ -11,6 +11,7 @@ import {
   TrackerIdentError,
   SecretMissingError,
 } from './lib/clientIdent'
+import { hostnameMatchesTrackerDomain } from './lib/trackerDomain'
 import { timingSafeEqual } from './lib/random'
 
 const http = httpRouter()
@@ -29,9 +30,10 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Per-IP global event ceiling. Defense-in-depth: stops a single IP from
   // multiplying its quota by spraying across many websiteIds.
   trackerEventGlobal: { kind: 'token bucket', rate: 240, period: MINUTE, capacity: 480 },
-  // Per-IP per-website new-session ceiling. Defeats UA rotation as a
-  // session-minting vector (events still land but collapse onto fallback).
-  trackerNewSession: { kind: 'fixed window', rate: 15, period: DAY },
+  // Per-IP per-website new-session ceiling. This must tolerate shared NATs
+  // and offices, so keep it high enough for real daily users while still
+  // bounding single-IP bot inflation far below the old unbounded behavior.
+  trackerNewSession: { kind: 'fixed window', rate: 100, period: DAY },
 })
 
 // ── CORS headers for tracker ──────────────────────────────────────────
@@ -78,20 +80,13 @@ http.route({
         presentedSecret.length !== proxySecret.length ||
         !timingSafeEqual(presentedSecret, proxySecret)
       ) {
-        logConvexError('Tracker collect: proxy secret mismatch', null)
+        logConvexWarn('Tracker collect: proxy secret mismatch')
         return silentSuccess(null)
       }
 
       // ── Required client headers (set by the Next.js proxy) ────────
       const clientIp = (request.headers.get('x-tracker-client-ip') ?? '').trim()
       const userAgent = request.headers.get('x-tracker-client-ua') ?? ''
-      if (!clientIp) {
-        logConvexError('Tracker collect: missing x-tracker-client-ip', null)
-        return new Response(JSON.stringify({ error: 'Missing client IP' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
 
       // ── Body ──────────────────────────────────────────────────────
       const body = await request.json()
@@ -102,22 +97,26 @@ http.route({
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
+      const websiteIdStr = String(payload.website)
 
       // ── Derive identifiers ────────────────────────────────────────
       let ipTruncated: string
       try {
+        if (!clientIp) throw new TrackerIdentError('missing x-tracker-client-ip')
         ipTruncated = truncateIp(clientIp)
       } catch (error) {
-        // Mis-formatted IP from the proxy — fail closed, log loudly.
-        logConvexError('Tracker collect: bad client IP', error)
-        return new Response(JSON.stringify({ error: 'Bad client IP' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        // Preserve pageview/event ingestion if the proxy cannot provide a
+        // usable IP. Sessions collapse into a site-specific degraded bucket,
+        // so this remains hard to inflate while avoiding another zero-events
+        // outage from one malformed header.
+        logConvexWarn('Tracker collect: using degraded IP bucket', {
+          websiteId: websiteIdStr,
+          reason: error instanceof Error ? error.message : 'unknown',
         })
+        ipTruncated = degradedIpBucket(websiteIdStr)
       }
 
       const dayUtc = utcDayKey()
-      const websiteIdStr = String(payload.website)
       const sessionIdWithUa = await deriveSessionId({
         ipTruncated,
         userAgent,
@@ -293,16 +292,27 @@ export const insertTrackerEvent = internalMutation({
   handler: async (ctx, args) => {
     // Validate website exists — websiteId comes from an external source as a string.
     const normalizedId = ctx.db.normalizeId('trackerWebsites', args.websiteId)
-    if (!normalizedId) return
+    if (!normalizedId) {
+      logConvexWarn('Tracker collect: invalid website id', { websiteId: args.websiteId })
+      return
+    }
     const website = await ctx.db.get(normalizedId)
-    if (!website) return
+    if (!website) {
+      logConvexWarn('Tracker collect: unknown website id', { websiteId: args.websiteId })
+      return
+    }
 
     // Domain enforcement — when the website is registered with a domain,
     // require the event's hostname to be present AND to match. Prevents
     // trivial cross-site forgery where an attacker copies another startup's
     // tracker id and either omits the hostname or supplies a wrong one.
     if (website.domain) {
-      if (!args.hostname || !hostnameMatches(args.hostname, website.domain)) {
+      if (!hostnameMatchesTrackerDomain(args.hostname, website.domain)) {
+        logConvexWarn('Tracker collect: domain mismatch', {
+          websiteId: args.websiteId,
+          hostname: args.hostname,
+          domain: website.domain,
+        })
         return
       }
     }
@@ -313,10 +323,22 @@ export const insertTrackerEvent = internalMutation({
     const globalLimit = await rateLimiter.limit(ctx, 'trackerEventGlobal', {
       key: args.ipHash,
     })
-    if (!globalLimit.ok) return
+    if (!globalLimit.ok) {
+      logConvexWarn('Tracker collect: global event rate limit exceeded', {
+        websiteId: args.websiteId,
+        ipHashPrefix: args.ipHash.slice(0, 12),
+      })
+      return
+    }
     const evtKey = `${args.ipHash}:${args.websiteId}`
     const evtLimit = await rateLimiter.limit(ctx, 'trackerEvent', { key: evtKey })
-    if (!evtLimit.ok) return
+    if (!evtLimit.ok) {
+      logConvexWarn('Tracker collect: website event rate limit exceeded', {
+        websiteId: args.websiteId,
+        ipHashPrefix: args.ipHash.slice(0, 12),
+      })
+      return
+    }
 
     // Pick which sessionId to record:
     //  - If the UA-keyed sessionId is already known for this site today,
@@ -341,6 +363,13 @@ export const insertTrackerEvent = internalMutation({
     } else {
       const nsKey = `${args.ipHash}:${args.websiteId}:${args.dayUtc}`
       const nsLimit = await rateLimiter.limit(ctx, 'trackerNewSession', { key: nsKey })
+      if (!nsLimit.ok) {
+        logConvexWarn('Tracker collect: new-session limit collapsed event', {
+          websiteId: args.websiteId,
+          ipHashPrefix: args.ipHash.slice(0, 12),
+          dayUtc: args.dayUtc,
+        })
+      }
       finalSessionId = nsLimit.ok ? args.sessionIdWithUa : args.sessionIdFallback
     }
 
@@ -418,18 +447,6 @@ function extractUTMParams(url: string): {
   }
 }
 
-/**
- * Check whether an event's reported hostname matches the registered domain
- * for the website. Subdomains of the registered domain are accepted (so
- * setting `example.com` covers both apex and `app.example.com`).
- */
-function hostnameMatches(hostname: string, domain: string): boolean {
-  const h = hostname.trim().toLowerCase()
-  const d = domain.trim().toLowerCase()
-  if (!d) return true
-  return h === d || h.endsWith(`.${d}`)
-}
-
 function utcDayStartMs(dayUtc: string): number {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayUtc)
   // The action computes dayUtc via utcDayKey() so an invalid value here
@@ -437,4 +454,8 @@ function utcDayStartMs(dayUtc: string): number {
   // the index filter to the entire history of events).
   if (!m) throw new Error(`utcDayStartMs: invalid dayUtc "${dayUtc}"`)
   return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
+function degradedIpBucket(websiteId: string): string {
+  return `degraded-ip:${websiteId.slice(0, 128)}`
 }

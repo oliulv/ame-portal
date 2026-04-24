@@ -22,6 +22,7 @@ import {
   type FounderGithubStats,
   type SearchContributionHit,
 } from './lib/githubStats'
+import { buildTrackerDailyMetrics, trackerRollupWindow } from './lib/trackerRollup'
 
 /**
  * Store metric snapshots (upserts by day to avoid duplicates).
@@ -1653,33 +1654,17 @@ export const fetchTrackerMetrics_cron = internalAction({
 
     const websiteIds = websites.map((w: any) => w._id)
 
-    // Get tracker events for these websites (last 30 days)
+    const window = trackerRollupWindow()
+
+    // Get tracker events for these websites (last 30 UTC days, including today)
     const events: any[] = await ctx.runQuery(internal.metrics.getTrackerEventsForWebsites, {
       websiteIds,
-      since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      since: new Date(window.startMs).toISOString(),
     })
 
-    // Aggregate events into daily buckets
-    const buckets = new Map<string, { pageviews: number; sessions: Set<string> }>()
-
-    for (const event of events) {
-      const date = new Date(event._creationTime)
-      const bucket = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-
-      if (!buckets.has(bucket)) {
-        buckets.set(bucket, { pageviews: 0, sessions: new Set() })
-      }
-
-      const b = buckets.get(bucket)!
-      if (!event.eventName) {
-        b.pageviews++
-      }
-      if (event.sessionId) {
-        b.sessions.add(event.sessionId)
-      }
-    }
-
-    // Store aggregated metrics
+    // Store aggregated metrics. The helper zero-fills the full window so a day
+    // with no events overwrites stale prior metrics instead of leaving an old
+    // leaderboard value behind.
     const snapshots: Array<{
       startupId: typeof args.startupId
       provider: 'tracker'
@@ -1687,38 +1672,14 @@ export const fetchTrackerMetrics_cron = internalAction({
       value: number
       timestamp: string
       window: 'daily'
-    }> = []
-
-    for (const [bucket, data] of buckets) {
-      const timestamp = `${bucket}T00:00:00.000Z`
-
-      snapshots.push({
-        startupId: args.startupId,
-        provider: 'tracker',
-        metricKey: 'pageviews',
-        value: data.pageviews,
-        timestamp,
-        window: 'daily',
-      })
-
-      snapshots.push({
-        startupId: args.startupId,
-        provider: 'tracker',
-        metricKey: 'sessions',
-        value: data.sessions.size,
-        timestamp,
-        window: 'daily',
-      })
-
-      snapshots.push({
-        startupId: args.startupId,
-        provider: 'tracker',
-        metricKey: 'weekly_active_users',
-        value: data.sessions.size,
-        timestamp,
-        window: 'daily',
-      })
-    }
+    }> = buildTrackerDailyMetrics(events, window).map((metric) => ({
+      startupId: args.startupId,
+      provider: 'tracker',
+      metricKey: metric.metricKey,
+      value: metric.value,
+      timestamp: metric.timestamp,
+      window: 'daily',
+    }))
 
     if (snapshots.length > 0) {
       await ctx.runMutation(internal.metrics.storeInternal, { snapshots })

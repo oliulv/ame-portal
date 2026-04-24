@@ -1,6 +1,7 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
 import { requireFounder, getFounderStartupIds } from './auth'
+import { normalizeTrackerDomain } from './lib/trackerDomain'
 
 /**
  * List tracker websites for the current founder.
@@ -34,12 +35,14 @@ export const create = mutation({
 
     if (startupIds.length === 0) throw new Error('No startup found')
 
+    const domain = normalizeTrackerDomain(args.domain)
+
     // Check for duplicate domain
-    if (args.domain) {
+    if (domain) {
       const existing = await ctx.db
         .query('trackerWebsites')
         .withIndex('by_startupId', (q) => q.eq('startupId', startupIds[0]))
-        .filter((q) => q.eq(q.field('domain'), args.domain))
+        .filter((q) => q.eq(q.field('domain'), domain))
         .first()
 
       if (existing) {
@@ -50,7 +53,7 @@ export const create = mutation({
     return await ctx.db.insert('trackerWebsites', {
       startupId: startupIds[0],
       name: args.name,
-      domain: args.domain,
+      domain,
     })
   },
 })
@@ -75,7 +78,21 @@ export const update = mutation({
 
     const patch: Record<string, unknown> = {}
     if (args.name !== undefined) patch.name = args.name
-    if (args.domain !== undefined) patch.domain = args.domain
+    if (args.domain !== undefined) {
+      const domain = normalizeTrackerDomain(args.domain)
+      if (domain) {
+        const existing = await ctx.db
+          .query('trackerWebsites')
+          .withIndex('by_startupId', (q) => q.eq('startupId', website.startupId))
+          .filter((q) => q.eq(q.field('domain'), domain))
+          .first()
+
+        if (existing && existing._id !== args.id) {
+          throw new Error('A tracker website with this domain already exists')
+        }
+      }
+      patch.domain = domain
+    }
 
     await ctx.db.patch(args.id, patch)
   },
