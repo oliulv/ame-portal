@@ -2,10 +2,12 @@ import { query, mutation } from './functions'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import {
-  requireAdmin,
   requireAdminWithPermission,
+  requireAdminForCohort,
+  requireAdminForStartup,
   requireAuth,
   requireFounder,
+  requireStartupAccess,
   getFounderStartupIds,
 } from './auth'
 
@@ -15,7 +17,7 @@ import {
 export const listByStartup = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
 
     const milestones = await ctx.db
       .query('milestones')
@@ -71,6 +73,10 @@ export const listEvents = query({
   handler: async (ctx, args) => {
     await requireAuth(ctx)
 
+    const milestone = await ctx.db.get(args.milestoneId)
+    if (!milestone) return []
+    await requireStartupAccess(ctx, milestone.startupId)
+
     const events = await ctx.db
       .query('milestoneEvents')
       .withIndex('by_milestoneId', (q) => q.eq('milestoneId', args.milestoneId))
@@ -102,9 +108,9 @@ export const listEvents = query({
 export const getForAdmin = query({
   args: { id: v.id('milestones') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
     const milestone = await ctx.db.get(args.id)
     if (!milestone) return null
+    await requireAdminForStartup(ctx, milestone.startupId)
 
     const startup = await ctx.db.get(milestone.startupId)
     return {
@@ -122,7 +128,7 @@ export const getForAdmin = query({
 export const listByCohort = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const startups = await ctx.db
       .query('startups')
@@ -155,7 +161,7 @@ export const listByCohort = query({
 export const listSubmittedByCohort = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const startups = await ctx.db
       .query('startups')
@@ -272,7 +278,7 @@ export const fundingSummaryForFounder = query({
 export const fundingSummaryForAdmin = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
 
     const startup = await ctx.db.get(args.startupId)
     const cohort = startup ? await ctx.db.get(startup.cohortId) : null
@@ -317,7 +323,7 @@ export const fundingSummaryForAdmin = query({
 export const fundingOverview = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const cohort = await ctx.db.get(args.cohortId)
 
@@ -422,7 +428,7 @@ export const create = mutation({
     requireFile: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
 
     let sortOrder = args.sortOrder
     if (sortOrder === undefined) {
@@ -483,11 +489,10 @@ export const update = mutation({
     requireFile: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const { id, ...updates } = args
     const milestone = await ctx.db.get(id)
     if (!milestone) throw new Error('Milestone not found')
+    await requireAdminForStartup(ctx, milestone.startupId)
 
     const patch: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(updates)) {
@@ -506,10 +511,9 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id('milestones') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const milestone = await ctx.db.get(args.id)
     if (!milestone) throw new Error('Milestone not found')
+    await requireAdminForStartup(ctx, milestone.startupId)
 
     // Notify founders before deleting
     const startup = await ctx.db.get(milestone.startupId)
@@ -753,10 +757,11 @@ export const withdraw = mutation({
 export const reorder = mutation({
   args: { milestoneIds: v.array(v.id('milestones')) },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const last = args.milestoneIds.length - 1
     for (let i = 0; i < args.milestoneIds.length; i++) {
+      const milestone = await ctx.db.get(args.milestoneIds[i])
+      if (!milestone) throw new Error('Milestone not found')
+      await requireAdminForStartup(ctx, milestone.startupId)
       await ctx.db.patch(args.milestoneIds[i], { sortOrder: last - i })
     }
   },
@@ -777,8 +782,14 @@ export const generateUploadUrl = mutation({
  * Get a URL for a stored milestone plan file.
  */
 export const getFileUrl = query({
-  args: { storageId: v.id('_storage') },
+  args: { milestoneId: v.id('milestones'), storageId: v.id('_storage') },
   handler: async (ctx, args) => {
+    const milestone = await ctx.db.get(args.milestoneId)
+    if (!milestone) throw new Error('Milestone not found')
+    await requireStartupAccess(ctx, milestone.startupId)
+    if (milestone.planStorageId !== args.storageId) {
+      throw new Error('File not found on milestone')
+    }
     return await ctx.storage.getUrl(args.storageId)
   },
 })
@@ -792,10 +803,7 @@ export const updateFundingDeployed = mutation({
     amount: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
-    const startup = await ctx.db.get(args.startupId)
-    if (!startup) throw new Error('Startup not found')
+    await requireAdminForStartup(ctx, args.startupId)
 
     await ctx.db.patch(args.startupId, { fundingDeployed: args.amount })
   },

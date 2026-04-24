@@ -4,6 +4,7 @@ import { v } from 'convex/values'
 import {
   requireAdmin,
   requireAdminWithPermission,
+  requireAdminForCohort,
   requireFounder,
   getFounderStartupIds,
   hasPermission,
@@ -17,6 +18,7 @@ export const canSend = query({
   handler: async (ctx, args) => {
     const user = await requireAdmin(ctx)
     if (user.role === 'super_admin') return true
+    await requireAdminForCohort(ctx, args.cohortId)
     return hasPermission(ctx, user._id, args.cohortId, 'send_announcements')
   },
 })
@@ -99,7 +101,7 @@ async function enrichWithSender(
 export const listForAdmin = query({
   args: { cohortId: v.id('cohorts') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     const announcements = await ctx.db
       .query('announcements')

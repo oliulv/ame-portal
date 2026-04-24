@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireFounder, requireAuth, requireAdmin } from './auth'
+import { requireFounder, requireAuth, requireAdminForStartup } from './auth'
 
 /**
  * Get the current founder's full profile (founder profile + startup + startup profile + bank).
@@ -128,11 +128,12 @@ export const updateAdminProfile = mutation({
 export const getByUserId = query({
   args: { userId: v.id('users') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
-    return await ctx.db
+    const profile = await ctx.db
       .query('founderProfiles')
       .withIndex('by_userId', (q) => q.eq('userId', args.userId))
       .first()
+    if (!profile) return null
+    await requireAdminForStartup(ctx, profile.startupId)
+    return profile
   },
 })

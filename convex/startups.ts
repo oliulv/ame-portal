@@ -1,7 +1,13 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
 import { Doc } from './_generated/dataModel'
-import { requireAdmin, requireSuperAdmin } from './auth'
+import {
+  getAdminAccessibleCohortIds,
+  requireAdmin,
+  requireAdminForCohort,
+  requireAdminForStartup,
+  requireSuperAdmin,
+} from './auth'
 import { slugify, generateUniqueSlug } from './lib/slugify'
 import { evaluateUserCleanup } from './lib/userCleanup'
 
@@ -11,16 +17,22 @@ import { evaluateUserCleanup } from './lib/userCleanup'
 export const list = query({
   args: { cohortId: v.optional(v.id('cohorts')) },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    const user = await requireAdmin(ctx)
 
     if (args.cohortId) {
+      await requireAdminForCohort(ctx, args.cohortId)
       return await ctx.db
         .query('startups')
         .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId!))
         .collect()
     }
 
-    return await ctx.db.query('startups').collect()
+    const accessibleCohortIds = await getAdminAccessibleCohortIds(ctx, user)
+    const allStartups = await ctx.db.query('startups').collect()
+    if (accessibleCohortIds === null) return allStartups
+
+    const allowed = new Set(accessibleCohortIds)
+    return allStartups.filter((startup) => allowed.has(startup.cohortId))
   },
 })
 
@@ -30,12 +42,14 @@ export const list = query({
 export const getBySlug = query({
   args: { slug: v.string() },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
-    return await ctx.db
+    const startup = await ctx.db
       .query('startups')
       .withIndex('by_slug', (q) => q.eq('slug', args.slug))
       .unique()
+    if (!startup) return null
+
+    await requireAdminForCohort(ctx, startup.cohortId)
+    return startup
   },
 })
 
@@ -45,8 +59,8 @@ export const getBySlug = query({
 export const getById = query({
   args: { id: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-    return await ctx.db.get(args.id)
+    const { startup } = await requireAdminForStartup(ctx, args.id)
+    return startup
   },
 })
 
@@ -64,7 +78,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     // Generate unique slug
     const allStartups = await ctx.db.query('startups').collect()
@@ -138,11 +152,13 @@ export const update = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
     const { id, ...updates } = args
     const current = await ctx.db.get(id)
     if (!current) throw new Error('Startup not found')
+    await requireAdminForCohort(ctx, current.cohortId)
+    if (updates.cohortId) {
+      await requireAdminForCohort(ctx, updates.cohortId)
+    }
 
     // If slug is being changed, validate uniqueness
     if (updates.slug && updates.slug !== current.slug) {
@@ -174,9 +190,15 @@ export const update = mutation({
 export const dashboardStats = query({
   args: { cohortSlug: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    const user = await requireAdmin(ctx)
 
-    const allCohorts = await ctx.db.query('cohorts').collect()
+    const accessibleCohortIds = await getAdminAccessibleCohortIds(ctx, user)
+    const allowedCohortIds = accessibleCohortIds === null ? null : new Set(accessibleCohortIds)
+
+    let allCohorts = await ctx.db.query('cohorts').collect()
+    if (allowedCohortIds) {
+      allCohorts = allCohorts.filter((cohort) => allowedCohortIds.has(cohort._id))
+    }
 
     let startups: Doc<'startups'>[] = []
     let invoiceCount = 0
@@ -188,6 +210,7 @@ export const dashboardStats = query({
         .unique()
 
       if (cohort) {
+        await requireAdminForCohort(ctx, cohort._id)
         startups = await ctx.db
           .query('startups')
           .withIndex('by_cohortId', (q) => q.eq('cohortId', cohort._id))
@@ -197,6 +220,9 @@ export const dashboardStats = query({
       }
     } else {
       startups = await ctx.db.query('startups').collect()
+      if (allowedCohortIds) {
+        startups = startups.filter((startup) => allowedCohortIds.has(startup.cohortId))
+      }
     }
 
     const activeStartups = startups.filter((s) => s.excludeFromMetrics !== true)
@@ -372,7 +398,7 @@ export const remove = mutation({
 export const getProfileByStartupId = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
     return await ctx.db
       .query('startupProfiles')
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
@@ -386,7 +412,7 @@ export const getProfileByStartupId = query({
 export const getFounderProfilesByStartupId = query({
   args: { startupId: v.id('startups') },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForStartup(ctx, args.startupId)
     return await ctx.db
       .query('founderProfiles')
       .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
@@ -403,10 +429,7 @@ export const toggleExcludeFromMetrics = mutation({
     exclude: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
-    const startup = await ctx.db.get(args.id)
-    if (!startup) throw new Error('Startup not found')
+    await requireAdminForStartup(ctx, args.id)
 
     await ctx.db.patch(args.id, { excludeFromMetrics: args.exclude })
   },

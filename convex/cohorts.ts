@@ -1,6 +1,6 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireSuperAdmin } from './auth'
+import { requireAdmin, requireAdminForCohort, requireSuperAdmin } from './auth'
 import { slugify, generateUniqueSlug } from './lib/slugify'
 
 /**
@@ -36,12 +36,14 @@ export const list = query({
 export const getBySlug = query({
   args: { slug: v.string() },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
-
-    return await ctx.db
+    const cohort = await ctx.db
       .query('cohorts')
       .withIndex('by_slug', (q) => q.eq('slug', args.slug))
       .unique()
+    if (!cohort) return null
+
+    await requireAdminForCohort(ctx, cohort._id)
+    return cohort
   },
 })
 

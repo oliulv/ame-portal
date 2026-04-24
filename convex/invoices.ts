@@ -8,6 +8,9 @@ import {
   requireFounder,
   requireAuth,
   requireStartupAccess,
+  getAdminAccessibleCohortIds,
+  requireAdminForCohort,
+  requireAdminForStartup,
   getFounderStartupIds,
 } from './auth'
 import { validateInvoiceFileName, extractInvoiceNumber } from './invoiceValidation'
@@ -320,11 +323,12 @@ export const listForAdmin = query({
     ),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    const admin = await requireAdmin(ctx)
 
     let invoices
 
     if (args.startupId) {
+      await requireAdminForStartup(ctx, args.startupId)
       invoices = await ctx.db
         .query('invoices')
         .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId!))
@@ -336,6 +340,16 @@ export const listForAdmin = query({
         .collect()
     } else {
       invoices = await ctx.db.query('invoices').collect()
+    }
+
+    const accessibleCohortIds = await getAdminAccessibleCohortIds(ctx, admin)
+    if (accessibleCohortIds !== null) {
+      const allowed = new Set(accessibleCohortIds)
+      const startups = await ctx.db.query('startups').collect()
+      const allowedStartupIds = new Set(
+        startups.filter((startup) => allowed.has(startup.cohortId)).map((startup) => startup._id)
+      )
+      invoices = invoices.filter((invoice) => allowedStartupIds.has(invoice.startupId))
     }
 
     // Apply both filters if needed
@@ -370,9 +384,13 @@ export const getNextSubmitted = query({
     startupId: v.optional(v.id('startups')),
   },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx)
+    await requireAdminForCohort(ctx, args.cohortId)
 
     if (args.startupId) {
+      const { startup } = await requireAdminForStartup(ctx, args.startupId)
+      if (startup.cohortId !== args.cohortId) {
+        throw new Error('Startup does not belong to this cohort')
+      }
       // Find next submitted invoice for this specific startup
       const invoices = await ctx.db
         .query('invoices')
@@ -454,7 +472,8 @@ export const updateStatus = mutation({
         startup._id
       )
     } else {
-      admin = await requireAdmin(ctx)
+      const result = await requireAdminForStartup(ctx, invoice.startupId)
+      admin = result.user
     }
 
     // Validate status transitions

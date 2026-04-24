@@ -1,6 +1,11 @@
 import { query, mutation } from './functions'
 import { v } from 'convex/values'
-import { requireAdmin, requireAdminWithPermission, hasPermission } from './auth'
+import {
+  requireAdmin,
+  requireAdminWithPermission,
+  requireAdminForCohort,
+  hasPermission,
+} from './auth'
 import { NOTIFICATION_TYPES } from './lib/notificationTypes'
 
 /**
@@ -11,6 +16,7 @@ export const canManageNotifications = query({
   handler: async (ctx, args) => {
     const user = await requireAdmin(ctx)
     if (user.role === 'super_admin') return true
+    await requireAdminForCohort(ctx, args.cohortId)
     return hasPermission(ctx, user._id, args.cohortId, 'manage_notifications')
   },
 })
