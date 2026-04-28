@@ -212,200 +212,6 @@ export const listSubmittedByCohort = query({
 })
 
 /**
- * Funding summary for the current founder's startup.
- * Returns unlocked, deployed, and available balance.
- * Deployed is computed from the sum of all paid invoices.
- */
-export const fundingSummaryForFounder = query({
-  args: {},
-  handler: async (ctx) => {
-    const user = await requireFounder(ctx)
-    const startupIds = await getFounderStartupIds(ctx, user._id)
-
-    if (startupIds.length === 0) {
-      return {
-        unlocked: 0,
-        deployed: 0,
-        available: 0,
-        potential: 0,
-        baseline: 0,
-        hasMilestones: false,
-      }
-    }
-
-    const startupId = startupIds[0]
-    const startup = await ctx.db.get(startupId)
-    const cohort = startup ? await ctx.db.get(startup.cohortId) : null
-
-    const milestones = await ctx.db
-      .query('milestones')
-      .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
-      .collect()
-
-    const potential = milestones.reduce((sum, m) => sum + m.amount, 0)
-    const unlocked = milestones
-      .filter((m) => m.status === 'approved')
-      .reduce((sum, m) => sum + m.amount, 0)
-
-    const allInvoices = await ctx.db
-      .query('invoices')
-      .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
-      .collect()
-    const deployed = allInvoices
-      .filter((i) => i.status === 'paid')
-      .reduce((sum, i) => sum + i.amountGbp, 0)
-    const committed = allInvoices
-      .filter((i) => i.status === 'approved')
-      .reduce((sum, i) => sum + i.amountGbp, 0)
-
-    const available = Math.max(0, unlocked - deployed)
-
-    return {
-      unlocked,
-      deployed,
-      committed,
-      available,
-      potential,
-      baseline: cohort?.baseFunding ?? 0,
-      hasMilestones: milestones.length > 0,
-    }
-  },
-})
-
-/**
- * Funding summary for a specific startup (admin).
- */
-export const fundingSummaryForAdmin = query({
-  args: { startupId: v.id('startups') },
-  handler: async (ctx, args) => {
-    await requireAdminForStartup(ctx, args.startupId)
-
-    const startup = await ctx.db.get(args.startupId)
-    const cohort = startup ? await ctx.db.get(startup.cohortId) : null
-
-    const milestones = await ctx.db
-      .query('milestones')
-      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
-      .collect()
-
-    const potential = milestones.reduce((sum, m) => sum + m.amount, 0)
-    const unlocked = milestones
-      .filter((m) => m.status === 'approved')
-      .reduce((sum, m) => sum + m.amount, 0)
-
-    const invoices = await ctx.db
-      .query('invoices')
-      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
-      .collect()
-    const deployed = invoices
-      .filter((i) => i.status === 'paid')
-      .reduce((sum, i) => sum + i.amountGbp, 0)
-    const committed = invoices
-      .filter((i) => i.status === 'approved')
-      .reduce((sum, i) => sum + i.amountGbp, 0)
-
-    const available = Math.max(0, unlocked - deployed)
-
-    return {
-      unlocked,
-      deployed,
-      committed,
-      available,
-      potential,
-      baseline: cohort?.baseFunding ?? 0,
-    }
-  },
-})
-
-/**
- * Funding overview for all startups in a cohort (admin).
- */
-export const fundingOverview = query({
-  args: { cohortId: v.id('cohorts') },
-  handler: async (ctx, args) => {
-    await requireAdminForCohort(ctx, args.cohortId)
-
-    const cohort = await ctx.db.get(args.cohortId)
-
-    const startups = await ctx.db
-      .query('startups')
-      .withIndex('by_cohortId', (q) => q.eq('cohortId', args.cohortId))
-      .collect()
-
-    let totalPotential = 0
-    let totalUnlocked = 0
-    let totalDeployed = 0
-    let totalCommitted = 0
-
-    const rows = await Promise.all(
-      startups.map(async (startup) => {
-        const milestones = await ctx.db
-          .query('milestones')
-          .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
-          .collect()
-
-        const potential = milestones.reduce((sum, m) => sum + m.amount, 0)
-        const unlocked = milestones
-          .filter((m) => m.status === 'approved')
-          .reduce((sum, m) => sum + m.amount, 0)
-
-        const allInvoices = await ctx.db
-          .query('invoices')
-          .withIndex('by_startupId', (q) => q.eq('startupId', startup._id))
-          .collect()
-        const deployed = allInvoices
-          .filter((i) => i.status === 'paid')
-          .reduce((sum, i) => sum + i.amountGbp, 0)
-        const committed = allInvoices
-          .filter((i) => i.status === 'approved')
-          .reduce((sum, i) => sum + i.amountGbp, 0)
-
-        const available = Math.max(0, unlocked - deployed)
-        const excluded = startup.excludeFromMetrics === true
-
-        if (!excluded) {
-          totalPotential += potential
-          totalUnlocked += unlocked
-          totalDeployed += deployed
-          totalCommitted += committed
-        }
-
-        return {
-          _id: startup._id,
-          name: startup.name,
-          slug: startup.slug,
-          potential,
-          unlocked,
-          deployed,
-          committed,
-          available,
-          milestoneCount: milestones.length,
-          excludeFromMetrics: excluded,
-        }
-      })
-    )
-
-    const includedCount = startups.filter((s) => s.excludeFromMetrics !== true).length
-
-    return {
-      startups: rows,
-      totals: {
-        potential: totalPotential,
-        unlocked: totalUnlocked,
-        deployed: totalDeployed,
-        committed: totalCommitted,
-        available: Math.max(0, totalUnlocked - totalDeployed),
-      },
-      cohort: {
-        fundingBudget: cohort?.fundingBudget ?? null,
-        baseFunding: cohort?.baseFunding ?? null,
-        startupCount: includedCount,
-      },
-    }
-  },
-})
-
-/**
  * Create a milestone (admin).
  */
 export const create = mutation({
@@ -445,6 +251,7 @@ export const create = mutation({
       description: args.description,
       amount: args.amount,
       status: args.status ?? 'waiting',
+      approvedAt: args.status === 'approved' ? Date.now() : undefined,
       dueDate: args.dueDate,
       sortOrder,
       requireLink: args.requireLink,
@@ -501,6 +308,14 @@ export const update = mutation({
       }
     }
 
+    if (updates.status !== undefined) {
+      if (updates.status === 'approved' && milestone.status !== 'approved') {
+        patch.approvedAt = Date.now()
+      } else if (updates.status !== 'approved') {
+        patch.approvedAt = undefined
+      }
+    }
+
     await ctx.db.patch(id, patch)
   },
 })
@@ -550,7 +365,8 @@ export const approve = mutation({
       startup._id
     )
 
-    await ctx.db.patch(args.id, { status: 'approved' })
+    const approvedAt = Date.now()
+    await ctx.db.patch(args.id, { status: 'approved', approvedAt })
 
     await ctx.db.insert('milestoneEvents', {
       milestoneId: args.id,
@@ -791,20 +607,5 @@ export const getFileUrl = query({
       throw new Error('File not found on milestone')
     }
     return await ctx.storage.getUrl(args.storageId)
-  },
-})
-
-/**
- * Update the funding deployed amount for a startup (admin).
- */
-export const updateFundingDeployed = mutation({
-  args: {
-    startupId: v.id('startups'),
-    amount: v.number(),
-  },
-  handler: async (ctx, args) => {
-    await requireAdminForStartup(ctx, args.startupId)
-
-    await ctx.db.patch(args.startupId, { fundingDeployed: args.amount })
   },
 })

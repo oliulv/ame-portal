@@ -212,6 +212,7 @@ export const notificationPreferencesSchema = z.object({
   milestoneStatusChanged: z.boolean(),
   announcements: z.boolean(),
   eventReminders: z.boolean(),
+  fundingAdjustments: z.boolean(),
 })
 
 export type NotificationPreferencesFormData = z.infer<typeof notificationPreferencesSchema>
@@ -221,7 +222,7 @@ export type NotificationPreferencesFormData = z.infer<typeof notificationPrefere
  */
 export const announcementSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100, 'Maximum 100 characters'),
-  body: z.string().min(1, 'Body is required').max(500, 'Maximum 500 characters'),
+  body: z.string().min(1, 'Body is required').max(10000, 'Maximum 10,000 characters'),
 })
 
 export type AnnouncementFormData = z.infer<typeof announcementSchema>

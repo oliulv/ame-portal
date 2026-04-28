@@ -190,6 +190,7 @@ describe('notificationPreferencesSchema', () => {
     milestoneStatusChanged: true,
     announcements: true,
     eventReminders: true,
+    fundingAdjustments: true,
   }
 
   describe('valid preferences', () => {
@@ -206,6 +207,7 @@ describe('notificationPreferencesSchema', () => {
         milestoneStatusChanged: false,
         announcements: false,
         eventReminders: false,
+        fundingAdjustments: false,
       })
       expect(result.success).toBe(true)
     })
@@ -218,17 +220,19 @@ describe('notificationPreferencesSchema', () => {
         milestoneStatusChanged: false,
         announcements: true,
         eventReminders: false,
+        fundingAdjustments: true,
       })
       expect(result.success).toBe(true)
     })
 
-    it('should parse and return exactly the six keys', () => {
+    it('should parse and return exactly the seven keys', () => {
       const result = notificationPreferencesSchema.safeParse(validPreferences)
       expect(result.success).toBe(true)
       if (result.success) {
         expect(Object.keys(result.data).sort()).toEqual([
           'announcements',
           'eventReminders',
+          'fundingAdjustments',
           'invoiceStatusChanged',
           'invoiceSubmitted',
           'milestoneStatusChanged',
@@ -275,6 +279,12 @@ describe('notificationPreferencesSchema', () => {
       expect(result.success).toBe(false)
     })
 
+    it('should reject when fundingAdjustments is missing', () => {
+      const { fundingAdjustments, ...rest } = validPreferences
+      const result = notificationPreferencesSchema.safeParse(rest)
+      expect(result.success).toBe(false)
+    })
+
     it('should reject string values instead of booleans', () => {
       const result = notificationPreferencesSchema.safeParse({
         ...validPreferences,
@@ -311,8 +321,8 @@ describe('announcementSchema', () => {
       expect(result.success).toBe(true)
     })
 
-    it('should accept body at exactly 500 characters', () => {
-      const body = 'x'.repeat(500)
+    it('should accept body at exactly 10,000 characters', () => {
+      const body = 'x'.repeat(10000)
       const result = announcementSchema.safeParse({ title: 'Title', body })
       expect(result.success).toBe(true)
     })
@@ -343,13 +353,13 @@ describe('announcementSchema', () => {
       }
     })
 
-    it('should reject body over 500 characters', () => {
-      const body = 'x'.repeat(501)
+    it('should reject body over 10,000 characters', () => {
+      const body = 'x'.repeat(10001)
       const result = announcementSchema.safeParse({ title: 'Title', body })
       expect(result.success).toBe(false)
       if (!result.success) {
         const messages = result.error.issues.map((i) => i.message)
-        expect(messages.some((m) => m.includes('500'))).toBe(true)
+        expect(messages.some((m) => m.includes('10,000'))).toBe(true)
       }
     })
 
