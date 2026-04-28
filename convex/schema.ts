@@ -75,7 +75,6 @@ export default defineSchema({
       v.literal('in_progress'),
       v.literal('completed')
     ),
-    fundingDeployed: v.optional(v.number()),
     excludeFromMetrics: v.optional(v.boolean()),
     // @deprecated — no longer written or read. Streak is now computed
     // live from weeklyUpdates via convex/lib/streak.ts. Left in the
@@ -168,6 +167,7 @@ export default defineSchema({
     requireLink: v.optional(v.boolean()),
     requireFile: v.optional(v.boolean()),
     adminComment: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
     // Timestamp of the most recent submit. Denormalized from milestoneEvents
     // so the admin inbox can order and display "Submitted X" without an
     // N+1 join. Rewritten on every submit (initial and re-submissions).
@@ -191,6 +191,35 @@ export default defineSchema({
     planStorageId: v.optional(v.id('_storage')),
     planFileName: v.optional(v.string()),
   }).index('by_milestoneId', ['milestoneId']),
+
+  // ── Funding Adjustments ───────────────────────────────────────────
+  fundingAdjustments: defineTable({
+    cohortId: v.id('cohorts'),
+    startupId: v.id('startups'),
+    type: v.union(v.literal('top_up'), v.literal('deduction')),
+    amount: v.number(),
+    note: v.string(),
+    createdByUserId: v.id('users'),
+    createdAt: v.number(),
+  })
+    .index('by_cohortId', ['cohortId'])
+    .index('by_startupId', ['startupId'])
+    .index('by_cohortId_createdAt', ['cohortId', 'createdAt']),
+
+  // ── Funding Audit Events ──────────────────────────────────────────
+  fundingAuditEvents: defineTable({
+    cohortId: v.id('cohorts'),
+    type: v.literal('cohort_settings_change'),
+    note: v.string(),
+    createdByUserId: v.id('users'),
+    createdAt: v.number(),
+    previousFundingBudget: v.optional(v.number()),
+    newFundingBudget: v.optional(v.number()),
+    previousBaseFunding: v.optional(v.number()),
+    newBaseFunding: v.optional(v.number()),
+  })
+    .index('by_cohortId', ['cohortId'])
+    .index('by_cohortId_createdAt', ['cohortId', 'createdAt']),
 
   // ── Invitations (founder) ──────────────────────────────────────────
   invitations: defineTable({
@@ -541,6 +570,7 @@ export default defineSchema({
     founderRemoved: v.optional(v.boolean()),
     weeklyUpdateSubmitted: v.optional(v.boolean()),
     weeklyUpdateFavorited: v.optional(v.boolean()),
+    fundingAdjustments: v.optional(v.boolean()),
   }).index('by_userId', ['userId']),
 
   // ── Announcements ────────────────────────────────────────────

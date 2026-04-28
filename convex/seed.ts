@@ -417,7 +417,6 @@ export const default_ = internalMutation({
         stage: s.stage,
         sector: s.sector,
         onboardingStatus,
-        fundingDeployed: onboardingStatus === 'completed' ? Math.floor(Math.random() * 15000) : 0,
       })
       startupIds.push(startupId)
 
@@ -475,6 +474,8 @@ export const default_ = internalMutation({
           description: tmpl.description,
           amount: tmpl.amount,
           status,
+          approvedAt:
+            status === 'approved' ? Date.now() - (30 - i - j) * 24 * 60 * 60 * 1000 : undefined,
           sortOrder: tmpl.sortOrder,
           requireLink: tmpl.requireLink ?? false,
           requireFile: tmpl.requireFile ?? false,
