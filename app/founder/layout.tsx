@@ -45,10 +45,12 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
   const router = useRouter()
   const { user, isLoading, timedOut } = useWaitForUser()
 
-  // Allow founder role, or admin/super_admin (who may also have a founderProfile).
-  // Backend queries (requireFounder) handle the real access control.
-  const hasFounderAccess =
-    user?.role === 'founder' || user?.role === 'admin' || user?.role === 'super_admin'
+  // Founders always pass. Admins/super_admins only pass if they also have a
+  // founderProfile (some admins are also founders). Admins without a profile
+  // get redirected with a "wrong role" message instead of letting downstream
+  // founder-only queries throw.
+  const access = useQuery(api.users.founderRouteAccess, user ? undefined : 'skip')
+  const hasFounderAccess = access === 'founder' || access === 'admin-with-profile'
 
   const profileData = useQuery(api.founderProfile.get, hasFounderAccess ? undefined : 'skip')
   const onboardingIncomplete =
@@ -57,15 +59,22 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (isLoading) return
 
-    if (user && !hasFounderAccess) {
-      window.location.href = '/access-required'
+    if (!user || timedOut) {
+      window.location.href = '/login'
       return
     }
 
-    if (!user || timedOut) {
-      window.location.href = '/login'
+    if (access === undefined) return
+
+    if (access === 'admin-no-profile') {
+      window.location.href = '/access-required?reason=founder-only'
+      return
     }
-  }, [user, isLoading, timedOut, hasFounderAccess])
+
+    if (access === 'unauthorized') {
+      window.location.href = '/access-required'
+    }
+  }, [user, isLoading, timedOut, access])
 
   // Redirect non-onboarded founders to onboarding page
   useEffect(() => {
@@ -74,7 +83,7 @@ export default function FounderLayout({ children }: { children: React.ReactNode 
     router.replace('/founder/onboarding')
   }, [onboardingIncomplete, pathname, router])
 
-  if (isLoading) {
+  if (isLoading || (user && access === undefined)) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-background">
         <div className="text-sm text-muted-foreground">Loading...</div>
