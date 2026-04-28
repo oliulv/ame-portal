@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import {
-  isValidTransition,
-  computeNextInvoiceNumber,
-  computeAvailableBalance,
-  VALID_TRANSITIONS,
-} from './invoiceLogic'
+import { isValidTransition, computeNextInvoiceNumber, VALID_TRANSITIONS } from './invoiceLogic'
 
 describe('invoiceLogic', () => {
   describe('isValidTransition', () => {
@@ -147,40 +142,6 @@ describe('invoiceLogic', () => {
     it('should ignore invoices with non-matching fileName like receipt.pdf', () => {
       const invoices = [{ fileName: 'receipt.pdf', status: 'paid' }]
       expect(computeNextInvoiceNumber(invoices)).toBe(1)
-    })
-  })
-
-  describe('computeAvailableBalance', () => {
-    it('should return 0 when no milestones and no invoices', () => {
-      expect(computeAvailableBalance([], [])).toBe(0)
-    })
-
-    it('should return full amount when milestones exist but no invoices', () => {
-      expect(computeAvailableBalance([10000, 20000], [])).toBe(30000)
-    })
-
-    it('should return remaining balance after partial deployment', () => {
-      expect(computeAvailableBalance([10000, 20000], [5000])).toBe(25000)
-    })
-
-    it('should return 0 when fully deployed', () => {
-      expect(computeAvailableBalance([10000, 20000], [10000, 20000])).toBe(0)
-    })
-
-    it('should clamp to 0 when over-deployed (never negative)', () => {
-      expect(computeAvailableBalance([10000], [15000])).toBe(0)
-    })
-
-    it('should handle single milestone and single invoice', () => {
-      expect(computeAvailableBalance([50000], [12500])).toBe(37500)
-    })
-
-    it('should clamp to 0 when milestone amounts are negative', () => {
-      expect(computeAvailableBalance([-1000], [])).toBe(0)
-    })
-
-    it('should return 0 when multiple invoices sum exactly to milestone total', () => {
-      expect(computeAvailableBalance([5000], [2000, 3000])).toBe(0)
     })
   })
 })

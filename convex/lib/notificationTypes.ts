@@ -6,6 +6,7 @@ export type NotificationGroup =
   | 'events'
   | 'resources'
   | 'announcements'
+  | 'funding'
   | 'team'
   | 'perks'
   | 'weeklyUpdates'
@@ -25,6 +26,7 @@ export const GROUP_LABELS: Record<NotificationGroup, string> = {
   weeklyUpdates: 'Weekly Updates',
   events: 'Events',
   announcements: 'Announcements',
+  funding: 'Funding',
   resources: 'Resources',
   team: 'Team & Onboarding',
   perks: 'Perks',
@@ -37,6 +39,7 @@ export const GROUP_ORDER: NotificationGroup[] = [
   'weeklyUpdates',
   'events',
   'announcements',
+  'funding',
   'resources',
   'team',
   'perks',
@@ -176,6 +179,16 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     description: 'Important announcements from the programme',
     status: 'active',
     group: 'announcements',
+  },
+
+  // ── Funding ──────────────────────────────────────────────────────
+  {
+    key: 'fundingAdjustments',
+    label: 'Funding Adjustments',
+    audience: 'founders',
+    description: 'When your available funding changes after an adjustment',
+    status: 'active',
+    group: 'funding',
   },
 
   // ── Resources ───────────────────────────────────────────────

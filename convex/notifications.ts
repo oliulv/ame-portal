@@ -238,6 +238,7 @@ export const confirmVerification = mutation({
         milestoneStatusChanged: true,
         announcements: true,
         eventReminders: true,
+        fundingAdjustments: true,
       })
     }
 
@@ -273,6 +274,7 @@ export const updatePreferences = mutation({
     founderRemoved: v.optional(v.boolean()),
     weeklyUpdateSubmitted: v.optional(v.boolean()),
     weeklyUpdateFavorited: v.optional(v.boolean()),
+    fundingAdjustments: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireAuth(ctx)
@@ -289,6 +291,7 @@ export const updatePreferences = mutation({
       milestoneStatusChanged: true,
       announcements: true,
       eventReminders: true,
+      fundingAdjustments: true,
     }
 
     if (existing) {
@@ -528,6 +531,20 @@ export const getFounderUserIdsInCohort = internalQuery({
     }
 
     return founderIds
+  },
+})
+
+/**
+ * Internal query: get all founder user IDs for one startup.
+ */
+export const getFounderUserIdsForStartup = internalQuery({
+  args: { startupId: v.id('startups') },
+  handler: async (ctx, args) => {
+    const profiles = await ctx.db
+      .query('founderProfiles')
+      .withIndex('by_startupId', (q) => q.eq('startupId', args.startupId))
+      .collect()
+    return profiles.map((profile) => profile.userId)
   },
 })
 
@@ -859,6 +876,7 @@ export const sendAnnouncementNotification = internalAction({
     cohortId: v.id('cohorts'),
     title: v.string(),
     body: v.string(),
+    appUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Get founders in cohort
@@ -880,7 +898,10 @@ export const sendAnnouncementNotification = internalAction({
       cohortId: args.cohortId,
     })
 
-    const message = `${args.title}: ${args.body}`
+    const portalUrl = args.appUrl ? `${args.appUrl.replace(/\/$/, '')}/founder/announcements` : null
+    const message = portalUrl
+      ? `New announcement: ${args.title}. View in portal: ${portalUrl}`
+      : `New announcement: ${args.title}. View in portal.`
 
     for (const r of recipients) {
       await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
@@ -889,6 +910,56 @@ export const sendAnnouncementNotification = internalAction({
         message,
         type: 'announcement',
         metadata: { title: args.title },
+      })
+    }
+  },
+})
+
+/**
+ * Notify founders when a top-up or deduction changes their funding balance.
+ */
+export const notifyFundingAdjustment = internalAction({
+  args: {
+    cohortId: v.id('cohorts'),
+    startupId: v.id('startups'),
+    startupName: v.string(),
+    deltaAmount: v.number(),
+    appUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const profiles = await ctx.runQuery(internal.notifications.getFounderUserIdsForStartup, {
+      startupId: args.startupId,
+    })
+
+    const recipients = await ctx.runQuery(internal.notifications.resolveRecipients, {
+      userIds: profiles,
+      notificationType: 'fundingAdjustments',
+      cohortId: args.cohortId,
+    })
+
+    if (recipients.length === 0) return
+
+    const sign = args.deltaAmount >= 0 ? '+' : '-'
+    const amount = Math.abs(args.deltaAmount).toLocaleString('en-GB', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    })
+    const portalUrl = args.appUrl ? `${args.appUrl.replace(/\/$/, '')}/founder/funding` : null
+    const message = portalUrl
+      ? `Your funding balance changed by ${sign}£${amount}. View Funding: ${portalUrl}`
+      : `Your funding balance changed by ${sign}£${amount}. View Funding in the portal.`
+
+    for (const r of recipients) {
+      await ctx.scheduler.runAfter(0, internal.notifications.sendSmsMessage, {
+        userId: r.userId,
+        phone: r.phone,
+        message,
+        type: 'fundingAdjustments',
+        metadata: {
+          startupId: args.startupId,
+          startupName: args.startupName,
+          deltaAmount: args.deltaAmount,
+        },
       })
     }
   },

@@ -73,6 +73,7 @@ export function AnnouncementsTab({ cohortSlug }: { cohortSlug: string }) {
         cohortId: cohort._id as Id<'cohorts'>,
         title: pendingData.title,
         body: pendingData.body,
+        appUrl: window.location.origin,
       })
       toast.success('Announcement sent to all founders')
       setShowConfirm(false)
@@ -142,12 +143,12 @@ export function AnnouncementsTab({ cohortSlug }: { cohortSlug: string }) {
                     <FormControl>
                       <Textarea
                         placeholder="Write your announcement..."
-                        rows={5}
+                        rows={8}
                         {...field}
-                        maxLength={500}
+                        maxLength={10000}
                       />
                     </FormControl>
-                    <FormDescription>{field.value.length}/500 characters</FormDescription>
+                    <FormDescription>{field.value.length}/10,000 characters</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -179,7 +180,7 @@ export function AnnouncementsTab({ cohortSlug }: { cohortSlug: string }) {
           {pendingData && (
             <div className="border p-4 space-y-2 bg-muted/30">
               <p className="font-semibold">{pendingData.title}</p>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+              <p className="max-h-64 overflow-y-auto text-sm text-muted-foreground whitespace-pre-wrap">
                 {pendingData.body}
               </p>
             </div>

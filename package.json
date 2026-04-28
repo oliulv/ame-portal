@@ -1,9 +1,10 @@
 {
   "name": "accelerateme-internal-tool",
-  "version": "0.2.1.0",
+  "version": "0.3.0.0",
   "private": true,
+  "portless": "acc-os",
   "scripts": {
-    "dev": "npx convex dev --once && npx convex dev & next dev",
+    "dev": "npx convex dev --once && npx convex dev & portless run next dev",
     "build": "npx convex deploy --cmd 'next build' --preview-run 'seed:default_'",
     "start": "next start",
     "lint": "eslint .",

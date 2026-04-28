@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { HowItWorks } from '@/components/ui/how-it-works'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Select,
   SelectContent,
@@ -30,32 +31,41 @@ const STATUS_ORDER: Record<string, number> = {
   approved: 3,
 }
 
+function formatCurrency(value: number): string {
+  return `£${value.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`
+}
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
+
 export default function FounderFundingPage() {
   const milestones = useQuery(api.milestones.listForFounder)
-  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
+  const fundingSummary = useQuery(api.funding.summaryForFounder)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<MilestoneFilter>('all')
   const [sortBy, setSortBy] = useState<MilestoneSort>('priority')
 
   const milestoneList = useMemo(() => milestones ?? [], [milestones])
-  const potential = milestoneList
-    .filter(
-      (m) => m.status === 'waiting' || m.status === 'submitted' || m.status === 'changes_requested'
-    )
-    .reduce((sum, m) => sum + m.amount, 0)
-  const unlocked = milestoneList
-    .filter((m) => m.status === 'approved')
-    .reduce((sum, m) => sum + m.amount, 0)
+  const potential = fundingSummary?.potential ?? 0
+  const unlocked = fundingSummary?.unlocked ?? 0
+  const claimable = fundingSummary?.claimable ?? 0
+  const topUp = fundingSummary?.topUp ?? 0
+  const deductions = fundingSummary?.deductions ?? 0
   const deployed = fundingSummary?.deployed ?? 0
   const committed = fundingSummary?.committed ?? 0
-  const available = Math.max(0, unlocked - deployed)
+  const available = fundingSummary?.available ?? 0
   const baseline = fundingSummary?.baseline ?? 0
-  const baselineLeft = Math.max(0, baseline - potential - unlocked)
-  const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
-  const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
+  const cappedDeployed = Math.max(0, Math.min(deployed, claimable))
+  const deployedPct = claimable > 0 ? (cappedDeployed / claimable) * 100 : 0
   const committedPct =
-    unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
+    claimable > 0 ? (Math.min(committed, claimable - cappedDeployed) / claimable) * 100 : 0
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const filteredMilestones = useMemo(() => {
@@ -86,7 +96,7 @@ export default function FounderFundingPage() {
     })
   }, [milestoneList, normalizedQuery, statusFilter, sortBy])
 
-  if (milestones === undefined) {
+  if (milestones === undefined || fundingSummary === undefined) {
     return (
       <div className="space-y-6">
         <div>
@@ -158,14 +168,13 @@ export default function FounderFundingPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium">Funding utilization</p>
             <p className="text-xs text-muted-foreground">
-              Deployed £{deployed.toLocaleString('en-GB')} of £{unlocked.toLocaleString('en-GB')}{' '}
-              unlocked
+              Deployed {formatCurrency(deployed)} of {formatCurrency(claimable)} claimable
             </p>
           </div>
           <div
-            className={`relative h-3 overflow-hidden rounded-full ${unlocked > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
+            className={`relative h-3 overflow-hidden rounded-full ${claimable > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
           >
-            {unlocked > 0 && (
+            {claimable > 0 && (
               <>
                 <div
                   className="absolute inset-y-0 left-0 bg-blue-600"
@@ -183,31 +192,31 @@ export default function FounderFundingPage() {
           <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-blue-600" />
-              Deployed £{deployed.toLocaleString('en-GB')}
+              Deployed {formatCurrency(deployed)}
             </span>
             {committed > 0 && (
               <span className="inline-flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-violet-500" />
-                Committed £{committed.toLocaleString('en-GB')}
+                Committed {formatCurrency(committed)}
               </span>
             )}
             <span className="inline-flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
-              Available £{available.toLocaleString('en-GB')}
+              Available {formatCurrency(available)}
             </span>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <Card>
           <CardContent className="pt-5 pb-4">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Baseline Left
-              <InfoTooltip text="Cohort baseline not yet allocated to any milestone." />
+              Baseline
+              <InfoTooltip text="Your cohort baseline funding frame." />
             </p>
             <p className="mt-1 text-2xl font-bold font-display text-muted-foreground">
-              £{baselineLeft.toLocaleString('en-GB')}
+              {formatCurrency(baseline)}
             </p>
           </CardContent>
         </Card>
@@ -217,9 +226,7 @@ export default function FounderFundingPage() {
               Potential
               <InfoTooltip text="Total value of pending and waiting milestones still to be unlocked." />
             </p>
-            <p className="mt-1 text-2xl font-bold font-display">
-              £{potential.toLocaleString('en-GB')}
-            </p>
+            <p className="mt-1 text-2xl font-bold font-display">{formatCurrency(potential)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -228,19 +235,46 @@ export default function FounderFundingPage() {
               Unlocked
               <InfoTooltip text="Total funding unlocked from approved milestones." />
             </p>
-            <p className="mt-1 text-2xl font-bold font-display">
-              £{unlocked.toLocaleString('en-GB')}
+            <p className="mt-1 text-2xl font-bold font-display">{formatCurrency(unlocked)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Top-up
+              <InfoTooltip text="Additional funding awarded directly by the accelerator team." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display">{formatCurrency(topUp)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Committed
+              <InfoTooltip text="Approved invoices that are reserved but not yet paid." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display text-violet-600">
+              {formatCurrency(committed)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5 pb-4">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
+              Deductions
+              <InfoTooltip text="Funding deducted from unspent available balance." />
+            </p>
+            <p className="mt-1 text-2xl font-bold font-display">{formatCurrency(deductions)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <p className="text-sm font-medium text-muted-foreground flex items-center">
               Deployed
-              <InfoTooltip text="Total amount submitted via invoices and approved for reimbursement. This is funding you have already spent." />
+              <InfoTooltip text="Paid reimbursements for this startup." />
             </p>
             <p className="mt-1 text-2xl font-bold font-display text-blue-600">
-              £{deployed.toLocaleString('en-GB')}
+              {formatCurrency(deployed)}
             </p>
           </CardContent>
         </Card>
@@ -248,14 +282,72 @@ export default function FounderFundingPage() {
           <CardContent className="pt-5 pb-4">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
               Available
-              <InfoTooltip text="Unlocked minus deployed. This is the amount you can still claim via invoice submissions on the Invoices page." />
+              <InfoTooltip text="Funding you can still claim via invoice submissions." />
             </p>
             <p className="mt-1 text-2xl font-bold font-display text-green-600">
-              £{available.toLocaleString('en-GB')}
+              {formatCurrency(available)}
             </p>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Funding adjustments</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Top-ups and deductions from the accelerator team.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {fundingSummary.adjustments.length > 0 ? (
+            <div className="space-y-3">
+              {fundingSummary.adjustments.map((adjustment) => {
+                const isTopUp = adjustment.type === 'top_up'
+                return (
+                  <div key={adjustment._id} className="border px-3 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <Avatar className="mt-0.5 h-8 w-8">
+                          <AvatarImage src={adjustment.adminImageUrl ?? undefined} />
+                          <AvatarFallback className="text-xs">
+                            {getInitials(adjustment.adminName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">
+                            {isTopUp ? 'Top-up awarded' : 'Funding deducted'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {adjustment.adminName} ·{' '}
+                            {new Date(adjustment.createdAt).toLocaleDateString('en-GB', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm">{adjustment.note}</p>
+                        </div>
+                      </div>
+                      <span
+                        className={`shrink-0 text-sm font-semibold ${
+                          isTopUp ? 'text-green-700' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {isTopUp ? '+' : '-'}
+                        {formatCurrency(adjustment.amount)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="border border-dashed p-4 text-sm text-muted-foreground">
+              No funding adjustments yet.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="space-y-4">

@@ -14,11 +14,12 @@ import {
   getFounderStartupIds,
 } from './auth'
 import { validateInvoiceFileName, extractInvoiceNumber } from './invoiceValidation'
+import { isValidTransition, computeNextInvoiceNumber } from './lib/invoiceLogic'
 import {
-  isValidTransition,
-  computeNextInvoiceNumber,
-  computeAvailableBalance,
-} from './lib/invoiceLogic'
+  computeInvoiceFundingTotals,
+  computeStartupFunding,
+  sumAdjustments,
+} from './lib/fundingMath'
 import { isStorageIdOnInvoice } from './lib/invoiceAccess'
 
 // Upload claim TTL. A founder must attach a claimed storageId to an invoice
@@ -171,16 +172,29 @@ export const create = mutation({
             (_, i) => `${startup.name} Receipt ${expectedNext}-${letters[i]}.pdf`
           )
 
-    // Validate amount against available balance (exclude batched-into invoices to avoid double-counting)
+    // Validate amount against available balance, including approved commitments.
     const milestones = await ctx.db
       .query('milestones')
       .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
       .collect()
-    const unlockedAmounts = milestones.filter((m) => m.status === 'approved').map((m) => m.amount)
-    const deployedAmounts = existingInvoices
-      .filter((i) => i.status === 'paid' && !i.batchedIntoId)
-      .map((i) => i.amountGbp)
-    const available = computeAvailableBalance(unlockedAmounts, deployedAmounts)
+    const adjustments = await ctx.db
+      .query('fundingAdjustments')
+      .withIndex('by_startupId', (q) => q.eq('startupId', startupId))
+      .collect()
+    const cohort = await ctx.db.get(startup.cohortId)
+    const approvedMilestones = milestones
+      .filter((m) => m.status === 'approved')
+      .reduce((sum, m) => sum + m.amount, 0)
+    const adjustmentTotals = sumAdjustments(adjustments)
+    const invoiceTotals = computeInvoiceFundingTotals(existingInvoices)
+    const available = computeStartupFunding({
+      baseline: cohort?.baseFunding ?? 0,
+      approvedMilestones,
+      topUps: adjustmentTotals.topUps,
+      deductions: adjustmentTotals.deductions,
+      committedInvoices: invoiceTotals.committed,
+      deployedInvoices: invoiceTotals.deployed,
+    }).available
 
     if (available <= 0) {
       throw new ConvexError(

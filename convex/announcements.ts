@@ -31,6 +31,7 @@ export const send = mutation({
     cohortId: v.id('cohorts'),
     title: v.string(),
     body: v.string(),
+    appUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const admin = await requireAdminWithPermission(ctx, args.cohortId, 'send_announcements')
@@ -40,8 +41,8 @@ export const send = mutation({
     if (title.length === 0 || title.length > 100) {
       throw new Error('Title must be between 1 and 100 characters')
     }
-    if (body.length === 0 || body.length > 500) {
-      throw new Error('Body must be between 1 and 500 characters')
+    if (body.length === 0 || body.length > 10000) {
+      throw new Error('Body must be between 1 and 10,000 characters')
     }
 
     const cohort = await ctx.db.get(args.cohortId)
@@ -76,6 +77,7 @@ export const send = mutation({
       cohortId: args.cohortId,
       title,
       body,
+      appUrl: args.appUrl,
     })
 
     return announcementId

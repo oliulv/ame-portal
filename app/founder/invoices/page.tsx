@@ -38,7 +38,7 @@ import {
 export default function FounderInvoicesPage() {
   const router = useRouter()
   const invoicesData = useQuery(api.invoices.listForFounder)
-  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
+  const fundingSummary = useQuery(api.funding.summaryForFounder)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>('all')
