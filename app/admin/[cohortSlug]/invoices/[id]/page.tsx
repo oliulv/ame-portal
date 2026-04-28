@@ -130,7 +130,7 @@ export default function InvoiceDetailPage() {
     invoice?.uploadedByUserId ? { userId: invoice.uploadedByUserId } : 'skip'
   )
   const fundingSummary = useQuery(
-    api.milestones.fundingSummaryForAdmin,
+    api.funding.summaryForAdminStartup,
     invoice?.startupId ? { startupId: invoice.startupId } : 'skip'
   )
 
@@ -520,7 +520,7 @@ export default function InvoiceDetailPage() {
                   const invoiceAmount = invoice.amountGbp
                   const currentAvailable = fundingSummary.available
                   const committed = fundingSummary.committed ?? 0
-                  const barTotal = fundingSummary.unlocked || 1
+                  const barTotal = fundingSummary.claimable || 1
                   const deployedPct = Math.min(100, (fundingSummary.deployed / barTotal) * 100)
                   const committedPct = Math.min(100 - deployedPct, (committed / barTotal) * 100)
 
@@ -571,7 +571,7 @@ export default function InvoiceDetailPage() {
                           <span>Funding usage</span>
                           <span>
                             {'\u00A3'}
-                            {fundingSummary.unlocked.toLocaleString('en-GB')} unlocked
+                            {fundingSummary.claimable.toLocaleString('en-GB')} claimable
                           </span>
                         </div>
                         <div className="relative h-3 overflow-hidden rounded-full bg-muted">

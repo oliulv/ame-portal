@@ -29,16 +29,3 @@ export function computeNextInvoiceNumber(
   const maxExisting = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
   return maxExisting + 1
 }
-
-/**
- * Compute available balance: total unlocked milestone amounts minus total
- * deployed (paid, non-batched) invoice amounts. Never negative.
- */
-export function computeAvailableBalance(
-  unlockedMilestoneAmounts: number[],
-  deployedInvoiceAmounts: number[]
-): number {
-  const unlocked = unlockedMilestoneAmounts.reduce((sum, a) => sum + a, 0)
-  const deployed = deployedInvoiceAmounts.reduce((sum, a) => sum + a, 0)
-  return Math.max(0, unlocked - deployed)
-}

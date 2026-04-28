@@ -83,7 +83,7 @@ export default function NewInvoicePage() {
   const deleteStorageFile = useMutation(api.invoices.deleteStorageFile)
   const extractInvoiceData = useAction(api.ai.extractInvoiceData)
   const invoiceInfo = useQuery(api.invoices.getFounderInvoiceInfo)
-  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
+  const fundingSummary = useQuery(api.funding.summaryForFounder)
 
   const startupName = invoiceInfo?.startupName ?? null
   const expectedNumber = invoiceInfo?.nextInvoiceNumber ?? 1
