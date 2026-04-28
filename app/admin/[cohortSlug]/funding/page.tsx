@@ -1,15 +1,24 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -18,17 +27,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Skeleton } from '@/components/ui/skeleton'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
-import { HowItWorks } from '@/components/ui/how-it-works'
-import { BarChart3, Layers3, Save, Settings, Target, Wallet } from 'lucide-react'
-import { toast } from 'sonner'
+import { CalendarClock, Save, Settings, SlidersHorizontal, Target } from 'lucide-react'
 import {
-  Bar,
-  BarChart,
+  Area,
   CartesianGrid,
   Cell,
-  Legend,
+  ComposedChart,
+  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -36,21 +42,270 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { toast } from 'sonner'
 
 function formatCurrency(value: number): string {
-  return `£${value.toLocaleString('en-GB')}`
+  return `£${value.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`
 }
 
 function parseCurrencyInput(raw: string): number {
   const normalized = raw.replace(/[£,\s]/g, '')
   if (normalized.length === 0) return 0
-
   const value = Number(normalized)
-  return Number.isFinite(value) ? value : Number.NaN
+  return Number.isFinite(value) ? Math.round(value * 100) / 100 : Number.NaN
 }
 
-function normalizeAmount(value: number): number {
-  return Math.round(value * 100) / 100
+function formatDateLabel(value: string) {
+  return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+function formatCompactCurrency(value: number): string {
+  const absolute = Math.abs(value)
+  const prefix = value < 0 ? '-£' : '£'
+  if (absolute >= 1000000) return `${prefix}${(absolute / 1000000).toFixed(1)}m`
+  if (absolute >= 1000) return `${prefix}${(absolute / 1000).toFixed(0)}k`
+  return formatCurrency(value)
+}
+
+function Metric({
+  label,
+  value,
+  help,
+  tone,
+}: {
+  label: string
+  value: number
+  help?: string
+  tone?: 'default' | 'muted' | 'blue' | 'violet' | 'green'
+}) {
+  const valueClass =
+    tone === 'muted'
+      ? 'text-muted-foreground'
+      : tone === 'blue'
+        ? 'text-blue-600'
+        : tone === 'violet'
+          ? 'text-violet-600'
+          : tone === 'green'
+            ? 'text-green-600'
+            : ''
+  return (
+    <Card>
+      <CardContent className="pt-5 pb-4">
+        <p className="flex items-center text-sm font-medium text-muted-foreground">
+          {label}
+          {help && <InfoTooltip text={help} />}
+        </p>
+        <p className={`mt-1 text-2xl font-bold font-display ${valueClass}`}>
+          {formatCurrency(value)}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function getStackedSegments({
+  total,
+  deployed,
+  committed,
+  available,
+}: {
+  total: number
+  deployed: number
+  committed: number
+  available: number
+}) {
+  const denominator = Math.max(total, 1)
+  const deployedValue = Math.max(0, Math.min(deployed, denominator))
+  const committedValue = Math.max(0, Math.min(committed, denominator - deployedValue))
+  const availableValue = Math.max(
+    0,
+    Math.min(available, denominator - deployedValue - committedValue)
+  )
+
+  return {
+    deployedPct: (deployedValue / denominator) * 100,
+    committedPct: (committedValue / denominator) * 100,
+    availablePct: (availableValue / denominator) * 100,
+  }
+}
+
+function FundingUtilizationBar({
+  total,
+  deployed,
+  committed,
+  available,
+}: {
+  total: number
+  deployed: number
+  committed: number
+  available: number
+}) {
+  const { deployedPct, committedPct, availablePct } = getStackedSegments({
+    total,
+    deployed,
+    committed,
+    available,
+  })
+  const committedLeft = deployedPct
+  const availableLeft = deployedPct + committedPct
+
+  return (
+    <div className="relative h-3 overflow-hidden rounded-full bg-muted">
+      {total > 0 && (
+        <>
+          <div
+            className="absolute inset-y-0 left-0 bg-blue-600 transition-all"
+            style={{ width: `${deployedPct}%` }}
+          />
+          <div
+            className="absolute inset-y-0 bg-violet-500 transition-all"
+            style={{ left: `${committedLeft}%`, width: `${committedPct}%` }}
+          />
+          <div
+            className="absolute inset-y-0 bg-emerald-500/60 transition-all"
+            style={{ left: `${availableLeft}%`, width: `${availablePct}%` }}
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
+function MiniFundingBar({
+  total,
+  deployed,
+  committed,
+  available,
+}: {
+  total: number
+  deployed: number
+  committed: number
+  available: number
+}) {
+  const { deployedPct, committedPct, availablePct } = getStackedSegments({
+    total,
+    deployed,
+    committed,
+    available,
+  })
+
+  return (
+    <div className="min-w-[128px] space-y-1">
+      <div className="relative h-2.5 overflow-hidden rounded-full bg-muted">
+        {total > 0 && (
+          <>
+            <div
+              className="absolute inset-y-0 left-0 bg-blue-600 transition-all"
+              style={{ width: `${deployedPct}%` }}
+            />
+            <div
+              className="absolute inset-y-0 bg-violet-500 transition-all"
+              style={{ left: `${deployedPct}%`, width: `${committedPct}%` }}
+            />
+            <div
+              className="absolute inset-y-0 bg-emerald-500/60 transition-all"
+              style={{ left: `${deployedPct + committedPct}%`, width: `${availablePct}%` }}
+            />
+          </>
+        )}
+      </div>
+      <p className="text-right text-[10px] text-muted-foreground">
+        {formatCurrency(Math.max(0, deployed + committed))} / {formatCurrency(total)}
+      </p>
+    </div>
+  )
+}
+
+function LegendDot({ className }: { className: string }) {
+  return <span className={`inline-block h-2 w-2 rounded-full ${className}`} />
+}
+
+function AllocationPie({
+  total,
+  deployed,
+  committed,
+  available,
+}: {
+  total: number
+  deployed: number
+  committed: number
+  available: number
+}) {
+  const remainingAllocation = Math.max(0, total - deployed - committed - available)
+  const data = [
+    { name: 'Deployed', value: deployed, color: '#2563eb' },
+    { name: 'Committed', value: committed, color: '#8b5cf6' },
+    { name: 'Available', value: available, color: '#10b981' },
+    { name: 'Remaining allocation', value: remainingAllocation, color: 'hsl(var(--muted))' },
+  ].filter((item) => item.value > 0)
+
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[320px] items-center justify-center border border-dashed text-sm text-muted-foreground">
+        No allocation configured
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="h-[320px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={84}
+              outerRadius={130}
+              paddingAngle={2}
+              stroke="hsl(var(--card))"
+              strokeWidth={2}
+            >
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value: number) => formatCurrency(Number(value))}
+              contentStyle={{
+                backgroundColor: 'hsl(var(--card))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '0px',
+                fontSize: '12px',
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        {data.map((item) => (
+          <div key={item.name} className="flex items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-2 text-muted-foreground">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: item.color }}
+              />
+              {item.name}
+            </span>
+            <span className="font-medium tabular-nums">{formatCurrency(item.value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function BreakdownRow({ label, value, help }: { label: string; value: number; help?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5 text-sm border-b last:border-b-0">
+      <span className="flex items-center text-muted-foreground">
+        {label}
+        {help && <InfoTooltip text={help} />}
+      </span>
+      <span className="text-right font-medium tabular-nums">{formatCurrency(value)}</span>
+    </div>
+  )
 }
 
 export default function AdminFundingPage() {
@@ -60,35 +315,37 @@ export default function AdminFundingPage() {
 
   const currentUser = useQuery(api.users.current)
   const isSuperAdmin = currentUser?.role === 'super_admin'
-
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
-  const overview = useQuery(
-    api.milestones.fundingOverview,
+  const dashboard = useQuery(
+    api.funding.dashboardForAdmin,
     cohort?._id ? { cohortId: cohort._id } : 'skip'
   )
-  const updateFundingConfig = useMutation(api.cohorts.updateFundingConfig)
+  const updateCohortSettings = useMutation(api.funding.updateCohortSettings)
 
-  const fundingBudgetValue = overview?.cohort.fundingBudget
-  const baseFundingValue = overview?.cohort.baseFunding
-
-  // Initialize inputs from server data; track last-seen server values to detect changes
-  const lastServerValues = useRef<{ budget?: number | null; base?: number | null }>({})
+  const [selectedSeries, setSelectedSeries] = useState('aggregate')
   const [allocationInput, setAllocationInput] = useState('')
   const [baselineInput, setBaselineInput] = useState('')
-  const [isSavingFundingConfig, setIsSavingFundingConfig] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const fundingBudgetSetting = dashboard?.cohort.fundingBudget
+  const baseFundingSetting = dashboard?.cohort.baseFunding
 
-  if (
-    fundingBudgetValue !== undefined &&
-    baseFundingValue !== undefined &&
-    (lastServerValues.current.budget !== fundingBudgetValue ||
-      lastServerValues.current.base !== baseFundingValue)
-  ) {
-    lastServerValues.current = { budget: fundingBudgetValue, base: baseFundingValue }
-    setAllocationInput(String(fundingBudgetValue ?? 0))
-    setBaselineInput(String(baseFundingValue ?? 0))
-  }
+  useEffect(() => {
+    if (fundingBudgetSetting === undefined || baseFundingSetting === undefined) return
+    setAllocationInput(String(fundingBudgetSetting ?? 0))
+    setBaselineInput(String(baseFundingSetting ?? 0))
+  }, [fundingBudgetSetting, baseFundingSetting])
 
-  const isLoading = cohort === undefined || overview === undefined
+  const isLoading = cohort === undefined || dashboard === undefined
+
+  const selectedPoints = useMemo(() => {
+    if (!dashboard) return []
+    if (selectedSeries === 'aggregate') return dashboard.timeSeries.aggregate
+    return (
+      dashboard.timeSeries.byStartup.find((series) => series.startupId === selectedSeries)
+        ?.points ?? []
+    )
+  }, [dashboard, selectedSeries])
 
   if (isLoading) {
     return (
@@ -97,15 +354,8 @@ export default function AdminFundingPage() {
           <Skeleton className="mb-2 h-9 w-48" />
           <Skeleton className="h-5 w-64" />
         </div>
-        <Card>
-          <CardContent className="space-y-4 pt-6">
-            <Skeleton className="h-6 w-48" />
-            <div className="grid gap-4 md:grid-cols-2">
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-            </div>
-          </CardContent>
-        </Card>
+        <Skeleton className="h-28 w-full" />
+        <Skeleton className="h-96 w-full" />
       </div>
     )
   }
@@ -120,20 +370,6 @@ export default function AdminFundingPage() {
     )
   }
 
-  const {
-    startups,
-    totals,
-    cohort: cohortFunding,
-  } = overview ?? {
-    startups: [],
-    totals: { potential: 0, unlocked: 0, deployed: 0, available: 0 },
-    cohort: { fundingBudget: 0, baseFunding: 0, startupCount: 0 },
-  }
-
-  const startupCount = cohortFunding.startupCount
-  const savedTotalAllocation = cohortFunding.fundingBudget ?? 0
-  const savedBaselinePerStartup = cohortFunding.baseFunding ?? 0
-
   const parsedAllocation = parseCurrencyInput(allocationInput)
   const parsedBaseline = parseCurrencyInput(baselineInput)
   const configIsValid =
@@ -141,99 +377,39 @@ export default function AdminFundingPage() {
     !Number.isNaN(parsedBaseline) &&
     parsedAllocation >= 0 &&
     parsedBaseline >= 0
-
-  const normalizedAllocationInput = configIsValid ? normalizeAmount(parsedAllocation) : 0
-  const normalizedBaselineInput = configIsValid ? normalizeAmount(parsedBaseline) : 0
-  const hasFundingConfigChanges =
-    configIsValid &&
-    (normalizeAmount(savedTotalAllocation) !== normalizedAllocationInput ||
-      normalizeAmount(savedBaselinePerStartup) !== normalizedBaselineInput)
-
-  const totalAllocation = configIsValid ? normalizedAllocationInput : savedTotalAllocation
-  const baselinePerStartup = configIsValid ? normalizedBaselineInput : savedBaselinePerStartup
-
-  const totalBaselineRequired = baselinePerStartup * startupCount
-  const topUpPool = totalAllocation - totalBaselineRequired
-  const totalUnlocked = totals.unlocked
-  const totalDeployed = totals.deployed
-  const unlockedNotYetDeployed = Math.max(0, totalUnlocked - totalDeployed)
-  const remainingTopUpCapacity = Math.max(0, totalAllocation - totalUnlocked)
-
-  const includedStartups = startups.filter((s) => !s.excludeFromMetrics)
-  const baseUnlockedTotal = includedStartups.reduce(
-    (sum, startup) => sum + Math.min(startup.unlocked, baselinePerStartup),
-    0
-  )
-  const baseDeployedTotal = includedStartups.reduce(
-    (sum, startup) => sum + Math.min(startup.deployed, baselinePerStartup),
-    0
-  )
-  const baseAvailableTotal = Math.max(0, baseUnlockedTotal - baseDeployedTotal)
-
-  const topUpUnlockedTotal = Math.max(0, totalUnlocked - baseUnlockedTotal)
-  const topUpDeployedTotal = Math.max(0, totalDeployed - baseDeployedTotal)
-  const topUpAvailableTotal = Math.max(0, topUpUnlockedTotal - topUpDeployedTotal)
-
-  const unlockedOfAllocationPct = totalAllocation > 0 ? (totalUnlocked / totalAllocation) * 100 : 0
-  const deployedOfAllocationPct = totalAllocation > 0 ? (totalDeployed / totalAllocation) * 100 : 0
-  const baseUnlockedPct =
-    totalBaselineRequired > 0 ? (baseUnlockedTotal / totalBaselineRequired) * 100 : 0
-
-  const startupChartData = [...startups]
-    .filter((s) => !s.excludeFromMetrics)
-    .sort((a, b) => b.unlocked - a.unlocked)
-    .map((startup) => ({
-      name: startup.name,
-      baseline: baselinePerStartup,
-      unlocked: startup.unlocked,
-      deployed: startup.deployed,
-    }))
-
-  const allocationPieData = [
-    {
-      name: 'Unlocked',
-      value: Math.max(0, Math.min(totalUnlocked, totalAllocation)),
-      color: 'hsl(var(--chart-2))',
-    },
-    {
-      name: 'Unallocated',
-      value: Math.max(0, totalAllocation - totalUnlocked),
-      color: 'hsl(var(--chart-3))',
-    },
-    {
-      name: 'Above allocation',
-      value: Math.max(0, totalUnlocked - totalAllocation),
-      color: 'hsl(var(--destructive))',
-    },
-  ].filter((item) => item.value > 0)
+  const savedAllocation = dashboard.cohort.fundingBudget ?? 0
+  const savedBaseline = dashboard.cohort.baseFunding ?? 0
+  const hasConfigChanges =
+    configIsValid && (parsedAllocation !== savedAllocation || parsedBaseline !== savedBaseline)
 
   async function handleSaveFundingConfig() {
-    if (!cohort) return
-
-    if (!configIsValid) {
+    if (!cohort || !configIsValid) {
       toast.error('Enter valid non-negative numbers for allocation and baseline')
       return
     }
 
-    setIsSavingFundingConfig(true)
+    setIsSaving(true)
     try {
-      await updateFundingConfig({
+      await updateCohortSettings({
         cohortId: cohort._id,
-        fundingBudget: normalizedAllocationInput,
-        baseFunding: normalizedBaselineInput,
+        fundingBudget: parsedAllocation,
+        baseFunding: parsedBaseline,
       })
       toast.success('Funding settings updated')
+      setSettingsOpen(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update funding settings')
     } finally {
-      setIsSavingFundingConfig(false)
+      setIsSaving(false)
     }
   }
 
-  function resetFundingInputs() {
-    setAllocationInput(String(savedTotalAllocation))
-    setBaselineInput(String(savedBaselinePerStartup))
-  }
+  const { position } = dashboard
+  const moneyLeftOverall = Math.max(0, position.totalAllocation - position.deployed)
+  const remainingAllocation = Math.max(
+    0,
+    position.totalAllocation - position.deployed - position.committed - position.available
+  )
 
   return (
     <div className="space-y-6">
@@ -242,400 +418,387 @@ export default function AdminFundingPage() {
           <h1 className="text-3xl font-bold tracking-tight font-display">Funding</h1>
           <p className="text-muted-foreground">Aggregate funding overview for {cohort.label}</p>
         </div>
-        <Link href={`/admin/${cohortSlug}/milestones?tab=templates`}>
-          <Button variant="outline">
-            <Settings className="mr-2 h-4 w-4" />
-            Milestone Templates
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/admin/${cohortSlug}/milestones?tab=templates`}>
+            <Button variant="outline">
+              <Settings className="mr-2 h-4 w-4" />
+              Milestone templates
+            </Button>
+          </Link>
+          {isSuperAdmin && (
+            <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline">
+                  <SlidersHorizontal className="mr-2 h-4 w-4" />
+                  Funding settings
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[calc(100vw-2rem)] p-4 sm:w-[360px]">
+                <div className="space-y-1">
+                  <h2 className="text-sm font-semibold">Funding settings</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Update the cohort allocation and baseline reserve. Changes are audited.
+                  </p>
+                </div>
+                <div className="mt-4 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="total-allocation">Total allocation (GBP)</Label>
+                    <Input
+                      id="total-allocation"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={allocationInput}
+                      onChange={(event) => setAllocationInput(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="baseline-startup">Baseline per startup (GBP)</Label>
+                    <Input
+                      id="baseline-startup"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={baselineInput}
+                      onChange={(event) => setBaselineInput(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Included startup count</Label>
+                    <div className="flex h-10 items-center border bg-muted/40 px-3 text-sm font-medium">
+                      {dashboard.cohort.includedStartupCount}
+                    </div>
+                  </div>
+                  {!configIsValid && (
+                    <p className="text-sm text-destructive">
+                      Use valid non-negative numbers for both funding settings.
+                    </p>
+                  )}
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setAllocationInput(String(savedAllocation))
+                      setBaselineInput(String(savedBaseline))
+                    }}
+                    disabled={!hasConfigChanges || isSaving}
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    onClick={handleSaveFundingConfig}
+                    disabled={!hasConfigChanges || !configIsValid || isSaving}
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    {isSaving ? 'Saving...' : 'Save settings'}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
       </div>
 
-      <HowItWorks title="How funding works">
-        <p>
-          <strong className="text-foreground">Funding is unlocked through milestones.</strong>{' '}
-          Milestones are agreed upon between founders and the team. Upon completing all programme
-          milestones, startups unlock at least £5,000 in baseline funding.
-        </p>
-        <p>
-          Outstanding startups may unlock further funding later. Deployed = funding claimed via
-          approved invoices. Available = remaining balance founders can still claim. The top-up pool
-          is the budget above total baseline that can be allocated to high-performing startups.
-        </p>
-      </HowItWorks>
-
-      {isSuperAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wallet className="h-4 w-4" />
-              Cohort Funding Controls
-            </CardTitle>
-            <CardDescription>
-              Adjust total allocation and baseline funding per startup. All rollups update
-              immediately after save.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="total-allocation">Total allocation (GBP)</Label>
-                <Input
-                  id="total-allocation"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={allocationInput}
-                  onChange={(e) => setAllocationInput(e.target.value)}
-                  placeholder="70000"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="baseline-startup">Baseline per startup (GBP)</Label>
-                <Input
-                  id="baseline-startup"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={baselineInput}
-                  onChange={(e) => setBaselineInput(e.target.value)}
-                  placeholder="5000"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Startup count</Label>
-                <div className="flex h-9 items-center  border bg-muted/40 px-3 text-sm font-medium">
-                  {startupCount}
-                </div>
-              </div>
-            </div>
-
-            {!configIsValid && (
-              <p className="text-sm text-red-600">
-                Please use valid non-negative numbers for funding settings.
-              </p>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={resetFundingInputs}
-                disabled={!hasFundingConfigChanges || isSavingFundingConfig}
-              >
-                Reset
-              </Button>
-              <Button
-                onClick={handleSaveFundingConfig}
-                disabled={!hasFundingConfigChanges || !configIsValid || isSavingFundingConfig}
-              >
-                <Save className="mr-2 h-4 w-4" />
-                {isSavingFundingConfig ? 'Saving...' : 'Save funding settings'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <Metric label="Total allocation" value={position.totalAllocation} />
+        <Metric
+          label="Money left"
+          value={moneyLeftOverall}
+          help="Total allocation minus deployed funding."
+        />
+        <Metric label="Available" value={position.available} tone="green" />
+        <Metric label="Committed" value={position.committed} tone="violet" />
+        <Metric label="Deployed" value={position.deployed} tone="blue" />
+        <Metric label="Top-up pool" value={position.topUpPool} tone="muted" />
+      </div>
 
       <Card>
-        <CardContent className="space-y-3 pt-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">Allocation utilization</p>
-            <p className="text-xs text-muted-foreground">
-              {formatCurrency(totalDeployed)} deployed of {formatCurrency(totalUnlocked)} unlocked
-            </p>
-          </div>
-          <div className="relative h-3 overflow-hidden rounded-full bg-muted">
-            <div
-              className="absolute inset-y-0 left-0 bg-emerald-500/30"
-              style={{ width: `${Math.min(100, Math.max(0, unlockedOfAllocationPct))}%` }}
-            />
-            <div
-              className="absolute inset-y-0 left-0 bg-blue-600"
-              style={{ width: `${Math.min(100, Math.max(0, deployedOfAllocationPct))}%` }}
-            />
-          </div>
-          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-blue-600" />
-              Deployed {formatCurrency(totalDeployed)}
+        <CardHeader>
+          <CardTitle className="text-base">Funding utilization</CardTitle>
+          <CardDescription>
+            Deployed {formatCurrency(position.deployed)} of{' '}
+            {formatCurrency(position.totalAllocation)} allocated
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <FundingUtilizationBar
+            total={position.totalAllocation}
+            deployed={position.deployed}
+            committed={position.committed}
+            available={position.available}
+          />
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <LegendDot className="bg-blue-600" />
+              Deployed {formatCurrency(position.deployed)}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-emerald-500/50" />
-              Unlocked {formatCurrency(totalUnlocked)}
+            <span className="inline-flex items-center gap-1.5">
+              <LegendDot className="bg-violet-500" />
+              Committed {formatCurrency(position.committed)}
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
-              Remaining top-up capacity {formatCurrency(remainingTopUpCapacity)}
+            <span className="inline-flex items-center gap-1.5">
+              <LegendDot className="bg-emerald-500/60" />
+              Available {formatCurrency(position.available)}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <LegendDot className="bg-muted" />
+              Remaining allocation {formatCurrency(remainingAllocation)}
             </span>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Total allocation
-              <InfoTooltip text="The total funding budget for this cohort, set in funding controls above." />
-            </p>
-            <p className="mt-1 text-2xl font-bold font-display">
-              {formatCurrency(totalAllocation)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Baseline required
-              <InfoTooltip text="The minimum funding reserved if all startups complete their milestones (startups x baseline per startup)." />
-            </p>
-            <p className="mt-1 text-2xl font-bold font-display">
-              {formatCurrency(totalBaselineRequired)}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {startupCount} startups x {formatCurrency(baselinePerStartup)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Total unlocked
-              <InfoTooltip text="Sum of all approved milestone amounts across all startups in this cohort." />
-            </p>
-            <p className="mt-1 text-2xl font-bold font-display">{formatCurrency(totalUnlocked)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {Math.round(unlockedOfAllocationPct)}% of total allocation
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Top-up pool
-              <InfoTooltip text="Budget above baseline that can be allocated to outstanding startups later in the programme. Total allocation minus baseline required." />
-            </p>
-            <p
-              className={`mt-1 text-2xl font-bold font-display ${topUpPool < 0 ? 'text-red-600' : ''}`}
-            >
-              {formatCurrency(topUpPool)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Base Funding Layer</CardTitle>
-            <CardDescription>
-              Unlocked and deployed progress against baseline commitments.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p>
-              Baseline unlocked:{' '}
-              <span className="font-medium">{formatCurrency(baseUnlockedTotal)}</span>
-            </p>
-            <p>
-              Baseline deployed:{' '}
-              <span className="font-medium text-blue-600">{formatCurrency(baseDeployedTotal)}</span>
-            </p>
-            <p>
-              Baseline available:{' '}
-              <span className="font-medium text-green-600">
-                {formatCurrency(baseAvailableTotal)}
-              </span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {Math.round(baseUnlockedPct)}% of baseline unlocked across all startups.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Top-Up Layer</CardTitle>
-            <CardDescription>
-              Funding above baseline, derived from unlocked and deployed totals.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p>
-              Top-up unlocked:{' '}
-              <span className="font-medium">{formatCurrency(topUpUnlockedTotal)}</span>
-            </p>
-            <p>
-              Top-up deployed:{' '}
-              <span className="font-medium text-blue-600">
-                {formatCurrency(topUpDeployedTotal)}
-              </span>
-            </p>
-            <p>
-              Top-up available:{' '}
-              <span className="font-medium text-green-600">
-                {formatCurrency(topUpAvailableTotal)}
-              </span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Unlocked not yet deployed: {formatCurrency(unlockedNotYetDeployed)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
+      <Card>
+        <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <BarChart3 className="h-4 w-4" />
-              Startup Funding Comparison
-            </CardTitle>
-            <CardDescription>Baseline vs unlocked vs deployed for each startup.</CardDescription>
-          </CardHeader>
-          <CardContent className="h-80">
-            {startupChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={startupChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 12 }}
-                    angle={-20}
-                    textAnchor="end"
-                    height={70}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => formatCurrency(Number(value))}
-                  />
-                  <Tooltip formatter={(value: number) => formatCurrency(Number(value))} />
-                  <Legend />
-                  <Bar dataKey="baseline" name="Baseline" fill="hsl(var(--chart-3))" />
-                  <Bar dataKey="unlocked" name="Unlocked" fill="hsl(var(--chart-2))" />
-                  <Bar dataKey="deployed" name="Deployed" fill="hsl(var(--chart-1))" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                No startup data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Layers3 className="h-4 w-4" />
-              Allocation Breakdown
+              <CalendarClock className="h-4 w-4" />
+              Funding History
             </CardTitle>
             <CardDescription>
-              How the total cohort allocation is split between unlocked and remaining budget.
+              Daily snapshots for entitled, unlocked, deployed, and available funding.
             </CardDescription>
-          </CardHeader>
-          <CardContent className="h-80">
-            {allocationPieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={allocationPieData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label={(entry) => `${entry.name}: ${Math.round((entry.percent ?? 0) * 100)}%`}
-                  >
-                    {allocationPieData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => formatCurrency(Number(value))} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Set allocation to view breakdown
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+          <Select value={selectedSeries} onValueChange={setSelectedSeries}>
+            <SelectTrigger className="w-full lg:w-64">
+              <SelectValue placeholder="Select series" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="aggregate">Aggregate cohort</SelectItem>
+              {dashboard.timeSeries.byStartup.map((series) => (
+                <SelectItem key={series.startupId} value={series.startupId}>
+                  {series.startupName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={selectedPoints}>
+                <defs>
+                  <linearGradient id="funding-available-gradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={formatDateLabel}
+                  className="text-xs"
+                  tick={{ fontSize: 11 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(value) => formatCompactCurrency(Number(value))}
+                  width={64}
+                />
+                <Tooltip
+                  labelFormatter={(value) =>
+                    new Date(String(value)).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })
+                  }
+                  formatter={(value: number, name: string) => [formatCurrency(Number(value)), name]}
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '0px',
+                    fontSize: '12px',
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="available"
+                  name="Available"
+                  stroke="hsl(var(--chart-1))"
+                  strokeWidth={2}
+                  fill="url(#funding-available-gradient)"
+                  dot={false}
+                  animationDuration={500}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="entitled"
+                  name="Entitled"
+                  stroke="hsl(var(--foreground))"
+                  dot={false}
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
+                  animationDuration={500}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="unlocked"
+                  name="Unlocked"
+                  stroke="hsl(var(--chart-2))"
+                  dot={false}
+                  strokeWidth={2}
+                  animationDuration={500}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="deployed"
+                  name="Deployed"
+                  stroke="#2563eb"
+                  dot={false}
+                  strokeWidth={2}
+                  animationDuration={500}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-2 w-2 rounded-full"
+                style={{ backgroundColor: 'hsl(var(--chart-1))' }}
+              />
+              Available
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-2 w-2 rounded-full"
+                style={{ backgroundColor: 'hsl(var(--chart-2))' }}
+              />
+              Unlocked
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <LegendDot className="bg-blue-600" />
+              Deployed
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-0.5 w-3 bg-foreground/70" />
+              Entitled
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Per Startup Funding</CardTitle>
-          <CardDescription>Click any startup row to open its detail page.</CardDescription>
+          <CardTitle className="text-base">Allocation breakdown</CardTitle>
+          <CardDescription>
+            Total allocation split by deployed, committed, available, and remaining funding.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          {includedStartups.length > 0 ? (
+        <CardContent className="grid gap-8 lg:grid-cols-2 lg:items-start">
+          <AllocationPie
+            total={position.totalAllocation}
+            deployed={position.deployed}
+            committed={position.committed}
+            available={position.available}
+          />
+          <div>
+            <BreakdownRow label="Baseline reserve" value={position.baselineReserve} />
+            <BreakdownRow label="Top-ups allocated" value={position.topUpsAllocated} />
+            <BreakdownRow label="Deductions returned" value={position.deductionsReturned} />
+            <BreakdownRow label="Top-up pool" value={position.topUpPool} />
+            <BreakdownRow
+              label="Claimable"
+              value={position.claimable}
+              help="Unlocked funding that can be committed or deployed."
+            />
+            <BreakdownRow label="Remaining allocation" value={remainingAllocation} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Startup funding</CardTitle>
+          <CardDescription>Click a row to open startup-specific funding controls.</CardDescription>
+        </CardHeader>
+        <CardContent className="px-0 pb-0">
+          {dashboard.startups.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Startup</TableHead>
+                  <TableHead className="pl-6">Startup</TableHead>
                   <TableHead className="text-right">Baseline</TableHead>
+                  <TableHead className="text-right">Top-up</TableHead>
+                  <TableHead className="text-right">Deductions</TableHead>
+                  <TableHead className="text-right">Entitlement</TableHead>
                   <TableHead className="text-right">Unlocked</TableHead>
+                  <TableHead className="text-right">Committed</TableHead>
                   <TableHead className="text-right">Deployed</TableHead>
                   <TableHead className="text-right">Available</TableHead>
-                  <TableHead className="text-right">% Baseline Unlocked</TableHead>
+                  <TableHead className="pr-6 text-right">Usage</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {includedStartups.map((startup) => {
-                  const baselineUnlockedPctForStartup =
-                    baselinePerStartup > 0
-                      ? (Math.min(startup.unlocked, baselinePerStartup) / baselinePerStartup) * 100
-                      : 0
-
-                  return (
-                    <TableRow
-                      key={startup._id}
-                      className="cursor-pointer transition-colors hover:bg-muted/50"
-                      onClick={() =>
-                        router.push(`/admin/${cohortSlug}/startups/${startup.slug || startup._id}`)
+                {dashboard.startups.map((startup) => (
+                  <TableRow
+                    key={startup.startupId}
+                    tabIndex={0}
+                    className="cursor-pointer transition-colors hover:bg-muted/50 focus:bg-muted/50 focus:outline-none"
+                    onClick={() =>
+                      router.push(
+                        `/admin/${cohortSlug}/startups/${startup.slug || startup.startupId}`
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        router.push(
+                          `/admin/${cohortSlug}/startups/${startup.slug || startup.startupId}`
+                        )
                       }
-                    >
-                      <TableCell className="font-medium">{startup.name}</TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(baselinePerStartup)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(startup.unlocked)}
-                      </TableCell>
-                      <TableCell className="text-right text-blue-600">
-                        {formatCurrency(startup.deployed)}
-                      </TableCell>
-                      <TableCell className="text-right text-green-600">
-                        {formatCurrency(startup.available)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="ml-auto w-28">
-                          <div className="mb-1 text-xs font-medium">
-                            {Math.round(baselineUnlockedPctForStartup)}%
-                          </div>
-                          <div className="h-1.5 rounded-full bg-muted">
-                            <div
-                              className="h-1.5 rounded-full bg-emerald-500"
-                              style={{
-                                width: `${Math.min(100, Math.max(0, baselineUnlockedPctForStartup))}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
+                    }}
+                  >
+                    <TableCell className="pl-6 font-medium whitespace-nowrap">
+                      {startup.name}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(startup.baseline)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(startup.topUp)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(startup.deductions)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(startup.entitlement)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">
+                      {formatCurrency(startup.unlocked)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap text-violet-700">
+                      {formatCurrency(startup.committed)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap text-blue-700">
+                      {formatCurrency(startup.deployed)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap font-medium text-green-700">
+                      {formatCurrency(startup.available)}
+                    </TableCell>
+                    <TableCell className="w-[140px] pr-6">
+                      <MiniFundingBar
+                        total={startup.claimable}
+                        deployed={startup.deployed}
+                        committed={startup.committed}
+                        available={startup.available}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           ) : (
-            <EmptyState
-              noCard
-              icon={<Target className="h-6 w-6" />}
-              title="No startups"
-              description="No startups in this cohort yet."
-            />
+            <div className="px-6 pb-6">
+              <EmptyState
+                noCard
+                icon={<Target className="h-6 w-6" />}
+                title="No included startups"
+                description="Included startups will appear here once they are added to the cohort."
+              />
+            </div>
           )}
         </CardContent>
       </Card>

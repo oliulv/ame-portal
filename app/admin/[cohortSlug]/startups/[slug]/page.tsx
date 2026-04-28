@@ -28,7 +28,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { BankDetailsDialog } from '@/components/bank-details-dialog'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import {
@@ -68,12 +70,29 @@ import {
   Landmark,
   Zap,
   Loader2,
+  PlusCircle,
+  MinusCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Doc } from '@/convex/_generated/dataModel'
 
 type Milestone = Doc<'milestones'>
 type Invoice = Doc<'invoices'>
+
+type AdjustmentMode = 'top_up' | 'deduction'
+
+function formatCurrency(value: number): string {
+  return `£${value.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`
+}
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
 
 function InvoiceCard({ invoice, cohortSlug }: { invoice: Invoice; cohortSlug: string }) {
   return (
@@ -189,6 +208,8 @@ export default function StartupDetailPage() {
   const slug = params.slug as string
 
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
+  const currentUser = useQuery(api.users.current)
+  const isSuperAdmin = currentUser?.role === 'super_admin'
   const startup = useQuery(api.startups.getBySlug, { slug })
   const milestones = useQuery(
     api.milestones.listByStartup,
@@ -218,7 +239,13 @@ export default function StartupDetailPage() {
     api.invoiceBatching.getPendingBatch,
     startup ? { startupId: startup._id } : 'skip'
   )
+  const fundingSummary = useQuery(
+    api.funding.summaryForAdminStartup,
+    startup ? { startupId: startup._id } : 'skip'
+  )
   const triggerBatchNow = useMutation(api.invoiceBatching.triggerBatchNow)
+  const allocateTopUp = useMutation(api.funding.allocateTopUp)
+  const deductAvailableFunding = useMutation(api.funding.deductAvailableFunding)
 
   const createInvitation = useMutation(api.invitations.create)
   const resendInvitation = useMutation(api.invitations.resend)
@@ -237,6 +264,11 @@ export default function StartupDetailPage() {
 
   const [showBankDetailsDialog, setShowBankDetailsDialog] = useState(false)
   const [showInviteDialog, setShowInviteDialog] = useState(false)
+  const [showFundingAdjustmentDialog, setShowFundingAdjustmentDialog] = useState(false)
+  const [adjustmentMode, setAdjustmentMode] = useState<AdjustmentMode>('top_up')
+  const [adjustmentAmount, setAdjustmentAmount] = useState('')
+  const [adjustmentNote, setAdjustmentNote] = useState('')
+  const [isWritingAdjustment, setIsWritingAdjustment] = useState(false)
   const [inviteFullName, setInviteFullName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteExpiresInDays, setInviteExpiresInDays] = useState('')
@@ -249,31 +281,86 @@ export default function StartupDetailPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
-  // Funding calculations
+  // Funding values come from the shared Convex read model.
   const milestoneList = useMemo(() => milestones ?? [], [milestones])
-  const potential = milestoneList
-    .filter((m) => m.status === 'waiting' || m.status === 'submitted')
-    .reduce((sum, m) => sum + m.amount, 0)
-  const unlocked = milestoneList
-    .filter((m) => m.status === 'approved')
-    .reduce((sum, m) => sum + m.amount, 0)
-  const deployed = (invoicesData ?? [])
-    .filter((i) => i.status === 'paid')
-    .reduce((sum, i) => sum + i.amountGbp, 0)
-  const committed = (invoicesData ?? [])
-    .filter((i) => i.status === 'approved')
-    .reduce((sum, i) => sum + i.amountGbp, 0)
-  const available = Math.max(0, unlocked - deployed)
-  const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
-  const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
+  const potential = fundingSummary?.potential ?? 0
+  const baseline = fundingSummary?.baseline ?? 0
+  const topUp = fundingSummary?.topUp ?? 0
+  const deductions = fundingSummary?.deductions ?? 0
+  const entitlement = fundingSummary?.entitlement ?? 0
+  const unlocked = fundingSummary?.unlocked ?? 0
+  const claimable = fundingSummary?.claimable ?? 0
+  const deployed = fundingSummary?.deployed ?? 0
+  const committed = fundingSummary?.committed ?? 0
+  const available = fundingSummary?.available ?? 0
+  const cappedDeployed = Math.max(0, Math.min(deployed, claimable))
+  const deployedPct = claimable > 0 ? (cappedDeployed / claimable) * 100 : 0
   const committedPct =
-    unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
+    claimable > 0 ? (Math.min(committed, claimable - cappedDeployed) / claimable) * 100 : 0
 
   // Quick stats
   const pendingInvoices = (invoicesData ?? []).filter(
     (i) => i.status === 'submitted' || i.status === 'under_review'
   ).length
   const approvedMilestones = milestoneList.filter((m) => m.status === 'approved').length
+  const parsedAdjustmentAmount = Number(adjustmentAmount)
+  const normalizedAdjustmentAmount =
+    Number.isFinite(parsedAdjustmentAmount) && parsedAdjustmentAmount > 0
+      ? Math.round(parsedAdjustmentAmount * 100) / 100
+      : 0
+  const topUpPool = fundingSummary?.topUpPool ?? 0
+  const adjustmentIsTopUp = adjustmentMode === 'top_up'
+  const previewAvailable = adjustmentIsTopUp
+    ? available + normalizedAdjustmentAmount
+    : Math.max(0, available - normalizedAdjustmentAmount)
+  const previewEntitlement = adjustmentIsTopUp
+    ? entitlement + normalizedAdjustmentAmount
+    : Math.max(0, entitlement - normalizedAdjustmentAmount)
+  const previewPool = adjustmentIsTopUp
+    ? topUpPool - normalizedAdjustmentAmount
+    : topUpPool + normalizedAdjustmentAmount
+  const adjustmentError =
+    normalizedAdjustmentAmount <= 0
+      ? 'Enter an amount greater than zero'
+      : adjustmentNote.trim().length === 0
+        ? 'Add a founder-visible note'
+        : adjustmentIsTopUp && normalizedAdjustmentAmount > topUpPool
+          ? `Top-up exceeds the remaining pool of ${formatCurrency(topUpPool)}`
+          : !adjustmentIsTopUp && normalizedAdjustmentAmount > available
+            ? `Deduction exceeds available funding of ${formatCurrency(available)}`
+            : null
+
+  async function handleFundingAdjustment() {
+    if (!cohort || !startup || adjustmentError) {
+      if (adjustmentError) toast.error(adjustmentError)
+      return
+    }
+
+    setIsWritingAdjustment(true)
+    try {
+      const payload = {
+        cohortId: cohort._id,
+        startupId: startup._id,
+        amount: normalizedAdjustmentAmount,
+        note: adjustmentNote.trim(),
+        appUrl: window.location.origin,
+      }
+      if (adjustmentIsTopUp) {
+        await allocateTopUp(payload)
+        toast.success('Top-up allocated')
+      } else {
+        await deductAvailableFunding(payload)
+        toast.success('Funding deducted')
+      }
+      setAdjustmentAmount('')
+      setAdjustmentNote('')
+      setShowFundingAdjustmentDialog(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to write funding adjustment')
+    } finally {
+      setIsWritingAdjustment(false)
+    }
+  }
 
   async function handleInvite() {
     if (!inviteFullName.trim() || !inviteEmail.trim() || !startup) return
@@ -359,7 +446,7 @@ export default function StartupDetailPage() {
   }
 
   // Loading state
-  if (startup === undefined || cohort === undefined) {
+  if (startup === undefined || cohort === undefined || (startup && fundingSummary === undefined)) {
     return (
       <div className="space-y-6">
         <div className="space-y-4">
@@ -454,50 +541,40 @@ export default function StartupDetailPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Baseline Left
-              <InfoTooltip text="Cohort baseline not yet allocated to any milestone." />
+              Baseline
+              <InfoTooltip text="The cohort baseline reserve for this startup." />
             </p>
             <p className="mt-1 text-2xl font-bold font-display text-muted-foreground">
-              {'\u00A3'}
-              {Math.max(0, (cohort?.baseFunding ?? 0) - potential - unlocked).toLocaleString(
-                'en-GB'
-              )}
+              {formatCurrency(baseline)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Potential
-              <InfoTooltip text="Total value of pending and waiting milestones still to be unlocked." />
+              Top-up
+              <InfoTooltip text="Additional funding directly awarded to this startup." />
             </p>
-            <p className="mt-1 text-2xl font-bold font-display">
-              {'\u00A3'}
-              {potential.toLocaleString('en-GB')}
-            </p>
+            <p className="mt-1 text-2xl font-bold font-display">{formatCurrency(topUp)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Unlocked
-              <InfoTooltip text="Total funding unlocked from approved milestones." />
+              Deductions
+              <InfoTooltip text="Funding deducted from unspent available balance." />
             </p>
-            <p className="mt-1 text-2xl font-bold font-display">
-              {'\u00A3'}
-              {unlocked.toLocaleString('en-GB')}
-            </p>
+            <p className="mt-1 text-2xl font-bold font-display">{formatCurrency(deductions)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-muted-foreground flex items-center">
-              Deployed
-              <InfoTooltip text="Sum of all paid invoices for this startup." />
+              Entitlement
+              <InfoTooltip text="Baseline plus top-ups minus deductions." />
             </p>
             <p className="mt-1 text-2xl font-bold font-display text-blue-600">
-              {'\u00A3'}
-              {deployed.toLocaleString('en-GB')}
+              {formatCurrency(entitlement)}
             </p>
           </CardContent>
         </Card>
@@ -508,8 +585,7 @@ export default function StartupDetailPage() {
               <InfoTooltip text="Unlocked minus deployed. How much the startup can still claim." />
             </p>
             <p className="mt-1 text-2xl font-bold font-display text-green-600">
-              {'\u00A3'}
-              {available.toLocaleString('en-GB')}
+              {formatCurrency(available)}
             </p>
           </CardContent>
         </Card>
@@ -521,15 +597,13 @@ export default function StartupDetailPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium">Funding utilization</p>
             <p className="text-xs text-muted-foreground">
-              Deployed {'\u00A3'}
-              {deployed.toLocaleString('en-GB')} of {'\u00A3'}
-              {unlocked.toLocaleString('en-GB')} unlocked
+              Deployed {formatCurrency(deployed)} of {formatCurrency(claimable)} claimable
             </p>
           </div>
           <div
-            className={`relative h-3 overflow-hidden rounded-full ${unlocked > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
+            className={`relative h-3 overflow-hidden rounded-full ${claimable > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
           >
-            {unlocked > 0 && (
+            {claimable > 0 && (
               <>
                 <div
                   className="absolute inset-y-0 left-0 bg-blue-600"
@@ -547,24 +621,222 @@ export default function StartupDetailPage() {
           <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-blue-600" />
-              Deployed {'\u00A3'}
-              {deployed.toLocaleString('en-GB')}
+              Deployed {formatCurrency(deployed)}
             </span>
             {committed > 0 && (
               <span className="inline-flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-violet-500" />
-                Committed {'\u00A3'}
-                {committed.toLocaleString('en-GB')}
+                Committed {formatCurrency(committed)}
               </span>
             )}
             <span className="inline-flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-emerald-500/40" />
-              Available {'\u00A3'}
-              {available.toLocaleString('en-GB')}
+              Available {formatCurrency(available)}
             </span>
           </div>
         </CardContent>
       </Card>
+
+      {isSuperAdmin && fundingSummary && (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Funding adjustments</CardTitle>
+              <CardDescription>
+                Top-ups and deductions that change this startup&apos;s entitlement.
+              </CardDescription>
+            </div>
+            <Button onClick={() => setShowFundingAdjustmentDialog(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              New adjustment
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="border bg-muted/40 px-3 py-2 text-sm">
+                <p className="text-muted-foreground">Available</p>
+                <p className="font-medium text-green-700">{formatCurrency(available)}</p>
+              </div>
+              <div className="border bg-muted/40 px-3 py-2 text-sm">
+                <p className="text-muted-foreground">Entitlement</p>
+                <p className="font-medium">{formatCurrency(entitlement)}</p>
+              </div>
+              <div className="border bg-muted/40 px-3 py-2 text-sm">
+                <p className="text-muted-foreground">Top-up pool</p>
+                <p className="font-medium">{formatCurrency(topUpPool)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium">Adjustment timeline</h3>
+              {fundingSummary.adjustments.length > 0 ? (
+                <div className="space-y-3">
+                  {fundingSummary.adjustments.map((adjustment) => {
+                    const isTopUp = adjustment.type === 'top_up'
+                    return (
+                      <div key={adjustment._id} className="border px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <Avatar className="mt-0.5 h-8 w-8">
+                              <AvatarImage src={adjustment.adminImageUrl ?? undefined} />
+                              <AvatarFallback className="text-xs">
+                                {getInitials(adjustment.adminName)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">
+                                {isTopUp ? 'Top-up allocated' : 'Funding deducted'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {adjustment.adminName} ·{' '}
+                                {new Date(adjustment.createdAt).toLocaleDateString('en-GB', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                              </p>
+                              <p className="mt-2 whitespace-pre-wrap text-sm">{adjustment.note}</p>
+                            </div>
+                          </div>
+                          <span
+                            className={`shrink-0 text-sm font-semibold ${
+                              isTopUp ? 'text-green-700' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {isTopUp ? '+' : '-'}
+                            {formatCurrency(adjustment.amount)}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="border border-dashed p-4 text-sm text-muted-foreground">
+                  No funding adjustments yet.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={showFundingAdjustmentDialog} onOpenChange={setShowFundingAdjustmentDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Funding adjustment</DialogTitle>
+            <DialogDescription>
+              Allocate top-up funding or deduct unspent available funding. Notes are visible to
+              founders.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 border">
+              <button
+                type="button"
+                className={`flex h-10 items-center justify-center gap-2 text-sm font-medium ${
+                  adjustmentMode === 'top_up'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background'
+                }`}
+                onClick={() => setAdjustmentMode('top_up')}
+              >
+                <PlusCircle className="h-4 w-4" />
+                Allocate top-up
+              </button>
+              <button
+                type="button"
+                className={`flex h-10 items-center justify-center gap-2 text-sm font-medium ${
+                  adjustmentMode === 'deduction'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background'
+                }`}
+                onClick={() => setAdjustmentMode('deduction')}
+              >
+                <MinusCircle className="h-4 w-4" />
+                Deduct funding
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="funding-adjustment-amount">Amount (GBP)</Label>
+              <Input
+                id="funding-adjustment-amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={adjustmentAmount}
+                onChange={(event) => setAdjustmentAmount(event.target.value)}
+                placeholder="1000"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="funding-adjustment-note">Founder-visible note</Label>
+              <Textarea
+                id="funding-adjustment-note"
+                value={adjustmentNote}
+                onChange={(event) => setAdjustmentNote(event.target.value)}
+                rows={3}
+                placeholder="Explain why this funding changed."
+              />
+            </div>
+
+            <div className="space-y-3 border bg-muted/30 p-4 text-sm">
+              <p className="font-medium">Funding adjustment preview</p>
+              <div className="grid gap-2">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Available</span>
+                  <span className="font-medium">
+                    {formatCurrency(available)} → {formatCurrency(previewAvailable)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Entitlement</span>
+                  <span className="font-medium">
+                    {formatCurrency(entitlement)} → {formatCurrency(previewEntitlement)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Top-up pool</span>
+                  <span className="font-medium">
+                    {formatCurrency(topUpPool)} → {formatCurrency(previewPool)}
+                  </span>
+                </div>
+              </div>
+              {!adjustmentIsTopUp && normalizedAdjustmentAmount > available * 0.8 && (
+                <p className="text-xs text-amber-700">
+                  This deduction uses most of the startup&apos;s current available balance.
+                </p>
+              )}
+              {adjustmentNote.trim().length > 0 && (
+                <div className="border-t pt-3">
+                  <p className="text-xs text-muted-foreground">Note preview</p>
+                  <p className="mt-1 whitespace-pre-wrap">{adjustmentNote}</p>
+                </div>
+              )}
+            </div>
+
+            {adjustmentError && normalizedAdjustmentAmount > 0 && (
+              <p className="text-sm text-destructive">{adjustmentError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowFundingAdjustmentDialog(false)}
+              disabled={isWritingAdjustment}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleFundingAdjustment}
+              disabled={!!adjustmentError || isWritingAdjustment}
+            >
+              {isWritingAdjustment ? 'Saving...' : 'Confirm adjustment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Quick stats row */}
       <div className="grid gap-4 md:grid-cols-4">

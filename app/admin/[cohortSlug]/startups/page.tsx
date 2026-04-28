@@ -312,7 +312,7 @@ export default function StartupsPage() {
   const cohort = useQuery(api.cohorts.getBySlug, { slug: cohortSlug })
   const startups = useQuery(api.startups.list, cohort ? { cohortId: cohort._id } : 'skip')
   const fundingOverview = useQuery(
-    api.milestones.fundingOverview,
+    api.funding.dashboardForAdmin,
     cohort ? { cohortId: cohort._id } : 'skip'
   )
   const integrationStatus = useQuery(
@@ -346,10 +346,14 @@ export default function StartupsPage() {
 
   // Build a lookup of funding data by startup ID
   const fundingByStartupId = useMemo(() => {
-    const map: Record<string, { unlocked: number; deployed: number }> = {}
+    const map: Record<string, { unlocked: number; deployed: number; entitlement: number }> = {}
     if (fundingOverview?.startups) {
       for (const s of fundingOverview.startups) {
-        map[s._id] = { unlocked: s.unlocked, deployed: s.deployed }
+        map[s.startupId] = {
+          unlocked: s.unlocked,
+          deployed: s.deployed,
+          entitlement: s.entitlement,
+        }
       }
     }
     return map
@@ -515,9 +519,10 @@ export default function StartupsPage() {
                               unlocked={funding?.unlocked ?? 0}
                               deployed={funding?.deployed ?? 0}
                               total={
-                                totalAllocation > 0 && startupCount > 0
+                                funding?.entitlement ??
+                                (totalAllocation > 0 && startupCount > 0
                                   ? totalAllocation / startupCount
-                                  : baselinePer
+                                  : baselinePer)
                               }
                             />
                           </TableCell>

@@ -34,7 +34,7 @@ export default function FounderDashboard() {
   const user = useQuery(api.users.current)
   const startup = useQuery(api.founderStartup.get)
   const milestones = useQuery(api.milestones.listForFounder)
-  const fundingSummary = useQuery(api.milestones.fundingSummaryForFounder)
+  const fundingSummary = useQuery(api.funding.summaryForFounder)
   const invoicesData = useQuery(api.invoices.listForFounder)
   const nextEvent = useQuery(api.cohortEvents.nextForFounder)
   const integrationStatus = useQuery(api.integrations.status)
@@ -83,15 +83,16 @@ export default function FounderDashboard() {
   const hasStartup = startup !== null
 
   const unlocked = fundingSummary?.unlocked ?? 0
+  const claimable = fundingSummary?.claimable ?? 0
   const deployed = fundingSummary?.deployed ?? 0
   const committed = fundingSummary?.committed ?? 0
   const available = fundingSummary?.available ?? 0
   const baseline = fundingSummary?.baseline ?? 0
-  const cappedDeployed = Math.max(0, Math.min(deployed, unlocked))
+  const cappedDeployed = Math.max(0, Math.min(deployed, claimable))
   const unlockedPct = baseline > 0 ? (unlocked / baseline) * 100 : 0
-  const deployedPct = unlocked > 0 ? (cappedDeployed / unlocked) * 100 : 0
+  const deployedPct = claimable > 0 ? (cappedDeployed / claimable) * 100 : 0
   const committedPct =
-    unlocked > 0 ? (Math.min(committed, unlocked - cappedDeployed) / unlocked) * 100 : 0
+    claimable > 0 ? (Math.min(committed, claimable - cappedDeployed) / claimable) * 100 : 0
   const unlockedPctRounded = Math.round(unlockedPct)
   const pendingInvoices = invoicesData?.pendingCount ?? 0
 
@@ -172,8 +173,8 @@ export default function FounderDashboard() {
           <CardContent className="flex flex-1 flex-col space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">
-                Deployed £{deployed.toLocaleString('en-GB')} of £{unlocked.toLocaleString('en-GB')}{' '}
-                unlocked
+                Deployed £{deployed.toLocaleString('en-GB')} of £{claimable.toLocaleString('en-GB')}{' '}
+                claimable
               </p>
               {baseline > 0 && (
                 <span className="text-xs text-muted-foreground">
@@ -184,7 +185,7 @@ export default function FounderDashboard() {
             <div
               className={`relative h-2.5 overflow-hidden rounded-full ${unlocked > 0 ? 'bg-emerald-500/25' : 'bg-muted'}`}
             >
-              {unlocked > 0 && (
+              {claimable > 0 && (
                 <>
                   <div
                     className="absolute inset-y-0 left-0 bg-blue-600 transition-all"
