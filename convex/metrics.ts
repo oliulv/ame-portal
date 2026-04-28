@@ -8,6 +8,7 @@ import { normalizeToMonthlyCents } from './lib/stripeMrr'
 import {
   computeVelocityScore,
   computeVelocityBreakdown,
+  buildVelocityTimeSeries,
   convertMergedCalendar,
   type TypedDayCounts,
   type MergedCalendarWeek,
@@ -204,34 +205,7 @@ function buildTimeSeries(
   startDate: string | undefined,
   _isTyped: boolean
 ): { timestamp: string; value: number }[] {
-  const allDates = Object.keys(calendar).sort()
-  if (allDates.length === 0) return []
-
-  const earliestDay = allDates[0]
-  const earliestOutput = new Date(earliestDay + 'T00:00:00.000Z')
-  earliestOutput.setDate(earliestOutput.getDate() + 28)
-
-  const requestedStart = startDate ? new Date(startDate) : earliestOutput
-  const outputStart =
-    requestedStart.getTime() > earliestOutput.getTime() ? requestedStart : earliestOutput
-
-  const today = new Date()
-  today.setUTCHours(0, 0, 0, 0)
-
-  const result: { timestamp: string; value: number }[] = []
-  const current = new Date(outputStart)
-  current.setUTCHours(0, 0, 0, 0)
-
-  while (current <= today) {
-    const score = computeVelocityScore(calendar, current)
-    result.push({
-      timestamp: current.toISOString().slice(0, 10) + 'T00:00:00.000Z',
-      value: score,
-    })
-    current.setDate(current.getDate() + 1)
-  }
-
-  return result
+  return buildVelocityTimeSeries(calendar, startDate)
 }
 
 /**
@@ -482,9 +456,16 @@ export const syncMetricsForStartup = action({
     }
 
     try {
-      await ctx.runAction(internal.metrics.fetchGithubMetrics, {
-        startupId: args.startupId,
-      })
+      const githubConnections: any[] = await ctx.runQuery(
+        internal.metrics.getAllGithubConnectionsForStartup,
+        { startupId: args.startupId }
+      )
+      if (githubConnections.length > 0) {
+        await ctx.runAction(internal.metrics.syncGithubForStartup, {
+          startupId: args.startupId,
+          connectionId: githubConnections[0]._id,
+        })
+      }
     } catch (error) {
       errors.push(`GitHub: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
@@ -964,39 +945,73 @@ export const syncTrackerForStartup = internalAction({
 export const syncGithubForStartup = internalAction({
   args: { startupId: v.id('startups'), connectionId: v.id('integrationConnections') },
   handler: async (ctx, args) => {
+    let connections: any[] = []
+    let partialFailureError: Error | null = null
     try {
       // Refresh tokens for all GitHub connections on this startup before fetching
-      const connections: any[] = await ctx.runQuery(
-        internal.metrics.getAllGithubConnectionsForStartup,
-        { startupId: args.startupId }
-      )
+      connections = await ctx.runQuery(internal.metrics.getAllGithubConnectionsForStartup, {
+        startupId: args.startupId,
+      })
       for (const conn of connections) {
         await ctx.runAction(internal.integrations.refreshGithubToken, {
           connectionId: conn._id,
         })
       }
 
-      await ctx.runAction(internal.metrics.fetchGithubMetrics, {
+      const syncResult: any = await ctx.runAction(internal.metrics.fetchGithubMetrics, {
         startupId: args.startupId,
       })
 
-      // Update lastSyncedAt on ALL connections for this startup (not just the triggering one)
+      const failedConnectionSyncErrors =
+        (syncResult?.failedConnectionSyncErrors as Record<string, string> | undefined) ?? {}
+      const successfulConnectionIds = new Set<string>(
+        (syncResult?.successfulConnectionIds as string[] | undefined) ??
+          connections.map((conn) => conn._id)
+      )
+
       const now = new Date().toISOString()
       for (const conn of connections) {
-        await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
-          connectionId: conn._id,
-          status: 'active',
-          lastSyncedAt: now,
-        })
+        const syncError = failedConnectionSyncErrors[conn._id]
+        if (syncError) {
+          await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+            connectionId: conn._id,
+            status: 'error',
+            syncError,
+            lastSyncedAt: now,
+          })
+        } else if (successfulConnectionIds.has(conn._id)) {
+          await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+            connectionId: conn._id,
+            status: 'active',
+            lastSyncedAt: now,
+          })
+        }
+      }
+
+      const failedConnectionIds = Object.keys(failedConnectionSyncErrors)
+      if (failedConnectionIds.length > 0) {
+        const failedNames = failedConnectionIds.map(
+          (id) => connections.find((conn) => conn._id === id)?.accountName ?? id
+        )
+        partialFailureError = new Error(
+          `Some GitHub connections failed to sync: ${failedNames.join(', ')}`
+        )
       }
     } catch (error) {
       logConvexError(`Error syncing GitHub for startup ${args.startupId}:`, error)
-      await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
-        connectionId: args.connectionId,
-        status: 'error',
-        syncError: error instanceof Error ? error.message : 'Unknown error',
-      })
+      const targets =
+        connections.length > 0 ? connections.map((conn) => conn._id) : [args.connectionId]
+      for (const connectionId of targets) {
+        await ctx.runMutation(internal.metrics.updateConnectionSyncStatus, {
+          connectionId,
+          status: 'error',
+          syncError: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+      throw error
     }
+
+    if (partialFailureError) throw partialFailureError
   },
 })
 
@@ -1331,9 +1346,14 @@ export const fetchGithubMetrics = internalAction({
     const perFounderStats: Record<string, FounderGithubStats> = {}
     const perFounderTypedCalendars: Record<string, TypedDayCounts> = {}
     const mergedTypedCalendar: TypedDayCounts = {}
+    const successfulConnectionIds: string[] = []
+    const failedConnectionSyncErrors: Record<string, string> = {}
 
     for (const connection of connections) {
-      if (!connection.accessToken) continue
+      if (!connection.accessToken) {
+        failedConnectionSyncErrors[connection._id] = 'Missing GitHub access token'
+        continue
+      }
 
       try {
         type ContributionsSummary = {
@@ -1362,15 +1382,18 @@ export const fetchGithubMetrics = internalAction({
 
         const contrib = data.viewer?.contributionsCollection
         if (!contrib) {
+          const message = `GitHub returned no contribution data for @${connection.accountName ?? connection._id}`
           logConvexError(
             `GitHub returned no contributionsCollection for startup ${args.startupId}, connection ${connection._id} (@${connection.accountName}). ` +
               `viewer login: ${data.viewer?.login ?? 'unknown'}`,
             null
           )
+          failedConnectionSyncErrors[connection._id] = message
           continue
         }
 
         successfulFetches++
+        successfulConnectionIds.push(connection._id)
         const founderName = connection.accountName ?? data.viewer?.login ?? connection._id
         const searchLogin = data.viewer?.login ?? connection.accountName
         const totalContributionCount = contrib.contributionCalendar?.totalContributions ?? 0
@@ -1433,6 +1456,8 @@ export const fetchGithubMetrics = internalAction({
           mergedTypedCalendar[date].issues += counts.issues
         }
       } catch (error) {
+        failedConnectionSyncErrors[connection._id] =
+          error instanceof Error ? error.message : 'Unknown GitHub API error'
         logConvexError(
           `GitHub fetch error for startup ${args.startupId}, connection ${connection._id}:`,
           error
@@ -1448,7 +1473,7 @@ export const fetchGithubMetrics = internalAction({
           `Skipping metric storage to preserve existing data.`,
         null
       )
-      return
+      throw new Error(`All GitHub API calls failed for startup ${args.startupId}`)
     }
 
     // Git Velocity scoring: unified formula with per-type weights and decay
@@ -1567,6 +1592,8 @@ export const fetchGithubMetrics = internalAction({
         meta: perFounderTypedCalendars,
       })
     }
+
+    return { successfulConnectionIds, failedConnectionSyncErrors }
   },
 })
 

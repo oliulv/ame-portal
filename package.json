@@ -1,6 +1,6 @@
 {
   "name": "accelerateme-internal-tool",
-  "version": "0.2.0.0",
+  "version": "0.2.1.0",
   "private": true,
   "scripts": {
     "dev": "npx convex dev --once && npx convex dev & next dev",

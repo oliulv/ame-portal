@@ -140,6 +140,7 @@ function IntegrationsPageInner() {
           'GitHub integration is not configured. Please contact an administrator.',
         not_authenticated: 'Please sign in to connect integrations.',
         invalid_state: 'Session expired. Please try connecting again.',
+        github_invalid_state: 'Session expired. Please try connecting GitHub again.',
         github_connection_failed: 'GitHub denied the connection request.',
         github_missing_code: 'GitHub authorization failed. Please try again.',
         github_config_missing:
@@ -655,11 +656,11 @@ This enables session and pageview tracking. Place it on every page you want to t
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Each founder on your team should connect their own GitHub account. Contributions
-                  are summed across all connected accounts.
+                  Each founder on your team should install the tracking app for the repos they want
+                  counted and authorize their own GitHub account.
                 </p>
                 <a
-                  href="/api/integrations/github/authorize"
+                  href="/api/integrations/github/install"
                   className="inline-flex items-center gap-2 rounded-md bg-[#24292f] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#24292f]/90 transition-colors"
                 >
                   <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
@@ -705,21 +706,28 @@ This enables session and pageview tracking. Place it on every page you want to t
                             Active
                           </Badge>
                           {isMine && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8"
-                              onClick={async () => {
-                                try {
-                                  await disconnectGithub()
-                                  toast.success('GitHub disconnected')
-                                } catch {
-                                  toast.error('Failed to disconnect GitHub')
-                                }
-                              }}
-                            >
-                              Disconnect
-                            </Button>
+                            <>
+                              {conn.status === 'error' && (
+                                <Button asChild variant="outline" size="sm" className="h-8">
+                                  <a href="/api/integrations/github/install">Reconnect</a>
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8"
+                                onClick={async () => {
+                                  try {
+                                    await disconnectGithub()
+                                    toast.success('GitHub disconnected')
+                                  } catch {
+                                    toast.error('Failed to disconnect GitHub')
+                                  }
+                                }}
+                              >
+                                Disconnect
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>

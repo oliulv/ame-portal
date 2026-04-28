@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
+import { signState } from '@/lib/oauthState'
 
 /**
  * GET /api/integrations/github/install
@@ -10,8 +11,9 @@ import { auth } from '@clerk/nextjs/server'
  * they can adjust repo access. Either way, after the user saves, GitHub
  * redirects back to this app.
  *
- * This is the "upgrade your repo access" flow. For connecting a GitHub
- * account (OAuth), use `/api/integrations/github/authorize` instead.
+ * With "Request user authorization (OAuth) during installation" enabled on
+ * the GitHub App, this is also the first-time connect flow. GitHub preserves
+ * the state parameter and returns it to the OAuth callback with the code.
  */
 export async function GET() {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')
@@ -26,6 +28,9 @@ export async function GET() {
     return NextResponse.redirect(`${appUrl}/founder/integrations?error=github_not_configured`)
   }
 
-  const url = `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/new`
-  return NextResponse.redirect(url)
+  const state = signState({ u: userId })
+  const url = new URL(`https://github.com/apps/${encodeURIComponent(appSlug)}/installations/new`)
+  url.searchParams.set('state', state)
+
+  return NextResponse.redirect(url.toString())
 }
