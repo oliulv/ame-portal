@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1.0] - 2026-04-28
+
+### Fixed
+
+- Founder portal no longer crashes when an admin opens a founder-only link (e.g. an announcement). Admins without a founder profile are now redirected to a "founder account required" page with a sign-out option, instead of seeing a Convex server error.
+
 ## [0.3.0.0] - 2026-04-28
 
 ### Added

@@ -15,6 +15,34 @@ export const current = query({
 })
 
 /**
+ * Non-throwing access check for the founder portal layout.
+ * Lets the UI distinguish "wrong role" from "not signed in" so we can
+ * redirect admins without a founder profile instead of crashing downstream
+ * founder-only queries.
+ */
+export const founderRouteAccess = query({
+  args: {},
+  handler: async (
+    ctx
+  ): Promise<'founder' | 'admin-with-profile' | 'admin-no-profile' | 'unauthorized'> => {
+    const user = await getCurrentUser(ctx)
+    if (!user) return 'unauthorized'
+
+    if (user.role === 'founder') return 'founder'
+
+    if (user.role === 'admin' || user.role === 'super_admin') {
+      const profile = await ctx.db
+        .query('founderProfiles')
+        .withIndex('by_userId', (q) => q.eq('userId', user._id))
+        .first()
+      return profile ? 'admin-with-profile' : 'admin-no-profile'
+    }
+
+    return 'unauthorized'
+  },
+})
+
+/**
  * Create or update a user record from Clerk webhook / first login.
  */
 export const upsertFromClerk = internalMutation({
