@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0.0] - 2026-04-28
+
+### Added
+
+- Cohort funding controls: admins can set total allocation and baseline-per-startup, with audited changes recorded against the cohort.
+- Per-startup funding adjustments: admins can issue one-off top-ups or deductions with a note; founders see them on their funding page.
+- Aggregate funding dashboard for admins: total allocation, money left, deployed/committed/available, top-up pool, utilisation bar, allocation pie chart, time-series history, and a per-startup breakdown table.
+- Founder funding adjustments feed showing top-ups and deductions from the accelerator team.
+- Notification preference for funding adjustments so founders can opt in/out of top-up and deduction alerts.
+- Announcement bodies can include an optional in-app link and now support up to 10,000 characters (previously 500).
+- Backfill migration to populate `approvedAt` on existing approved milestones so historical entries appear correctly in the new funding history.
+
+### Changed
+
+- Admin funding page rebuilt to match the rest of the UI: standalone metric cards, larger pie chart with cleaner legend, breakdown rows without nested borders, and a tabular-numerics table that breathes.
+- Milestone funding logic moved into `convex/funding.ts` and `convex/lib/fundingMath.ts` with isolated unit tests; `convex/milestones.ts` is now a thin orchestration layer.
+- Invoice logic consolidated in `convex/lib/invoiceLogic.ts` for clearer state transitions and easier testing.
+- `dev` script now runs through `portless`, so local URLs are stable named hosts (`https://acc-os.localhost`) instead of port numbers.
+
+### Removed
+
+- Schema field `startups.fundingDeployed` is no longer written or read; deployed totals are derived from invoices and adjustments at query time.
+
 ## [0.2.1.0] - 2026-04-28
 
 ### Fixed
