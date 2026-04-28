@@ -9,6 +9,7 @@ import {
   computeLeaderboardScore,
   computeVelocityScore,
   computeVelocityBreakdown,
+  buildVelocityTimeSeries,
   CATEGORY_KEYS,
   WEIGHTS,
   DECAY_RATE,
@@ -630,5 +631,39 @@ describe('computeVelocityScore & computeVelocityBreakdown', () => {
     const expectedRatio = Math.exp(-DECAY_RATE * 27)
     const actualRatio = scoreDay27 / scoreDay0
     expect(actualRatio).toBeCloseTo(expectedRatio, 1)
+  })
+})
+
+describe('buildVelocityTimeSeries', () => {
+  const AS_OF = new Date('2026-04-15T00:00:00.000Z')
+
+  it('emits points immediately for a founder whose first contribution is inside 28 days', () => {
+    const calendar: TypedDayCounts = {
+      '2026-04-10': { commits: 0, prs: 1, issues: 0 },
+    }
+
+    const series = buildVelocityTimeSeries(calendar, undefined, AS_OF)
+
+    expect(series).toHaveLength(6)
+    expect(series[0]).toEqual({ timestamp: '2026-04-10T00:00:00.000Z', value: PR_PTS })
+    expect(series.at(-1)).toEqual({
+      timestamp: '2026-04-15T00:00:00.000Z',
+      value: computeVelocityScore(calendar, AS_OF),
+    })
+  })
+
+  it('honors startDate without inventing points before the first contribution', () => {
+    const calendar: TypedDayCounts = {
+      '2026-04-10': { commits: 1, prs: 0, issues: 0 },
+    }
+
+    expect(buildVelocityTimeSeries(calendar, '2026-04-01T00:00:00.000Z', AS_OF)[0]).toEqual({
+      timestamp: '2026-04-10T00:00:00.000Z',
+      value: COMMIT_PTS,
+    })
+    expect(buildVelocityTimeSeries(calendar, '2026-04-13T00:00:00.000Z', AS_OF)[0]).toEqual({
+      timestamp: '2026-04-13T00:00:00.000Z',
+      value: computeVelocityScore(calendar, new Date('2026-04-13T00:00:00.000Z')),
+    })
   })
 })

@@ -84,6 +84,36 @@ export interface VelocityBreakdown {
   rawTotal: number
 }
 
+export function buildVelocityTimeSeries(
+  calendar: TypedDayCounts,
+  startDate?: string,
+  asOf = new Date()
+): { timestamp: string; value: number }[] {
+  const allDates = Object.keys(calendar).sort()
+  if (allDates.length === 0) return []
+
+  const earliestDay = new Date(`${allDates[0]}T00:00:00.000Z`)
+  const requestedStart = startDate ? new Date(startDate) : earliestDay
+  const outputStart = requestedStart > earliestDay ? requestedStart : earliestDay
+
+  const today = new Date(asOf.getTime())
+  today.setUTCHours(0, 0, 0, 0)
+
+  const current = new Date(outputStart.getTime())
+  current.setUTCHours(0, 0, 0, 0)
+
+  const result: { timestamp: string; value: number }[] = []
+  while (current <= today) {
+    result.push({
+      timestamp: `${current.toISOString().slice(0, 10)}T00:00:00.000Z`,
+      value: computeVelocityScore(calendar, current),
+    })
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+
+  return result
+}
+
 /**
  * Compute the velocity score for a single day's snapshot using the unified
  * formula: 28-day rolling window with per-type weights and temporal decay.
